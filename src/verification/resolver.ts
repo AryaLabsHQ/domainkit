@@ -1,80 +1,87 @@
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 
-import type { DomainName } from "../domain/domain-name.ts";
-import type { DnsRecordType } from "../domain/dns-record.ts";
-import { ResolverError } from "../errors.ts";
+import * as DomainName from "../domain/domain-name.ts";
+import * as DnsRecord from "../domain/dns-record.ts";
 
-export interface DnsQuery {
-  readonly name: DomainName;
+export interface Query {
+  readonly name: DomainName.DomainName;
   readonly signal?: AbortSignal;
-  readonly type: DnsRecordType;
+  readonly type: DnsRecord.Type;
 }
 
-export interface DnsAnswer {
-  readonly data: string;
-  readonly name: DomainName;
-  readonly ttl: number;
-  readonly type: DnsRecordType;
+export const Answer = Schema.Struct({
+  data: Schema.String,
+  name: DomainName.Schema,
+  ttl: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  type: DnsRecord.Type,
+});
+export interface Answer extends Schema.Schema.Type<typeof Answer> {}
+
+export const Resolution = Schema.TaggedUnion({
+  answer: { answers: Schema.Array(Answer) },
+  nodata: {},
+});
+export type Resolution = typeof Resolution.Type;
+
+export class Error extends Schema.TaggedError<Error>()("ResolverError", {
+  cause: Schema.optionalKey(Schema.Unknown),
+  message: Schema.String,
+  reason: Schema.Literals(["timeout", "transport"]),
+}) {}
+
+export interface Interface {
+  readonly resolve: (query: Query) => Effect.Effect<Resolution, Error>;
 }
 
-export type DnsResolution =
-  | { readonly _tag: "answer"; readonly answers: ReadonlyArray<DnsAnswer> }
-  | { readonly _tag: "nodata" };
+export class Service extends Context.Service<Service, Interface>()("@domainkit/DnsResolver") {}
 
-export interface DnsResolverService {
-  readonly resolve: (query: DnsQuery) => Effect.Effect<DnsResolution, ResolverError>;
-}
-
-export const DnsResolver = Context.Service<DnsResolverService>("domainkit/DnsResolver");
-
-export type PromiseDnsResolution =
-  | DnsResolution
+export type AsyncResolution =
+  | Resolution
   | { readonly _tag: "timeout" }
   | { readonly _tag: "failure"; readonly message: string };
 
-export interface PromiseDnsResolver {
-  readonly resolve: (query: DnsQuery) => Promise<PromiseDnsResolution>;
+export interface AsyncInterface {
+  readonly resolve: (query: Query) => Promise<AsyncResolution>;
 }
 
-export function layerDnsResolverFromPromise(
-  resolver: PromiseDnsResolver,
-): Layer.Layer<DnsResolverService> {
-  return Layer.succeed(DnsResolver)({
-    resolve: (query) =>
+export const layerFromAsync = (resolver: AsyncInterface): Layer.Layer<Service> =>
+  Layer.succeed(Service, {
+    resolve: Effect.fn("DnsResolver.resolve")((query) =>
       Effect.tryPromise({
         try: () => resolver.resolve(query),
         catch: (cause) =>
-          new ResolverError({
-            message: cause instanceof Error ? cause.message : String(cause),
+          new Error({
+            cause,
+            message: cause instanceof globalThis.Error ? cause.message : String(cause),
             reason: "transport",
           }),
       }).pipe(
-        Effect.flatMap((resolution) =>
-          resolution._tag === "timeout"
-            ? Effect.fail(new ResolverError({ message: "DNS query timed out", reason: "timeout" }))
-            : resolution._tag === "failure"
-              ? Effect.fail(new ResolverError({ message: resolution.message, reason: "transport" }))
-              : Effect.succeed(resolution),
-        ),
+        Effect.flatMap((resolution) => {
+          switch (resolution._tag) {
+            case "answer":
+            case "nodata":
+              return Effect.succeed(resolution);
+            case "timeout":
+              return Effect.fail(new Error({ message: "DNS query timed out", reason: "timeout" }));
+            case "failure":
+              return Effect.fail(new Error({ message: resolution.message, reason: "transport" }));
+          }
+        }),
       ),
+    ),
   });
-}
 
-export function toPromiseDnsResolver(resolver: DnsResolverService): PromiseDnsResolver {
-  return {
-    resolve: (query) =>
-      Effect.runPromise(
-        resolver
-          .resolve(query)
-          .pipe(
-            Effect.catch((failure) =>
-              Effect.succeed(
-                failure.reason === "timeout"
-                  ? ({ _tag: "timeout" } as const)
-                  : ({ _tag: "failure", message: failure.message } as const),
-              ),
-            ),
-          ),
+export const toAsync = (resolver: Interface): AsyncInterface => ({
+  resolve: (query) =>
+    Effect.runPromise(
+      resolver.resolve(query).pipe(
+        Effect.match({
+          onFailure: (failure): AsyncResolution =>
+            failure.reason === "timeout"
+              ? { _tag: "timeout" }
+              : { _tag: "failure", message: failure.message },
+          onSuccess: (resolution) => resolution,
+        }),
       ),
-  };
-}
+    ),
+});

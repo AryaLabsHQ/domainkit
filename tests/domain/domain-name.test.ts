@@ -1,15 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, it } from "@effect/vitest";
 
-import { parseDomainName } from "../../src/domain/domain-name.ts";
+import { DomainName } from "../../src/index.ts";
 
-describe("parseDomainName", () => {
-  it("normalizes case, trailing dots, and international labels", () => {
-    expect(parseDomainName("WWW.Example.COM.")).toBe("www.example.com");
-    expect(parseDomainName("bücher.example")).toBe("xn--bcher-kva.example");
+describe("DomainName", () => {
+  it("normalizes case, trailing dots, and Unicode labels through its schema codec", () => {
+    assert.strictEqual(DomainName.parse("WWW.Example.COM."), "www.example.com");
+    assert.strictEqual(DomainName.parse("bücher.example"), "xn--bcher-kva.example");
   });
 
-  it("permits DNS service labels and rejects relative names", () => {
-    expect(parseDomainName("_sip._tcp.example.com")).toBe("_sip._tcp.example.com");
-    expect(() => parseDomainName("localhost")).toThrow();
+  it("retains service labels", () => {
+    assert.strictEqual(DomainName.parse("_sip._tcp.example.com"), "_sip._tcp.example.com");
+  });
+
+  it("rejects names without a registrable DNS shape", () => {
+    assert.throws(() => DomainName.parse("localhost"));
   });
 });

@@ -1,20 +1,19 @@
 import { getDomain } from "tldts";
 
-import type { DomainName } from "../domain/domain-name.ts";
-import { parseDomainName } from "../domain/domain-name.ts";
-import { InvalidInputError } from "../errors.ts";
+import * as DomainName from "../domain/domain-name.ts";
+import { Error as InvalidInputError } from "../invalid-input.ts";
 
-export function deriveZoneCandidates(input: string): ReadonlyArray<DomainName> {
-  const domain = parseDomainName(input);
+export function candidates(input: string): ReadonlyArray<DomainName.DomainName> {
+  const domain = DomainName.parse(input);
   const registrable = getDomain(domain, { allowPrivateDomains: true });
   if (registrable === null) {
     throw new InvalidInputError({ message: "Domain does not have a registrable DNS zone" });
   }
   const labels = domain.split(".");
   const registrableLabels = registrable.split(".").length;
-  const candidates: Array<DomainName> = [];
+  const values: Array<DomainName.DomainName> = [];
   for (let index = 0; index <= labels.length - registrableLabels; index += 1) {
-    candidates.push(parseDomainName(labels.slice(index).join(".")));
+    values.push(DomainName.parse(labels.slice(index).join(".")));
   }
-  return candidates;
+  return values;
 }

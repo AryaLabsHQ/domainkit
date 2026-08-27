@@ -3,99 +3,20 @@ import packageJson from "../package.json" with { type: "json" };
 /** The current package version from the package manifest. */
 export const VERSION = packageJson.version;
 
-export { assertConnectionGrant } from "./auth/grants.ts";
-export { beginOAuth, completeOAuth, connectToken, refreshOAuth, revokeOAuth } from "./promise.ts";
-export type { BeginOAuthInput } from "./promise.ts";
-export type { Fetch } from "./auth/oauth.ts";
-export { Secret } from "./auth/secret.ts";
-export {
-  Connection,
-  ConnectionCapability,
-  ConnectionGrant,
-  ProviderAuthManifest,
-} from "./auth/types.ts";
-export type {
-  ConnectionCapability as ConnectionCapabilityValue,
-  OAuthClientConfiguration,
-  OAuthContinuation,
-  OAuthMethod,
-  OAuthSubjectResolver,
-  StoredCredential,
-  TokenValidation,
-} from "./auth/types.ts";
-export { DomainName, parseDomainName } from "./domain/domain-name.ts";
-export {
-  AaaaRecord,
-  ARecord,
-  CaaRecord,
-  CnameRecord,
-  DnsRecord,
-  DnsRecordType,
-  MxRecord,
-  NsRecord,
-  parseDnsRecord,
-  RequirementMetadata,
-  SrvRecord,
-  TxtRecord,
-} from "./domain/dns-record.ts";
-export type {
-  DnsRecordInput,
-  DnsRecordType as DnsRecordTypeValue,
-  RequirementMetadata as RequirementMetadataValue,
-} from "./domain/dns-record.ts";
-export {
-  AuthorizationError,
-  CryptoError,
-  InvalidInputError,
-  PartialApplyError,
-  PlanConflictError,
-  ProviderError,
-  ResolverError,
-  StorageError,
-  StalePlanError,
-} from "./errors.ts";
-export type { DomainKitError } from "./errors.ts";
-export { selectProvider } from "./discovery/selection.ts";
-export type {
-  ConnectedZone,
-  ProviderCandidateEvidence,
-  ProviderSelection,
-} from "./discovery/selection.ts";
-export { deriveZoneCandidates } from "./discovery/zones.ts";
-export type {
-  PromiseDnsProvider as DnsProvider,
-  ProviderCreateResult,
-} from "./provider/provider.ts";
-export { applyPlan, authorizePlan, authorizePlanForConnection, createPlan } from "./promise.ts";
-export type { CreatePlanInput } from "./promise.ts";
-export { renderManualInstructions } from "./plan/plan.ts";
-export {
-  ApplyReceipt,
-  decodeApplyReceipt,
-  decodeDnsPlan,
-  DnsPlan,
-  encodeApplyReceipt,
-  encodeDnsPlan,
-  PlanAuthorization,
-  PlanOperation,
-} from "./plan/types.ts";
-export type {
-  PromiseConnectionStore as ConnectionStore,
-  PromiseCredentialStore as CredentialStore,
-  PromiseOAuthStateStore as OAuthStateStore,
-  PromiseReceiptStore as ReceiptStore,
-} from "./stores/contracts.ts";
-export { makeCloudflareDnsResolver, normalizeDnsData } from "./verification/cloudflare-doh.ts";
-export type { CloudflareDnsResolverOptions } from "./verification/cloudflare-doh.ts";
-export type {
-  DnsAnswer,
-  DnsQuery,
-  PromiseDnsResolution as DnsResolution,
-  PromiseDnsResolver as DnsResolver,
-} from "./verification/resolver.ts";
-export { verifyRecord } from "./promise.ts";
-export type {
-  ProviderObservation,
-  PublicDnsObservation,
-  RecordVerification,
-} from "./verification/verify.ts";
+export * as Connection from "./promise/connection.ts";
+export * as ProviderAuth from "./promise/provider-auth.ts";
+export * as Secret from "./auth/secret.ts";
+export * as ProviderDiscovery from "./discovery/selection.ts";
+export * as Zones from "./discovery/zones.ts";
+export * as DnsRecord from "./promise/dns-record.ts";
+export * as DomainName from "./promise/domain-name.ts";
+export * as InvalidInput from "./invalid-input.ts";
+export * as DnsPlan from "./promise/dns-plan.ts";
+export type * as DnsProvider from "./promise/dns-provider.ts";
+export type * as DnsResolver from "./promise/dns-resolver.ts";
+export * as OAuth from "./promise/oauth.ts";
+export * as Provisioning from "./promise/provisioning.ts";
+export type * as Stores from "./promise/stores.ts";
+export * as TokenConnection from "./promise/token.ts";
+export * as Verification from "./promise/verification.ts";
+export * as CloudflareDnsOverHttps from "./promise/cloudflare-doh.ts";

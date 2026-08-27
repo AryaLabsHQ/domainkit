@@ -1,36 +1,23 @@
 import { Clock, Crypto, Effect } from "effect";
 import * as oauth from "oauth4webapi";
 
-import {
-  AuthorizationError,
-  CryptoError,
-  InvalidInputError,
-  ProviderError,
-  type StorageError,
-} from "../errors.ts";
-import { sha256 } from "../plan/canonical-json.ts";
-import {
-  ConnectionStore,
-  type ConnectionStoreService,
-  CredentialStore,
-  type CredentialStoreService,
-  OAuthStateStore,
-  type OAuthStateStoreService,
-} from "../stores/contracts.ts";
-import { Secret } from "./secret.ts";
-import type {
-  Connection,
-  OAuthClientConfiguration,
-  OAuthMethod,
-  StoredCredential,
-} from "./types.ts";
+import { Error as InvalidInputError } from "../invalid-input.ts";
+import { CryptoError, sha256Text } from "../plan/canonical-json.ts";
+import * as DnsProvider from "../provider/provider.ts";
+import * as ConnectionStore from "../stores/connection.ts";
+import * as CredentialStore from "../stores/credential.ts";
+import type * as Storage from "../stores/error.ts";
+import * as OAuthStateStore from "../stores/oauth-state.ts";
+import * as Connection from "./connection.ts";
+import type * as ProviderAuth from "./manifest.ts";
+import { Value as Secret } from "./secret.ts";
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-export interface BeginOAuthInput {
-  readonly client: OAuthClientConfiguration;
-  readonly grant: Connection["grant"];
-  readonly method: OAuthMethod;
+export interface BeginInput {
+  readonly client: ProviderAuth.OAuthClientConfiguration;
+  readonly grant: Connection.Grant;
+  readonly method: ProviderAuth.OAuthMethod;
   readonly redirectUri: string;
   readonly subjectId: string;
   readonly ttlMs?: number;
@@ -41,27 +28,27 @@ export interface OAuthSubjectResolver {
     tokens: oauth.TokenEndpointResponse,
     accessToken: Secret,
   ): Effect.Effect<
-    { readonly accountId: string; readonly expiresAt: string | null },
-    InvalidInputError | ProviderError
+    { readonly accountId: string; readonly expiresAt: Date | null },
+    InvalidInputError | DnsProvider.Error
   >;
 }
 
 export type OAuthError =
-  | AuthorizationError
+  | Connection.AuthorizationError
   | CryptoError
   | InvalidInputError
-  | ProviderError
-  | StorageError;
+  | DnsProvider.Error
+  | Storage.Error;
 
-export function beginOAuth(
-  input: BeginOAuthInput,
+function beginProgram(
+  input: BeginInput,
 ): Effect.Effect<
   { readonly authorizationUrl: URL },
-  CryptoError | StorageError,
-  OAuthStateStoreService | Crypto.Crypto
+  CryptoError | Storage.Error,
+  OAuthStateStore.Service | Crypto.Crypto
 > {
   return Effect.gen(function* () {
-    const stateStore = yield* OAuthStateStore;
+    const stateStore = yield* OAuthStateStore.Service;
     const cryptoService = yield* Crypto.Crypto;
     const now = yield* Clock.currentTimeMillis;
     const state = base64Url(yield* cryptoBytes(cryptoService, 32));
@@ -71,7 +58,7 @@ export function beginOAuth(
         .digest("SHA-256", new TextEncoder().encode(codeVerifier))
         .pipe(Effect.mapError((cause) => new CryptoError({ message: cause.message }))),
     );
-    const stateHash = yield* sha256(state);
+    const stateHash = yield* sha256Text(state);
     const authorizationUrl = new URL(input.method.authorizationServer.authorization_endpoint);
     authorizationUrl.search = new URLSearchParams({
       client_id: input.client.clientId,
@@ -86,7 +73,7 @@ export function beginOAuth(
     yield* stateStore.put({
       clientId: input.client.clientId,
       codeVerifier: Secret.from(codeVerifier),
-      expiresAt: new Date(now + (input.ttlMs ?? 10 * 60_000)).toISOString(),
+      expiresAt: new Date(now + (input.ttlMs ?? 10 * 60_000)),
       grant: input.grant,
       method: input.method,
       redirectUri: input.redirectUri,
@@ -97,35 +84,37 @@ export function beginOAuth(
   });
 }
 
-export function completeOAuth(input: {
+function completeProgram(input: {
   readonly callbackUrl: URL;
-  readonly client: OAuthClientConfiguration;
+  readonly client: ProviderAuth.OAuthClientConfiguration;
   readonly fetch?: Fetch;
   readonly providerId: string;
   readonly resolveSubject: OAuthSubjectResolver;
 }): Effect.Effect<
-  Connection,
+  Connection.Connection,
   OAuthError,
-  OAuthStateStoreService | ConnectionStoreService | CredentialStoreService | Crypto.Crypto
+  OAuthStateStore.Service | ConnectionStore.Service | CredentialStore.Service | Crypto.Crypto
 > {
   return Effect.gen(function* () {
-    const stateStore = yield* OAuthStateStore;
-    const connectionStore = yield* ConnectionStore;
-    const credentialStore = yield* CredentialStore;
+    const stateStore = yield* OAuthStateStore.Service;
+    const connectionStore = yield* ConnectionStore.Service;
+    const credentialStore = yield* CredentialStore.Service;
     const cryptoService = yield* Crypto.Crypto;
     const state = input.callbackUrl.searchParams.get("state");
     if (state === null) {
-      return yield* new AuthorizationError({ message: "OAuth callback is missing state" });
+      return yield* new Connection.AuthorizationError({
+        message: "OAuth callback is missing state",
+      });
     }
     const now = yield* Clock.currentTimeMillis;
-    const continuation = yield* stateStore.consume(yield* sha256(state), new Date(now));
+    const continuation = yield* stateStore.consume(yield* sha256Text(state), new Date(now));
     if (continuation === null) {
-      return yield* new AuthorizationError({
+      return yield* new Connection.AuthorizationError({
         message: "OAuth continuation is expired, unknown, or already used",
       });
     }
     if (continuation.clientId !== input.client.clientId) {
-      return yield* new AuthorizationError({
+      return yield* new Connection.AuthorizationError({
         message: "OAuth client does not match the continuation",
       });
     }
@@ -151,10 +140,10 @@ export function completeOAuth(input: {
     const id = yield* cryptoService.randomUUIDv4.pipe(
       Effect.mapError((cause) => new CryptoError({ message: cause.message })),
     );
-    const connection: Connection = {
+    const connection: Connection.Connection = {
       accountId: subject.accountId,
       capabilities: [...continuation.method.capabilities],
-      createdAt: new Date(now).toISOString(),
+      createdAt: new Date(now),
       expiresAt: subject.expiresAt,
       grant: continuation.grant,
       id,
@@ -173,17 +162,20 @@ export function completeOAuth(input: {
   });
 }
 
-export function refreshOAuth(input: {
-  readonly client: OAuthClientConfiguration;
-  readonly connection: Connection;
+function refreshProgram(input: {
+  readonly client: ProviderAuth.OAuthClientConfiguration;
+  readonly connection: Connection.Connection;
   readonly fetch?: Fetch;
-  readonly method: OAuthMethod;
-}): Effect.Effect<void, OAuthError, CredentialStoreService> {
+  readonly method: ProviderAuth.OAuthMethod;
+}): Effect.Effect<void, OAuthError, CredentialStore.Service> {
   return Effect.gen(function* () {
-    const credentialStore = yield* CredentialStore;
+    const credentialStore = yield* CredentialStore.Service;
     const credential = yield* requireCredential(input.connection.id, credentialStore);
-    if (credential.refreshToken === null) {
-      return yield* new AuthorizationError({ message: "Connection has no refresh token" });
+    const refreshToken = credential.refreshToken;
+    if (refreshToken === null) {
+      return yield* new Connection.AuthorizationError({
+        message: "Connection has no refresh token",
+      });
     }
     const as = input.method.authorizationServer as oauth.AuthorizationServer;
     const client: oauth.Client = { client_id: input.client.clientId };
@@ -193,7 +185,7 @@ export function refreshOAuth(input: {
         as,
         client,
         authentication,
-        credential.refreshToken!.expose(),
+        refreshToken.expose(),
         requestOptions(input.fetch, signal),
       );
       return oauth.processRefreshTokenResponse(as, client, response);
@@ -209,19 +201,19 @@ export function refreshOAuth(input: {
   });
 }
 
-export function revokeOAuth(input: {
-  readonly client: OAuthClientConfiguration;
-  readonly connection: Connection;
+function revokeProgram(input: {
+  readonly client: ProviderAuth.OAuthClientConfiguration;
+  readonly connection: Connection.Connection;
   readonly fetch?: Fetch;
-  readonly method: OAuthMethod;
-}): Effect.Effect<void, OAuthError, CredentialStoreService> {
+  readonly method: ProviderAuth.OAuthMethod;
+}): Effect.Effect<void, OAuthError, CredentialStore.Service> {
   return Effect.gen(function* () {
     if (input.method.authorizationServer.revocation_endpoint === undefined) {
-      return yield* new AuthorizationError({
+      return yield* new Connection.AuthorizationError({
         message: "Provider does not advertise token revocation",
       });
     }
-    const credentialStore = yield* CredentialStore;
+    const credentialStore = yield* CredentialStore.Service;
     const credential = yield* requireCredential(input.connection.id, credentialStore);
     const as = input.method.authorizationServer as oauth.AuthorizationServer;
     const authentication = yield* effectClientAuthentication(input.method, input.client);
@@ -240,8 +232,8 @@ export function revokeOAuth(input: {
 }
 
 function effectClientAuthentication(
-  method: OAuthMethod,
-  client: OAuthClientConfiguration,
+  method: ProviderAuth.OAuthMethod,
+  client: ProviderAuth.OAuthClientConfiguration,
 ): Effect.Effect<oauth.ClientAuth, InvalidInputError> {
   return Effect.try({
     try: () => clientAuthentication(method, client),
@@ -253,8 +245,8 @@ function effectClientAuthentication(
 }
 
 function clientAuthentication(
-  method: OAuthMethod,
-  client: OAuthClientConfiguration,
+  method: ProviderAuth.OAuthMethod,
+  client: ProviderAuth.OAuthClientConfiguration,
 ): oauth.ClientAuth {
   switch (method.clientAuth) {
     case "none":
@@ -287,28 +279,33 @@ function requestOptions(
 
 function requireCredential(
   connectionId: string,
-  store: CredentialStoreService,
-): Effect.Effect<StoredCredential, AuthorizationError | StorageError> {
-  return store
-    .get(connectionId)
-    .pipe(
-      Effect.flatMap((credential) =>
-        credential === null
-          ? Effect.fail(
-              new AuthorizationError({ message: "Connection credentials are unavailable" }),
-            )
-          : Effect.succeed(credential),
-      ),
-    );
+  store: CredentialStore.Interface,
+): Effect.Effect<Connection.StoredCredential, Connection.AuthorizationError | Storage.Error> {
+  return store.get(connectionId).pipe(
+    Effect.flatMap((credential) =>
+      credential === null
+        ? Effect.fail(
+            new Connection.AuthorizationError({
+              message: "Connection credentials are unavailable",
+            }),
+          )
+        : Effect.succeed(credential),
+    ),
+  );
 }
 
 function providerRequest<A>(providerId: string, request: (signal: AbortSignal) => Promise<A>) {
   return Effect.tryPromise({
     try: request,
     catch: (cause) =>
-      cause instanceof AuthorizationError || cause instanceof InvalidInputError
+      cause instanceof Connection.AuthorizationError || cause instanceof InvalidInputError
         ? cause
-        : new ProviderError({ message: safeOAuthMessage(cause), providerId }),
+        : new DnsProvider.Error({
+            cause,
+            message: safeOAuthMessage(cause),
+            operation: "oauthRequest",
+            providerId,
+          }),
   });
 }
 
@@ -330,3 +327,8 @@ function base64Url(bytes: Uint8Array): string {
 function safeOAuthMessage(cause: unknown): string {
   return cause instanceof Error ? cause.name : "OAuth provider request failed";
 }
+
+export const begin = Effect.fn("OAuth.begin")(beginProgram);
+export const complete = Effect.fn("OAuth.complete")(completeProgram);
+export const refresh = Effect.fn("OAuth.refresh")(refreshProgram);
+export const revoke = Effect.fn("OAuth.revoke")(revokeProgram);

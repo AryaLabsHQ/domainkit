@@ -1,61 +1,71 @@
-import { Schema } from "effect";
+import { Effect, Schema as S } from "effect";
 
-import { DomainName } from "../domain/domain-name.ts";
-import { DnsRecord } from "../domain/dns-record.ts";
+import * as DomainName from "../domain/domain-name.ts";
+import * as DnsRecord from "../domain/dns-record.ts";
+import { Error as InvalidInputError } from "../invalid-input.ts";
 
-export const PlanOperation = Schema.Union([
-  Schema.TaggedStruct("create", {
-    id: Schema.String,
-    requirement: DnsRecord,
-  }),
-  Schema.TaggedStruct("noop", {
-    id: Schema.String,
-    requirement: DnsRecord,
-    ttlDrift: Schema.Boolean,
-  }),
-  Schema.TaggedStruct("conflict", {
-    existing: Schema.Array(DnsRecord),
-    id: Schema.String,
-    reason: Schema.String,
-    requirement: DnsRecord,
-  }),
-]);
-export type PlanOperation = typeof PlanOperation.Type;
-
-export const DnsPlan = Schema.Struct({
-  digest: Schema.String,
-  operations: Schema.Array(PlanOperation),
-  providerId: Schema.String,
-  version: Schema.Literal("domainkit.dns-plan.v1"),
-  zone: DomainName,
+export const Operation = S.TaggedUnion({
+  create: {
+    id: S.String,
+    requirement: DnsRecord.Schema,
+  },
+  noop: {
+    id: S.String,
+    requirement: DnsRecord.Schema,
+    ttlDrift: S.Boolean,
+  },
+  conflict: {
+    existing: S.Array(DnsRecord.Schema),
+    id: S.String,
+    reason: S.String,
+    requirement: DnsRecord.Schema,
+  },
 });
-export type DnsPlan = typeof DnsPlan.Type;
+export type Operation = typeof Operation.Type;
 
-export const PlanAuthorization = Schema.Struct({
-  allowPartial: Schema.Boolean,
-  operationIds: Schema.Array(Schema.String),
-  planDigest: Schema.String,
-  version: Schema.Literal("domainkit.plan-authorization.v1"),
+export const Schema = S.Struct({
+  digest: S.String,
+  operations: S.Array(Operation),
+  providerId: S.String,
+  version: S.Literal("domainkit.dns-plan.v1"),
+  zone: DomainName.Schema,
 });
-export type PlanAuthorization = typeof PlanAuthorization.Type;
+export interface DnsPlan extends S.Schema.Type<typeof Schema> {}
 
-export const ApplyReceipt = Schema.Struct({
-  appliedAt: Schema.String,
-  operations: Schema.Array(
-    Schema.Struct({
-      operationId: Schema.String,
-      providerRecordId: Schema.NullOr(Schema.String),
+export const Authorization = S.Struct({
+  allowPartial: S.Boolean,
+  operationIds: S.Array(S.String),
+  planDigest: S.String,
+  version: S.Literal("domainkit.plan-authorization.v1"),
+});
+export interface PlanAuthorization extends S.Schema.Type<typeof Authorization> {}
+
+export const Receipt = S.Struct({
+  appliedAt: S.DateFromString,
+  operations: S.Array(
+    S.Struct({
+      operationId: S.String,
+      providerRecordId: S.NullOr(S.String),
     }),
   ),
-  planDigest: Schema.String,
-  providerId: Schema.String,
-  status: Schema.Literals(["complete", "partial"]),
-  version: Schema.Literal("domainkit.apply-receipt.v1"),
-  zone: DomainName,
+  planDigest: S.String,
+  providerId: S.String,
+  status: S.Literals(["complete", "partial"]),
+  version: S.Literal("domainkit.apply-receipt.v1"),
+  zone: DomainName.Schema,
 });
-export type ApplyReceipt = typeof ApplyReceipt.Type;
+export interface ApplyReceipt extends S.Schema.Type<typeof Receipt> {}
 
-export const decodeDnsPlan = Schema.decodeUnknownSync(DnsPlan);
-export const encodeDnsPlan = Schema.encodeSync(DnsPlan);
-export const decodeApplyReceipt = Schema.decodeUnknownSync(ApplyReceipt);
-export const encodeApplyReceipt = Schema.encodeSync(ApplyReceipt);
+export const decode = Effect.fn("DnsPlan.decode")((input: unknown) =>
+  S.decodeUnknownEffect(Schema)(input).pipe(
+    Effect.mapError((cause) => new InvalidInputError({ message: cause.message })),
+  ),
+);
+
+export const encode = S.encodeSync(Schema);
+export const decodeReceipt = Effect.fn("DnsPlan.decodeReceipt")((input: unknown) =>
+  S.decodeUnknownEffect(Receipt)(input).pipe(
+    Effect.mapError((cause) => new InvalidInputError({ message: cause.message })),
+  ),
+);
+export const encodeReceipt = S.encodeSync(Receipt);

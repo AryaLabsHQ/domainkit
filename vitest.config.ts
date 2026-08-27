@@ -7,5 +7,6 @@ export default defineConfig({
       provider: "v8",
     },
     include: ["tests/**/*.test.ts"],
+    setupFiles: ["./vitest.setup.ts"],
   },
 });

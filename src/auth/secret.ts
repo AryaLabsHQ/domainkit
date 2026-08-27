@@ -1,14 +1,14 @@
 /** A deliberately non-serializable credential value. */
-export class Secret {
+export class Value {
   readonly #value: string;
 
   private constructor(value: string) {
     this.#value = value;
   }
 
-  static from(value: string): Secret {
+  static from(value: string): Value {
     if (value.length === 0) throw new Error("Secret values cannot be empty");
-    return new Secret(value);
+    return new Value(value);
   }
 
   expose(): string {
@@ -23,3 +23,5 @@ export class Secret {
     return "[REDACTED]";
   }
 }
+
+export const make = Value.from;

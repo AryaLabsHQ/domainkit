@@ -1,38 +1,24 @@
 import { Effect, Layer } from "effect";
 
-import type { ResolverError } from "../errors.ts";
-import {
-  DnsResolver,
-  type DnsQuery,
-  type DnsResolution,
-  type DnsResolverService,
-  type PromiseDnsResolver,
-  toPromiseDnsResolver,
-} from "./resolver.ts";
+import * as DnsResolver from "./resolver.ts";
 
-export class InMemoryDnsResolver implements DnsResolverService {
-  readonly #resolve: (
-    query: DnsQuery,
-  ) => DnsResolution | Effect.Effect<DnsResolution, ResolverError>;
+export type Resolve = (
+  query: DnsResolver.Query,
+) => DnsResolver.Resolution | Effect.Effect<DnsResolver.Resolution, DnsResolver.Error>;
 
-  constructor(
-    resolve: (query: DnsQuery) => DnsResolution | Effect.Effect<DnsResolution, ResolverError>,
-  ) {
-    this.#resolve = resolve;
-  }
-
-  resolve(query: DnsQuery): Effect.Effect<DnsResolution, ResolverError> {
-    return Effect.suspend(() => {
-      const resolution = this.#resolve(query);
-      return Effect.isEffect(resolution) ? resolution : Effect.succeed(resolution);
-    });
-  }
-
-  get layer(): Layer.Layer<DnsResolverService> {
-    return Layer.succeed(DnsResolver)(this);
-  }
-
-  get promise(): PromiseDnsResolver {
-    return toPromiseDnsResolver(this);
-  }
+export function make(resolve: Resolve): DnsResolver.Interface {
+  return {
+    resolve: Effect.fn("InMemoryDnsResolver.resolve")((query) =>
+      Effect.suspend(() => {
+        const resolution = resolve(query);
+        return Effect.isEffect(resolution) ? resolution : Effect.succeed(resolution);
+      }),
+    ),
+  };
 }
+
+export const layer = (resolve: Resolve): Layer.Layer<DnsResolver.Service> =>
+  Layer.succeed(DnsResolver.Service, make(resolve));
+
+export const toAsync = (resolve: Resolve): DnsResolver.AsyncInterface =>
+  DnsResolver.toAsync(make(resolve));

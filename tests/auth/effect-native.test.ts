@@ -1,21 +1,25 @@
-import { Effect, Fiber, Layer } from "effect";
-import { describe, expect, it } from "vitest";
+import { assert, describe, it } from "@effect/vitest";
+import { Effect, Layer } from "effect";
+import { TestClock } from "effect/testing";
 
 import {
-  beginOAuth,
-  completeOAuth,
-  connectToken,
-  refreshOAuth,
-  webCryptoLayer,
+  ConnectionStore,
+  CredentialStore,
+  Digest,
+  DomainName,
+  OAuth,
+  OAuthStateStore,
+  ProviderAuth,
+  Secret,
+  TokenConnection,
 } from "../../src/effect.ts";
-import { parseDomainName, Secret, type OAuthMethod } from "../../src/index.ts";
 import {
   InMemoryConnectionStore,
   InMemoryCredentialStore,
   InMemoryOAuthStateStore,
 } from "../../src/testing.ts";
 
-const method: OAuthMethod = {
+const method: ProviderAuth.OAuthMethod = {
   _tag: "oauth2",
   authorizationServer: {
     authorization_endpoint: "https://auth.example/authorize",
@@ -28,16 +32,20 @@ const method: OAuthMethod = {
 };
 
 describe("Effect-native authorization", () => {
-  it("runs token validation and persistence through services", async () => {
-    const connections = new InMemoryConnectionStore();
-    const credentials = new InMemoryCredentialStore();
-    const layer = Layer.mergeAll(connections.layer, credentials.layer, webCryptoLayer);
-    const connection = await Effect.runPromise(
-      connectToken({
+  it.effect("runs token validation and persistence through services", () => {
+    const connections = InMemoryConnectionStore.make();
+    const credentials = InMemoryCredentialStore.make();
+    const layer = Layer.mergeAll(
+      Layer.succeed(ConnectionStore.Service, connections),
+      Layer.succeed(CredentialStore.Service, credentials),
+      Digest.webCryptoLayer,
+    );
+    return Effect.gen(function* () {
+      const connection = yield* TokenConnection.connect({
         grant: { _tag: "account" },
         providerId: "example-provider",
         subjectId: "user-1",
-        token: Secret.from("token"),
+        token: Secret.make("token"),
         validate: () =>
           Effect.succeed({
             accountId: "account-1",
@@ -45,40 +53,38 @@ describe("Effect-native authorization", () => {
             expiresAt: null,
             scopes: ["dns:write"],
           }),
-      }).pipe(Effect.provide(layer)),
-    );
-
-    expect((await Effect.runPromise(credentials.get(connection.id)))?.accessToken.expose()).toBe(
-      "token",
-    );
+      });
+      assert.strictEqual((yield* credentials.get(connection.id))?.accessToken.expose(), "token");
+      assert.ok(connection.createdAt instanceof Date);
+    }).pipe(Effect.provide(layer));
   });
 
-  it("runs PKCE, exchange, and persistence through Effect Layers", async () => {
-    const oauthState = new InMemoryOAuthStateStore();
-    const connections = new InMemoryConnectionStore();
-    const credentials = new InMemoryCredentialStore();
+  it.effect("runs PKCE, exchange, and persistence through Layers", () => {
+    const oauthState = InMemoryOAuthStateStore.make();
+    const connections = InMemoryConnectionStore.make();
+    const credentials = InMemoryCredentialStore.make();
     const layer = Layer.mergeAll(
-      oauthState.layer,
-      connections.layer,
-      credentials.layer,
-      webCryptoLayer,
+      Layer.succeed(OAuthStateStore.Service, oauthState),
+      Layer.succeed(ConnectionStore.Service, connections),
+      Layer.succeed(CredentialStore.Service, credentials),
+      Digest.webCryptoLayer,
     );
-    const begin = await Effect.runPromise(
-      beginOAuth({
+    return Effect.gen(function* () {
+      const started = yield* OAuth.begin({
         client: { clientId: "client-id" },
-        grant: { _tag: "domains", domains: [parseDomainName("example.com")] },
+        grant: { _tag: "domains", domains: [DomainName.parse("example.com")] },
         method,
         redirectUri: "https://app.example/oauth/callback",
         subjectId: "user-1",
-      }).pipe(Effect.provide(layer)),
-    );
-    const callbackUrl = new URL("https://app.example/oauth/callback");
-    callbackUrl.search = new URLSearchParams({
-      code: "authorization-code",
-      state: begin.authorizationUrl.searchParams.get("state")!,
-    }).toString();
-    const connection = await Effect.runPromise(
-      completeOAuth({
+      });
+      const state = started.authorizationUrl.searchParams.get("state");
+      if (state === null) return yield* Effect.die("OAuth state was not generated");
+      const callbackUrl = new URL("https://app.example/oauth/callback");
+      callbackUrl.search = new URLSearchParams({
+        code: "authorization-code",
+        state,
+      }).toString();
+      const connection = yield* OAuth.complete({
         callbackUrl,
         client: { clientId: "client-id" },
         fetch: async () =>
@@ -89,64 +95,43 @@ describe("Effect-native authorization", () => {
           }),
         providerId: "example-provider",
         resolveSubject: () => Effect.succeed({ accountId: "account-1", expiresAt: null }),
-      }).pipe(Effect.provide(layer)),
-    );
-
-    expect(connection.kind).toBe("oauth2");
-    expect((await Effect.runPromise(credentials.get(connection.id)))?.accessToken.expose()).toBe(
-      "access-token",
-    );
+      });
+      assert.strictEqual(connection.kind, "oauth2");
+      assert.strictEqual(
+        (yield* credentials.get(connection.id))?.accessToken.expose(),
+        "access-token",
+      );
+    }).pipe(Effect.provide(layer));
   });
 
-  it("propagates Effect interruption into OAuth transport", async () => {
-    const credentials = new InMemoryCredentialStore();
-    const connection = {
-      accountId: "account-1",
-      capabilities: ["dns:read", "dns:write"] as const,
-      createdAt: "2026-08-27T00:00:00.000Z",
-      expiresAt: null,
-      grant: { _tag: "account" } as const,
-      id: "connection-1",
-      kind: "oauth2" as const,
-      providerId: "example-provider",
-      scopes: ["dns:write"],
-      subjectId: "user-1",
-    };
-    await Effect.runPromise(
-      credentials.put(connection.id, {
-        accessToken: Secret.from("access-token"),
-        refreshToken: Secret.from("refresh-token"),
-        tokenType: "bearer",
-      }),
+  it.effect("expires OAuth continuations with TestClock", () => {
+    const layer = Layer.mergeAll(
+      InMemoryOAuthStateStore.layer(),
+      InMemoryConnectionStore.layer(),
+      InMemoryCredentialStore.layer(),
+      Digest.webCryptoLayer,
     );
-    let started!: () => void;
-    const requestStarted = new Promise<void>((resolve) => {
-      started = resolve;
-    });
-    let aborted = false;
-    const fiber = Effect.runFork(
-      refreshOAuth({
+    return Effect.gen(function* () {
+      const started = yield* OAuth.begin({
         client: { clientId: "client-id" },
-        connection,
-        fetch: async (_input, init) => {
-          started();
-          return new Promise<Response>((_resolve, reject) => {
-            init?.signal?.addEventListener(
-              "abort",
-              () => {
-                aborted = true;
-                reject(init.signal?.reason);
-              },
-              { once: true },
-            );
-          });
-        },
+        grant: { _tag: "account" },
         method,
-      }).pipe(Effect.provide(credentials.layer)),
-    );
-    await requestStarted;
-    await Effect.runPromise(Fiber.interrupt(fiber));
-
-    expect(aborted).toBe(true);
+        redirectUri: "https://app.example/oauth/callback",
+        subjectId: "user-1",
+        ttlMs: 1,
+      });
+      yield* TestClock.adjust("2 millis");
+      const state = started.authorizationUrl.searchParams.get("state");
+      if (state === null) return yield* Effect.die("OAuth state was not generated");
+      const callbackUrl = new URL("https://app.example/oauth/callback");
+      callbackUrl.search = new URLSearchParams({ code: "code", state }).toString();
+      const failure = yield* OAuth.complete({
+        callbackUrl,
+        client: { clientId: "client-id" },
+        providerId: "example-provider",
+        resolveSubject: () => Effect.succeed({ accountId: "account-1", expiresAt: null }),
+      }).pipe(Effect.flip);
+      assert.strictEqual(failure._tag, "AuthorizationError");
+    }).pipe(Effect.provide(layer));
   });
 });

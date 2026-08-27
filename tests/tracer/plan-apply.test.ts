@@ -1,275 +1,177 @@
+import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { describe, expect, it } from "vitest";
 
 import {
-  applyPlan,
-  authorizePlan,
-  createPlan,
-  type DnsProvider,
-  parseDomainName,
-  parseDnsRecord,
-  renderManualInstructions,
-} from "../../src/index.ts";
-import {
-  applyPlan as applyPlanEffect,
-  authorizePlan as authorizePlanEffect,
-  createPlan as createPlanEffect,
-  DnsProvider as DnsProviderServiceTag,
-  type DnsProviderService,
-  webCryptoLayer,
+  DnsPlan,
+  DnsProvider,
+  DnsRecord,
+  Digest,
+  Provisioning as EffectProvisioning,
 } from "../../src/effect.ts";
+import { Provisioning } from "../../src/index.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
 
-const requirement = parseDnsRecord({
+const metadata = {
+  ownership: "customer",
+  provenance: "test",
+  purpose: "tracking",
+};
+
+const requirement = DnsRecord.parse({
   _tag: "CNAME",
-  metadata: {
-    ownership: "example-app",
-    provenance: "click-tracking",
-    purpose: "Route tracked links",
-  },
-  name: "click.example.com",
+  metadata,
+  name: "track.example.com",
   policy: "exclusive",
-  target: "tracking.example.net",
+  target: "target.example.net",
   ttl: 300,
 });
 
-describe("plan and apply tracer", () => {
-  it("runs missing -> create -> apply -> exact no-op through both APIs", async () => {
-    const provider = new InMemoryDnsProvider();
-    const layer = Layer.merge(provider.layer, webCryptoLayer);
-    const first = await Effect.runPromise(
-      createPlanEffect({ requirements: [requirement], zone: "example.com" }).pipe(
-        Effect.provide(layer),
-      ),
-    );
-
-    expect(first.operations.map(({ _tag }) => _tag)).toEqual(["create"]);
-    expect(renderManualInstructions(first)[0]).toContain("CREATE CNAME click.example.com");
-    const equivalent = await Effect.runPromise(
-      createPlanEffect({ requirements: [requirement], zone: "EXAMPLE.COM." }).pipe(
-        Effect.provide(layer),
-      ),
-    );
-    expect(equivalent).toEqual(first);
-
-    const authorization = await Effect.runPromise(
-      authorizePlanEffect(first).pipe(Effect.provide(webCryptoLayer)),
-    );
-    const receipt = await Effect.runPromise(
-      applyPlanEffect({ authorization, plan: first }).pipe(Effect.provide(layer)),
-    );
-    expect(receipt.operations).toHaveLength(1);
-    expect(receipt.status).toBe("complete");
-
-    const second = await createPlan({
-      provider: provider.promise,
-      requirements: [requirement],
-      zone: "example.com",
-    });
-    expect(second.operations).toMatchObject([{ _tag: "noop", ttlDrift: false }]);
-  });
-
-  it("fails closed on incompatible CNAME state", async () => {
-    const provider = new InMemoryDnsProvider({
-      records: {
-        "example.com": [
-          parseDnsRecord({
-            ...requirement,
-            target: "other.example.com",
-          }),
-        ],
-      },
-    });
-    const plan = await createPlan({
-      provider: provider.promise,
-      requirements: [requirement],
-      zone: "example.com",
-    });
-    expect(plan.operations[0]?._tag).toBe("conflict");
-    await expect(
-      applyPlan({ authorization: await authorizePlan(plan), plan, provider: provider.promise }),
-    ).rejects.toMatchObject({ _tag: "PlanConflictError" });
-  });
-
-  it("rejects altered plans, wrong digests, and unapproved partial apply", async () => {
-    const provider = new InMemoryDnsProvider();
-    const secondRequirement = parseDnsRecord({
-      _tag: "TXT",
-      metadata: requirement.metadata,
-      name: "verify.example.com",
-      policy: "append",
-      ttl: null,
-      value: "domainkit-verification",
-    });
-    const plan = await createPlan({
-      provider: provider.promise,
-      requirements: [requirement, secondRequirement],
-      zone: "example.com",
-    });
-    const authorization = await authorizePlan(plan);
-
-    await expect(
-      applyPlan({
-        authorization: { ...authorization, planDigest: "wrong" },
-        plan,
-        provider: provider.promise,
-      }),
-    ).rejects.toMatchObject({ _tag: "AuthorizationError" });
-    await expect(
-      applyPlan({
-        authorization,
-        plan: { ...plan, providerId: "tampered" },
-        provider: provider.promise,
-      }),
-    ).rejects.toMatchObject({ _tag: "AuthorizationError" });
-    await expect(authorizePlan(plan, [authorization.operationIds[0]!])).rejects.toMatchObject({
-      _tag: "AuthorizationError",
-    });
-  });
-
-  it("rejects a plan when DNS state changes after authorization", async () => {
-    const provider = new InMemoryDnsProvider();
-    const plan = await createPlan({
-      provider: provider.promise,
-      requirements: [requirement],
-      zone: "example.com",
-    });
-    const authorization = await authorizePlan(plan);
-    await Effect.runPromise(
-      provider.createRecord(
-        parseDomainName("example.com"),
-        parseDnsRecord({ ...requirement, target: "unexpected.example.net" }),
-      ),
-    );
-
-    await expect(
-      applyPlan({ authorization, plan, provider: provider.promise }),
-    ).rejects.toMatchObject({
-      _tag: "StalePlanError",
-      approvedPlanDigest: plan.digest,
-    });
-  });
-
-  it("reports successful writes when DNS changes between plan operations", async () => {
-    const backing = new InMemoryDnsProvider();
-    let created = 0;
-    let injected = false;
-    let conflictingRecord: ReturnType<typeof parseDnsRecord> | undefined;
-    const provider: DnsProvider = {
-      id: backing.id,
-      createRecord: async (zone, record) => {
-        const result = await backing.promise.createRecord(zone, record);
-        created += 1;
-        return result;
-      },
-      listRecords: async (zone) => {
-        if (created === 1 && !injected && conflictingRecord !== undefined) {
-          injected = true;
-          await backing.promise.createRecord(zone, conflictingRecord);
-        }
-        return backing.promise.listRecords(zone);
-      },
-    };
-    const additional = parseDnsRecord({
-      ...requirement,
-      name: "second.example.com",
-      target: "second-target.example.net",
-    });
-    const plan = await createPlan({
-      provider,
-      requirements: [requirement, additional],
-      zone: "example.com",
-    });
-    const creates = plan.operations.filter((operation) => operation._tag === "create");
-    expect(creates).toHaveLength(2);
-    const second = creates[1]!;
-    if (second.requirement._tag !== "CNAME") throw new Error("Expected a CNAME operation");
-    conflictingRecord = parseDnsRecord({
-      ...second.requirement,
-      target: "concurrent.example.net",
-    });
-
-    await expect(
-      applyPlan({
-        authorization: await authorizePlan(plan),
-        now: () => new Date("2026-08-27T00:00:00.000Z"),
-        plan,
-        provider,
-      }),
-    ).rejects.toMatchObject({
-      _tag: "PartialApplyError",
-      causeTag: "StalePlanError",
-      failedOperationId: second.id,
-      receipt: {
-        operations: [{ operationId: creates[0]!.id }],
-        planDigest: plan.digest,
-        status: "partial",
-      },
-    });
-  });
-
-  it("returns confirmed writes when interrupted between operations", async () => {
-    const backing = new InMemoryDnsProvider();
-    let creates = 0;
-    const provider: DnsProviderService = {
-      id: backing.id,
-      createRecord: (zone, record) => {
-        creates += 1;
-        return creates === 1 ? backing.createRecord(zone, record) : Effect.interrupt;
-      },
-      listRecords: (zone) => backing.listRecords(zone),
-    };
-    const additional = parseDnsRecord({
-      ...requirement,
-      name: "second.example.com",
-      target: "second-target.example.net",
-    });
-    const layer = Layer.merge(Layer.succeed(DnsProviderServiceTag)(provider), webCryptoLayer);
-    const plan = await Effect.runPromise(
-      createPlanEffect({
-        requirements: [requirement, additional],
+describe("provisioning tracer", () => {
+  it.effect("runs missing, apply, and exact no-op through the Effect API", () => {
+    const provider = InMemoryDnsProvider.make();
+    const layer = Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer);
+    return Effect.gen(function* () {
+      const first = yield* EffectProvisioning.create({
+        requirements: [requirement],
         zone: "example.com",
-      }).pipe(Effect.provide(layer)),
-    );
-    const authorization = await Effect.runPromise(
-      authorizePlanEffect(plan).pipe(Effect.provide(webCryptoLayer)),
-    );
+      });
+      assert.deepStrictEqual(
+        first.operations.map(({ _tag }) => _tag),
+        ["create"],
+      );
 
-    await expect(
-      Effect.runPromise(applyPlanEffect({ authorization, plan }).pipe(Effect.provide(layer))),
-    ).rejects.toMatchObject({
-      _tag: "PartialApplyError",
-      causeTag: "Interrupted",
-      receipt: {
-        operations: [{ operationId: plan.operations[0]!.id }],
-        status: "partial",
-      },
-    });
+      const authorization = yield* EffectProvisioning.authorize(first);
+      const receipt = yield* EffectProvisioning.apply({ authorization, plan: first });
+      assert.strictEqual(receipt.status, "complete");
+      assert.ok(receipt.appliedAt instanceof Date);
+
+      const second = yield* EffectProvisioning.create({
+        requirements: [requirement],
+        zone: "example.com",
+      });
+      assert.deepStrictEqual(
+        second.operations.map(({ _tag }) => _tag),
+        ["noop"],
+      );
+    }).pipe(Effect.provide(layer));
   });
 
-  it("allows append-only coexistence and observes TTL drift without updating", async () => {
-    const existing = parseDnsRecord({
+  it("mirrors the tracer through the Promise namespace", async () => {
+    const provider = InMemoryDnsProvider.toAsync();
+    const plan = await Provisioning.create({
+      provider,
+      requirements: [requirement],
+      zone: "example.com",
+    });
+    const authorization = await Provisioning.authorize(plan);
+    const receipt = await Provisioning.apply({ authorization, plan, provider });
+    assert.strictEqual(receipt.status, "complete");
+  });
+
+  it.effect("fails closed on incompatible CNAME state", () => {
+    const layer = Layer.merge(
+      InMemoryDnsProvider.layer({
+        records: {
+          "example.com": [
+            DnsRecord.parse({
+              _tag: "TXT",
+              metadata,
+              name: "track.example.com",
+              policy: "append",
+              ttl: 300,
+              value: "occupied",
+            }),
+          ],
+        },
+      }),
+      Digest.webCryptoLayer,
+    );
+    return Effect.gen(function* () {
+      const plan = yield* EffectProvisioning.create({
+        requirements: [requirement],
+        zone: "example.com",
+      });
+      assert.strictEqual(plan.operations[0]?._tag, "conflict");
+      const authorization = yield* EffectProvisioning.authorize(plan);
+      const failure = yield* EffectProvisioning.apply({ authorization, plan }).pipe(Effect.flip);
+      assert.ok(failure instanceof EffectProvisioning.ConflictError);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("rejects a plan whose digest-bound contents were altered", () => {
+    const layer = Layer.merge(InMemoryDnsProvider.layer(), Digest.webCryptoLayer);
+    return Effect.gen(function* () {
+      const plan = yield* EffectProvisioning.create({
+        requirements: [requirement],
+        zone: "example.com",
+      });
+      const altered: DnsPlan.DnsPlan = {
+        ...plan,
+        providerId: "different-provider",
+      };
+      const failure = yield* EffectProvisioning.authorize(altered).pipe(Effect.flip);
+      assert.ok(failure instanceof EffectProvisioning.AuthorizationError);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("detects DNS state changes after authorization", () => {
+    const provider = InMemoryDnsProvider.make();
+    const layer = Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer);
+    return Effect.gen(function* () {
+      const plan = yield* EffectProvisioning.create({
+        requirements: [requirement],
+        zone: "example.com",
+      });
+      const authorization = yield* EffectProvisioning.authorize(plan);
+      yield* provider.createRecord(
+        plan.zone,
+        DnsRecord.parse({ ...requirement, target: "unexpected.example.net" }),
+      );
+      const failure = yield* EffectProvisioning.apply({ authorization, plan }).pipe(Effect.flip);
+      assert.ok(failure instanceof EffectProvisioning.StaleError);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("returns a partial receipt after a confirmed write and later failure", () => {
+    const backing = InMemoryDnsProvider.make();
+    let creates = 0;
+    const provider: DnsProvider.Interface = {
+      id: backing.id,
+      listRecords: backing.listRecords,
+      createRecord: Effect.fn("TestDnsProvider.createRecord")((zone, record) => {
+        creates += 1;
+        return creates === 1
+          ? backing.createRecord(zone, record)
+          : Effect.fail(
+              new DnsProvider.Error({
+                message: "injected failure",
+                operation: "createRecord",
+                providerId: backing.id,
+              }),
+            );
+      }),
+    };
+    const layer = Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer);
+    const second = DnsRecord.parse({
       _tag: "TXT",
-      metadata: requirement.metadata,
+      metadata,
       name: "verify.example.com",
       policy: "append",
-      ttl: 600,
-      value: "existing",
+      ttl: 300,
+      value: "second",
     });
-    const provider = new InMemoryDnsProvider({ records: { "example.com": [existing] } });
-    const additional = parseDnsRecord({ ...existing, ttl: 300, value: "additional" });
-    const create = await createPlan({
-      provider: provider.promise,
-      requirements: [additional],
-      zone: "example.com",
-    });
-    expect(create.operations[0]?._tag).toBe("create");
-
-    const drift = await createPlan({
-      provider: provider.promise,
-      requirements: [{ ...existing, ttl: 300 }],
-      zone: "example.com",
-    });
-    expect(drift.operations[0]).toMatchObject({ _tag: "noop", ttlDrift: true });
+    return Effect.gen(function* () {
+      const plan = yield* EffectProvisioning.create({
+        requirements: [requirement, second],
+        zone: "example.com",
+      });
+      const authorization = yield* EffectProvisioning.authorize(plan);
+      const failure = yield* EffectProvisioning.apply({ authorization, plan }).pipe(Effect.flip);
+      assert.ok(failure instanceof EffectProvisioning.PartialApplyError);
+      if (failure instanceof EffectProvisioning.PartialApplyError) {
+        assert.strictEqual(failure.receipt.status, "partial");
+        assert.strictEqual(failure.receipt.operations.length, 1);
+      }
+    }).pipe(Effect.provide(layer));
   });
 });

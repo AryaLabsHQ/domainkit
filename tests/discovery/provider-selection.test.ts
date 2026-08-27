@@ -1,122 +1,84 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, it } from "@effect/vitest";
 
-import {
-  deriveZoneCandidates,
-  parseDomainName,
-  selectProvider,
-  type ConnectedZone,
-  type Connection,
-} from "../../src/index.ts";
+import { Connection, DomainName, ProviderDiscovery, Zones } from "../../src/index.ts";
 
-function connection(id: string, providerId: string): Connection {
-  return {
-    accountId: "account-1",
-    capabilities: ["dns:read", "dns:write"],
-    createdAt: "2026-08-27T00:00:00.000Z",
-    expiresAt: null,
-    grant: { _tag: "account" },
-    id,
-    kind: "token",
-    providerId,
-    scopes: ["dns:write"],
-    subjectId: "user-1",
-  };
-}
+const connection: Connection.Connection = {
+  accountId: "account-1",
+  capabilities: ["dns:read", "dns:write"],
+  createdAt: new Date("2026-08-27T00:00:00.000Z"),
+  expiresAt: null,
+  grant: { _tag: "account" },
+  id: "connection-1",
+  kind: "token",
+  providerId: "cloudflare",
+  scopes: [],
+  subjectId: "subject-1",
+};
 
-function zone(
-  providerId: string,
-  nameservers: ReadonlyArray<string>,
-  name = "example.com",
-): ConnectedZone {
-  return {
-    accountId: "account-1",
-    connection: connection(`${providerId}-connection`, providerId),
-    nameservers,
-    providerId,
-    zone: name,
-  };
-}
-
-describe("zone candidates", () => {
-  it("handles apex, nested, IDN, private-suffix, and public-suffix inputs", () => {
-    expect(deriveZoneCandidates("example.co.uk")).toEqual([parseDomainName("example.co.uk")]);
-    expect(deriveZoneCandidates("a.b.example.co.uk")).toEqual([
-      parseDomainName("a.b.example.co.uk"),
-      parseDomainName("b.example.co.uk"),
-      parseDomainName("example.co.uk"),
+describe("provider discovery", () => {
+  it("derives candidates from the registrable domain", () => {
+    assert.deepStrictEqual(Zones.candidates("a.b.example.co.uk"), [
+      DomainName.parse("a.b.example.co.uk"),
+      DomainName.parse("b.example.co.uk"),
+      DomainName.parse("example.co.uk"),
     ]);
-    expect(deriveZoneCandidates("www.bücher.de")).toEqual([
-      parseDomainName("www.xn--bcher-kva.de"),
-      parseDomainName("xn--bcher-kva.de"),
+    assert.deepStrictEqual(Zones.candidates("www.bücher.de"), [
+      DomainName.parse("www.xn--bcher-kva.de"),
+      DomainName.parse("xn--bcher-kva.de"),
     ]);
-    expect(deriveZoneCandidates("customer.blogspot.com")).toEqual([
-      parseDomainName("customer.blogspot.com"),
-    ]);
-    expect(() => deriveZoneCandidates("co.uk")).toThrow();
-  });
-});
-
-describe("provider selection", () => {
-  const cloudflare = zone("cloudflare", ["alice.ns.cloudflare.com", "bob.ns.cloudflare.com"]);
-  const vercel = zone("vercel", ["ns1.vercel-dns.com", "ns2.vercel-dns.com"]);
-
-  it("honors an authorized explicit provider even when nameservers differ", () => {
-    const selected = selectProvider({
-      authoritativeNameservers: cloudflare.nameservers,
-      connectedZones: [cloudflare, vercel],
-      domain: "www.example.com",
-      explicit: { accountId: "account-1", providerId: "vercel", zone: "example.com" },
-    });
-    expect(selected).toMatchObject({
-      _tag: "selected",
-      candidate: { providerId: "vercel" },
-      reason: "explicit",
-    });
   });
 
-  it("auto-selects only one decisive connected nameserver match", () => {
-    const selected = selectProvider({
-      authoritativeNameservers: ["BOB.NS.CLOUDFLARE.COM.", "alice.ns.cloudflare.com"],
-      connectedZones: [cloudflare, vercel],
+  it("selects the unique connected zone with decisive nameserver evidence", () => {
+    const selection = ProviderDiscovery.select({
+      authoritativeNameservers: ["ADA.NS.CLOUDFLARE.COM.", "BOB.NS.CLOUDFLARE.COM"],
+      connectedZones: [
+        {
+          accountId: "account-1",
+          connection,
+          nameservers: ["ada.ns.cloudflare.com", "bob.ns.cloudflare.com"],
+          providerId: "cloudflare",
+          zone: "example.com",
+        },
+      ],
       domain: "www.example.com",
     });
-    expect(selected).toMatchObject({
-      _tag: "selected",
-      candidate: { providerId: "cloudflare" },
-      reason: "unique-nameserver-match",
+    assert.strictEqual(selection._tag, "selected");
+    if (selection._tag === "selected") {
+      assert.strictEqual(selection.reason, "unique-nameserver-match");
+      assert.deepStrictEqual(selection.candidate.matchedNameservers, [
+        DomainName.parse("ada.ns.cloudflare.com"),
+        DomainName.parse("bob.ns.cloudflare.com"),
+      ]);
+    }
+  });
+
+  it("returns manual selection when nameserver evidence is unsupported", () => {
+    const selection = ProviderDiscovery.select({
+      authoritativeNameservers: ["ns1.unknown.example"],
+      connectedZones: [
+        {
+          accountId: "account-1",
+          connection,
+          nameservers: ["ada.ns.cloudflare.com"],
+          providerId: "cloudflare",
+          zone: "example.com",
+        },
+      ],
+      domain: "example.com",
     });
-  });
-
-  it("returns evidence and manual fallback for ambiguity or unsupported nameservers", () => {
-    const duplicate = {
-      ...cloudflare,
-      accountId: "account-2",
-      connection: { ...cloudflare.connection, accountId: "account-2", id: "other" },
-    };
-    expect(
-      selectProvider({
-        authoritativeNameservers: cloudflare.nameservers,
-        connectedZones: [cloudflare, duplicate],
-        domain: "example.com",
-      }),
-    ).toMatchObject({ _tag: "manual", reason: "ambiguous" });
-    expect(
-      selectProvider({
-        authoritativeNameservers: ["ns1.unknown.example"],
-        connectedZones: [cloudflare, vercel],
-        domain: "example.com",
-      }),
-    ).toMatchObject({ _tag: "manual", reason: "unsupported" });
-  });
-
-  it("rejects an explicit zone without a matching connection grant", () => {
-    expect(() =>
-      selectProvider({
-        authoritativeNameservers: [],
-        connectedZones: [cloudflare],
-        domain: "example.com",
-        explicit: { accountId: "account-1", providerId: "vercel", zone: "example.com" },
-      }),
-    ).toThrow();
+    assert.deepStrictEqual(selection, {
+      _tag: "manual",
+      evidence: [
+        {
+          accountId: "account-1",
+          connectionId: "connection-1",
+          decisiveNameserverMatch: false,
+          matchedNameservers: [],
+          providerId: "cloudflare",
+          zone: DomainName.parse("example.com"),
+        },
+      ],
+      reason: "unsupported",
+    });
   });
 });

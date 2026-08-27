@@ -29,12 +29,13 @@ the core abstraction.
 The package is portable ESM built on Fetch and Web APIs. Effect is a peer dependency. Executor is
 not required; a later optional bridge can implement DomainKit's host interfaces.
 
-The root API accepts ordinary async providers and stores:
+Both entry points are organized by capability namespaces. The root API accepts ordinary async
+providers and stores:
 
 ```ts
-import { createPlan } from "domainkit";
+import { Provisioning } from "domainkit";
 
-const plan = await createPlan({
+const plan = await Provisioning.create({
   provider: {
     id: "my-provider",
     listRecords: async (zone) => listDnsRecords(zone),
@@ -50,15 +51,21 @@ directly:
 
 ```ts
 import { Effect, Layer } from "effect";
-import { createPlan, layerDnsProviderFromPromise, webCryptoLayer } from "domainkit/effect";
+import { Digest, DnsProvider, Provisioning } from "domainkit/effect";
 
-const program = createPlan({ requirements, zone: "example.com" }).pipe(
-  Effect.provide(Layer.merge(layerDnsProviderFromPromise(provider), webCryptoLayer)),
+const program = Provisioning.create({ requirements, zone: "example.com" }).pipe(
+  Effect.provide(Layer.merge(DnsProvider.layerFromAsync(provider), Digest.webCryptoLayer)),
 );
 ```
 
-The Promise functions provide bridge Layers and call `Effect.runPromise`; they do not maintain a
-second planning, authorization, or verification implementation.
+The Promise namespace functions provide bridge Layers and call `Effect.runPromise`; they do not
+maintain a second planning, authorization, or verification implementation. Effect services use the
+same module shape throughout: `Interface`, `Service`, `layer...`, and named `Effect.fn` operations
+live behind the owning namespace.
+
+Schemas own external parsing. For example, `DomainName.parse` and `DnsRecord.parse` decode and
+canonicalize strings through codecs, while encoded protocol dates remain ISO strings and decoded
+domain values use `Date`.
 
 ## v0.1 boundary
 

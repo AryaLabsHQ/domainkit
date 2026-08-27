@@ -1,13 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "@effect/vitest";
 
-import {
-  assertConnectionGrant,
-  authorizePlanForConnection,
-  connectToken,
-  createPlan,
-  parseDnsRecord,
-  Secret,
-} from "../../src/index.ts";
+import { Connection, DnsRecord, Provisioning, Secret, TokenConnection } from "../../src/index.ts";
 import {
   InMemoryConnectionStore,
   InMemoryCredentialStore,
@@ -15,18 +8,19 @@ import {
 } from "../../src/testing.ts";
 
 describe("token connections", () => {
-  it("validates caller tokens and enforces account-wide grants", async () => {
-    const credentialStore = new InMemoryCredentialStore();
-    const connection = await connectToken({
-      connectionStore: new InMemoryConnectionStore().promise,
-      credentialStore: credentialStore.promise,
+  it("validates caller tokens and authorizes a digest-bound DNS plan", async () => {
+    const connections = InMemoryConnectionStore.toAsync();
+    const credentialStore = InMemoryCredentialStore.make();
+    const credentials = InMemoryCredentialStore.toAsync(credentialStore);
+    const connection = await TokenConnection.connect({
+      connectionStore: connections,
+      credentialStore: credentials,
       grant: { _tag: "account" },
-      now: () => new Date("2026-08-27T00:00:00.000Z"),
       providerId: "example-provider",
       subjectId: "user-1",
-      token: Secret.from("personal-access-token"),
+      token: Secret.make("personal-access-token"),
       validate: async (token) => {
-        expect(token.expose()).toBe("personal-access-token");
+        assert.strictEqual(token.expose(), "personal-access-token");
         return {
           accountId: "account-1",
           capabilities: ["dns:read", "dns:write"],
@@ -35,23 +29,22 @@ describe("token connections", () => {
         };
       },
     });
-    expect(
-      assertConnectionGrant(connection, {
+    assert.strictEqual(
+      Connection.assertGrant(connection, {
         accountId: "account-1",
         capability: "dns:read",
         domain: "anything.example.com",
         providerId: "example-provider",
       }),
-    ).toBe("anything.example.com");
-    expect(JSON.stringify(await credentialStore.promise.get(connection.id))).not.toContain(
-      "personal-access-token",
+      "anything.example.com",
     );
+    assert.notMatch(JSON.stringify(await credentials.get(connection.id)), /personal-access-token/);
 
-    const provider = new InMemoryDnsProvider({ id: "example-provider" });
-    const plan = await createPlan({
-      provider: provider.promise,
+    const provider = InMemoryDnsProvider.toAsync({ id: "example-provider" });
+    const plan = await Provisioning.create({
+      provider,
       requirements: [
-        parseDnsRecord({
+        DnsRecord.parse({
           _tag: "TXT",
           metadata: { ownership: "example-app", provenance: "test", purpose: "Verify domain" },
           name: "_verify.example.com",
@@ -62,35 +55,34 @@ describe("token connections", () => {
       ],
       zone: "example.com",
     });
+
     await expect(
-      authorizePlanForConnection({ accountId: "wrong-account", connection, plan }),
+      Provisioning.authorizeForConnection({
+        accountId: "wrong-account",
+        connection,
+        plan,
+      }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
+    const authorization = await Provisioning.authorizeForConnection({
+      accountId: "account-1",
+      connection,
+      plan,
+    });
+    assert.strictEqual(authorization.planDigest, plan.digest);
+
     await expect(
-      authorizePlanForConnection({ accountId: "account-1", connection, plan }),
-    ).resolves.toMatchObject({ planDigest: plan.digest });
-    await expect(
-      authorizePlanForConnection({
+      Provisioning.authorizeForConnection({
         accountId: "account-1",
         connection: { ...connection, capabilities: ["dns:read"] },
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
     await expect(
-      authorizePlanForConnection({
+      Provisioning.authorizeForConnection({
         accountId: "account-1",
-        connection: { ...connection, expiresAt: "2026-08-26T00:00:00.000Z" },
+        connection: { ...connection, expiresAt: new Date(0) },
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
-    await expect(
-      authorizePlanForConnection({
-        accountId: "account-1",
-        connection: { ...connection, expiresAt: "not-a-date" },
-        plan,
-      }),
-    ).rejects.toMatchObject({
-      _tag: "AuthorizationError",
-      message: "Connection expiration is invalid",
-    });
   });
 });

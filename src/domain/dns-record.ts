@@ -1,108 +1,78 @@
-import { Schema } from "effect";
+import { Effect, Schema as S } from "effect";
 
-import { InvalidInputError } from "../invalid-input-error.ts";
-import { DomainName, parseDomainName } from "./domain-name.ts";
+import { Error as InvalidInputError } from "../invalid-input.ts";
+import * as DomainName from "./domain-name.ts";
 
-export const DnsRecordType = Schema.Literals([
-  "A",
-  "AAAA",
-  "CNAME",
-  "TXT",
-  "MX",
-  "CAA",
-  "NS",
-  "SRV",
-]);
-export type DnsRecordType = typeof DnsRecordType.Type;
+export const Type = S.Literals(["A", "AAAA", "CNAME", "TXT", "MX", "CAA", "NS", "SRV"]);
+export type Type = typeof Type.Type;
 
-export const RequirementMetadata = Schema.Struct({
-  ownership: Schema.String.check(Schema.isMinLength(1)),
-  provenance: Schema.String.check(Schema.isMinLength(1)),
-  purpose: Schema.String.check(Schema.isMinLength(1)),
+export const RequirementMetadata = S.Struct({
+  ownership: S.String.check(S.isMinLength(1)),
+  provenance: S.String.check(S.isMinLength(1)),
+  purpose: S.String.check(S.isMinLength(1)),
 });
-export type RequirementMetadata = typeof RequirementMetadata.Type;
+export interface RequirementMetadata extends S.Schema.Type<typeof RequirementMetadata> {}
 
 const CommonFields = {
   metadata: RequirementMetadata,
-  name: DomainName,
-  policy: Schema.Literals(["exclusive", "append"]),
-  ttl: Schema.NullOr(Schema.Int.check(Schema.isBetween({ minimum: 60, maximum: 2_147_483_647 }))),
+  name: DomainName.Schema,
+  policy: S.Literals(["exclusive", "append"]),
+  ttl: S.NullOr(S.Int.check(S.isBetween({ minimum: 60, maximum: 2_147_483_647 }))),
 };
 
-const Address = Schema.String.check(
-  Schema.makeFilter((value) => (isIpv4(value) ? undefined : "Expected an IPv4 address")),
+const ExclusiveCommonFields = { ...CommonFields, policy: S.Literal("exclusive") };
+const Address = S.String.check(
+  S.makeFilter((value) => (isIpv4(value) ? undefined : "Expected an IPv4 address")),
 );
-const Ipv6Address = Schema.String.check(
-  Schema.makeFilter((value) => (isIpv6(value) ? undefined : "Expected an IPv6 address")),
+const Ipv6Address = S.String.check(
+  S.makeFilter((value) => (isIpv6(value) ? undefined : "Expected an IPv6 address")),
 );
-const Port = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 65_535 }));
-const Priority = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 65_535 }));
+const Port = S.Int.check(S.isBetween({ minimum: 0, maximum: 65_535 }));
+const Priority = S.Int.check(S.isBetween({ minimum: 0, maximum: 65_535 }));
 
-export const ARecord = Schema.TaggedStruct("A", { ...CommonFields, address: Address });
-export const AaaaRecord = Schema.TaggedStruct("AAAA", { ...CommonFields, address: Ipv6Address });
-export const CnameRecord = Schema.TaggedStruct("CNAME", { ...CommonFields, target: DomainName });
-export const TxtRecord = Schema.TaggedStruct("TXT", {
-  ...CommonFields,
-  value: Schema.String.check(Schema.isMinLength(1)),
+export const Schema = S.TaggedUnion({
+  A: { ...CommonFields, address: Address },
+  AAAA: { ...CommonFields, address: Ipv6Address },
+  CNAME: { ...ExclusiveCommonFields, target: DomainName.Schema },
+  TXT: { ...CommonFields, value: S.String.check(S.isMinLength(1)) },
+  MX: { ...CommonFields, exchange: DomainName.Schema, priority: Priority },
+  CAA: {
+    ...CommonFields,
+    flags: S.Int.check(S.isBetween({ minimum: 0, maximum: 255 })),
+    tag: S.Literals(["issue", "issuewild", "iodef"]),
+    value: S.String.check(S.isMinLength(1)),
+  },
+  NS: { ...CommonFields, target: DomainName.Schema },
+  SRV: {
+    ...CommonFields,
+    port: Port,
+    priority: Priority,
+    target: DomainName.Schema,
+    weight: Priority,
+  },
 });
-export const MxRecord = Schema.TaggedStruct("MX", {
-  ...CommonFields,
-  exchange: DomainName,
-  priority: Priority,
-});
-export const CaaRecord = Schema.TaggedStruct("CAA", {
-  ...CommonFields,
-  flags: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 255 })),
-  tag: Schema.Literals(["issue", "issuewild", "iodef"]),
-  value: Schema.String.check(Schema.isMinLength(1)),
-});
-export const NsRecord = Schema.TaggedStruct("NS", { ...CommonFields, target: DomainName });
-export const SrvRecord = Schema.TaggedStruct("SRV", {
-  ...CommonFields,
-  port: Port,
-  priority: Priority,
-  target: DomainName,
-  weight: Priority,
-});
+export const {
+  A,
+  AAAA: Aaaa,
+  CAA: Caa,
+  CNAME: Cname,
+  MX: Mx,
+  NS: Ns,
+  SRV: Srv,
+  TXT: Txt,
+} = Schema.cases;
+export type DnsRecord = typeof Schema.Type;
+export type Encoded = typeof Schema.Encoded;
 
-export const DnsRecord = Schema.Union([
-  ARecord,
-  AaaaRecord,
-  CnameRecord,
-  TxtRecord,
-  MxRecord,
-  CaaRecord,
-  NsRecord,
-  SrvRecord,
-]);
-export type DnsRecord = typeof DnsRecord.Type;
-type InputRecord<Record extends DnsRecord> = Record extends DnsRecord
-  ? Omit<Record, "exchange" | "name" | "target"> & { readonly name: string } & (Record extends {
-        readonly target: DomainName;
-      }
-        ? { readonly target: string }
-        : {}) &
-      (Record extends { readonly exchange: DomainName } ? { readonly exchange: string } : {})
-  : never;
-export type DnsRecordInput = InputRecord<DnsRecord>;
+export const decode = Effect.fn("DnsRecord.decode")((input: unknown) =>
+  S.decodeUnknownEffect(Schema)(input).pipe(
+    Effect.mapError((cause) => new InvalidInputError({ message: cause.message })),
+  ),
+);
 
-export function parseDnsRecord<const Input extends DnsRecordInput | DnsRecord>(
-  input: Input,
-): Extract<DnsRecord, { readonly _tag: Input["_tag"] }>;
-export function parseDnsRecord(input: DnsRecordInput | DnsRecord): DnsRecord;
-export function parseDnsRecord(input: DnsRecordInput | DnsRecord): DnsRecord {
+export function parse(input: unknown): DnsRecord {
   try {
-    const normalized = {
-      ...input,
-      name: parseDomainName(input.name),
-      ...("target" in input ? { target: parseDomainName(input.target) } : {}),
-      ...("exchange" in input ? { exchange: parseDomainName(input.exchange) } : {}),
-    };
-    const record = Schema.decodeUnknownSync(DnsRecord)(normalized);
-    if (record._tag === "CNAME" && record.policy === "append") {
-      throw new Error("CNAME requirements must use the exclusive policy");
-    }
-    return record;
+    return S.decodeUnknownSync(Schema)(input);
   } catch (cause) {
     throw new InvalidInputError({
       message: cause instanceof Error ? cause.message : String(cause),
@@ -110,7 +80,7 @@ export function parseDnsRecord(input: DnsRecordInput | DnsRecord): DnsRecord {
   }
 }
 
-export function recordData(record: DnsRecord): Readonly<Record<string, number | string>> {
+export function data(record: DnsRecord): Readonly<Record<string, number | string>> {
   switch (record._tag) {
     case "A":
     case "AAAA":
@@ -134,11 +104,11 @@ export function recordData(record: DnsRecord): Readonly<Record<string, number | 
   }
 }
 
-export function sameRecordData(left: DnsRecord, right: DnsRecord): boolean {
+export function equals(left: DnsRecord, right: DnsRecord): boolean {
   return (
     left._tag === right._tag &&
     left.name === right.name &&
-    JSON.stringify(recordData(left)) === JSON.stringify(recordData(right))
+    JSON.stringify(data(left)) === JSON.stringify(data(right))
   );
 }
 

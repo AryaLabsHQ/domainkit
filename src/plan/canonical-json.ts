@@ -1,39 +1,68 @@
-import { Crypto, Effect, Layer, PlatformError } from "effect";
+import { Crypto, Effect, Layer, PlatformError, Schema } from "effect";
 
-import { CryptoError } from "../errors.ts";
+export class CryptoError extends Schema.TaggedError<CryptoError>()("CryptoError", {
+  message: Schema.String,
+}) {}
 
-function normalize(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(normalize);
+export type Json =
+  | null
+  | boolean
+  | number
+  | string
+  | ReadonlyArray<Json>
+  | { readonly [key: string]: Json };
+
+/** Deterministic JSON serialization for already schema-encoded protocol values. */
+export function stringify(value: Json): string {
+  if (value === null || typeof value !== "object") {
+    const encoded = JSON.stringify(value);
+    if (encoded === undefined) throw new TypeError("Value is not representable as JSON");
+    return encoded;
   }
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value)
-        .filter(([, entry]) => entry !== undefined)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, entry]) => [key, normalize(entry)]),
-    );
-  }
-  return value;
+  if (isJsonArray(value)) return `[${value.map(stringify).join(",")}]`;
+  return `{${Object.entries(value)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([key, entry]) => `${JSON.stringify(key)}:${stringify(entry)}`)
+    .join(",")}}`;
 }
 
-export function canonicalJson(value: unknown): string {
-  return JSON.stringify(normalize(value));
+function isJsonArray(value: Json): value is ReadonlyArray<Json> {
+  return Array.isArray(value);
 }
 
-export function sha256(value: unknown): Effect.Effect<string, CryptoError, Crypto.Crypto> {
-  return Effect.gen(function* () {
-    const cryptoService = yield* Crypto.Crypto;
-    const bytes = new TextEncoder().encode(canonicalJson(value));
-    const digest = yield* cryptoService
-      .digest("SHA-256", bytes)
-      .pipe(Effect.mapError((cause) => new CryptoError({ message: cause.message })));
-    return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  });
+export const sha256Text = Effect.fn("Digest.sha256Text")(function* (value: string) {
+  const cryptoService = yield* Crypto.Crypto;
+  const digest = yield* cryptoService
+    .digest("SHA-256", new TextEncoder().encode(value))
+    .pipe(Effect.mapError((cause) => new CryptoError({ message: cause.message })));
+  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+});
+
+export const sha256Json = Effect.fn("Digest.sha256Json")((value: Json) =>
+  Effect.try({
+    try: () => stringify(value),
+    catch: (cause) =>
+      new CryptoError({ message: cause instanceof Error ? cause.message : String(cause) }),
+  }).pipe(Effect.flatMap(sha256Text)),
+);
+
+function sha256EncodedProgram<S extends Schema.Constraint>(
+  schema: S,
+  value: S["Type"],
+): Effect.Effect<string, CryptoError, Crypto.Crypto | S["EncodingServices"]> {
+  return Schema.encodeEffect(schema)(value).pipe(
+    Effect.mapError((cause) => new CryptoError({ message: cause.message })),
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Json)),
+    Effect.mapError((cause) => new CryptoError({ message: cause.message })),
+    Effect.flatMap(sha256Json),
+  );
 }
 
-/** Portable Web Crypto implementation used by the Promise facade. */
-export const webCryptoLayer: Layer.Layer<Crypto.Crypto> = Layer.succeed(Crypto.Crypto)(
+export const sha256Encoded = Effect.fn("Digest.sha256Encoded")(sha256EncodedProgram);
+
+/** Portable Web Crypto implementation for hosts that want a ready-made Layer. */
+export const webCryptoLayer: Layer.Layer<Crypto.Crypto> = Layer.succeed(
+  Crypto.Crypto,
   Crypto.make({
     randomBytes: (size) => crypto.getRandomValues(new Uint8Array(size)),
     digest: (algorithm, data) =>

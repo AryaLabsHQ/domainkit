@@ -1,67 +1,75 @@
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 
-import type { DomainName } from "../domain/domain-name.ts";
-import type { DnsRecord } from "../domain/dns-record.ts";
-import { ProviderError } from "../errors.ts";
+import type * as DomainName from "../domain/domain-name.ts";
+import type * as DnsRecord from "../domain/dns-record.ts";
 
-export interface ProviderCreateResult {
+export interface CreateResult {
   readonly providerRecordId: string | null;
 }
 
-/** The canonical provider capability required by the additive v0.1 interpreter. */
-export interface DnsProviderService {
+export class Error extends Schema.TaggedError<Error>()("ProviderError", {
+  cause: Schema.optionalKey(Schema.Unknown),
+  message: Schema.String,
+  operation: Schema.String,
+  providerId: Schema.String,
+}) {}
+
+/** The provider capability used by DNS planning, application, and verification. */
+export interface Interface {
   readonly id: string;
-  /**
-   * Creates one approved record. DomainKit does not assume this operation is conditional or part of
-   * a provider transaction; callers receive a partial receipt if a later operation fails.
-   */
   readonly createRecord: (
-    zone: DomainName,
-    record: DnsRecord,
-  ) => Effect.Effect<ProviderCreateResult, ProviderError>;
+    zone: DomainName.DomainName,
+    record: DnsRecord.DnsRecord,
+  ) => Effect.Effect<CreateResult, Error>;
   readonly listRecords: (
-    zone: DomainName,
-  ) => Effect.Effect<ReadonlyArray<DnsRecord>, ProviderError>;
+    zone: DomainName.DomainName,
+  ) => Effect.Effect<ReadonlyArray<DnsRecord.DnsRecord>, Error>;
 }
 
-export const DnsProvider = Context.Service<DnsProviderService>("domainkit/DnsProvider");
+export class Service extends Context.Service<Service, Interface>()("@domainkit/DnsProvider") {}
 
-/** An ordinary async provider implementation accepted by the Promise facade. */
-export interface PromiseDnsProvider {
+/** Minimal Promise-shaped provider contract for hosts that do not use Effect directly. */
+export interface AsyncInterface {
   readonly id: string;
-  readonly createRecord: (zone: DomainName, record: DnsRecord) => Promise<ProviderCreateResult>;
-  readonly listRecords: (zone: DomainName) => Promise<ReadonlyArray<DnsRecord>>;
+  readonly createRecord: (
+    zone: DomainName.DomainName,
+    record: DnsRecord.DnsRecord,
+  ) => Promise<CreateResult>;
+  readonly listRecords: (
+    zone: DomainName.DomainName,
+  ) => Promise<ReadonlyArray<DnsRecord.DnsRecord>>;
 }
 
-/** Bridges an ordinary async provider into the canonical Effect capability. */
-export function layerDnsProviderFromPromise(
-  provider: PromiseDnsProvider,
-): Layer.Layer<DnsProviderService> {
-  const providerError = (cause: unknown) =>
-    cause instanceof ProviderError
-      ? cause
-      : new ProviderError({ message: messageOf(cause), providerId: provider.id });
-  return Layer.succeed(DnsProvider)({
+export const layerFromAsync = (provider: AsyncInterface): Layer.Layer<Service> =>
+  Layer.succeed(Service, {
     id: provider.id,
-    createRecord: (zone, record) =>
+    createRecord: Effect.fn("DnsProvider.createRecord")((zone, record) =>
       Effect.tryPromise({
         try: () => provider.createRecord(zone, record),
-        catch: providerError,
+        catch: (cause) => failure(provider, "createRecord", cause),
       }),
-    listRecords: (zone) =>
-      Effect.tryPromise({ try: () => provider.listRecords(zone), catch: providerError }),
+    ),
+    listRecords: Effect.fn("DnsProvider.listRecords")((zone) =>
+      Effect.tryPromise({
+        try: () => provider.listRecords(zone),
+        catch: (cause) => failure(provider, "listRecords", cause),
+      }),
+    ),
   });
-}
 
-/** Adapts an Effect-native provider for a Promise-only host or test harness. */
-export function toPromiseDnsProvider(provider: DnsProviderService): PromiseDnsProvider {
-  return {
-    id: provider.id,
-    createRecord: (zone, record) => Effect.runPromise(provider.createRecord(zone, record)),
-    listRecords: (zone) => Effect.runPromise(provider.listRecords(zone)),
-  };
-}
+export const toAsync = (provider: Interface): AsyncInterface => ({
+  id: provider.id,
+  createRecord: (zone, record) => Effect.runPromise(provider.createRecord(zone, record)),
+  listRecords: (zone) => Effect.runPromise(provider.listRecords(zone)),
+});
 
-function messageOf(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
+function failure(provider: AsyncInterface, operation: string, cause: unknown): Error {
+  return cause instanceof Error
+    ? cause
+    : new Error({
+        cause,
+        message: cause instanceof globalThis.Error ? cause.message : String(cause),
+        operation,
+        providerId: provider.id,
+      });
 }

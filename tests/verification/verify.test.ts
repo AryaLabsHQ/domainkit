@@ -1,124 +1,146 @@
+import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { describe, expect, it } from "vitest";
 
-import { parseDnsRecord, parseDomainName, verifyRecord } from "../../src/index.ts";
-import { ResolverError, verifyRecord as verifyRecordEffect } from "../../src/effect.ts";
+import {
+  DnsRecord,
+  DnsResolver,
+  DomainName,
+  Verification as EffectVerification,
+} from "../../src/effect.ts";
+import { Verification } from "../../src/index.ts";
 import { InMemoryDnsProvider, InMemoryDnsResolver } from "../../src/testing.ts";
 
-const record = parseDnsRecord({
+const record = DnsRecord.parse({
   _tag: "CNAME",
-  metadata: { ownership: "example-app", provenance: "test", purpose: "Route traffic" },
+  metadata: { ownership: "customer", provenance: "test", purpose: "tracking" },
   name: "track.example.com",
   policy: "exclusive",
-  target: "destination.example.net",
+  target: "target.example.net",
   ttl: 300,
 });
 
 describe("record verification", () => {
-  it("keeps provider readback and public propagation as separate evidence", async () => {
-    const provider = new InMemoryDnsProvider({ records: { "example.com": [record] } });
-    const resolver = new InMemoryDnsResolver(() => ({
-      _tag: "answer",
-      answers: [
-        {
-          data: "destination.example.net.",
-          name: parseDomainName("track.example.com"),
-          ttl: 60,
-          type: "CNAME",
-        },
-      ],
-    }));
-    const verified = await Effect.runPromise(
-      verifyRecordEffect({ record, zone: parseDomainName("example.com") }).pipe(
-        Effect.provide(Layer.merge(provider.layer, resolver.layer)),
-      ),
+  it.effect("keeps provider readback and public propagation as separate evidence", () => {
+    const layer = Layer.merge(
+      InMemoryDnsProvider.layer({ records: { "example.com": [record] } }),
+      InMemoryDnsResolver.layer(() => ({
+        _tag: "answer",
+        answers: [
+          {
+            data: "TARGET.EXAMPLE.NET.",
+            name: DomainName.parse("track.example.com"),
+            ttl: 300,
+            type: "CNAME",
+          },
+        ],
+      })),
     );
-    expect(verified).toEqual({
-      provider: { _tag: "match" },
-      publicDns: { _tag: "propagated" },
-      status: "verified",
-    });
+    return Effect.gen(function* () {
+      const result = yield* EffectVerification.record({
+        record,
+        zone: DomainName.parse("example.com"),
+      });
+      assert.deepStrictEqual(result, {
+        provider: { _tag: "match" },
+        publicDns: { _tag: "propagated" },
+        status: "verified",
+      });
+    }).pipe(Effect.provide(layer));
+  });
 
-    const pending = await verifyRecord({
-      provider: provider.promise,
+  it("mirrors pending evidence through the Promise namespace", async () => {
+    const result = await Verification.record({
+      provider: InMemoryDnsProvider.toAsync({ records: { "example.com": [record] } }),
       record,
-      resolver: new InMemoryDnsResolver(() => ({ _tag: "nodata" })).promise,
-      zone: parseDomainName("example.com"),
+      resolver: InMemoryDnsResolver.toAsync(() => ({ _tag: "nodata" })),
+      zone: DomainName.parse("example.com"),
     });
-    expect(pending).toMatchObject({
+    assert.deepStrictEqual(result, {
       provider: { _tag: "match" },
       publicDns: { _tag: "missing" },
       status: "pending",
     });
   });
 
-  it("distinguishes mismatch, timeout, and provider failure", async () => {
-    const empty = new InMemoryDnsProvider();
-    const mismatch = await verifyRecord({
-      provider: empty.promise,
+  it("distinguishes mismatch, timeout, and resolver failure", async () => {
+    const provider = InMemoryDnsProvider.toAsync();
+    const mismatch = await Verification.record({
+      provider,
       record,
-      resolver: new InMemoryDnsResolver(() => ({
+      resolver: InMemoryDnsResolver.toAsync(() => ({
         _tag: "answer",
         answers: [
           {
-            data: "wrong.example.net",
+            data: "other.example.net",
             name: record.name,
-            ttl: 60,
+            ttl: 300,
             type: "CNAME",
           },
         ],
-      })).promise,
-      zone: parseDomainName("example.com"),
+      })),
+      zone: DomainName.parse("example.com"),
     });
-    expect(mismatch).toMatchObject({ publicDns: { _tag: "mismatch" }, status: "mismatch" });
+    assert.strictEqual(mismatch.status, "mismatch");
 
-    const timeout = await verifyRecord({
-      provider: empty.promise,
+    const timeout = await Verification.record({
+      provider,
       record,
-      resolver: {
-        resolve: async () => ({ _tag: "timeout" }),
-      },
-      zone: parseDomainName("example.com"),
+      resolver: { resolve: async () => ({ _tag: "timeout" }) },
+      zone: DomainName.parse("example.com"),
     });
-    expect(timeout).toMatchObject({ publicDns: { _tag: "timeout" }, status: "unavailable" });
+    assert.strictEqual(timeout.status, "unavailable");
+    assert.strictEqual(timeout.publicDns._tag, "timeout");
   });
 
-  it("does not accept matching data from a different owner name", async () => {
-    const provider = new InMemoryDnsProvider({ records: { "example.com": [record] } });
-    const observation = await verifyRecord({
-      provider: provider.promise,
-      record,
-      resolver: new InMemoryDnsResolver(() => ({
-        _tag: "answer",
-        answers: [
-          {
-            data: "destination.example.net",
-            name: parseDomainName("other.example.com"),
-            ttl: 60,
-            type: "CNAME",
-          },
-        ],
-      })).promise,
-      zone: parseDomainName("example.com"),
-    });
-    expect(observation).toMatchObject({ publicDns: { _tag: "mismatch" }, status: "mismatch" });
-  });
-
-  it("turns typed resolver failure into unavailable verification evidence", async () => {
-    const provider = new InMemoryDnsProvider({ records: { "example.com": [record] } });
-    const resolver = new InMemoryDnsResolver(() =>
-      Effect.fail(new ResolverError({ message: "resolver unavailable", reason: "transport" })),
-    );
-    const observation = await Effect.runPromise(
-      verifyRecordEffect({ record, zone: parseDomainName("example.com") }).pipe(
-        Effect.provide(Layer.merge(provider.layer, resolver.layer)),
+  it.effect("turns a typed resolver error into unavailable evidence", () => {
+    const layer = Layer.merge(
+      InMemoryDnsProvider.layer({ records: { "example.com": [record] } }),
+      InMemoryDnsResolver.layer(() =>
+        Effect.fail(
+          new DnsResolver.Error({
+            message: "resolver unavailable",
+            reason: "transport",
+          }),
+        ),
       ),
     );
+    return Effect.gen(function* () {
+      const result = yield* EffectVerification.record({
+        record,
+        zone: DomainName.parse("example.com"),
+      });
+      assert.strictEqual(result.status, "unavailable");
+      assert.deepStrictEqual(result.publicDns, {
+        _tag: "failure",
+        message: "resolver unavailable",
+      });
+    }).pipe(Effect.provide(layer));
+  });
 
-    expect(observation).toMatchObject({
-      provider: { _tag: "match" },
-      publicDns: { _tag: "failure", message: "resolver unavailable" },
-      status: "unavailable",
-    });
+  it.effect("requires matching owner name as well as type and data", () => {
+    const layer = Layer.merge(
+      InMemoryDnsProvider.layer({ records: { "example.com": [record] } }),
+      Layer.succeed(DnsResolver.Service, {
+        resolve: () =>
+          Effect.succeed({
+            _tag: "answer",
+            answers: [
+              {
+                data: "target.example.net",
+                name: DomainName.parse("other.example.com"),
+                ttl: 300,
+                type: "CNAME",
+              },
+            ],
+          }),
+      }),
+    );
+    return Effect.gen(function* () {
+      const result = yield* EffectVerification.record({
+        record,
+        zone: DomainName.parse("example.com"),
+      });
+      assert.strictEqual(result.status, "mismatch");
+    }).pipe(Effect.provide(layer));
   });
 });

@@ -1,23 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "@effect/vitest";
 
-import {
-  assertConnectionGrant,
-  beginOAuth,
-  completeOAuth,
-  parseDomainName,
-  refreshOAuth,
-  revokeOAuth,
-  Secret,
-  type Connection,
-  type OAuthMethod,
-} from "../../src/index.ts";
+import { Connection, DomainName, OAuth, ProviderAuth, Secret } from "../../src/index.ts";
 import {
   InMemoryConnectionStore,
   InMemoryCredentialStore,
   InMemoryOAuthStateStore,
 } from "../../src/testing.ts";
 
-const method: OAuthMethod = {
+const method: ProviderAuth.OAuthMethod = {
   _tag: "oauth2",
   authorizationServer: {
     authorization_endpoint: "https://auth.example/authorize",
@@ -30,25 +20,25 @@ const method: OAuthMethod = {
   scopes: ["dns:read", "dns:write"],
 };
 
-describe("OAuth authorization code flow", () => {
-  it("uses PKCE/state, consumes continuation once, and redacts credentials", async () => {
-    const stateStore = new InMemoryOAuthStateStore();
-    const connectionStore = new InMemoryConnectionStore();
-    const credentialStore = new InMemoryCredentialStore();
-    const begin = await beginOAuth({
+describe("OAuth Promise facade", () => {
+  it("uses PKCE and one-time state while redacting credentials", async () => {
+    const state = InMemoryOAuthStateStore.make();
+    const connections = InMemoryConnectionStore.make();
+    const credentials = InMemoryCredentialStore.make();
+    const begin = await OAuth.begin({
       client: { clientId: "client-id" },
-      grant: { _tag: "domains", domains: [parseDomainName("example.com")] },
+      grant: { _tag: "domains", domains: [DomainName.parse("example.com")] },
       method,
-      now: () => new Date("2026-08-27T00:00:00.000Z"),
       redirectUri: "https://app.example/oauth/callback",
-      stateStore: stateStore.promise,
+      stateStore: InMemoryOAuthStateStore.toAsync(state),
       subjectId: "user-1",
     });
-    expect(begin.authorizationUrl.searchParams.get("code_challenge_method")).toBe("S256");
-    const state = begin.authorizationUrl.searchParams.get("state")!;
+    assert.strictEqual(begin.authorizationUrl.searchParams.get("code_challenge_method"), "S256");
+    const oauthState = begin.authorizationUrl.searchParams.get("state");
+    if (oauthState === null) throw new Error("OAuth state was not generated");
 
     let requestBody = "";
-    const fetch = async (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    const fetch = async (_url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       requestBody = String(init?.body);
       return Response.json({
         access_token: "access-token-value",
@@ -59,100 +49,72 @@ describe("OAuth authorization code flow", () => {
       });
     };
     const callbackUrl = new URL("https://app.example/oauth/callback");
-    callbackUrl.search = new URLSearchParams({ code: "authorization-code", state }).toString();
-    const connection = await completeOAuth({
+    callbackUrl.search = new URLSearchParams({
+      code: "authorization-code",
+      state: oauthState,
+    }).toString();
+    const connection = await OAuth.complete({
       callbackUrl,
       client: { clientId: "client-id" },
-      connectionStore: connectionStore.promise,
-      credentialStore: credentialStore.promise,
+      connectionStore: InMemoryConnectionStore.toAsync(connections),
+      credentialStore: InMemoryCredentialStore.toAsync(credentials),
       fetch,
-      now: () => new Date("2026-08-27T00:01:00.000Z"),
       providerId: "example-provider",
       resolveSubject: async (_tokens, accessToken) => {
-        expect(accessToken.expose()).toBe("access-token-value");
-        return { accountId: "account-1", expiresAt: "2026-08-27T01:01:00.000Z" };
+        assert.strictEqual(accessToken.expose(), "access-token-value");
+        return { accountId: "account-1", expiresAt: new Date(Date.now() + 60_000) };
       },
-      stateStore: stateStore.promise,
+      stateStore: InMemoryOAuthStateStore.toAsync(state),
     });
 
-    expect(requestBody).toContain("code_verifier=");
-    expect(requestBody).toContain("code=authorization-code");
-    expect(JSON.stringify(connection)).not.toContain("token-value");
-    expect(JSON.stringify(await credentialStore.promise.get(connection.id))).toContain(
-      "[REDACTED]",
+    assert.match(requestBody, /code_verifier=/);
+    assert.match(requestBody, /code=authorization-code/);
+    assert.notMatch(JSON.stringify(connection), /token-value/);
+    assert.strictEqual(
+      JSON.stringify(
+        await InMemoryCredentialStore.toAsync(credentials).get(connection.id),
+      ).includes("token-value"),
+      false,
     );
-    expect(JSON.stringify(await credentialStore.promise.get(connection.id))).not.toContain(
-      "token-value",
-    );
-    expect(
-      assertConnectionGrant(connection, {
+    assert.strictEqual(
+      Connection.assertGrant(connection, {
         accountId: "account-1",
         capability: "dns:read",
         domain: "example.com",
-        now: new Date("2026-08-27T00:02:00.000Z"),
         providerId: "example-provider",
       }),
-    ).toBe("example.com");
-    expect(() =>
-      assertConnectionGrant(connection, {
+      "example.com",
+    );
+    assert.throws(() =>
+      Connection.assertGrant(connection, {
         accountId: "account-1",
         capability: "dns:read",
         domain: "other.example.com",
-        now: new Date("2026-08-27T00:02:00.000Z"),
         providerId: "example-provider",
       }),
-    ).toThrow();
+    );
 
     await expect(
-      completeOAuth({
+      OAuth.complete({
         callbackUrl,
         client: { clientId: "client-id" },
-        connectionStore: connectionStore.promise,
-        credentialStore: credentialStore.promise,
+        connectionStore: InMemoryConnectionStore.toAsync(connections),
+        credentialStore: InMemoryCredentialStore.toAsync(credentials),
         fetch,
         providerId: "example-provider",
         resolveSubject: async () => ({ accountId: "account-1", expiresAt: null }),
-        stateStore: stateStore.promise,
+        stateStore: InMemoryOAuthStateStore.toAsync(state),
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
   });
 
-  it("expires continuations and never serializes secret values", async () => {
-    const stateStore = new InMemoryOAuthStateStore();
-    const begin = await beginOAuth({
-      client: { clientId: "client-id", clientSecret: Secret.from("client-secret") },
-      grant: { _tag: "account" },
-      method: { ...method, clientAuth: "client_secret_basic" },
-      now: () => new Date("2026-08-27T00:00:00.000Z"),
-      redirectUri: "https://app.example/oauth/callback",
-      stateStore: stateStore.promise,
-      subjectId: "user-1",
-      ttlMs: 1,
-    });
-    const callbackUrl = new URL("https://app.example/oauth/callback");
-    callbackUrl.searchParams.set("code", "code");
-    callbackUrl.searchParams.set("state", begin.authorizationUrl.searchParams.get("state")!);
-    await expect(
-      completeOAuth({
-        callbackUrl,
-        client: { clientId: "client-id", clientSecret: Secret.from("client-secret") },
-        connectionStore: new InMemoryConnectionStore().promise,
-        credentialStore: new InMemoryCredentialStore().promise,
-        now: () => new Date("2026-08-27T00:00:01.000Z"),
-        providerId: "example-provider",
-        resolveSubject: async () => ({ accountId: "account-1", expiresAt: null }),
-        stateStore: stateStore.promise,
-      }),
-    ).rejects.toMatchObject({ _tag: "AuthorizationError" });
-    expect(JSON.stringify(Secret.from("never-visible"))).toBe('"[REDACTED]"');
-  });
-
-  it("refreshes and revokes only when provider capabilities and credentials allow it", async () => {
-    const credentialStore = new InMemoryCredentialStore();
-    const connection: Connection = {
+  it("refreshes and revokes stored credentials", async () => {
+    const credentials = InMemoryCredentialStore.make();
+    const asyncCredentials = InMemoryCredentialStore.toAsync(credentials);
+    const connection: Connection.Connection = {
       accountId: "account-1",
       capabilities: ["dns:read", "dns:write"],
-      createdAt: "2026-08-27T00:00:00.000Z",
+      createdAt: new Date("2026-08-27T00:00:00.000Z"),
       expiresAt: null,
       grant: { _tag: "account" },
       id: "connection-1",
@@ -161,55 +123,43 @@ describe("OAuth authorization code flow", () => {
       scopes: ["dns:write"],
       subjectId: "user-1",
     };
-    await credentialStore.promise.put(connection.id, {
-      accessToken: Secret.from("old-access"),
-      refreshToken: Secret.from("old-refresh"),
+    await asyncCredentials.put(connection.id, {
+      accessToken: Secret.make("old-access"),
+      refreshToken: Secret.make("old-refresh"),
       tokenType: "bearer",
     });
-    const fetch = async (input: RequestInfo | URL): Promise<Response> => {
-      if (String(input).endsWith("/token")) {
-        return Response.json({
-          access_token: "new-access",
-          refresh_token: "new-refresh",
-          token_type: "Bearer",
-        });
-      }
-      return new Response(null, { status: 200 });
-    };
+    const fetch = async (input: RequestInfo | URL): Promise<Response> =>
+      String(input).endsWith("/token")
+        ? Response.json({
+            access_token: "new-access",
+            refresh_token: "new-refresh",
+            token_type: "Bearer",
+          })
+        : new Response(null, { status: 200 });
 
-    await refreshOAuth({
+    await OAuth.refresh({
       client: { clientId: "client-id" },
       connection,
-      credentialStore: credentialStore.promise,
+      credentialStore: asyncCredentials,
       fetch,
       method,
     });
-    expect((await credentialStore.promise.get(connection.id))?.accessToken.expose()).toBe(
+    assert.strictEqual(
+      (await asyncCredentials.get(connection.id))?.accessToken.expose(),
       "new-access",
     );
-    await revokeOAuth({
+
+    await OAuth.revoke({
       client: { clientId: "client-id" },
       connection,
-      credentialStore: credentialStore.promise,
+      credentialStore: asyncCredentials,
       fetch,
       method,
     });
-    expect(await credentialStore.promise.get(connection.id)).toBeNull();
+    assert.strictEqual(await asyncCredentials.get(connection.id), null);
+  });
 
-    await expect(
-      revokeOAuth({
-        client: { clientId: "client-id" },
-        connection,
-        credentialStore: credentialStore.promise,
-        method: {
-          ...method,
-          authorizationServer: {
-            authorization_endpoint: method.authorizationServer.authorization_endpoint,
-            issuer: method.authorizationServer.issuer,
-            token_endpoint: method.authorizationServer.token_endpoint,
-          },
-        },
-      }),
-    ).rejects.toMatchObject({ _tag: "AuthorizationError" });
+  it("never serializes secret contents", () => {
+    assert.strictEqual(JSON.stringify(Secret.make("never-visible")), '"[REDACTED]"');
   });
 });

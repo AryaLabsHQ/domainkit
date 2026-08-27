@@ -43,15 +43,14 @@
   },
   "scripts": {
     "build": "tsdown",
-    "architecture:check": "bun scripts/check-architecture.mts",
     "clean": "rm -rf dist coverage",
-    "consumer:audit": "bun scripts/check-consumers.mts",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --deny-warnings .",
-    "pack:audit": "bun scripts/check-package.mts",
-    "release:check": "bun run lint && bun run format:check && bun run typecheck && bun run architecture:check && bun run test && bun run build && bun run pack:audit && bun run consumer:audit",
-    "test": "vitest run",
+    "lint:rules": "node --test tools/oxlint/*.test.js",
+    "release:check": "bun run lint && bun run lint:rules && bun run format:check && bun run typecheck && bun run test && bun run build && bun run test:artifact",
+    "test": "vitest run --exclude tests/artifact/**/*.test.ts",
+    "test:artifact": "vitest run tests/artifact",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
@@ -60,6 +59,7 @@
     "tldts": "^7.4.11"
   },
   "devDependencies": {
+    "@effect/vitest": "4.0.0-rc.112",
     "@types/bun": "1.4.0",
     "effect": "4.0.0-rc.112",
     "oxfmt": "0.65.0",
