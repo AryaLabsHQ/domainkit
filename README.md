@@ -50,10 +50,9 @@ const program = Provisioning.create({ requirements, zone: "example.com" }).pipe(
 );
 ```
 
-The Promise namespace functions provide bridge Layers and call `Effect.runPromise`; they do not
-maintain a second planning, authorization, or verification implementation. Effect services use the
-same module shape throughout: `Interface`, `Service`, `layer...`, and named `Effect.fn` operations
-live behind the owning namespace.
+The Promise namespaces delegate to the canonical Effect programs rather than maintaining a second
+planning, authorization, or verification implementation. Hosts supply providers and stores
+explicitly; DomainKit does not own a hidden runtime.
 
 Schemas own external parsing. For example, `DomainName.parse` and `DnsRecord.parse` decode and
 canonicalize strings through codecs, while encoded protocol dates remain ISO strings and decoded

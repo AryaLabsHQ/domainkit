@@ -1,6 +1,6 @@
 # Contributing
 
-DomainKit is building a small, auditable public contract for DNS provisioning. Changes should keep
+DomainKit defines a small, auditable public contract for DNS provisioning. Changes should keep
 provider APIs, host storage, and product UI outside the core protocol unless an accepted architecture
 decision says otherwise.
 
@@ -18,5 +18,5 @@ one coherent change and explain any public contract change.
 
 ## Compatibility
 
-Before the first stable release, public APIs may change directly as the provider adapters validate
-the abstraction. Once a stable contract exists, breaking changes will be explicit and versioned.
+While the public contract is pre-1.0, APIs may change directly. Once a stable contract is declared,
+breaking changes will be explicit and versioned.
