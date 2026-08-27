@@ -69,6 +69,7 @@ describe("Vercel Effect client", () => {
       record("CAA", "", '0 issue "ca.example"'),
       record("NS", "delegated", "ns.example.net"),
       record("SRV", "_service._tcp", "5 443 service.example.net", { priority: 10 }),
+      record("A", "*", "192.0.2.2"),
       record("ALIAS", "", "alias.vercel-dns.com"),
     ];
     const recording = recordedFetch([
@@ -81,12 +82,18 @@ describe("Vercel Effect client", () => {
       const records = yield* client.listRecords(DomainName.parse("example.com"));
       assert.deepStrictEqual(
         records.map(({ _tag }) => _tag),
-        ["A", "AAAA", "CNAME", "TXT", "MX", "CAA", "NS", "SRV", "Opaque"],
+        ["A", "AAAA", "CNAME", "TXT", "MX", "CAA", "NS", "SRV", "Opaque", "Opaque"],
       );
       assert.strictEqual(records[0]?.name, "a.example.com");
       assert.strictEqual(records[2]?._tag === "CNAME" ? records[2].ttl : undefined, 300);
       assert.strictEqual(records[4]?.name, "example.com");
       assert.deepStrictEqual(records[8], {
+        _tag: "Opaque",
+        name: "*.example.com",
+        providerRecordId: "record-a",
+        providerType: "A",
+      });
+      assert.deepStrictEqual(records[9], {
         _tag: "Opaque",
         name: DomainName.parse("example.com"),
         providerRecordId: "record-alias",

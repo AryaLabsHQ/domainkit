@@ -10,13 +10,18 @@ export type CreateBody = Readonly<Record<string, unknown>>;
 export const decode = Effect.fn("VercelRecords.decode")(
   (zone: DomainName.DomainName, record: Protocol.Record) =>
     Effect.gen(function* () {
+      const absolute = absoluteNameCandidate(zone, record.name);
+      const name = yield* DomainName.decode(absolute).pipe(
+        Effect.match({ onFailure: () => null, onSuccess: (value) => value }),
+      );
+      if (name === null) return yield* decodeOpaque(record, absolute);
       const common = {
         metadata: {
           ownership: "provider",
           provenance: "vercel",
           purpose: "existing DNS record",
         },
-        name: yield* absoluteName(zone, record.name),
+        name,
         policy: record.type === "CNAME" ? "exclusive" : "append",
         ttl: record.ttl ?? 60,
       } as const;
@@ -74,14 +79,19 @@ export const decode = Effect.fn("VercelRecords.decode")(
           });
         }
         default:
-          return yield* S.decodeUnknownEffect(DnsRecord.Opaque)({
-            _tag: "Opaque",
-            name: common.name,
-            providerRecordId: record.id,
-            providerType: record.type,
-          }).pipe(Effect.mapError((cause) => failure("decodeRecord", cause.message)));
+          return yield* decodeOpaque(record, name);
       }
     }),
+);
+
+const decodeOpaque = Effect.fn("VercelRecords.decodeOpaque")(
+  (record: Protocol.Record, name: string) =>
+    S.decodeUnknownEffect(DnsRecord.Opaque)({
+      _tag: "Opaque",
+      name,
+      providerRecordId: record.id,
+      providerType: record.type,
+    }).pipe(Effect.mapError((cause) => failure("decodeRecord", cause.message))),
 );
 
 export function encode(zone: DomainName.DomainName, record: DnsRecord.DnsRecord): CreateBody {
@@ -119,20 +129,13 @@ export function encode(zone: DomainName.DomainName, record: DnsRecord.DnsRecord)
   }
 }
 
-const absoluteName = Effect.fn("VercelRecords.absoluteName")((
-  zone: DomainName.DomainName,
-  name: string,
-) => {
-  const candidate =
-    name === "" || name === "@"
-      ? zone
-      : name === zone || name.endsWith(`.${zone}`)
-        ? name
-        : `${name}.${zone}`;
-  return DomainName.decode(candidate).pipe(
-    Effect.mapError((cause) => failure("decodeRecord", cause.message)),
-  );
-});
+function absoluteNameCandidate(zone: DomainName.DomainName, name: string): string {
+  return name === "" || name === "@"
+    ? zone
+    : name === zone || name.endsWith(`.${zone}`)
+      ? name
+      : `${name}.${zone}`;
+}
 
 function relativeName(zone: DomainName.DomainName, name: DomainName.DomainName): string {
   if (name === zone) return "";
