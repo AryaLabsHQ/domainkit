@@ -4,9 +4,6 @@ DomainKit is a provider-independent TypeScript SDK for turning DNS requirements 
 authorized provisioning plans. It is intended for products that need to connect customer domains
 without making registrar-specific APIs their product architecture.
 
-The project is pre-release. Version `0.0.1` reserves the package while the first public contract is
-built.
-
 ## Direction
 
 DomainKit separates four concerns:
