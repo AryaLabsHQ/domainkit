@@ -315,7 +315,7 @@ describe("Cloudflare Effect client", () => {
       capabilities,
       fetch: recordedFetch([
         { body: page([zone]) },
-        { body: page([proxied, record("HTTPS", "example.com", { data: {} })]) },
+        { body: page([proxied, record("HTTPS", "*.example.com", { data: {} })]) },
       ]).fetch,
       token,
     });
@@ -328,7 +328,7 @@ describe("Cloudflare Effect client", () => {
       );
       assert.deepStrictEqual(records[1], {
         _tag: "Opaque",
-        name: DomainName.parse("example.com"),
+        name: "*.example.com",
         providerRecordId: "record-https",
         providerType: "HTTPS",
       });
