@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-DomainKit is a standalone SDK rather than a Samva package. Its core uses ESM, Fetch, Web Crypto, and
+DomainKit is an independent, provider-neutral SDK. Its core uses ESM, Fetch, Web Crypto, and
 serializable values so applications can adopt it without adopting a particular database, framework,
 or integration runtime. Provider SDKs are avoided when a small documented HTTP surface is enough.
 

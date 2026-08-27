@@ -1,15 +1,15 @@
-const allowedFiles = new Set([
+const requiredFiles = new Set([
   "LICENSE",
   "README.md",
   "dist/effect.d.mts",
   "dist/effect.mjs",
   "dist/index.d.mts",
   "dist/index.mjs",
-  "dist/index.mjs.map",
   "dist/testing.d.mts",
   "dist/testing.mjs",
   "package.json",
 ]);
+const generatedArtifact = /^dist\/[a-zA-Z0-9_-]+\.(?:mjs|d\.mts)(?:\.map)?$/;
 
 const forbiddenPatterns = [
   /(?:^|\/)\.env(?:\.|$)/,
@@ -40,9 +40,11 @@ if (files === undefined) {
 }
 
 const unexpected = files.filter(
-  (path) => !allowedFiles.has(path) || forbiddenPatterns.some((pattern) => pattern.test(path)),
+  (path) =>
+    (!requiredFiles.has(path) && !generatedArtifact.test(path)) ||
+    forbiddenPatterns.some((pattern) => pattern.test(path)),
 );
-const missing = [...allowedFiles].filter((path) => !files.includes(path));
+const missing = [...requiredFiles].filter((path) => !files.includes(path));
 
 if (unexpected.length > 0 || missing.length > 0) {
   throw new Error(

@@ -1,1 +1,1 @@
-export { VERSION } from "./index.ts";
+export { InMemoryDnsProvider } from "./provider/in-memory.ts";
