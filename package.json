@@ -43,6 +43,14 @@
       "types": "./dist/effect-cloudflare.d.mts",
       "import": "./dist/effect-cloudflare.mjs"
     },
+    "./vercel": {
+      "types": "./dist/vercel.d.mts",
+      "import": "./dist/vercel.mjs"
+    },
+    "./effect/vercel": {
+      "types": "./dist/effect-vercel.d.mts",
+      "import": "./dist/effect-vercel.mjs"
+    },
     "./testing": {
       "types": "./dist/testing.d.mts",
       "import": "./dist/testing.mjs"

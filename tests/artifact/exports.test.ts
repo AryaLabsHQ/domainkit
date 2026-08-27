@@ -3,8 +3,10 @@ import { assert, describe, it } from "@effect/vitest";
 import packageJson from "../../package.json" with { type: "json" };
 import * as effectApi from "../../src/effect.ts";
 import * as effectCloudflareApi from "../../src/effect-cloudflare.ts";
+import * as effectVercelApi from "../../src/effect-vercel.ts";
 import * as promiseApi from "../../src/index.ts";
 import * as promiseCloudflareApi from "../../src/cloudflare.ts";
+import * as promiseVercelApi from "../../src/vercel.ts";
 import * as testingApi from "../../src/testing.ts";
 
 describe("public namespaces", () => {
@@ -26,6 +28,10 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof effectCloudflareApi.make, "function");
     assert.strictEqual(typeof promiseApi.Cloudflare.make, "function");
     assert.strictEqual(typeof promiseCloudflareApi.make, "function");
+    assert.strictEqual(typeof effectApi.Vercel.make, "function");
+    assert.strictEqual(typeof effectVercelApi.make, "function");
+    assert.strictEqual(typeof promiseApi.Vercel.make, "function");
+    assert.strictEqual(typeof promiseVercelApi.make, "function");
   });
 
   it("does not flatten service tags or operations onto either entry point", () => {

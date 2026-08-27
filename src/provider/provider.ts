@@ -22,7 +22,7 @@ export type ErrorReason = typeof ErrorReason.Type;
 
 export class Error extends Schema.TaggedError<Error>()("ProviderError", {
   cause: Schema.optionalKey(Schema.Unknown),
-  code: Schema.optionalKey(Schema.Number),
+  code: Schema.optionalKey(Schema.Union([Schema.Number, Schema.String])),
   message: Schema.String,
   operation: Schema.String,
   providerId: Schema.String,
