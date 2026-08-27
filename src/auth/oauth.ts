@@ -140,7 +140,7 @@ function completeProgram(input: {
     const id = yield* cryptoService.randomUUIDv4.pipe(
       Effect.mapError((cause) => new CryptoError({ message: cause.message })),
     );
-    const connection: Connection.Connection = {
+    const connection = yield* Connection.validate({
       accountId: subject.accountId,
       capabilities: [...continuation.method.capabilities],
       createdAt: new Date(now),
@@ -151,7 +151,7 @@ function completeProgram(input: {
       providerId: input.providerId,
       scopes: (tokens.scope ?? continuation.method.scopes.join(" ")).split(" ").filter(Boolean),
       subjectId: continuation.subjectId,
-    };
+    });
     yield* credentialStore.put(connection.id, {
       accessToken,
       refreshToken: tokens.refresh_token === undefined ? null : Secret.from(tokens.refresh_token),

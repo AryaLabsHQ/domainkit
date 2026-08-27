@@ -6,7 +6,7 @@ import type * as DnsProvider from "../provider/provider.ts";
 import * as ConnectionStore from "../stores/connection.ts";
 import * as CredentialStore from "../stores/credential.ts";
 import type * as Storage from "../stores/error.ts";
-import type * as Connection from "./connection.ts";
+import * as Connection from "./connection.ts";
 import type * as ProviderAuth from "./manifest.ts";
 import { Value as Secret } from "./secret.ts";
 
@@ -29,7 +29,7 @@ export const connect = Effect.fn("TokenConnection.connect")(function* (input: In
   const id = yield* cryptoService.randomUUIDv4.pipe(
     Effect.mapError((cause) => new CryptoFailure({ message: cause.message })),
   );
-  const connection: Connection.Connection = {
+  const connection = yield* Connection.validate({
     accountId: validation.accountId,
     capabilities: [...validation.capabilities],
     createdAt,
@@ -40,7 +40,7 @@ export const connect = Effect.fn("TokenConnection.connect")(function* (input: In
     providerId: input.providerId,
     scopes: [...validation.scopes],
     subjectId: input.subjectId,
-  };
+  });
   yield* credentialStore.put(connection.id, {
     accessToken: input.token,
     refreshToken: null,

@@ -84,5 +84,31 @@ describe("token connections", () => {
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
+    await expect(
+      Provisioning.authorizeForConnection({
+        accountId: "account-1",
+        connection: { ...connection, expiresAt: new Date(Number.NaN) },
+        plan,
+      }),
+    ).rejects.toMatchObject({ _tag: "AuthorizationError" });
+  });
+
+  it("rejects invalid expiration metadata returned by token validation", async () => {
+    await expect(
+      TokenConnection.connect({
+        connectionStore: InMemoryConnectionStore.toAsync(),
+        credentialStore: InMemoryCredentialStore.toAsync(),
+        grant: { _tag: "account" },
+        providerId: "example-provider",
+        subjectId: "user-1",
+        token: Secret.make("personal-access-token"),
+        validate: async () => ({
+          accountId: "account-1",
+          capabilities: ["dns:read", "dns:write"],
+          expiresAt: new Date(Number.NaN),
+          scopes: ["dns:write"],
+        }),
+      }),
+    ).rejects.toMatchObject({ _tag: "InvalidInputError" });
   });
 });

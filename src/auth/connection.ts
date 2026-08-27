@@ -34,6 +34,12 @@ export const decode = Effect.fn("Connection.decode")((input: unknown) =>
   ),
 );
 
+export const validate = Effect.fn("Connection.validate")((input: unknown) =>
+  S.decodeUnknownEffect(S.toType(Schema))(input).pipe(
+    Effect.mapError((cause) => new InvalidInputError({ message: cause.message })),
+  ),
+);
+
 export const encode = S.encodeSync(Schema);
 
 export interface OAuthContinuation {
@@ -70,8 +76,13 @@ export function assertGrant(
   if (connection.providerId !== request.providerId || connection.accountId !== request.accountId) {
     throw new AuthorizationError({ message: "Connection does not grant this provider account" });
   }
-  if (connection.expiresAt !== null && connection.expiresAt <= (request.now ?? new Date())) {
-    throw new AuthorizationError({ message: "Connection has expired" });
+  if (connection.expiresAt !== null) {
+    if (Number.isNaN(connection.expiresAt.getTime())) {
+      throw new AuthorizationError({ message: "Connection expiration is invalid" });
+    }
+    if (connection.expiresAt <= (request.now ?? new Date())) {
+      throw new AuthorizationError({ message: "Connection has expired" });
+    }
   }
   if (!connection.capabilities.includes(request.capability)) {
     throw new AuthorizationError({

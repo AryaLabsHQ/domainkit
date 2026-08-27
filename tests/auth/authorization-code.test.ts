@@ -159,6 +159,38 @@ describe("OAuth Promise facade", () => {
     assert.strictEqual(await asyncCredentials.get(connection.id), null);
   });
 
+  it("rejects invalid expiration metadata returned by subject resolution", async () => {
+    const state = InMemoryOAuthStateStore.make();
+    const begin = await OAuth.begin({
+      client: { clientId: "client-id" },
+      grant: { _tag: "account" },
+      method,
+      redirectUri: "https://app.example/oauth/callback",
+      stateStore: InMemoryOAuthStateStore.toAsync(state),
+      subjectId: "user-1",
+    });
+    const oauthState = begin.authorizationUrl.searchParams.get("state");
+    if (oauthState === null) throw new Error("OAuth state was not generated");
+    const callbackUrl = new URL("https://app.example/oauth/callback");
+    callbackUrl.search = new URLSearchParams({ code: "code", state: oauthState }).toString();
+
+    await expect(
+      OAuth.complete({
+        callbackUrl,
+        client: { clientId: "client-id" },
+        connectionStore: InMemoryConnectionStore.toAsync(),
+        credentialStore: InMemoryCredentialStore.toAsync(),
+        fetch: async () => Response.json({ access_token: "token", token_type: "Bearer" }),
+        providerId: "example-provider",
+        resolveSubject: async () => ({
+          accountId: "account-1",
+          expiresAt: new Date(Number.NaN),
+        }),
+        stateStore: InMemoryOAuthStateStore.toAsync(state),
+      }),
+    ).rejects.toMatchObject({ _tag: "InvalidInputError" });
+  });
+
   it("never serializes secret contents", () => {
     assert.strictEqual(JSON.stringify(Secret.make("never-visible")), '"[REDACTED]"');
   });
