@@ -26,6 +26,11 @@ export class CryptoError extends Schema.TaggedError<CryptoError>()("CryptoError"
   message: Schema.String,
 }) {}
 
+export class StorageError extends Schema.TaggedError<StorageError>()("StorageError", {
+  message: Schema.String,
+  operation: Schema.String,
+}) {}
+
 export class StalePlanError extends Schema.TaggedError<StalePlanError>()("StalePlanError", {
   approvedPlanDigest: Schema.String,
   currentPlanDigest: Schema.String,
@@ -52,6 +57,7 @@ export type DomainKitError =
   | PlanConflictError
   | AuthorizationError
   | CryptoError
+  | StorageError
   | PartialApplyError
   | ProviderError
   | StalePlanError;

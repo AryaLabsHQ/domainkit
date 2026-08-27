@@ -41,7 +41,7 @@ describe("OAuth authorization code flow", () => {
       method,
       now: () => new Date("2026-08-27T00:00:00.000Z"),
       redirectUri: "https://app.example/oauth/callback",
-      stateStore,
+      stateStore: stateStore.promise,
       subjectId: "user-1",
     });
     expect(begin.authorizationUrl.searchParams.get("code_challenge_method")).toBe("S256");
@@ -63,8 +63,8 @@ describe("OAuth authorization code flow", () => {
     const connection = await completeOAuth({
       callbackUrl,
       client: { clientId: "client-id" },
-      connectionStore,
-      credentialStore,
+      connectionStore: connectionStore.promise,
+      credentialStore: credentialStore.promise,
       fetch,
       now: () => new Date("2026-08-27T00:01:00.000Z"),
       providerId: "example-provider",
@@ -72,14 +72,18 @@ describe("OAuth authorization code flow", () => {
         expect(accessToken.expose()).toBe("access-token-value");
         return { accountId: "account-1", expiresAt: "2026-08-27T01:01:00.000Z" };
       },
-      stateStore,
+      stateStore: stateStore.promise,
     });
 
     expect(requestBody).toContain("code_verifier=");
     expect(requestBody).toContain("code=authorization-code");
     expect(JSON.stringify(connection)).not.toContain("token-value");
-    expect(JSON.stringify(await credentialStore.get(connection.id))).toContain("[REDACTED]");
-    expect(JSON.stringify(await credentialStore.get(connection.id))).not.toContain("token-value");
+    expect(JSON.stringify(await credentialStore.promise.get(connection.id))).toContain(
+      "[REDACTED]",
+    );
+    expect(JSON.stringify(await credentialStore.promise.get(connection.id))).not.toContain(
+      "token-value",
+    );
     expect(
       assertConnectionGrant(connection, {
         accountId: "account-1",
@@ -103,12 +107,12 @@ describe("OAuth authorization code flow", () => {
       completeOAuth({
         callbackUrl,
         client: { clientId: "client-id" },
-        connectionStore,
-        credentialStore,
+        connectionStore: connectionStore.promise,
+        credentialStore: credentialStore.promise,
         fetch,
         providerId: "example-provider",
         resolveSubject: async () => ({ accountId: "account-1", expiresAt: null }),
-        stateStore,
+        stateStore: stateStore.promise,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
   });
@@ -121,7 +125,7 @@ describe("OAuth authorization code flow", () => {
       method: { ...method, clientAuth: "client_secret_basic" },
       now: () => new Date("2026-08-27T00:00:00.000Z"),
       redirectUri: "https://app.example/oauth/callback",
-      stateStore,
+      stateStore: stateStore.promise,
       subjectId: "user-1",
       ttlMs: 1,
     });
@@ -132,12 +136,12 @@ describe("OAuth authorization code flow", () => {
       completeOAuth({
         callbackUrl,
         client: { clientId: "client-id", clientSecret: Secret.from("client-secret") },
-        connectionStore: new InMemoryConnectionStore(),
-        credentialStore: new InMemoryCredentialStore(),
+        connectionStore: new InMemoryConnectionStore().promise,
+        credentialStore: new InMemoryCredentialStore().promise,
         now: () => new Date("2026-08-27T00:00:01.000Z"),
         providerId: "example-provider",
         resolveSubject: async () => ({ accountId: "account-1", expiresAt: null }),
-        stateStore,
+        stateStore: stateStore.promise,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
     expect(JSON.stringify(Secret.from("never-visible"))).toBe('"[REDACTED]"');
@@ -157,7 +161,7 @@ describe("OAuth authorization code flow", () => {
       scopes: ["dns:write"],
       subjectId: "user-1",
     };
-    await credentialStore.put(connection.id, {
+    await credentialStore.promise.put(connection.id, {
       accessToken: Secret.from("old-access"),
       refreshToken: Secret.from("old-refresh"),
       tokenType: "bearer",
@@ -176,25 +180,27 @@ describe("OAuth authorization code flow", () => {
     await refreshOAuth({
       client: { clientId: "client-id" },
       connection,
-      credentialStore,
+      credentialStore: credentialStore.promise,
       fetch,
       method,
     });
-    expect((await credentialStore.get(connection.id))?.accessToken.expose()).toBe("new-access");
+    expect((await credentialStore.promise.get(connection.id))?.accessToken.expose()).toBe(
+      "new-access",
+    );
     await revokeOAuth({
       client: { clientId: "client-id" },
       connection,
-      credentialStore,
+      credentialStore: credentialStore.promise,
       fetch,
       method,
     });
-    expect(await credentialStore.get(connection.id)).toBeNull();
+    expect(await credentialStore.promise.get(connection.id)).toBeNull();
 
     await expect(
       revokeOAuth({
         client: { clientId: "client-id" },
         connection,
-        credentialStore,
+        credentialStore: credentialStore.promise,
         method: {
           ...method,
           authorizationServer: {

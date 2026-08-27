@@ -4,10 +4,10 @@ import packageJson from "../package.json" with { type: "json" };
 export const VERSION = packageJson.version;
 
 export { assertConnectionGrant } from "./auth/grants.ts";
-export { beginOAuth, completeOAuth, refreshOAuth, revokeOAuth } from "./auth/oauth.ts";
-export type { BeginOAuthInput, Fetch } from "./auth/oauth.ts";
+export { beginOAuth, completeOAuth, connectToken, refreshOAuth, revokeOAuth } from "./promise.ts";
+export type { BeginOAuthInput } from "./promise.ts";
+export type { Fetch } from "./auth/oauth.ts";
 export { Secret } from "./auth/secret.ts";
-export { connectToken } from "./auth/token.ts";
 export {
   Connection,
   ConnectionCapability,
@@ -50,6 +50,7 @@ export {
   PartialApplyError,
   PlanConflictError,
   ProviderError,
+  StorageError,
   StalePlanError,
 } from "./errors.ts";
 export type { DomainKitError } from "./errors.ts";
@@ -66,8 +67,7 @@ export type {
   PromiseDnsProvider,
   ProviderCreateResult,
 } from "./provider/provider.ts";
-export { authorizePlanForConnection } from "./plan/connection-authorization.ts";
-export { applyPlan, authorizePlan, createPlan } from "./promise.ts";
+export { applyPlan, authorizePlan, authorizePlanForConnection, createPlan } from "./promise.ts";
 export type { CreatePlanInput } from "./promise.ts";
 export { renderManualInstructions } from "./plan/plan.ts";
 export {
@@ -81,10 +81,10 @@ export {
   PlanOperation,
 } from "./plan/types.ts";
 export type {
-  ConnectionStore,
-  CredentialStore,
-  OAuthStateStore,
-  ReceiptStore,
+  PromiseConnectionStore as ConnectionStore,
+  PromiseCredentialStore as CredentialStore,
+  PromiseOAuthStateStore as OAuthStateStore,
+  PromiseReceiptStore as ReceiptStore,
 } from "./stores/contracts.ts";
 export { CloudflareDnsResolver, normalizeDnsData } from "./verification/cloudflare-doh.ts";
 export type { DnsAnswer, DnsQuery, DnsResolution, DnsResolver } from "./verification/resolver.ts";

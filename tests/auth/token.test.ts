@@ -18,8 +18,8 @@ describe("token connections", () => {
   it("validates caller tokens and enforces account-wide grants", async () => {
     const credentialStore = new InMemoryCredentialStore();
     const connection = await connectToken({
-      connectionStore: new InMemoryConnectionStore(),
-      credentialStore,
+      connectionStore: new InMemoryConnectionStore().promise,
+      credentialStore: credentialStore.promise,
       grant: { _tag: "account" },
       now: () => new Date("2026-08-27T00:00:00.000Z"),
       providerId: "example-provider",
@@ -43,7 +43,7 @@ describe("token connections", () => {
         providerId: "example-provider",
       }),
     ).toBe("anything.example.com");
-    expect(JSON.stringify(await credentialStore.get(connection.id))).not.toContain(
+    expect(JSON.stringify(await credentialStore.promise.get(connection.id))).not.toContain(
       "personal-access-token",
     );
 

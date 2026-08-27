@@ -53,8 +53,3 @@ export const webCryptoLayer: Layer.Layer<Crypto.Crypto> = Layer.succeed(Crypto.C
       }),
   }),
 );
-
-/** @internal Temporary foreign-Promise bridge while OAuth is migrated to Effect. */
-export function sha256Promise(value: unknown): Promise<string> {
-  return Effect.runPromise(sha256(value).pipe(Effect.provide(webCryptoLayer)));
-}
