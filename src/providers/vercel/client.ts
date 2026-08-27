@@ -131,18 +131,38 @@ export function make(options: Options): Interface {
 
   const resolveZone = Effect.fn("VercelClient.resolveZone")((name: DomainName.DomainName) =>
     Effect.gen(function* () {
-      const matches = (yield* allDomains()).filter(
-        (domain) => domain.name === name && domain.serviceType === "zeit.world",
+      const configResult = yield* request(
+        withContext(`/v6/domains/${encodeURIComponent(name)}/config`),
+        "resolveZone",
       );
-      const match = matches[0];
-      if (matches.length === 1 && match !== undefined) return match;
-      return yield* Effect.fail(
-        failure(
-          "resolveZone",
-          matches.length === 0
-            ? `Vercel authoritative zone ${name} was not found in the selected account`
-            : `Vercel returned multiple authoritative zones named ${name}`,
-          { reason: matches.length === 0 ? "not_found" : "response" },
+      const config = yield* decode(
+        Protocol.DomainConfig,
+        configResult.body,
+        "resolveZone",
+        configResult.response,
+      );
+      if (config.serviceType !== "zeit.world" || config.misconfigured) {
+        return yield* Effect.fail(
+          failure(
+            "resolveZone",
+            `Vercel zone ${name} is not configured for authoritative DNS in the selected account`,
+            { reason: "not_found" },
+          ),
+        );
+      }
+      const domainResult = yield* request(
+        withContext(`/v5/domains/${encodeURIComponent(name)}`),
+        "resolveZone",
+      );
+      const envelope = yield* decode(
+        Protocol.DomainEnvelope,
+        domainResult.body,
+        "resolveZone",
+        domainResult.response,
+      );
+      return yield* DomainName.decode(envelope.domain.name).pipe(
+        Effect.mapError((cause) =>
+          failure("resolveZone", `Vercel returned an invalid storage zone: ${cause.message}`),
         ),
       );
     }),
@@ -150,24 +170,28 @@ export function make(options: Options): Interface {
 
   const listRecords = Effect.fn("VercelClient.listRecords")((zoneName: DomainName.DomainName) =>
     Effect.gen(function* () {
-      yield* resolveZone(zoneName);
+      const storageZone = yield* resolveZone(zoneName);
       const records: Array<DnsRecord.Observed> = [];
       let until: number | null = null;
       while (true) {
         const values: Record<string, string> = { limit: "100" };
         if (until !== null) values.until = String(until);
         const { body, response } = yield* request(
-          withContext(`/v5/domains/${encodeURIComponent(zoneName)}/records`, values),
+          withContext(`/v5/domains/${encodeURIComponent(storageZone)}/records`, values),
           "listRecords",
         );
         const envelope = yield* decode(Protocol.RecordListEnvelope, body, "listRecords", response);
         records.push(
           ...(yield* Effect.forEach(envelope.records, (record) =>
-            Records.decode(zoneName, record),
+            Records.decode(storageZone, record),
           )),
         );
         const next = envelope.pagination?.next ?? null;
-        if (next === null) return records;
+        if (next === null) {
+          return records.filter(
+            (record) => record.name === zoneName || record.name.endsWith(`.${zoneName}`),
+          );
+        }
         until = next;
       }
     }),
@@ -176,9 +200,9 @@ export function make(options: Options): Interface {
   const createRecord = Effect.fn("VercelClient.createRecord")(
     (zoneName: DomainName.DomainName, record: DnsRecord.DnsRecord) =>
       Effect.gen(function* () {
-        yield* resolveZone(zoneName);
+        const storageZone = yield* resolveZone(zoneName);
         const body = yield* Effect.try({
-          try: () => Records.encode(zoneName, record),
+          try: () => Records.encode(storageZone, record),
           catch: (cause) =>
             cause instanceof DnsProvider.Error
               ? cause
@@ -187,7 +211,7 @@ export function make(options: Options): Interface {
                 }),
         });
         const result = yield* request(
-          withContext(`/v2/domains/${encodeURIComponent(zoneName)}/records`),
+          withContext(`/v2/domains/${encodeURIComponent(storageZone)}/records`),
           "createRecord",
           { body: JSON.stringify(body), method: "POST" },
         );

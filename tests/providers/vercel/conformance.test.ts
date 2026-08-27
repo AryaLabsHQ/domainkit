@@ -3,7 +3,13 @@ import { Effect, Layer } from "effect";
 
 import { Digest, DnsProvider, DnsRecord, Provisioning, Secret } from "../../../src/effect.ts";
 import * as Vercel from "../../../src/providers/vercel/index.ts";
-import { domain, domainPage, record, recordedFetch, recordPage } from "./fixtures.ts";
+import {
+  authoritativeConfig,
+  domainEnvelope,
+  record,
+  recordedFetch,
+  recordPage,
+} from "./fixtures.ts";
 
 const requirement = DnsRecord.parse({
   _tag: "CNAME",
@@ -18,13 +24,17 @@ const capabilities = ["dns:read", "dns:write"] as const;
 describe("Vercel provider conformance", () => {
   it.effect("plans, authorizes, creates, and confirms additive state", () => {
     const recording = recordedFetch([
-      { body: domainPage([domain]) },
+      { body: authoritativeConfig },
+      { body: domainEnvelope },
       { body: recordPage([]) },
-      { body: domainPage([domain]) },
+      { body: authoritativeConfig },
+      { body: domainEnvelope },
       { body: recordPage([]) },
-      { body: domainPage([domain]) },
+      { body: authoritativeConfig },
+      { body: domainEnvelope },
       { body: recordPage([]) },
-      { body: domainPage([domain]) },
+      { body: authoritativeConfig },
+      { body: domainEnvelope },
       { body: { uid: "created-record" } },
     ]);
     const provider = make(recording.fetch);
@@ -49,15 +59,18 @@ describe("Vercel provider conformance", () => {
       const exact = record("CNAME", "track", "target.example.net", { ttl: 300 });
       const conflicting = record("TXT", "track", "occupied", { ttl: 300 });
       const exactRecording = recordedFetch([
-        { body: domainPage([domain]) },
+        { body: authoritativeConfig },
+        { body: domainEnvelope },
         { body: recordPage([exact]) },
       ]);
       const conflictRecording = recordedFetch([
-        { body: domainPage([domain]) },
+        { body: authoritativeConfig },
+        { body: domainEnvelope },
         { body: recordPage([conflicting]) },
       ]);
       const opaqueConflictRecording = recordedFetch([
-        { body: domainPage([domain]) },
+        { body: authoritativeConfig },
+        { body: domainEnvelope },
         { body: recordPage([record("ALIAS", "track", "alias.vercel-dns.com")]) },
       ]);
       return Effect.gen(function* () {

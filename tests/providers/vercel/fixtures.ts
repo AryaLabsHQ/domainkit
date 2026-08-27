@@ -32,6 +32,13 @@ export const recordPage = (records: ReadonlyArray<unknown>, next: number | null 
   records,
 });
 
+export const authoritativeConfig = {
+  misconfigured: false,
+  serviceType: "zeit.world",
+} as const;
+
+export const domainEnvelope = { domain } as const;
+
 export function record(
   type: string,
   name: string,

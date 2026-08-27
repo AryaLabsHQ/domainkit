@@ -56,6 +56,14 @@ export const Domain = S.Struct({
 });
 export interface Domain extends S.Schema.Type<typeof Domain> {}
 
+export const DomainConfig = S.Struct({
+  misconfigured: S.Boolean,
+  serviceType: S.Literals(["zeit.world", "external", "na"]),
+});
+export interface DomainConfig extends S.Schema.Type<typeof DomainConfig> {}
+
+export const DomainEnvelope = S.Struct({ domain: Domain });
+
 export const DomainListEnvelope = S.Struct({
   domains: S.Array(Domain),
   pagination: Pagination,

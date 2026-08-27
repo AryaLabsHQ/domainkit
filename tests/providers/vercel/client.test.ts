@@ -4,7 +4,15 @@ import { Effect } from "effect";
 import { DnsRecord, DomainName, Secret } from "../../../src/effect.ts";
 import * as Vercel from "../../../src/providers/vercel/index.ts";
 import * as Records from "../../../src/providers/vercel/records.ts";
-import { domain, domainPage, portableZone, record, recordedFetch } from "./fixtures.ts";
+import {
+  authoritativeConfig,
+  domain,
+  domainEnvelope,
+  domainPage,
+  portableZone,
+  record,
+  recordedFetch,
+} from "./fixtures.ts";
 
 const token = Secret.make("test-token-that-must-remain-secret");
 const capabilities = ["dns:read", "dns:write"] as const;
@@ -73,7 +81,11 @@ describe("Vercel Effect client", () => {
       record("ALIAS", "", "alias.vercel-dns.com"),
     ];
     const recording = recordedFetch([
-      { body: domainPage([domain]) },
+      {
+        body: authoritativeConfig,
+        expect: { pathname: "/v6/domains/example.com/config" },
+      },
+      { body: domainEnvelope, expect: { pathname: "/v5/domains/example.com" } },
       { body: { pagination: { count: 4, next: 42, prev: null }, records: first } },
       { body: { pagination: { count: 5, next: null, prev: 42 }, records: second } },
     ]);
@@ -99,13 +111,17 @@ describe("Vercel Effect client", () => {
         providerRecordId: "record-alias",
         providerType: "ALIAS",
       });
-      assert.ok(recording.requests[2]?.url.includes("until=42"));
+      assert.ok(recording.requests[3]?.url.includes("until=42"));
     });
   });
 
   it.effect("creates relative record payloads and returns Vercel's record id", () => {
     const recording = recordedFetch([
-      { body: domainPage([domain]) },
+      {
+        body: authoritativeConfig,
+        expect: { pathname: "/v6/domains/example.com/config" },
+      },
+      { body: domainEnvelope, expect: { pathname: "/v5/domains/example.com" } },
       {
         body: { uid: "created-record" },
         expect: { method: "POST", pathname: "/v2/domains/example.com/records" },
@@ -126,7 +142,7 @@ describe("Vercel Effect client", () => {
         }),
       );
       assert.strictEqual(result.providerRecordId, "created-record");
-      const write = recording.requests[1];
+      const write = recording.requests[2];
       assert.deepStrictEqual(JSON.parse(String(write?.init?.body)), {
         mxPriority: 10,
         name: "",
@@ -137,6 +153,79 @@ describe("Vercel Effect client", () => {
         new Headers(write?.init?.headers).get("authorization"),
         `Bearer ${token.expose()}`,
       );
+    });
+  });
+
+  it.effect("validates an exact delegated zone through the domain configuration endpoint", () => {
+    const zone = DomainName.parse("dk-live.example.com");
+    const recording = recordedFetch([
+      {
+        body: authoritativeConfig,
+        expect: { pathname: "/v6/domains/dk-live.example.com/config" },
+      },
+      {
+        body: domainEnvelope,
+        expect: { pathname: "/v5/domains/dk-live.example.com" },
+      },
+      {
+        body: {
+          pagination: { count: 2, next: null, prev: null },
+          records: [record("TXT", "outside", "ignored"), record("TXT", "inside.dk-live", "kept")],
+        },
+        expect: { pathname: "/v5/domains/example.com/records" },
+      },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      assert.deepStrictEqual(
+        (yield* client.listRecords(zone)).map(({ name }) => name),
+        [DomainName.parse("inside.dk-live.example.com")],
+      );
+      assert.ok(recording.requests.every(({ url }) => url.includes("teamId=team-1")));
+
+      const external = make(
+        recordedFetch([{ body: { misconfigured: false, serviceType: "external" } }]).fetch,
+        { _tag: "team", teamId: "team-1" },
+      );
+      const failure = yield* external.listRecords(zone).pipe(Effect.flip);
+      assert.strictEqual(failure.reason, "not_found");
+    });
+  });
+
+  it.effect("creates delegated-zone records relative to Vercel's storage zone", () => {
+    const recording = recordedFetch([
+      {
+        body: authoritativeConfig,
+        expect: { pathname: "/v6/domains/dk-live.example.com/config" },
+      },
+      {
+        body: domainEnvelope,
+        expect: { pathname: "/v5/domains/dk-live.example.com" },
+      },
+      {
+        body: { uid: "delegated-record" },
+        expect: { method: "POST", pathname: "/v2/domains/example.com/records" },
+      },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      yield* client.createRecord(
+        DomainName.parse("dk-live.example.com"),
+        DnsRecord.parse({
+          _tag: "TXT",
+          metadata: { ownership: "customer", provenance: "test", purpose: "verification" },
+          name: "_probe.dk-live.example.com",
+          policy: "append",
+          ttl: 300,
+          value: "delegated-zone",
+        }),
+      );
+      assert.deepStrictEqual(JSON.parse(String(recording.requests[2]?.init?.body)), {
+        name: "_probe.dk-live",
+        ttl: 300,
+        type: "TXT",
+        value: "delegated-zone",
+      });
     });
   });
 
