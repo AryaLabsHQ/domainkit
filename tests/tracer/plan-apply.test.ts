@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,7 +10,12 @@ import {
   parseDnsRecord,
   renderManualInstructions,
 } from "../../src/index.ts";
-import { createPlan as createPlanEffect } from "../../src/effect.ts";
+import {
+  applyPlan as applyPlanEffect,
+  authorizePlan as authorizePlanEffect,
+  createPlan as createPlanEffect,
+  webCryptoLayer,
+} from "../../src/effect.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
 
 const requirement = parseDnsRecord({
@@ -29,26 +34,36 @@ const requirement = parseDnsRecord({
 describe("plan and apply tracer", () => {
   it("runs missing -> create -> apply -> exact no-op through both APIs", async () => {
     const provider = new InMemoryDnsProvider();
-    const first = await createPlan({ provider, requirements: [requirement], zone: "example.com" });
+    const layer = Layer.merge(provider.layer, webCryptoLayer);
+    const first = await Effect.runPromise(
+      createPlanEffect({ requirements: [requirement], zone: "example.com" }).pipe(
+        Effect.provide(layer),
+      ),
+    );
 
     expect(first.operations.map(({ _tag }) => _tag)).toEqual(["create"]);
     expect(renderManualInstructions(first)[0]).toContain("CREATE CNAME click.example.com");
     const equivalent = await Effect.runPromise(
-      createPlanEffect({ provider, requirements: [requirement], zone: "EXAMPLE.COM." }),
+      createPlanEffect({ requirements: [requirement], zone: "EXAMPLE.COM." }).pipe(
+        Effect.provide(layer),
+      ),
     );
     expect(equivalent).toEqual(first);
 
-    const authorization = await authorizePlan(first);
-    const receipt = await applyPlan({
-      authorization,
-      now: () => new Date("2026-08-27T00:00:00.000Z"),
-      plan: first,
-      provider,
-    });
+    const authorization = await Effect.runPromise(
+      authorizePlanEffect(first).pipe(Effect.provide(webCryptoLayer)),
+    );
+    const receipt = await Effect.runPromise(
+      applyPlanEffect({ authorization, plan: first }).pipe(Effect.provide(layer)),
+    );
     expect(receipt.operations).toHaveLength(1);
     expect(receipt.status).toBe("complete");
 
-    const second = await createPlan({ provider, requirements: [requirement], zone: "example.com" });
+    const second = await createPlan({
+      provider: provider.promise,
+      requirements: [requirement],
+      zone: "example.com",
+    });
     expect(second.operations).toMatchObject([{ _tag: "noop", ttlDrift: false }]);
   });
 
@@ -63,10 +78,14 @@ describe("plan and apply tracer", () => {
         ],
       },
     });
-    const plan = await createPlan({ provider, requirements: [requirement], zone: "example.com" });
+    const plan = await createPlan({
+      provider: provider.promise,
+      requirements: [requirement],
+      zone: "example.com",
+    });
     expect(plan.operations[0]?._tag).toBe("conflict");
     await expect(
-      applyPlan({ authorization: await authorizePlan(plan), plan, provider }),
+      applyPlan({ authorization: await authorizePlan(plan), plan, provider: provider.promise }),
     ).rejects.toMatchObject({ _tag: "PlanConflictError" });
   });
 
@@ -81,20 +100,24 @@ describe("plan and apply tracer", () => {
       value: "domainkit-verification",
     });
     const plan = await createPlan({
-      provider,
+      provider: provider.promise,
       requirements: [requirement, secondRequirement],
       zone: "example.com",
     });
     const authorization = await authorizePlan(plan);
 
     await expect(
-      applyPlan({ authorization: { ...authorization, planDigest: "wrong" }, plan, provider }),
+      applyPlan({
+        authorization: { ...authorization, planDigest: "wrong" },
+        plan,
+        provider: provider.promise,
+      }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
     await expect(
       applyPlan({
         authorization,
         plan: { ...plan, providerId: "tampered" },
-        provider,
+        provider: provider.promise,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
     await expect(authorizePlan(plan, [authorization.operationIds[0]!])).rejects.toMatchObject({
@@ -104,14 +127,22 @@ describe("plan and apply tracer", () => {
 
   it("rejects a plan when DNS state changes after authorization", async () => {
     const provider = new InMemoryDnsProvider();
-    const plan = await createPlan({ provider, requirements: [requirement], zone: "example.com" });
+    const plan = await createPlan({
+      provider: provider.promise,
+      requirements: [requirement],
+      zone: "example.com",
+    });
     const authorization = await authorizePlan(plan);
-    await provider.createRecord(
-      parseDomainName("example.com"),
-      parseDnsRecord({ ...requirement, target: "unexpected.example.net" }),
+    await Effect.runPromise(
+      provider.createRecord(
+        parseDomainName("example.com"),
+        parseDnsRecord({ ...requirement, target: "unexpected.example.net" }),
+      ),
     );
 
-    await expect(applyPlan({ authorization, plan, provider })).rejects.toMatchObject({
+    await expect(
+      applyPlan({ authorization, plan, provider: provider.promise }),
+    ).rejects.toMatchObject({
       _tag: "StalePlanError",
       approvedPlanDigest: plan.digest,
     });
@@ -125,16 +156,16 @@ describe("plan and apply tracer", () => {
     const provider: DnsProvider = {
       id: backing.id,
       createRecord: async (zone, record) => {
-        const result = await backing.createRecord(zone, record);
+        const result = await backing.promise.createRecord(zone, record);
         created += 1;
         return result;
       },
       listRecords: async (zone) => {
         if (created === 1 && !injected && conflictingRecord !== undefined) {
           injected = true;
-          await backing.createRecord(zone, conflictingRecord);
+          await backing.promise.createRecord(zone, conflictingRecord);
         }
-        return backing.listRecords(zone);
+        return backing.promise.listRecords(zone);
       },
     };
     const additional = parseDnsRecord({
@@ -187,14 +218,14 @@ describe("plan and apply tracer", () => {
     const provider = new InMemoryDnsProvider({ records: { "example.com": [existing] } });
     const additional = parseDnsRecord({ ...existing, ttl: 300, value: "additional" });
     const create = await createPlan({
-      provider,
+      provider: provider.promise,
       requirements: [additional],
       zone: "example.com",
     });
     expect(create.operations[0]?._tag).toBe("create");
 
     const drift = await createPlan({
-      provider,
+      provider: provider.promise,
       requirements: [{ ...existing, ttl: 300 }],
       zone: "example.com",
     });

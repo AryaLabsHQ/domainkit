@@ -16,7 +16,7 @@ describe("record verification", () => {
   it("keeps provider readback and public propagation as separate evidence", async () => {
     const provider = new InMemoryDnsProvider({ records: { "example.com": [record] } });
     const verified = await verifyRecord({
-      provider,
+      provider: provider.promise,
       record,
       resolver: new InMemoryDnsResolver(() => ({
         _tag: "answer",
@@ -38,7 +38,7 @@ describe("record verification", () => {
     });
 
     const pending = await verifyRecord({
-      provider,
+      provider: provider.promise,
       record,
       resolver: new InMemoryDnsResolver(() => ({ _tag: "nodata" })),
       zone: parseDomainName("example.com"),
@@ -53,7 +53,7 @@ describe("record verification", () => {
   it("distinguishes mismatch, timeout, and provider failure", async () => {
     const empty = new InMemoryDnsProvider();
     const mismatch = await verifyRecord({
-      provider: empty,
+      provider: empty.promise,
       record,
       resolver: new InMemoryDnsResolver(() => ({
         _tag: "answer",
@@ -71,7 +71,7 @@ describe("record verification", () => {
     expect(mismatch).toMatchObject({ publicDns: { _tag: "mismatch" }, status: "mismatch" });
 
     const timeout = await verifyRecord({
-      provider: empty,
+      provider: empty.promise,
       record,
       resolver: new InMemoryDnsResolver(() => ({ _tag: "timeout" })),
       zone: parseDomainName("example.com"),
@@ -82,7 +82,7 @@ describe("record verification", () => {
   it("does not accept matching data from a different owner name", async () => {
     const provider = new InMemoryDnsProvider({ records: { "example.com": [record] } });
     const observation = await verifyRecord({
-      provider,
+      provider: provider.promise,
       record,
       resolver: new InMemoryDnsResolver(() => ({
         _tag: "answer",

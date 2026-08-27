@@ -1,7 +1,7 @@
 import * as oauth from "oauth4webapi";
 
 import { AuthorizationError, InvalidInputError, ProviderError } from "../errors.ts";
-import { sha256 } from "../plan/canonical-json.ts";
+import { sha256Promise as sha256 } from "../plan/canonical-json.ts";
 import type { ConnectionStore, CredentialStore, OAuthStateStore } from "../stores/contracts.ts";
 import { Secret } from "./secret.ts";
 import type {

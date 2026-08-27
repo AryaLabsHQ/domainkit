@@ -1,6 +1,6 @@
 import type { DnsRecord } from "../domain/dns-record.ts";
 import { recordData, sameRecordData } from "../domain/dns-record.ts";
-import type { DnsProvider } from "../provider/provider.ts";
+import type { PromiseDnsProvider as DnsProvider } from "../provider/provider.ts";
 import { normalizeDnsData } from "./cloudflare-doh.ts";
 import type { DnsResolver } from "./resolver.ts";
 

@@ -49,7 +49,7 @@ describe("token connections", () => {
 
     const provider = new InMemoryDnsProvider({ id: "example-provider" });
     const plan = await createPlan({
-      provider,
+      provider: provider.promise,
       requirements: [
         parseDnsRecord({
           _tag: "TXT",

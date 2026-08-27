@@ -45,6 +45,7 @@ export type {
 } from "./domain/dns-record.ts";
 export {
   AuthorizationError,
+  CryptoError,
   InvalidInputError,
   PartialApplyError,
   PlanConflictError,
@@ -59,10 +60,16 @@ export type {
   ProviderSelection,
 } from "./discovery/selection.ts";
 export { deriveZoneCandidates } from "./discovery/zones.ts";
-export type { DnsProvider, ProviderCreateResult } from "./provider/provider.ts";
+export { layerDnsProviderFromPromise, toPromiseDnsProvider } from "./provider/provider.ts";
+export type {
+  PromiseDnsProvider as DnsProvider,
+  PromiseDnsProvider,
+  ProviderCreateResult,
+} from "./provider/provider.ts";
 export { authorizePlanForConnection } from "./plan/connection-authorization.ts";
-export { applyPlan, authorizePlan, createPlan, renderManualInstructions } from "./plan/plan.ts";
-export type { CreatePlanInput } from "./plan/plan.ts";
+export { applyPlan, authorizePlan, createPlan } from "./promise.ts";
+export type { CreatePlanInput } from "./promise.ts";
+export { renderManualInstructions } from "./plan/plan.ts";
 export {
   ApplyReceipt,
   decodeApplyReceipt,

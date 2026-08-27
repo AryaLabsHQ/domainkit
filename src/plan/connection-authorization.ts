@@ -1,6 +1,6 @@
 import { assertConnectionGrant } from "../auth/grants.ts";
 import type { Connection } from "../auth/types.ts";
-import { authorizePlan } from "./plan.ts";
+import { authorizePlan } from "../promise.ts";
 import type { DnsPlan, PlanAuthorization } from "./types.ts";
 
 export async function authorizePlanForConnection(input: {

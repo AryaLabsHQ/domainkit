@@ -10,11 +10,24 @@ import { connectToken as connectTokenPromise } from "./auth/token.ts";
 import type { DomainKitError } from "./errors.ts";
 import { InvalidInputError } from "./errors.ts";
 import { authorizePlanForConnection as authorizePlanForConnectionPromise } from "./plan/connection-authorization.ts";
-import {
-  applyPlan as applyPlanPromise,
-  authorizePlan as authorizePlanPromise,
-  createPlan as createPlanPromise,
+export { webCryptoLayer } from "./plan/canonical-json.ts";
+export { applyPlan, authorizePlan, createPlan } from "./plan/plan.ts";
+export type {
+  ApplyPlanError,
+  AuthorizationPlanError,
+  CreatePlanInput,
+  PlanError,
 } from "./plan/plan.ts";
+export {
+  DnsProvider,
+  layerDnsProviderFromPromise,
+  toPromiseDnsProvider,
+} from "./provider/provider.ts";
+export type {
+  DnsProviderService,
+  PromiseDnsProvider,
+  ProviderCreateResult,
+} from "./provider/provider.ts";
 import type {
   ConnectionStore as ConnectionStoreContract,
   CredentialStore as CredentialStoreContract,
@@ -24,24 +37,6 @@ import type {
 import { verifyRecord as verifyRecordPromise } from "./verification/verify.ts";
 
 export * from "./index.ts";
-
-export function createPlan(
-  input: Parameters<typeof createPlanPromise>[0],
-): Effect.Effect<Awaited<ReturnType<typeof createPlanPromise>>, DomainKitError> {
-  return Effect.tryPromise({ try: () => createPlanPromise(input), catch: toDomainKitError });
-}
-
-export function authorizePlan(
-  ...input: Parameters<typeof authorizePlanPromise>
-): Effect.Effect<Awaited<ReturnType<typeof authorizePlanPromise>>, DomainKitError> {
-  return Effect.tryPromise({ try: () => authorizePlanPromise(...input), catch: toDomainKitError });
-}
-
-export function applyPlan(
-  input: Parameters<typeof applyPlanPromise>[0],
-): Effect.Effect<Awaited<ReturnType<typeof applyPlanPromise>>, DomainKitError> {
-  return Effect.tryPromise({ try: () => applyPlanPromise(input), catch: toDomainKitError });
-}
 
 export const OAuthStateStore = Context.Service<OAuthStateStoreContract>(
   "domainkit/OAuthStateStore",

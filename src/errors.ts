@@ -22,6 +22,10 @@ export class ProviderError extends Schema.TaggedError<ProviderError>()("Provider
   providerId: Schema.String,
 }) {}
 
+export class CryptoError extends Schema.TaggedError<CryptoError>()("CryptoError", {
+  message: Schema.String,
+}) {}
+
 export class StalePlanError extends Schema.TaggedError<StalePlanError>()("StalePlanError", {
   approvedPlanDigest: Schema.String,
   currentPlanDigest: Schema.String,
@@ -31,7 +35,12 @@ export class StalePlanError extends Schema.TaggedError<StalePlanError>()("StaleP
 export class PartialApplyError extends Schema.TaggedError<PartialApplyError>()(
   "PartialApplyError",
   {
-    causeTag: Schema.Literals(["ProviderError", "StalePlanError"]),
+    causeTag: Schema.Literals([
+      "CryptoError",
+      "InvalidInputError",
+      "ProviderError",
+      "StalePlanError",
+    ]),
     failedOperationId: Schema.String,
     message: Schema.String,
     receipt: ApplyReceipt,
@@ -42,6 +51,7 @@ export type DomainKitError =
   | InvalidInputError
   | PlanConflictError
   | AuthorizationError
+  | CryptoError
   | PartialApplyError
   | ProviderError
   | StalePlanError;
