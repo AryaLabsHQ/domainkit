@@ -1,7 +1,13 @@
-import { Effect, Layer } from "effect";
+import { Effect, Fiber, Layer } from "effect";
 import { describe, expect, it } from "vitest";
 
-import { beginOAuth, completeOAuth, connectToken, webCryptoLayer } from "../../src/effect.ts";
+import {
+  beginOAuth,
+  completeOAuth,
+  connectToken,
+  refreshOAuth,
+  webCryptoLayer,
+} from "../../src/effect.ts";
 import { parseDomainName, Secret, type OAuthMethod } from "../../src/index.ts";
 import {
   InMemoryConnectionStore,
@@ -90,5 +96,57 @@ describe("Effect-native authorization", () => {
     expect((await Effect.runPromise(credentials.get(connection.id)))?.accessToken.expose()).toBe(
       "access-token",
     );
+  });
+
+  it("propagates Effect interruption into OAuth transport", async () => {
+    const credentials = new InMemoryCredentialStore();
+    const connection = {
+      accountId: "account-1",
+      capabilities: ["dns:read", "dns:write"] as const,
+      createdAt: "2026-08-27T00:00:00.000Z",
+      expiresAt: null,
+      grant: { _tag: "account" } as const,
+      id: "connection-1",
+      kind: "oauth2" as const,
+      providerId: "example-provider",
+      scopes: ["dns:write"],
+      subjectId: "user-1",
+    };
+    await Effect.runPromise(
+      credentials.put(connection.id, {
+        accessToken: Secret.from("access-token"),
+        refreshToken: Secret.from("refresh-token"),
+        tokenType: "bearer",
+      }),
+    );
+    let started!: () => void;
+    const requestStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let aborted = false;
+    const fiber = Effect.runFork(
+      refreshOAuth({
+        client: { clientId: "client-id" },
+        connection,
+        fetch: async (_input, init) => {
+          started();
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              "abort",
+              () => {
+                aborted = true;
+                reject(init.signal?.reason);
+              },
+              { once: true },
+            );
+          });
+        },
+        method,
+      }).pipe(Effect.provide(credentials.layer)),
+    );
+    await requestStarted;
+    await Effect.runPromise(Fiber.interrupt(fiber));
+
+    expect(aborted).toBe(true);
   });
 });

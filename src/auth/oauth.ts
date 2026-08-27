@@ -133,7 +133,7 @@ export function completeOAuth(input: {
     const as = continuation.method.authorizationServer as oauth.AuthorizationServer;
     const client: oauth.Client = { client_id: continuation.clientId };
     const authentication = yield* effectClientAuthentication(continuation.method, input.client);
-    const tokens = yield* providerRequest(input.providerId, async () => {
+    const tokens = yield* providerRequest(input.providerId, async (signal) => {
       const callbackParameters = oauth.validateAuthResponse(as, client, input.callbackUrl, state);
       const response = await oauth.authorizationCodeGrantRequest(
         as,
@@ -142,7 +142,7 @@ export function completeOAuth(input: {
         callbackParameters,
         continuation.redirectUri,
         continuation.codeVerifier.expose(),
-        requestOptions(input.fetch),
+        requestOptions(input.fetch, signal),
       );
       return oauth.processAuthorizationCodeResponse(as, client, response);
     });
@@ -188,13 +188,13 @@ export function refreshOAuth(input: {
     const as = input.method.authorizationServer as oauth.AuthorizationServer;
     const client: oauth.Client = { client_id: input.client.clientId };
     const authentication = yield* effectClientAuthentication(input.method, input.client);
-    const tokens = yield* providerRequest(input.connection.providerId, async () => {
+    const tokens = yield* providerRequest(input.connection.providerId, async (signal) => {
       const response = await oauth.refreshTokenGrantRequest(
         as,
         client,
         authentication,
         credential.refreshToken!.expose(),
-        requestOptions(input.fetch),
+        requestOptions(input.fetch, signal),
       );
       return oauth.processRefreshTokenResponse(as, client, response);
     });
@@ -225,13 +225,13 @@ export function revokeOAuth(input: {
     const credential = yield* requireCredential(input.connection.id, credentialStore);
     const as = input.method.authorizationServer as oauth.AuthorizationServer;
     const authentication = yield* effectClientAuthentication(input.method, input.client);
-    yield* providerRequest(input.connection.providerId, async () => {
+    yield* providerRequest(input.connection.providerId, async (signal) => {
       const response = await oauth.revocationRequest(
         as,
         { client_id: input.client.clientId },
         authentication,
         credential.accessToken.expose(),
-        requestOptions(input.fetch),
+        requestOptions(input.fetch, signal),
       );
       await oauth.processRevocationResponse(response);
     });
@@ -272,10 +272,14 @@ function clientAuthentication(
   }
 }
 
-function requestOptions(fetchImplementation?: Fetch): oauth.TokenEndpointRequestOptions {
+function requestOptions(
+  fetchImplementation: Fetch | undefined,
+  signal: AbortSignal,
+): oauth.TokenEndpointRequestOptions {
   return fetchImplementation === undefined
-    ? {}
+    ? { signal }
     : {
+        signal,
         [oauth.customFetch]: (url, options) =>
           fetchImplementation(url, { ...options, body: options.body }),
       };
@@ -298,7 +302,7 @@ function requireCredential(
     );
 }
 
-function providerRequest<A>(providerId: string, request: () => Promise<A>) {
+function providerRequest<A>(providerId: string, request: (signal: AbortSignal) => Promise<A>) {
   return Effect.tryPromise({
     try: request,
     catch: (cause) =>
