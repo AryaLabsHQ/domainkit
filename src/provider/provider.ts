@@ -7,11 +7,28 @@ export interface CreateResult {
   readonly providerRecordId: string | null;
 }
 
+export const ErrorReason = Schema.Literals([
+  "authentication",
+  "authorization",
+  "conflict",
+  "not_found",
+  "rate_limit",
+  "request",
+  "response",
+  "transport",
+  "unsupported",
+]);
+export type ErrorReason = typeof ErrorReason.Type;
+
 export class Error extends Schema.TaggedError<Error>()("ProviderError", {
   cause: Schema.optionalKey(Schema.Unknown),
+  code: Schema.optionalKey(Schema.Number),
   message: Schema.String,
   operation: Schema.String,
   providerId: Schema.String,
+  reason: Schema.optionalKey(ErrorReason),
+  retryAfterMs: Schema.optionalKey(Schema.Number),
+  status: Schema.optionalKey(Schema.Number),
 }) {}
 
 /** The provider capability used by DNS planning, application, and verification. */

@@ -12,7 +12,11 @@ const PackResult = Schema.Array(
 const requiredFiles = new Set([
   "LICENSE",
   "README.md",
+  "dist/cloudflare.d.mts",
+  "dist/cloudflare.mjs",
   "dist/effect.d.mts",
+  "dist/effect-cloudflare.d.mts",
+  "dist/effect-cloudflare.mjs",
   "dist/effect.mjs",
   "dist/index.d.mts",
   "dist/index.mjs",

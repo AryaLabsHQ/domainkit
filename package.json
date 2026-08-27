@@ -35,6 +35,14 @@
       "types": "./dist/effect.d.mts",
       "import": "./dist/effect.mjs"
     },
+    "./cloudflare": {
+      "types": "./dist/cloudflare.d.mts",
+      "import": "./dist/cloudflare.mjs"
+    },
+    "./effect/cloudflare": {
+      "types": "./dist/effect-cloudflare.d.mts",
+      "import": "./dist/effect-cloudflare.mjs"
+    },
     "./testing": {
       "types": "./dist/testing.d.mts",
       "import": "./dist/testing.mjs"

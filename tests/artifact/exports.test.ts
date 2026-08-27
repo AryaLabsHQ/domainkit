@@ -2,7 +2,9 @@ import { assert, describe, it } from "@effect/vitest";
 
 import packageJson from "../../package.json" with { type: "json" };
 import * as effectApi from "../../src/effect.ts";
+import * as effectCloudflareApi from "../../src/effect-cloudflare.ts";
 import * as promiseApi from "../../src/index.ts";
+import * as promiseCloudflareApi from "../../src/cloudflare.ts";
 import * as testingApi from "../../src/testing.ts";
 
 describe("public namespaces", () => {
@@ -20,6 +22,10 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof effectApi.DnsOverHttps.make, "function");
     assert.strictEqual(typeof promiseApi.DnsOverHttps.make, "function");
     assert.strictEqual(typeof testingApi.InMemoryDnsProvider.layer, "function");
+    assert.strictEqual(typeof effectApi.Cloudflare.make, "function");
+    assert.strictEqual(typeof effectCloudflareApi.make, "function");
+    assert.strictEqual(typeof promiseApi.Cloudflare.make, "function");
+    assert.strictEqual(typeof promiseCloudflareApi.make, "function");
   });
 
   it("does not flatten service tags or operations onto either entry point", () => {

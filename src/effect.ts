@@ -18,6 +18,7 @@ export * as Digest from "./plan/canonical-json.ts";
 export * as Provisioning from "./plan/plan.ts";
 export * as DnsPlan from "./plan/types.ts";
 export * as DnsProvider from "./provider/provider.ts";
+export * as Cloudflare from "./providers/cloudflare/index.ts";
 export * as ConnectionStore from "./stores/connection.ts";
 export * as CredentialStore from "./stores/credential.ts";
 export * as OAuthStateStore from "./stores/oauth-state.ts";

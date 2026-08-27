@@ -13,6 +13,7 @@ export * as DomainName from "./promise/domain-name.ts";
 export * as InvalidInput from "./invalid-input.ts";
 export * as DnsPlan from "./promise/dns-plan.ts";
 export type * as DnsProvider from "./promise/dns-provider.ts";
+export * as Cloudflare from "./promise/cloudflare.ts";
 export type * as DnsResolver from "./promise/dns-resolver.ts";
 export * as OAuth from "./promise/oauth.ts";
 export * as Provisioning from "./promise/provisioning.ts";

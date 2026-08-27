@@ -38,12 +38,15 @@ describe("packed consumers", () => {
         join(directory, "consumer.mjs"),
         `
 import { Provisioning, VERSION } from "domainkit";
+import { make as makeCloudflare } from "domainkit/cloudflare";
 import { Effect, Layer } from "effect";
 import {
   Digest,
   DnsProvider,
   Provisioning as EffectProvisioning,
 } from "domainkit/effect";
+import { make as makeEffectCloudflare } from "domainkit/effect/cloudflare";
+import { Secret } from "domainkit";
 
 const provider = {
   id: "packed-consumer",
@@ -62,6 +65,14 @@ const input = {
   zone: "example.com",
 };
 const promisePlan = await Provisioning.create({ ...input, provider });
+const cloudflareOptions = {
+  accountId: "packed-account",
+  capabilities: ["dns:read", "dns:write"],
+  fetch: async () => { throw new Error("not called"); },
+  token: Secret.make("packed-token"),
+};
+const cloudflare = makeCloudflare(cloudflareOptions);
+const effectCloudflare = makeEffectCloudflare(cloudflareOptions);
 const effectPlan = await Effect.runPromise(
   EffectProvisioning.create(input).pipe(
     Effect.provide(
@@ -69,7 +80,12 @@ const effectPlan = await Effect.runPromise(
     ),
   ),
 );
-if (VERSION.length === 0 || promisePlan.digest !== effectPlan.digest) {
+if (
+  VERSION.length === 0 ||
+  promisePlan.digest !== effectPlan.digest ||
+  cloudflare.id !== "cloudflare" ||
+  effectCloudflare.id !== "cloudflare"
+) {
   throw new Error("Packed Promise and Effect namespaces diverged");
 }
 `,
