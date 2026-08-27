@@ -14,6 +14,8 @@ import {
   applyPlan as applyPlanEffect,
   authorizePlan as authorizePlanEffect,
   createPlan as createPlanEffect,
+  DnsProvider as DnsProviderServiceTag,
+  type DnsProviderService,
   webCryptoLayer,
 } from "../../src/effect.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
@@ -201,6 +203,45 @@ describe("plan and apply tracer", () => {
       receipt: {
         operations: [{ operationId: creates[0]!.id }],
         planDigest: plan.digest,
+        status: "partial",
+      },
+    });
+  });
+
+  it("returns confirmed writes when interrupted between operations", async () => {
+    const backing = new InMemoryDnsProvider();
+    let creates = 0;
+    const provider: DnsProviderService = {
+      id: backing.id,
+      createRecord: (zone, record) => {
+        creates += 1;
+        return creates === 1 ? backing.createRecord(zone, record) : Effect.interrupt;
+      },
+      listRecords: (zone) => backing.listRecords(zone),
+    };
+    const additional = parseDnsRecord({
+      ...requirement,
+      name: "second.example.com",
+      target: "second-target.example.net",
+    });
+    const layer = Layer.merge(Layer.succeed(DnsProviderServiceTag)(provider), webCryptoLayer);
+    const plan = await Effect.runPromise(
+      createPlanEffect({
+        requirements: [requirement, additional],
+        zone: "example.com",
+      }).pipe(Effect.provide(layer)),
+    );
+    const authorization = await Effect.runPromise(
+      authorizePlanEffect(plan).pipe(Effect.provide(webCryptoLayer)),
+    );
+
+    await expect(
+      Effect.runPromise(applyPlanEffect({ authorization, plan }).pipe(Effect.provide(layer))),
+    ).rejects.toMatchObject({
+      _tag: "PartialApplyError",
+      causeTag: "Interrupted",
+      receipt: {
+        operations: [{ operationId: plan.operations[0]!.id }],
         status: "partial",
       },
     });

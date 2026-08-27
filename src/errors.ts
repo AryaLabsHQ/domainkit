@@ -48,6 +48,7 @@ export class PartialApplyError extends Schema.TaggedError<PartialApplyError>()(
     causeTag: Schema.Literals([
       "CryptoError",
       "InvalidInputError",
+      "Interrupted",
       "ProviderError",
       "StalePlanError",
     ]),

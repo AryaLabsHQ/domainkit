@@ -1,4 +1,4 @@
-import { Clock, Crypto, Effect, Schema } from "effect";
+import { Cause, Clock, Crypto, Effect, Schema } from "effect";
 
 import { parseDomainName } from "../domain/domain-name.ts";
 import type { DnsRecord, DnsRecordInput } from "../domain/dns-record.ts";
@@ -175,6 +175,23 @@ export function applyPlan(input: {
                   ),
                 ),
         ),
+        Effect.catchCause((cause) => {
+          if (!Cause.hasInterruptsOnly(cause) || operations.length === 0) {
+            return Effect.failCause(cause);
+          }
+          return createApplyReceipt(input, operations, "partial").pipe(
+            Effect.flatMap((receipt) =>
+              Effect.fail(
+                new PartialApplyError({
+                  causeTag: "Interrupted",
+                  failedOperationId: operation.id,
+                  message: "DNS apply was interrupted after confirmed writes",
+                  receipt,
+                }),
+              ),
+            ),
+          );
+        }),
       );
     }
 
