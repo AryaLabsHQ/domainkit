@@ -16,11 +16,14 @@ export function assertConnectionGrant(
   if (connection.providerId !== request.providerId || connection.accountId !== request.accountId) {
     throw new AuthorizationError({ message: "Connection does not grant this provider account" });
   }
-  if (
-    connection.expiresAt !== null &&
-    new Date(connection.expiresAt) <= (request.now ?? new Date())
-  ) {
-    throw new AuthorizationError({ message: "Connection has expired" });
+  if (connection.expiresAt !== null) {
+    const expiresAt = new Date(connection.expiresAt);
+    if (Number.isNaN(expiresAt.getTime())) {
+      throw new AuthorizationError({ message: "Connection expiration is invalid" });
+    }
+    if (expiresAt <= (request.now ?? new Date())) {
+      throw new AuthorizationError({ message: "Connection has expired" });
+    }
   }
   if (!connection.capabilities.includes(request.capability)) {
     throw new AuthorizationError({

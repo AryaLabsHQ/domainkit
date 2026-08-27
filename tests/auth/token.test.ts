@@ -82,5 +82,15 @@ describe("token connections", () => {
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
+    await expect(
+      authorizePlanForConnection({
+        accountId: "account-1",
+        connection: { ...connection, expiresAt: "not-a-date" },
+        plan,
+      }),
+    ).rejects.toMatchObject({
+      _tag: "AuthorizationError",
+      message: "Connection expiration is invalid",
+    });
   });
 });
