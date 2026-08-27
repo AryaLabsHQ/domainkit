@@ -57,66 +57,111 @@ describe("Cloudflare provider conformance", () => {
     }).pipe(Effect.provide(layer));
   });
 
-  it.effect("no-ops exact state and blocks incompatible CNAME state without writes", () => {
-    const exact = {
-      content: "target.example.net",
-      id: "exact-record",
-      name: "track.example.com",
-      proxied: false,
-      ttl: 300,
-      type: "CNAME",
-    };
-    const conflicting = {
-      content: "occupied",
-      id: "conflicting-record",
-      name: "track.example.com",
-      proxied: false,
-      ttl: 300,
-      type: "TXT",
-    };
-    const exactRecording = recordedFetch([{ body: page([zone]) }, { body: page([exact]) }]);
-    const conflictRecording = recordedFetch([
-      { body: page([zone]) },
-      { body: page([conflicting]) },
-    ]);
+  it.effect(
+    "no-ops exact state and blocks portable or opaque CNAME conflicts without writes",
+    () => {
+      const exact = {
+        content: "target.example.net",
+        id: "exact-record",
+        name: "track.example.com",
+        proxied: false,
+        ttl: 300,
+        type: "CNAME",
+      };
+      const conflicting = {
+        content: "occupied",
+        id: "conflicting-record",
+        name: "track.example.com",
+        proxied: false,
+        ttl: 300,
+        type: "TXT",
+      };
+      const exactRecording = recordedFetch([{ body: page([zone]) }, { body: page([exact]) }]);
+      const conflictRecording = recordedFetch([
+        { body: page([zone]) },
+        { body: page([conflicting]) },
+      ]);
+      const opaqueConflictRecording = recordedFetch([
+        { body: page([zone]) },
+        {
+          body: page([
+            {
+              data: {},
+              id: "https-record",
+              name: "track.example.com",
+              proxied: false,
+              ttl: 300,
+              type: "HTTPS",
+            },
+          ]),
+        },
+      ]);
 
-    return Effect.gen(function* () {
-      const exactProvider = Cloudflare.make({
-        accountId: "account-1",
-        capabilities,
-        fetch: exactRecording.fetch,
-        token: Secret.make("token"),
-      });
-      const exactPlan = yield* Provisioning.create({
-        requirements: [requirement],
-        zone: "example.com",
-      }).pipe(
-        Effect.provide(
-          Layer.merge(Layer.succeed(DnsProvider.Service, exactProvider), Digest.webCryptoLayer),
-        ),
-      );
-      assert.strictEqual(exactPlan.operations[0]?._tag, "noop");
+      return Effect.gen(function* () {
+        const exactProvider = Cloudflare.make({
+          accountId: "account-1",
+          capabilities,
+          fetch: exactRecording.fetch,
+          token: Secret.make("token"),
+        });
+        const exactPlan = yield* Provisioning.create({
+          requirements: [requirement],
+          zone: "example.com",
+        }).pipe(
+          Effect.provide(
+            Layer.merge(Layer.succeed(DnsProvider.Service, exactProvider), Digest.webCryptoLayer),
+          ),
+        );
+        assert.strictEqual(exactPlan.operations[0]?._tag, "noop");
 
-      const conflictProvider = Cloudflare.make({
-        accountId: "account-1",
-        capabilities,
-        fetch: conflictRecording.fetch,
-        token: Secret.make("token"),
+        const conflictProvider = Cloudflare.make({
+          accountId: "account-1",
+          capabilities,
+          fetch: conflictRecording.fetch,
+          token: Secret.make("token"),
+        });
+        const conflictPlan = yield* Provisioning.create({
+          requirements: [requirement],
+          zone: "example.com",
+        }).pipe(
+          Effect.provide(
+            Layer.merge(
+              Layer.succeed(DnsProvider.Service, conflictProvider),
+              Digest.webCryptoLayer,
+            ),
+          ),
+        );
+        assert.strictEqual(conflictPlan.operations[0]?._tag, "conflict");
+
+        const opaqueConflictProvider = Cloudflare.make({
+          accountId: "account-1",
+          capabilities,
+          fetch: opaqueConflictRecording.fetch,
+          token: Secret.make("token"),
+        });
+        const opaqueConflictPlan = yield* Provisioning.create({
+          requirements: [requirement],
+          zone: "example.com",
+        }).pipe(
+          Effect.provide(
+            Layer.merge(
+              Layer.succeed(DnsProvider.Service, opaqueConflictProvider),
+              Digest.webCryptoLayer,
+            ),
+          ),
+        );
+        assert.strictEqual(opaqueConflictPlan.operations[0]?._tag, "conflict");
+        if (opaqueConflictPlan.operations[0]?._tag === "conflict") {
+          assert.strictEqual(opaqueConflictPlan.operations[0].existing[0]?._tag, "Opaque");
+        }
+        assert.ok(
+          [
+            ...exactRecording.requests,
+            ...conflictRecording.requests,
+            ...opaqueConflictRecording.requests,
+          ].every(({ init }) => init?.method !== "POST"),
+        );
       });
-      const conflictPlan = yield* Provisioning.create({
-        requirements: [requirement],
-        zone: "example.com",
-      }).pipe(
-        Effect.provide(
-          Layer.merge(Layer.succeed(DnsProvider.Service, conflictProvider), Digest.webCryptoLayer),
-        ),
-      );
-      assert.strictEqual(conflictPlan.operations[0]?._tag, "conflict");
-      assert.ok(
-        [...exactRecording.requests, ...conflictRecording.requests].every(
-          ({ init }) => init?.method !== "POST",
-        ),
-      );
-    });
-  });
+    },
+  );
 });

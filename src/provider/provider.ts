@@ -40,7 +40,7 @@ export interface Interface {
   ) => Effect.Effect<CreateResult, Error>;
   readonly listRecords: (
     zone: DomainName.DomainName,
-  ) => Effect.Effect<ReadonlyArray<DnsRecord.DnsRecord>, Error>;
+  ) => Effect.Effect<ReadonlyArray<DnsRecord.Observed>, Error>;
 }
 
 export class Service extends Context.Service<Service, Interface>()("@domainkit/DnsProvider") {}
@@ -52,9 +52,7 @@ export interface AsyncInterface {
     zone: DomainName.DomainName,
     record: DnsRecord.DnsRecord,
   ) => Promise<CreateResult>;
-  readonly listRecords: (
-    zone: DomainName.DomainName,
-  ) => Promise<ReadonlyArray<DnsRecord.DnsRecord>>;
+  readonly listRecords: (zone: DomainName.DomainName) => Promise<ReadonlyArray<DnsRecord.Observed>>;
 }
 
 export const layerFromAsync = (provider: AsyncInterface): Layer.Layer<Service> =>

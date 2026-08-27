@@ -64,6 +64,19 @@ export const {
 export type DnsRecord = typeof Schema.Type;
 export type Encoded = typeof Schema.Encoded;
 
+/** Provider state that DomainKit cannot create but must retain for safe reconciliation. */
+export const Opaque = S.Struct({
+  _tag: S.Literal("Opaque"),
+  name: DomainName.Schema,
+  providerRecordId: S.NullOr(S.String),
+  providerType: S.String.check(S.isMinLength(1)),
+});
+export interface Opaque extends S.Schema.Type<typeof Opaque> {}
+
+/** Any DNS record observed through a provider, including non-portable record types. */
+export const Observed = S.Union([Schema, Opaque]);
+export type Observed = typeof Observed.Type;
+
 export const decode = Effect.fn("DnsRecord.decode")((input: unknown) =>
   S.decodeUnknownEffect(Schema)(input).pipe(
     Effect.mapError((cause) => new InvalidInputError({ message: cause.message })),

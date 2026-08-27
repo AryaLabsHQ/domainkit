@@ -89,9 +89,9 @@ describe("Cloudflare Effect client", () => {
         records.map(({ _tag }) => _tag),
         ["A", "AAAA", "CNAME", "TXT", "MX", "CAA", "NS", "SRV"],
       );
-      assert.strictEqual(records[0]?.ttl, null);
-      assert.strictEqual(records[3]?.ttl, 300);
-      assert.strictEqual(records[2]?.policy, "exclusive");
+      assert.strictEqual(records[0]?._tag === "A" ? records[0].ttl : undefined, null);
+      assert.strictEqual(records[3]?._tag === "TXT" ? records[3].ttl : undefined, 300);
+      assert.strictEqual(records[2]?._tag === "CNAME" ? records[2].policy : undefined, "exclusive");
       assert.ok(recording.requests[2]?.url.includes("page=2"));
     });
   });
@@ -308,7 +308,7 @@ describe("Cloudflare Effect client", () => {
     }),
   );
 
-  it.effect("reads proxied portable records and ignores non-portable provider records", () => {
+  it.effect("reads portable records and preserves non-portable provider records", () => {
     const proxied = { ...record("A", "a.example.com", { content: "192.0.2.1" }), proxied: true };
     const client = Cloudflare.make({
       accountId: "account-1",
@@ -321,8 +321,17 @@ describe("Cloudflare Effect client", () => {
     });
     return Effect.gen(function* () {
       const records = yield* client.listRecords(DomainName.parse("example.com"));
-      assert.strictEqual(records.length, 1);
-      assert.strictEqual(records[0]?.metadata.provenance, "cloudflare:proxied");
+      assert.strictEqual(records.length, 2);
+      assert.strictEqual(
+        records[0]?._tag === "A" ? records[0].metadata.provenance : undefined,
+        "cloudflare:proxied",
+      );
+      assert.deepStrictEqual(records[1], {
+        _tag: "Opaque",
+        name: DomainName.parse("example.com"),
+        providerRecordId: "record-https",
+        providerType: "HTTPS",
+      });
     });
   });
 });

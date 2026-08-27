@@ -96,7 +96,7 @@ export const create = Effect.fn("Provisioning.create")(function* (input: CreateI
 
 interface PlanningState {
   readonly operations: ReadonlyArray<DnsPlan.Operation>;
-  readonly projected: ReadonlyArray<DnsRecord.DnsRecord>;
+  readonly projected: ReadonlyArray<DnsRecord.Observed>;
 }
 
 /** Authorizes all or a selected subset of create operations in a digest-bound plan. */
@@ -285,11 +285,14 @@ function assertStillCreatable(
 
 function reconcileRequirement(
   requirement: DnsRecord.DnsRecord,
-  allExisting: ReadonlyArray<DnsRecord.DnsRecord>,
+  allExisting: ReadonlyArray<DnsRecord.Observed>,
 ): Effect.Effect<DnsPlan.Operation, CryptoError, Crypto.Crypto> {
   return Effect.gen(function* () {
     const sameName = allExisting.filter((record) => record.name === requirement.name);
-    const sameSet = sameName.filter((record) => record._tag === requirement._tag);
+    const sameSet = sameName.filter(
+      (record): record is DnsRecord.DnsRecord =>
+        record._tag !== "Opaque" && record._tag === requirement._tag,
+    );
     const exact = sameSet.find((record) => DnsRecord.equals(record, requirement));
     const id = yield* sha256Encoded(RequirementDigest, { requirement });
     if (exact !== undefined) {
@@ -354,8 +357,8 @@ function failureMessage(failure: CreateError | StaleError): string {
     : failure.message;
 }
 
-function compareRecords(left: DnsRecord.DnsRecord, right: DnsRecord.DnsRecord): number {
-  const encode = S.encodeSync(DnsRecord.Schema);
+function compareRecords(left: DnsRecord.Observed, right: DnsRecord.Observed): number {
+  const encode = S.encodeSync(DnsRecord.Observed);
   const toJson = S.decodeUnknownSync(S.Json);
   const leftJson = stringify(toJson(encode(left)));
   const rightJson = stringify(toJson(encode(right)));

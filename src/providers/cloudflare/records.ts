@@ -74,18 +74,15 @@ export const decode = Effect.fn("CloudflareRecords.decode")((record: Protocol.Re
         );
       }
       default:
-        return yield* Effect.fail(
-          failure("decodeRecord", `Cloudflare record type ${record.type} is not supported`, {
-            reason: "unsupported",
-          }),
-        );
+        return yield* S.decodeUnknownEffect(DnsRecord.Opaque)({
+          _tag: "Opaque",
+          name: record.name,
+          providerRecordId: record.id,
+          providerType: record.type,
+        }).pipe(Effect.mapError((cause) => failure("decodeRecord", cause.message)));
     }
   }),
 );
-
-export function isSupported(record: Protocol.Record): boolean {
-  return ["A", "AAAA", "CNAME", "TXT", "MX", "CAA", "NS", "SRV"].includes(record.type);
-}
 
 export function encode(record: DnsRecord.DnsRecord): CreateBody {
   const common = {

@@ -141,7 +141,7 @@ export function make(options: Options): Interface {
   const listRecords = Effect.fn("CloudflareClient.listRecords")((zoneName: DomainName.DomainName) =>
     Effect.gen(function* () {
       const zone = yield* resolveZone(zoneName);
-      const records: Array<DnsRecord.DnsRecord> = [];
+      const records: Array<DnsRecord.Observed> = [];
       let page = 1;
       while (true) {
         const query = new URLSearchParams({ page: String(page), per_page: "100" });
@@ -151,9 +151,7 @@ export function make(options: Options): Interface {
         );
         yield* ensureSuccess(body, "listRecords", response);
         const envelope = yield* decode(Protocol.RecordListEnvelope, body, "listRecords", response);
-        for (const record of envelope.result) {
-          if (Records.isSupported(record)) records.push(yield* Records.decode(record));
-        }
+        records.push(...(yield* Effect.forEach(envelope.result, Records.decode)));
         const totalPages = envelope.result_info?.total_pages;
         if (
           (totalPages !== undefined && page >= totalPages) ||
