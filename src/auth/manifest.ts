@@ -34,6 +34,7 @@ export const Schema = S.Struct({
 });
 export interface Manifest extends S.Schema.Type<typeof Schema> {}
 export type OAuthMethod = Extract<Manifest["methods"][number], { readonly _tag: "oauth2" }>;
+/** A provider-owned installation flow that returns a credential from a one-time code. */
 export type IntegrationMethod = Extract<
   Manifest["methods"][number],
   { readonly _tag: "integration" }

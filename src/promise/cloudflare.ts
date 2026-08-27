@@ -21,6 +21,7 @@ export interface Interface extends DnsProvider.AsyncInterface {
   readonly validateToken: () => Promise<ProviderAuth.TokenValidation>;
 }
 
+/** Creates a Promise-compatible facade over the Effect-native Cloudflare client. */
 export function make(options: Cloudflare.Client.Options): Interface {
   const client = Cloudflare.make(options);
   return {

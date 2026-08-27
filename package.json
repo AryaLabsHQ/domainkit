@@ -64,11 +64,14 @@
     "format:check": "oxfmt --check .",
     "lint": "oxlint --deny-warnings .",
     "lint:rules": "node --test tools/oxlint/*.test.js",
-    "release:check": "bun run lint && bun run lint:rules && bun run format:check && bun run typecheck && bun run test && bun run build && bun run test:artifact",
+    "release:check": "bun run lint && bun run lint:rules && bun run format:check && bun run typecheck && bun run test && bun run build && bun run typecheck:examples && bun run test:artifact",
     "test": "vitest run --exclude tests/artifact/**/*.test.ts",
     "test:artifact": "vitest run tests/artifact",
+    "test:consumers": "vitest run tests/artifact/packed-consumers.test.ts",
+    "test:providers": "vitest run tests/providers",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:examples": "tsc --project tsconfig.examples.json"
   },
   "dependencies": {
     "@leichtgewicht/dns-packet": "6.0.3",
@@ -79,6 +82,7 @@
     "@effect/vitest": "4.0.0-rc.112",
     "@types/bun": "1.4.0",
     "effect": "4.0.0-rc.112",
+    "miniflare": "3.20250718.3",
     "oxfmt": "0.65.0",
     "oxlint": "1.80.0",
     "tsdown": "0.22.14",

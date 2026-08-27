@@ -10,6 +10,7 @@ import * as Records from "./records.ts";
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
+/** Configuration for an Effect-native Cloudflare authoritative-DNS client. */
 export interface Options {
   readonly accountId: string;
   readonly baseUrl?: string;
@@ -27,6 +28,7 @@ export interface ListZonesInput {
 
 export type Account = Protocol.Account;
 
+/** A portable Cloudflare authoritative zone with normalized nameserver evidence. */
 export interface Zone {
   readonly accountId: string;
   readonly id: string;
@@ -43,6 +45,7 @@ export interface Interface extends DnsProvider.Interface {
   readonly validateToken: () => Effect.Effect<ProviderAuth.TokenValidation, DnsProvider.Error>;
 }
 
+/** Creates an Effect-native Cloudflare client without owning the credential lifecycle. */
 export function make(options: Options): Interface {
   const fetch = options.fetch ?? globalThis.fetch;
   const baseUrl = (options.baseUrl ?? "https://api.cloudflare.com/client/v4").replace(/\/$/, "");

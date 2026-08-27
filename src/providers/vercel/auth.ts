@@ -6,6 +6,7 @@ import * as DnsProvider from "../../provider/provider.ts";
 import type * as Client from "./client.ts";
 import * as Protocol from "./protocol.ts";
 
+/** Describes Vercel's caller-created personal access-token method. */
 export function tokenMethod(
   capabilities: ProviderAuth.TokenValidation["capabilities"],
 ): Extract<ProviderAuth.Manifest["methods"][number], { readonly _tag: "token" }> {
@@ -21,6 +22,7 @@ export interface IntegrationMethodOptions {
   readonly slug: string;
 }
 
+/** Describes Vercel's provider-specific integration installation flow. */
 export function integrationMethod(
   options: IntegrationMethodOptions,
 ): ProviderAuth.IntegrationMethod {
@@ -32,6 +34,7 @@ export function integrationMethod(
   };
 }
 
+/** Creates the Vercel token and integration authorization manifest. */
 export function manifest(options: IntegrationMethodOptions): ProviderAuth.Manifest {
   return {
     methods: [tokenMethod(options.capabilities), integrationMethod(options)],
@@ -55,6 +58,7 @@ export interface IntegrationCredential {
   readonly userId: string;
 }
 
+/** Exchanges Vercel's one-time integration code and preserves its account context. */
 export const exchangeCode = Effect.fn("VercelAuth.exchangeCode")((options: ExchangeCodeOptions) =>
   Effect.gen(function* () {
     const fetch = options.fetch ?? globalThis.fetch;

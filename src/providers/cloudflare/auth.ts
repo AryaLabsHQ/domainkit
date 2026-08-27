@@ -12,6 +12,7 @@ const authorizationServer = {
   token_endpoint: "https://dash.cloudflare.com/oauth2/token",
 } as const;
 
+/** Describes Cloudflare's caller-created API-token authorization method. */
 export function tokenMethod(
   capabilities: ProviderAuth.TokenValidation["capabilities"],
 ): Extract<ProviderAuth.Manifest["methods"][number], { readonly _tag: "token" }> {
@@ -30,6 +31,7 @@ export interface OAuthMethodOptions {
   readonly clientAuth: ProviderAuth.OAuthMethod["clientAuth"];
 }
 
+/** Describes a registered Cloudflare OAuth client and its assigned scope IDs. */
 export function oauthMethod(options: OAuthMethodOptions): ProviderAuth.OAuthMethod {
   return {
     _tag: "oauth2",
@@ -40,6 +42,7 @@ export function oauthMethod(options: OAuthMethodOptions): ProviderAuth.OAuthMeth
   };
 }
 
+/** Creates the Cloudflare token and OAuth authorization manifest. */
 export function manifest(options: OAuthMethodOptions): ProviderAuth.Manifest {
   return {
     methods: [tokenMethod(options.capabilities), oauthMethod(options)],
@@ -49,6 +52,7 @@ export function manifest(options: OAuthMethodOptions): ProviderAuth.Manifest {
 
 export interface SubjectResolverOptions extends Omit<Client.Options, "token" | "tokenKind"> {}
 
+/** Resolves the Cloudflare account selected by a completed OAuth grant. */
 export function subjectResolver(
   options: SubjectResolverOptions,
 ): ProviderAuth.OAuthSubjectResolver {
@@ -65,6 +69,7 @@ export function subjectResolver(
     });
 }
 
+/** Creates a host callback that validates a Cloudflare API token. */
 export function tokenValidator(
   options: Omit<Client.Options, "token">,
 ): (token: Secret.Value) => ReturnType<Client.Interface["validateToken"]> {
