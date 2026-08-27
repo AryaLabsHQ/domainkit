@@ -31,6 +31,11 @@ export class StorageError extends Schema.TaggedError<StorageError>()("StorageErr
   operation: Schema.String,
 }) {}
 
+export class ResolverError extends Schema.TaggedError<ResolverError>()("ResolverError", {
+  message: Schema.String,
+  reason: Schema.Literals(["timeout", "transport"]),
+}) {}
+
 export class StalePlanError extends Schema.TaggedError<StalePlanError>()("StalePlanError", {
   approvedPlanDigest: Schema.String,
   currentPlanDigest: Schema.String,
@@ -58,6 +63,7 @@ export type DomainKitError =
   | AuthorizationError
   | CryptoError
   | StorageError
+  | ResolverError
   | PartialApplyError
   | ProviderError
   | StalePlanError;

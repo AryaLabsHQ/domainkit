@@ -1,8 +1,12 @@
+import { Effect } from "effect";
+
+import type { DomainName } from "../domain/domain-name.ts";
 import type { DnsRecord } from "../domain/dns-record.ts";
 import { recordData, sameRecordData } from "../domain/dns-record.ts";
-import type { PromiseDnsProvider as DnsProvider } from "../provider/provider.ts";
+import type { ProviderError } from "../errors.ts";
+import { DnsProvider, type DnsProviderService } from "../provider/provider.ts";
 import { normalizeDnsData } from "./cloudflare-doh.ts";
-import type { DnsResolver } from "./resolver.ts";
+import { DnsResolver, type DnsResolution, type DnsResolverService } from "./resolver.ts";
 
 export type ProviderObservation =
   | { readonly _tag: "match" }
@@ -23,59 +27,76 @@ export interface RecordVerification {
   readonly status: "verified" | "pending" | "mismatch" | "unavailable";
 }
 
-export async function verifyRecord(input: {
-  readonly provider: DnsProvider;
+export function verifyRecord(input: {
   readonly record: DnsRecord;
-  readonly resolver: DnsResolver;
-  readonly zone: Parameters<DnsProvider["listRecords"]>[0];
-}): Promise<RecordVerification> {
-  const [provider, resolution] = await Promise.all([
-    observeProvider(input.provider, input.zone, input.record),
-    input.resolver.resolve({ name: input.record.name, type: input.record._tag }),
-  ]);
-  const expected = normalizeDnsData(input.record._tag, recordValue(input.record));
-  const publicDns: PublicDnsObservation =
-    resolution._tag === "answer"
-      ? resolution.answers.some(
-          (answer) =>
-            answer.name === input.record.name &&
-            answer.type === input.record._tag &&
-            normalizeDnsData(answer.type, answer.data) === expected,
-        )
-        ? { _tag: "propagated" }
-        : { _tag: "mismatch", answers: resolution.answers.map(({ data }) => data) }
-      : resolution._tag === "nodata"
-        ? { _tag: "missing" }
-        : resolution;
-  const status =
-    provider._tag === "match" && publicDns._tag === "propagated"
-      ? "verified"
-      : provider._tag === "failure" || publicDns._tag === "failure" || publicDns._tag === "timeout"
-        ? "unavailable"
-        : provider._tag === "mismatch" || publicDns._tag === "mismatch"
-          ? "mismatch"
-          : "pending";
-  return { provider, publicDns, status };
+  readonly zone: DomainName;
+}): Effect.Effect<RecordVerification, never, DnsProviderService | DnsResolverService> {
+  return Effect.gen(function* () {
+    const providerService = yield* DnsProvider;
+    const resolver = yield* DnsResolver;
+    const [provider, resolution] = yield* Effect.all(
+      [
+        observeProvider(providerService, input.zone, input.record).pipe(
+          Effect.catch((failure) =>
+            Effect.succeed<ProviderObservation>({
+              _tag: "failure",
+              message: failure.message,
+            }),
+          ),
+        ),
+        resolver.resolve({ name: input.record.name, type: input.record._tag }).pipe(
+          Effect.match({
+            onFailure: (failure): PublicDnsObservation =>
+              failure.reason === "timeout"
+                ? { _tag: "timeout" }
+                : { _tag: "failure", message: failure.message },
+            onSuccess: (value) => observePublicDns(input.record, value),
+          }),
+        ),
+      ] as const,
+      { concurrency: "unbounded" },
+    );
+    const status =
+      provider._tag === "match" && resolution._tag === "propagated"
+        ? "verified"
+        : provider._tag === "failure" ||
+            resolution._tag === "failure" ||
+            resolution._tag === "timeout"
+          ? "unavailable"
+          : provider._tag === "mismatch" || resolution._tag === "mismatch"
+            ? "mismatch"
+            : "pending";
+    return { provider, publicDns: resolution, status };
+  });
 }
 
-async function observeProvider(
-  provider: DnsProvider,
-  zone: Parameters<DnsProvider["listRecords"]>[0],
+function observeProvider(
+  provider: DnsProviderService,
+  zone: DomainName,
   record: DnsRecord,
-): Promise<ProviderObservation> {
-  try {
-    const records = await provider.listRecords(zone);
-    if (records.some((existing) => sameRecordData(existing, record))) return { _tag: "match" };
-    const sameSet = records.filter(
-      (existing) => existing.name === record.name && existing._tag === record._tag,
-    );
-    return sameSet.length === 0 ? { _tag: "missing" } : { _tag: "mismatch", records: sameSet };
-  } catch (cause) {
-    return {
-      _tag: "failure",
-      message: cause instanceof Error ? cause.name : "Provider readback failed",
-    };
-  }
+): Effect.Effect<ProviderObservation, ProviderError> {
+  return provider.listRecords(zone).pipe(
+    Effect.map((records): ProviderObservation => {
+      if (records.some((existing) => sameRecordData(existing, record))) return { _tag: "match" };
+      const sameSet = records.filter(
+        (existing) => existing.name === record.name && existing._tag === record._tag,
+      );
+      return sameSet.length === 0 ? { _tag: "missing" } : { _tag: "mismatch", records: sameSet };
+    }),
+  );
+}
+
+function observePublicDns(record: DnsRecord, resolution: DnsResolution): PublicDnsObservation {
+  if (resolution._tag === "nodata") return { _tag: "missing" };
+  const expected = normalizeDnsData(record._tag, recordValue(record));
+  return resolution.answers.some(
+    (answer) =>
+      answer.name === record.name &&
+      answer.type === record._tag &&
+      normalizeDnsData(answer.type, answer.data) === expected,
+  )
+    ? { _tag: "propagated" }
+    : { _tag: "mismatch", answers: resolution.answers.map(({ data }) => data) };
 }
 
 function recordValue(record: DnsRecord): string {

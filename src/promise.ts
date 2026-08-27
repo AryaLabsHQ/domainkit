@@ -41,6 +41,11 @@ import {
   type PromiseCredentialStore,
   type PromiseOAuthStateStore,
 } from "./stores/contracts.ts";
+import { layerDnsResolverFromPromise, type PromiseDnsResolver } from "./verification/resolver.ts";
+import {
+  type RecordVerification,
+  verifyRecord as verifyRecordEffect,
+} from "./verification/verify.ts";
 
 export interface CreatePlanInput extends EffectCreatePlanInput {
   readonly provider: PromiseDnsProvider;
@@ -199,6 +204,24 @@ export function connectToken(input: {
       webCryptoLayer,
     ),
     input.now,
+  );
+}
+
+export function verifyRecord(input: {
+  readonly provider: PromiseDnsProvider;
+  readonly record: Parameters<typeof verifyRecordEffect>[0]["record"];
+  readonly resolver: PromiseDnsResolver;
+  readonly zone: Parameters<typeof verifyRecordEffect>[0]["zone"];
+}): Promise<RecordVerification> {
+  return Effect.runPromise(
+    verifyRecordEffect({ record: input.record, zone: input.zone }).pipe(
+      Effect.provide(
+        Layer.merge(
+          layerDnsProviderFromPromise(input.provider),
+          layerDnsResolverFromPromise(input.resolver),
+        ),
+      ),
+    ),
   );
 }
 

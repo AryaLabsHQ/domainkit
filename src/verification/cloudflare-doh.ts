@@ -1,7 +1,18 @@
+import { Effect, Layer } from "effect";
+
+import type { Fetch } from "../auth/oauth.ts";
 import { parseDomainName } from "../domain/domain-name.ts";
 import type { DnsRecordType } from "../domain/dns-record.ts";
-import type { Fetch } from "../auth/oauth.ts";
-import type { DnsAnswer, DnsQuery, DnsResolution, DnsResolver } from "./resolver.ts";
+import { ResolverError } from "../errors.ts";
+import {
+  type DnsAnswer,
+  type DnsQuery,
+  type DnsResolution,
+  DnsResolver,
+  type DnsResolverService,
+  type PromiseDnsResolver,
+  toPromiseDnsResolver,
+} from "./resolver.ts";
 
 const typeCodes: Readonly<Record<DnsRecordType, number>> = {
   A: 1,
@@ -17,7 +28,7 @@ const recordTypes = new Map(
   Object.entries(typeCodes).map(([type, code]) => [code, type as DnsRecordType]),
 );
 
-export class CloudflareDnsResolver implements DnsResolver {
+export class CloudflareDnsResolver implements DnsResolverService {
   readonly #endpoint: string;
   readonly #fetch: Fetch;
   readonly #timeoutMs: number;
@@ -34,14 +45,39 @@ export class CloudflareDnsResolver implements DnsResolver {
     this.#timeoutMs = options.timeoutMs ?? 5_000;
   }
 
-  async resolve(query: DnsQuery): Promise<DnsResolution> {
+  resolve(query: DnsQuery): Effect.Effect<DnsResolution, ResolverError> {
+    return Effect.tryPromise({
+      try: (effectSignal) => this.#resolve(query, effectSignal),
+      catch: (cause) =>
+        cause instanceof ResolverError
+          ? cause
+          : new ResolverError({
+              message: cause instanceof Error ? cause.name : "DNS resolution failed",
+              reason: "transport",
+            }),
+    });
+  }
+
+  get layer(): Layer.Layer<DnsResolverService> {
+    return Layer.succeed(DnsResolver)(this);
+  }
+
+  get promise(): PromiseDnsResolver {
+    return toPromiseDnsResolver(this);
+  }
+
+  async #resolve(query: DnsQuery, effectSignal: AbortSignal): Promise<DnsResolution> {
     const controller = new AbortController();
-    const abortFromHost = () => controller.abort(query.signal?.reason);
+    let timedOut = false;
+    const abort = (signal: AbortSignal) => controller.abort(signal.reason);
+    const abortFromEffect = () => abort(effectSignal);
+    const abortFromHost = () => query.signal !== undefined && abort(query.signal);
+    effectSignal.addEventListener("abort", abortFromEffect, { once: true });
     query.signal?.addEventListener("abort", abortFromHost, { once: true });
-    const timer = setTimeout(
-      () => controller.abort(new Error("DNS resolution timed out")),
-      this.#timeoutMs,
-    );
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new Error("DNS resolution timed out"));
+    }, this.#timeoutMs);
     try {
       const url = new URL(this.#endpoint);
       url.searchParams.set("name", query.name);
@@ -50,7 +86,12 @@ export class CloudflareDnsResolver implements DnsResolver {
         headers: { accept: "application/dns-json" },
         signal: controller.signal,
       });
-      if (!response.ok) return { _tag: "failure", message: `DoH returned HTTP ${response.status}` };
+      if (!response.ok) {
+        throw new ResolverError({
+          message: `DoH returned HTTP ${response.status}`,
+          reason: "transport",
+        });
+      }
       const body = (await response.json()) as {
         readonly Answer?: ReadonlyArray<{
           readonly data: string;
@@ -76,14 +117,13 @@ export class CloudflareDnsResolver implements DnsResolver {
       }
       return answers.length === 0 ? { _tag: "nodata" } : { _tag: "answer", answers };
     } catch (cause) {
-      return controller.signal.aborted
-        ? { _tag: "timeout" }
-        : {
-            _tag: "failure",
-            message: cause instanceof Error ? cause.name : "DNS resolution failed",
-          };
+      if (timedOut) {
+        throw new ResolverError({ message: "DNS query timed out", reason: "timeout" });
+      }
+      throw cause;
     } finally {
       clearTimeout(timer);
+      effectSignal.removeEventListener("abort", abortFromEffect);
       query.signal?.removeEventListener("abort", abortFromHost);
     }
   }

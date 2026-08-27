@@ -1,6 +1,8 @@
+import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { parseDnsRecord, parseDomainName, verifyRecord } from "../../src/index.ts";
+import { verifyRecord as verifyRecordEffect } from "../../src/effect.ts";
 import { InMemoryDnsProvider, InMemoryDnsResolver } from "../../src/testing.ts";
 
 const record = parseDnsRecord({
@@ -15,22 +17,22 @@ const record = parseDnsRecord({
 describe("record verification", () => {
   it("keeps provider readback and public propagation as separate evidence", async () => {
     const provider = new InMemoryDnsProvider({ records: { "example.com": [record] } });
-    const verified = await verifyRecord({
-      provider: provider.promise,
-      record,
-      resolver: new InMemoryDnsResolver(() => ({
-        _tag: "answer",
-        answers: [
-          {
-            data: "destination.example.net.",
-            name: parseDomainName("track.example.com"),
-            ttl: 60,
-            type: "CNAME",
-          },
-        ],
-      })),
-      zone: parseDomainName("example.com"),
-    });
+    const resolver = new InMemoryDnsResolver(() => ({
+      _tag: "answer",
+      answers: [
+        {
+          data: "destination.example.net.",
+          name: parseDomainName("track.example.com"),
+          ttl: 60,
+          type: "CNAME",
+        },
+      ],
+    }));
+    const verified = await Effect.runPromise(
+      verifyRecordEffect({ record, zone: parseDomainName("example.com") }).pipe(
+        Effect.provide(Layer.merge(provider.layer, resolver.layer)),
+      ),
+    );
     expect(verified).toEqual({
       provider: { _tag: "match" },
       publicDns: { _tag: "propagated" },
@@ -40,7 +42,7 @@ describe("record verification", () => {
     const pending = await verifyRecord({
       provider: provider.promise,
       record,
-      resolver: new InMemoryDnsResolver(() => ({ _tag: "nodata" })),
+      resolver: new InMemoryDnsResolver(() => ({ _tag: "nodata" })).promise,
       zone: parseDomainName("example.com"),
     });
     expect(pending).toMatchObject({
@@ -65,7 +67,7 @@ describe("record verification", () => {
             type: "CNAME",
           },
         ],
-      })),
+      })).promise,
       zone: parseDomainName("example.com"),
     });
     expect(mismatch).toMatchObject({ publicDns: { _tag: "mismatch" }, status: "mismatch" });
@@ -73,7 +75,9 @@ describe("record verification", () => {
     const timeout = await verifyRecord({
       provider: empty.promise,
       record,
-      resolver: new InMemoryDnsResolver(() => ({ _tag: "timeout" })),
+      resolver: {
+        resolve: async () => ({ _tag: "timeout" }),
+      },
       zone: parseDomainName("example.com"),
     });
     expect(timeout).toMatchObject({ publicDns: { _tag: "timeout" }, status: "unavailable" });
@@ -94,7 +98,7 @@ describe("record verification", () => {
             type: "CNAME",
           },
         ],
-      })),
+      })).promise,
       zone: parseDomainName("example.com"),
     });
     expect(observation).toMatchObject({ publicDns: { _tag: "mismatch" }, status: "mismatch" });

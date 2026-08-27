@@ -1,13 +1,33 @@
-import type { DnsQuery, DnsResolution, DnsResolver } from "./resolver.ts";
+import { Effect, Layer } from "effect";
 
-export class InMemoryDnsResolver implements DnsResolver {
-  readonly #resolve: (query: DnsQuery) => DnsResolution | Promise<DnsResolution>;
+import {
+  DnsResolver,
+  type DnsQuery,
+  type DnsResolution,
+  type DnsResolverService,
+  type PromiseDnsResolver,
+  toPromiseDnsResolver,
+} from "./resolver.ts";
 
-  constructor(resolve: (query: DnsQuery) => DnsResolution | Promise<DnsResolution>) {
+export class InMemoryDnsResolver implements DnsResolverService {
+  readonly #resolve: (query: DnsQuery) => DnsResolution | Effect.Effect<DnsResolution>;
+
+  constructor(resolve: (query: DnsQuery) => DnsResolution | Effect.Effect<DnsResolution>) {
     this.#resolve = resolve;
   }
 
-  async resolve(query: DnsQuery): Promise<DnsResolution> {
-    return this.#resolve(query);
+  resolve(query: DnsQuery): Effect.Effect<DnsResolution> {
+    return Effect.suspend(() => {
+      const resolution = this.#resolve(query);
+      return Effect.isEffect(resolution) ? resolution : Effect.succeed(resolution);
+    });
+  }
+
+  get layer(): Layer.Layer<DnsResolverService> {
+    return Layer.succeed(DnsResolver)(this);
+  }
+
+  get promise(): PromiseDnsResolver {
+    return toPromiseDnsResolver(this);
   }
 }

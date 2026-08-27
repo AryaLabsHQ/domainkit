@@ -50,6 +50,7 @@ export {
   PartialApplyError,
   PlanConflictError,
   ProviderError,
+  ResolverError,
   StorageError,
   StalePlanError,
 } from "./errors.ts";
@@ -87,8 +88,13 @@ export type {
   PromiseReceiptStore as ReceiptStore,
 } from "./stores/contracts.ts";
 export { CloudflareDnsResolver, normalizeDnsData } from "./verification/cloudflare-doh.ts";
-export type { DnsAnswer, DnsQuery, DnsResolution, DnsResolver } from "./verification/resolver.ts";
-export { verifyRecord } from "./verification/verify.ts";
+export type {
+  DnsAnswer,
+  DnsQuery,
+  PromiseDnsResolution as DnsResolution,
+  PromiseDnsResolver as DnsResolver,
+} from "./verification/resolver.ts";
+export { verifyRecord } from "./promise.ts";
 export type {
   ProviderObservation,
   PublicDnsObservation,

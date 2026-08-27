@@ -1,7 +1,3 @@
-import { Effect } from "effect";
-
-import { verifyRecord as verifyRecordPromise } from "./verification/verify.ts";
-
 export * from "./index.ts";
 
 export { beginOAuth, completeOAuth, refreshOAuth, revokeOAuth } from "./auth/oauth.ts";
@@ -47,9 +43,14 @@ export type {
   PromiseReceiptStore,
   ReceiptStoreService,
 } from "./stores/contracts.ts";
-
-export function verifyRecord(
-  input: Parameters<typeof verifyRecordPromise>[0],
-): Effect.Effect<Awaited<ReturnType<typeof verifyRecordPromise>>> {
-  return Effect.promise(() => verifyRecordPromise(input));
-}
+export {
+  DnsResolver,
+  layerDnsResolverFromPromise,
+  toPromiseDnsResolver,
+} from "./verification/resolver.ts";
+export type {
+  DnsResolverService,
+  PromiseDnsResolution,
+  PromiseDnsResolver,
+} from "./verification/resolver.ts";
+export { verifyRecord } from "./verification/verify.ts";
