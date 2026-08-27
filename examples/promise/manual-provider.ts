@@ -1,6 +1,7 @@
 import {
   DnsRecord,
   DomainName,
+  type DnsPlan,
   Provisioning,
   type DnsProvider,
   type DnsResolver,
@@ -10,6 +11,10 @@ import {
 export async function provisionWithManualApproval(
   provider: DnsProvider.Interface,
   resolver: DnsResolver.Interface,
+  requestApproval: (input: {
+    readonly instructions: ReadonlyArray<string>;
+    readonly plan: DnsPlan.DnsPlan;
+  }) => Promise<boolean>,
 ): Promise<void> {
   const zone = DomainName.parse("example.com");
   const requirement = DnsRecord.parse({
@@ -22,8 +27,11 @@ export async function provisionWithManualApproval(
   });
   const plan = await Provisioning.create({ provider, requirements: [requirement], zone });
 
-  // Present these instructions or the structured operations to the user before approval.
-  console.log(Provisioning.renderManualInstructions(plan));
+  const approved = await requestApproval({
+    instructions: Provisioning.renderManualInstructions(plan),
+    plan,
+  });
+  if (!approved) return;
 
   const authorization = await Provisioning.authorize(plan);
   await Provisioning.apply({ authorization, plan, provider });
