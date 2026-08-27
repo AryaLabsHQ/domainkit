@@ -315,13 +315,19 @@ describe("Cloudflare Effect client", () => {
       capabilities,
       fetch: recordedFetch([
         { body: page([zone]) },
-        { body: page([proxied, record("HTTPS", "*.example.com", { data: {} })]) },
+        {
+          body: page([
+            proxied,
+            record("A", "*.example.com", { content: "192.0.2.2" }),
+            record("HTTPS", "example.com", { data: {} }),
+          ]),
+        },
       ]).fetch,
       token,
     });
     return Effect.gen(function* () {
       const records = yield* client.listRecords(DomainName.parse("example.com"));
-      assert.strictEqual(records.length, 2);
+      assert.strictEqual(records.length, 3);
       assert.strictEqual(
         records[0]?._tag === "A" ? records[0].metadata.provenance : undefined,
         "cloudflare:proxied",
@@ -329,6 +335,12 @@ describe("Cloudflare Effect client", () => {
       assert.deepStrictEqual(records[1], {
         _tag: "Opaque",
         name: "*.example.com",
+        providerRecordId: "record-a",
+        providerType: "A",
+      });
+      assert.deepStrictEqual(records[2], {
+        _tag: "Opaque",
+        name: "example.com",
         providerRecordId: "record-https",
         providerType: "HTTPS",
       });

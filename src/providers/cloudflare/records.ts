@@ -1,5 +1,6 @@
 import { Effect, Schema as S } from "effect";
 
+import * as DomainName from "../../domain/domain-name.ts";
 import * as DnsRecord from "../../domain/dns-record.ts";
 import * as DnsProvider from "../../provider/provider.ts";
 import type * as Protocol from "./protocol.ts";
@@ -18,13 +19,17 @@ export type CreateBody = Readonly<Record<string, unknown>>;
 
 export const decode = Effect.fn("CloudflareRecords.decode")((record: Protocol.Record) =>
   Effect.gen(function* () {
+    const name = yield* DomainName.decode(record.name).pipe(
+      Effect.match({ onFailure: () => null, onSuccess: (value) => value }),
+    );
+    if (name === null) return yield* decodeOpaque(record);
     const common = {
       metadata: {
         ownership: "provider",
         provenance: record.proxied === true ? "cloudflare:proxied" : "cloudflare",
         purpose: "existing DNS record",
       },
-      name: record.name,
+      name,
       policy: record.type === "CNAME" ? "exclusive" : "append",
       ttl: record.ttl === 1 ? null : record.ttl,
     } as const;
@@ -74,14 +79,18 @@ export const decode = Effect.fn("CloudflareRecords.decode")((record: Protocol.Re
         );
       }
       default:
-        return yield* S.decodeUnknownEffect(DnsRecord.Opaque)({
-          _tag: "Opaque",
-          name: record.name,
-          providerRecordId: record.id,
-          providerType: record.type,
-        }).pipe(Effect.mapError((cause) => failure("decodeRecord", cause.message)));
+        return yield* decodeOpaque(record);
     }
   }),
+);
+
+const decodeOpaque = Effect.fn("CloudflareRecords.decodeOpaque")((record: Protocol.Record) =>
+  S.decodeUnknownEffect(DnsRecord.Opaque)({
+    _tag: "Opaque",
+    name: record.name,
+    providerRecordId: record.id,
+    providerType: record.type,
+  }).pipe(Effect.mapError((cause) => failure("decodeRecord", cause.message))),
 );
 
 export function encode(record: DnsRecord.DnsRecord): CreateBody {
