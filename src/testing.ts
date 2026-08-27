@@ -5,3 +5,4 @@ export {
   InMemoryOAuthStateStore,
   InMemoryReceiptStore,
 } from "./stores/in-memory.ts";
+export { InMemoryDnsResolver } from "./verification/in-memory.ts";

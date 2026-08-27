@@ -21,6 +21,7 @@ import type {
   OAuthStateStore as OAuthStateStoreContract,
   ReceiptStore as ReceiptStoreContract,
 } from "./stores/contracts.ts";
+import { verifyRecord as verifyRecordPromise } from "./verification/verify.ts";
 
 export * from "./index.ts";
 
@@ -104,6 +105,12 @@ export function authorizePlanForConnection(
     try: () => authorizePlanForConnectionPromise(input),
     catch: toDomainKitError,
   });
+}
+
+export function verifyRecord(
+  input: Parameters<typeof verifyRecordPromise>[0],
+): Effect.Effect<Awaited<ReturnType<typeof verifyRecordPromise>>> {
+  return Effect.promise(() => verifyRecordPromise(input));
 }
 
 function toDomainKitError(cause: unknown): DomainKitError {

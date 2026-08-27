@@ -44,6 +44,13 @@ export {
   ProviderError,
 } from "./errors.ts";
 export type { DomainKitError } from "./errors.ts";
+export { selectProvider } from "./discovery/selection.ts";
+export type {
+  ConnectedZone,
+  ProviderCandidateEvidence,
+  ProviderSelection,
+} from "./discovery/selection.ts";
+export { deriveZoneCandidates } from "./discovery/zones.ts";
 export type { DnsProvider, ProviderCreateResult } from "./provider/provider.ts";
 export { authorizePlanForConnection } from "./plan/connection-authorization.ts";
 export { applyPlan, authorizePlan, createPlan, renderManualInstructions } from "./plan/plan.ts";
@@ -64,3 +71,11 @@ export type {
   OAuthStateStore,
   ReceiptStore,
 } from "./stores/contracts.ts";
+export { CloudflareDnsResolver, normalizeDnsData } from "./verification/cloudflare-doh.ts";
+export type { DnsAnswer, DnsQuery, DnsResolution, DnsResolver } from "./verification/resolver.ts";
+export { verifyRecord } from "./verification/verify.ts";
+export type {
+  ProviderObservation,
+  PublicDnsObservation,
+  RecordVerification,
+} from "./verification/verify.ts";

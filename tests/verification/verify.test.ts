@@ -1,0 +1,81 @@
+import { describe, expect, it } from "vitest";
+
+import { parseDnsRecord, parseDomainName, verifyRecord } from "../../src/index.ts";
+import { InMemoryDnsProvider, InMemoryDnsResolver } from "../../src/testing.ts";
+
+const record = parseDnsRecord({
+  _tag: "CNAME",
+  metadata: { ownership: "example-app", provenance: "test", purpose: "Route traffic" },
+  name: "track.example.com",
+  policy: "exclusive",
+  target: "destination.example.net",
+  ttl: 300,
+});
+
+describe("record verification", () => {
+  it("keeps provider readback and public propagation as separate evidence", async () => {
+    const provider = new InMemoryDnsProvider({ records: { "example.com": [record] } });
+    const verified = await verifyRecord({
+      provider,
+      record,
+      resolver: new InMemoryDnsResolver(() => ({
+        _tag: "answer",
+        answers: [
+          {
+            data: "destination.example.net.",
+            name: parseDomainName("track.example.com"),
+            ttl: 60,
+            type: "CNAME",
+          },
+        ],
+      })),
+      zone: parseDomainName("example.com"),
+    });
+    expect(verified).toEqual({
+      provider: { _tag: "match" },
+      publicDns: { _tag: "propagated" },
+      status: "verified",
+    });
+
+    const pending = await verifyRecord({
+      provider,
+      record,
+      resolver: new InMemoryDnsResolver(() => ({ _tag: "nodata" })),
+      zone: parseDomainName("example.com"),
+    });
+    expect(pending).toMatchObject({
+      provider: { _tag: "match" },
+      publicDns: { _tag: "missing" },
+      status: "pending",
+    });
+  });
+
+  it("distinguishes mismatch, timeout, and provider failure", async () => {
+    const empty = new InMemoryDnsProvider();
+    const mismatch = await verifyRecord({
+      provider: empty,
+      record,
+      resolver: new InMemoryDnsResolver(() => ({
+        _tag: "answer",
+        answers: [
+          {
+            data: "wrong.example.net",
+            name: record.name,
+            ttl: 60,
+            type: "CNAME",
+          },
+        ],
+      })),
+      zone: parseDomainName("example.com"),
+    });
+    expect(mismatch).toMatchObject({ publicDns: { _tag: "mismatch" }, status: "mismatch" });
+
+    const timeout = await verifyRecord({
+      provider: empty,
+      record,
+      resolver: new InMemoryDnsResolver(() => ({ _tag: "timeout" })),
+      zone: parseDomainName("example.com"),
+    });
+    expect(timeout).toMatchObject({ publicDns: { _tag: "timeout" }, status: "unavailable" });
+  });
+});
