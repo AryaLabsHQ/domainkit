@@ -102,6 +102,7 @@ export async function completeOAuth(input: {
     const now = (input.now ?? (() => new Date()))();
     const connection: Connection = {
       accountId: subject.accountId,
+      capabilities: [...continuation.method.capabilities],
       createdAt: now.toISOString(),
       expiresAt: subject.expiresAt,
       grant: continuation.grant,

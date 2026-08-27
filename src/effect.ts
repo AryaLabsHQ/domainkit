@@ -118,9 +118,13 @@ function toDomainKitError(cause: unknown): DomainKitError {
     cause !== null &&
     typeof cause === "object" &&
     "_tag" in cause &&
-    ["InvalidInputError", "PlanConflictError", "AuthorizationError", "ProviderError"].includes(
-      String(cause._tag),
-    )
+    [
+      "InvalidInputError",
+      "PlanConflictError",
+      "AuthorizationError",
+      "ProviderError",
+      "StalePlanError",
+    ].includes(String(cause._tag))
   ) {
     return cause as DomainKitError;
   }

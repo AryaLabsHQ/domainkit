@@ -44,6 +44,7 @@ export function selectProvider(input: {
     readonly providerId: string;
     readonly zone: string;
   };
+  readonly now?: Date;
 }): ProviderSelection {
   const domain = parseDomainName(input.domain);
   const zoneCandidates = new Set(deriveZoneCandidates(domain));
@@ -53,7 +54,9 @@ export function selectProvider(input: {
     try {
       assertConnectionGrant(connected.connection, {
         accountId: connected.accountId,
+        capability: "dns:read",
         domain,
+        ...(input.now === undefined ? {} : { now: input.now }),
         providerId: connected.providerId,
       });
       return true;

@@ -27,12 +27,18 @@ describe("token connections", () => {
       token: Secret.from("personal-access-token"),
       validate: async (token) => {
         expect(token.expose()).toBe("personal-access-token");
-        return { accountId: "account-1", expiresAt: null, scopes: ["dns:write"] };
+        return {
+          accountId: "account-1",
+          capabilities: ["dns:read", "dns:write"],
+          expiresAt: null,
+          scopes: ["dns:write"],
+        };
       },
     });
     expect(
       assertConnectionGrant(connection, {
         accountId: "account-1",
+        capability: "dns:read",
         domain: "anything.example.com",
         providerId: "example-provider",
       }),
@@ -62,5 +68,19 @@ describe("token connections", () => {
     await expect(
       authorizePlanForConnection({ accountId: "account-1", connection, plan }),
     ).resolves.toMatchObject({ planDigest: plan.digest });
+    await expect(
+      authorizePlanForConnection({
+        accountId: "account-1",
+        connection: { ...connection, capabilities: ["dns:read"] },
+        plan,
+      }),
+    ).rejects.toMatchObject({ _tag: "AuthorizationError" });
+    await expect(
+      authorizePlanForConnection({
+        accountId: "account-1",
+        connection: { ...connection, expiresAt: "2026-08-26T00:00:00.000Z" },
+        plan,
+      }),
+    ).rejects.toMatchObject({ _tag: "AuthorizationError" });
   });
 });

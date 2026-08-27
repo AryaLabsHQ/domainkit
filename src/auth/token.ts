@@ -15,6 +15,7 @@ export async function connectToken(input: {
   const validation = await input.validate(input.token);
   const connection: Connection = {
     accountId: validation.accountId,
+    capabilities: [...validation.capabilities],
     createdAt: (input.now ?? (() => new Date()))().toISOString(),
     expiresAt: validation.expiresAt,
     grant: input.grant,

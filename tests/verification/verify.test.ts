@@ -78,4 +78,25 @@ describe("record verification", () => {
     });
     expect(timeout).toMatchObject({ publicDns: { _tag: "timeout" }, status: "unavailable" });
   });
+
+  it("does not accept matching data from a different owner name", async () => {
+    const provider = new InMemoryDnsProvider({ records: { "example.com": [record] } });
+    const observation = await verifyRecord({
+      provider,
+      record,
+      resolver: new InMemoryDnsResolver(() => ({
+        _tag: "answer",
+        answers: [
+          {
+            data: "destination.example.net",
+            name: parseDomainName("other.example.com"),
+            ttl: 60,
+            type: "CNAME",
+          },
+        ],
+      })),
+      zone: parseDomainName("example.com"),
+    });
+    expect(observation).toMatchObject({ publicDns: { _tag: "mismatch" }, status: "mismatch" });
+  });
 });

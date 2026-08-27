@@ -5,6 +5,7 @@ import {
   applyPlan,
   authorizePlan,
   createPlan,
+  parseDomainName,
   parseDnsRecord,
   renderManualInstructions,
 } from "../../src/index.ts";
@@ -96,6 +97,21 @@ describe("plan and apply tracer", () => {
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
     await expect(authorizePlan(plan, [authorization.operationIds[0]!])).rejects.toMatchObject({
       _tag: "AuthorizationError",
+    });
+  });
+
+  it("rejects a plan when DNS state changes after authorization", async () => {
+    const provider = new InMemoryDnsProvider();
+    const plan = await createPlan({ provider, requirements: [requirement], zone: "example.com" });
+    const authorization = await authorizePlan(plan);
+    await provider.createRecord(
+      parseDomainName("example.com"),
+      parseDnsRecord({ ...requirement, target: "unexpected.example.net" }),
+    );
+
+    await expect(applyPlan({ authorization, plan, provider })).rejects.toMatchObject({
+      _tag: "StalePlanError",
+      approvedPlanDigest: plan.digest,
     });
   });
 

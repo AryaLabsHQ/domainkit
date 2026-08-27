@@ -4,6 +4,9 @@ import type * as oauth from "oauth4webapi";
 import { DomainName } from "../domain/domain-name.ts";
 import type { Secret } from "./secret.ts";
 
+export const ConnectionCapability = Schema.Literals(["dns:read", "dns:write"]);
+export type ConnectionCapability = typeof ConnectionCapability.Type;
+
 export const ConnectionGrant = Schema.Union([
   Schema.TaggedStruct("account", {}),
   Schema.TaggedStruct("domains", { domains: Schema.Array(DomainName) }),
@@ -20,10 +23,12 @@ export const ProviderAuthManifest = Schema.Struct({
           revocation_endpoint: Schema.optionalKey(Schema.String),
           token_endpoint: Schema.String,
         }),
+        capabilities: Schema.Array(ConnectionCapability),
         clientAuth: Schema.Literals(["none", "client_secret_basic", "client_secret_post"]),
         scopes: Schema.Array(Schema.String),
       }),
       Schema.TaggedStruct("token", {
+        capabilities: Schema.Array(ConnectionCapability),
         instructionsUrl: Schema.String,
       }),
     ]),
@@ -38,6 +43,7 @@ export type OAuthMethod = Extract<
 
 export const Connection = Schema.Struct({
   accountId: Schema.String,
+  capabilities: Schema.Array(ConnectionCapability),
   createdAt: Schema.String,
   expiresAt: Schema.NullOr(Schema.String),
   grant: ConnectionGrant,
@@ -73,6 +79,7 @@ export interface OAuthClientConfiguration {
 
 export interface TokenValidation {
   readonly accountId: string;
+  readonly capabilities: ReadonlyArray<ConnectionCapability>;
   readonly expiresAt: string | null;
   readonly scopes: ReadonlyArray<string>;
 }

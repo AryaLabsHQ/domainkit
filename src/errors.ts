@@ -24,8 +24,14 @@ export class ProviderError extends Schema.TaggedError<ProviderError>()("Provider
   providerId: Schema.String,
 }) {}
 
+export class StalePlanError extends Schema.TaggedError<StalePlanError>()("StalePlanError", {
+  approvedPlanDigest: Schema.String,
+  currentPlanDigest: Schema.String,
+}) {}
+
 export type DomainKitError =
   | InvalidInputError
   | PlanConflictError
   | AuthorizationError
-  | ProviderError;
+  | ProviderError
+  | StalePlanError;

@@ -12,6 +12,7 @@ export async function authorizePlanForConnection(input: {
 }): Promise<PlanAuthorization> {
   assertConnectionGrant(input.connection, {
     accountId: input.accountId,
+    capability: "dns:write",
     domain: input.plan.zone,
     providerId: input.plan.providerId,
   });

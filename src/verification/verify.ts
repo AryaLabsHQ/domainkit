@@ -38,6 +38,7 @@ export async function verifyRecord(input: {
     resolution._tag === "answer"
       ? resolution.answers.some(
           (answer) =>
+            answer.name === input.record.name &&
             answer.type === input.record._tag &&
             normalizeDnsData(answer.type, answer.data) === expected,
         )

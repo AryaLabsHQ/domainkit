@@ -8,8 +8,14 @@ export { beginOAuth, completeOAuth, refreshOAuth, revokeOAuth } from "./auth/oau
 export type { BeginOAuthInput, Fetch } from "./auth/oauth.ts";
 export { Secret } from "./auth/secret.ts";
 export { connectToken } from "./auth/token.ts";
-export { Connection, ConnectionGrant, ProviderAuthManifest } from "./auth/types.ts";
+export {
+  Connection,
+  ConnectionCapability,
+  ConnectionGrant,
+  ProviderAuthManifest,
+} from "./auth/types.ts";
 export type {
+  ConnectionCapability as ConnectionCapabilityValue,
   OAuthClientConfiguration,
   OAuthContinuation,
   OAuthMethod,
@@ -42,6 +48,7 @@ export {
   InvalidInputError,
   PlanConflictError,
   ProviderError,
+  StalePlanError,
 } from "./errors.ts";
 export type { DomainKitError } from "./errors.ts";
 export { selectProvider } from "./discovery/selection.ts";

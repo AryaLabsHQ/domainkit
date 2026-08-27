@@ -25,6 +25,7 @@ const method: OAuthMethod = {
     revocation_endpoint: "https://auth.example/revoke",
     token_endpoint: "https://auth.example/token",
   },
+  capabilities: ["dns:read", "dns:write"],
   clientAuth: "none",
   scopes: ["dns:read", "dns:write"],
 };
@@ -82,14 +83,18 @@ describe("OAuth authorization code flow", () => {
     expect(
       assertConnectionGrant(connection, {
         accountId: "account-1",
+        capability: "dns:read",
         domain: "example.com",
+        now: new Date("2026-08-27T00:02:00.000Z"),
         providerId: "example-provider",
       }),
     ).toBe("example.com");
     expect(() =>
       assertConnectionGrant(connection, {
         accountId: "account-1",
+        capability: "dns:read",
         domain: "other.example.com",
+        now: new Date("2026-08-27T00:02:00.000Z"),
         providerId: "example-provider",
       }),
     ).toThrow();
@@ -142,6 +147,7 @@ describe("OAuth authorization code flow", () => {
     const credentialStore = new InMemoryCredentialStore();
     const connection: Connection = {
       accountId: "account-1",
+      capabilities: ["dns:read", "dns:write"],
       createdAt: "2026-08-27T00:00:00.000Z",
       expiresAt: null,
       grant: { _tag: "account" },

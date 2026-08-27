@@ -3,7 +3,7 @@ import { Schema } from "effect";
 import { parseDomainName } from "../domain/domain-name.ts";
 import type { DnsRecord, DnsRecordInput } from "../domain/dns-record.ts";
 import { parseDnsRecord, sameRecordData } from "../domain/dns-record.ts";
-import { AuthorizationError, PlanConflictError, ProviderError } from "../errors.ts";
+import { AuthorizationError, PlanConflictError, ProviderError, StalePlanError } from "../errors.ts";
 import type { DnsProvider } from "../provider/provider.ts";
 import { canonicalJson, sha256 } from "./canonical-json.ts";
 import { ApplyReceipt, type DnsPlan, type PlanAuthorization, type PlanOperation } from "./types.ts";
@@ -96,6 +96,18 @@ export async function applyPlan(input: {
   if (!authorization.allowPartial && creates.some(({ id }) => !approved.has(id))) {
     throw new AuthorizationError({
       message: "Authorization does not cover every create operation",
+    });
+  }
+
+  const currentPlan = await createPlan({
+    provider,
+    requirements: plan.operations.map(({ requirement }) => requirement),
+    zone: plan.zone,
+  });
+  if (currentPlan.digest !== plan.digest) {
+    throw new StalePlanError({
+      approvedPlanDigest: plan.digest,
+      currentPlanDigest: currentPlan.digest,
     });
   }
 

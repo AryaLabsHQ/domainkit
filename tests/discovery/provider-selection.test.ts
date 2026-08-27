@@ -11,6 +11,7 @@ import {
 function connection(id: string, providerId: string): Connection {
   return {
     accountId: "account-1",
+    capabilities: ["dns:read", "dns:write"],
     createdAt: "2026-08-27T00:00:00.000Z",
     expiresAt: null,
     grant: { _tag: "account" },
