@@ -29,6 +29,37 @@ the core abstraction.
 The package is portable ESM built on Fetch and Web APIs. Effect is a peer dependency. Executor is
 not required; a later optional bridge can implement DomainKit's host interfaces.
 
+The root API accepts ordinary async providers and stores:
+
+```ts
+import { createPlan } from "domainkit";
+
+const plan = await createPlan({
+  provider: {
+    id: "my-provider",
+    listRecords: async (zone) => listDnsRecords(zone),
+    createRecord: async (zone, record) => createDnsRecord(zone, record),
+  },
+  requirements,
+  zone: "example.com",
+});
+```
+
+Effect applications provide the same capabilities as Layers and run the canonical program
+directly:
+
+```ts
+import { Effect, Layer } from "effect";
+import { createPlan, layerDnsProviderFromPromise, webCryptoLayer } from "domainkit/effect";
+
+const program = createPlan({ requirements, zone: "example.com" }).pipe(
+  Effect.provide(Layer.merge(layerDnsProviderFromPromise(provider), webCryptoLayer)),
+);
+```
+
+The Promise functions provide bridge Layers and call `Effect.runPromise`; they do not maintain a
+second planning, authorization, or verification implementation.
+
 ## v0.1 boundary
 
 The first release will create missing records, report exact no-ops, and fail closed on conflicts.

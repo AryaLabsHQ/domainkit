@@ -28,18 +28,18 @@ const recordTypes = new Map(
   Object.entries(typeCodes).map(([type, code]) => [code, type as DnsRecordType]),
 );
 
+export interface CloudflareDnsResolverOptions {
+  readonly endpoint?: string;
+  readonly fetch?: Fetch;
+  readonly timeoutMs?: number;
+}
+
 export class CloudflareDnsResolver implements DnsResolverService {
   readonly #endpoint: string;
   readonly #fetch: Fetch;
   readonly #timeoutMs: number;
 
-  constructor(
-    options: {
-      readonly endpoint?: string;
-      readonly fetch?: Fetch;
-      readonly timeoutMs?: number;
-    } = {},
-  ) {
+  constructor(options: CloudflareDnsResolverOptions = {}) {
     this.#endpoint = options.endpoint ?? "https://cloudflare-dns.com/dns-query";
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#timeoutMs = options.timeoutMs ?? 5_000;
@@ -127,6 +127,13 @@ export class CloudflareDnsResolver implements DnsResolverService {
       query.signal?.removeEventListener("abort", abortFromHost);
     }
   }
+}
+
+/** Creates the Cloudflare DoH resolver shape consumed by the Promise facade. */
+export function makeCloudflareDnsResolver(
+  options: CloudflareDnsResolverOptions = {},
+): PromiseDnsResolver {
+  return new CloudflareDnsResolver(options).promise;
 }
 
 export function normalizeDnsData(type: DnsRecordType, data: string): string {

@@ -62,10 +62,8 @@ export type {
   ProviderSelection,
 } from "./discovery/selection.ts";
 export { deriveZoneCandidates } from "./discovery/zones.ts";
-export { layerDnsProviderFromPromise, toPromiseDnsProvider } from "./provider/provider.ts";
 export type {
   PromiseDnsProvider as DnsProvider,
-  PromiseDnsProvider,
   ProviderCreateResult,
 } from "./provider/provider.ts";
 export { applyPlan, authorizePlan, authorizePlanForConnection, createPlan } from "./promise.ts";
@@ -87,7 +85,8 @@ export type {
   PromiseOAuthStateStore as OAuthStateStore,
   PromiseReceiptStore as ReceiptStore,
 } from "./stores/contracts.ts";
-export { CloudflareDnsResolver, normalizeDnsData } from "./verification/cloudflare-doh.ts";
+export { makeCloudflareDnsResolver, normalizeDnsData } from "./verification/cloudflare-doh.ts";
+export type { CloudflareDnsResolverOptions } from "./verification/cloudflare-doh.ts";
 export type {
   DnsAnswer,
   DnsQuery,

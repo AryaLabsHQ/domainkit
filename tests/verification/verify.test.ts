@@ -2,7 +2,7 @@ import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { parseDnsRecord, parseDomainName, verifyRecord } from "../../src/index.ts";
-import { verifyRecord as verifyRecordEffect } from "../../src/effect.ts";
+import { ResolverError, verifyRecord as verifyRecordEffect } from "../../src/effect.ts";
 import { InMemoryDnsProvider, InMemoryDnsResolver } from "../../src/testing.ts";
 
 const record = parseDnsRecord({
@@ -102,5 +102,23 @@ describe("record verification", () => {
       zone: parseDomainName("example.com"),
     });
     expect(observation).toMatchObject({ publicDns: { _tag: "mismatch" }, status: "mismatch" });
+  });
+
+  it("turns typed resolver failure into unavailable verification evidence", async () => {
+    const provider = new InMemoryDnsProvider({ records: { "example.com": [record] } });
+    const resolver = new InMemoryDnsResolver(() =>
+      Effect.fail(new ResolverError({ message: "resolver unavailable", reason: "transport" })),
+    );
+    const observation = await Effect.runPromise(
+      verifyRecordEffect({ record, zone: parseDomainName("example.com") }).pipe(
+        Effect.provide(Layer.merge(provider.layer, resolver.layer)),
+      ),
+    );
+
+    expect(observation).toMatchObject({
+      provider: { _tag: "match" },
+      publicDns: { _tag: "failure", message: "resolver unavailable" },
+      status: "unavailable",
+    });
   });
 });

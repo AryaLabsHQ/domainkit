@@ -1,7 +1,8 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
-import { CloudflareDnsResolver, parseDomainName } from "../../src/index.ts";
+import { CloudflareDnsResolver } from "../../src/effect.ts";
+import { parseDomainName } from "../../src/index.ts";
 
 describe("Cloudflare DNS-over-HTTPS resolver", () => {
   it("uses portable Fetch and normalizes record-specific answers", async () => {
