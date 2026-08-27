@@ -81,11 +81,17 @@ describe("Vercel Effect client", () => {
       const records = yield* client.listRecords(DomainName.parse("example.com"));
       assert.deepStrictEqual(
         records.map(({ _tag }) => _tag),
-        ["A", "AAAA", "CNAME", "TXT", "MX", "CAA", "NS", "SRV"],
+        ["A", "AAAA", "CNAME", "TXT", "MX", "CAA", "NS", "SRV", "Opaque"],
       );
       assert.strictEqual(records[0]?.name, "a.example.com");
-      assert.strictEqual(records[2]?.ttl, 300);
+      assert.strictEqual(records[2]?._tag === "CNAME" ? records[2].ttl : undefined, 300);
       assert.strictEqual(records[4]?.name, "example.com");
+      assert.deepStrictEqual(records[8], {
+        _tag: "Opaque",
+        name: DomainName.parse("example.com"),
+        providerRecordId: "record-alias",
+        providerType: "ALIAS",
+      });
       assert.ok(recording.requests[2]?.url.includes("until=42"));
     });
   });

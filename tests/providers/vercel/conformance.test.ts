@@ -43,49 +43,74 @@ describe("Vercel provider conformance", () => {
     }).pipe(Effect.provide(layer));
   });
 
-  it.effect("no-ops exact state and blocks incompatible CNAME state without writes", () => {
-    const exact = record("CNAME", "track", "target.example.net", { ttl: 300 });
-    const conflicting = record("TXT", "track", "occupied", { ttl: 300 });
-    const exactRecording = recordedFetch([
-      { body: domainPage([domain]) },
-      { body: recordPage([exact]) },
-    ]);
-    const conflictRecording = recordedFetch([
-      { body: domainPage([domain]) },
-      { body: recordPage([conflicting]) },
-    ]);
-    return Effect.gen(function* () {
-      const exactPlan = yield* Provisioning.create({
-        requirements: [requirement],
-        zone: "example.com",
-      }).pipe(
-        Effect.provide(
-          Layer.merge(
-            Layer.succeed(DnsProvider.Service, make(exactRecording.fetch)),
-            Digest.webCryptoLayer,
+  it.effect(
+    "no-ops exact state and blocks portable or opaque CNAME conflicts without writes",
+    () => {
+      const exact = record("CNAME", "track", "target.example.net", { ttl: 300 });
+      const conflicting = record("TXT", "track", "occupied", { ttl: 300 });
+      const exactRecording = recordedFetch([
+        { body: domainPage([domain]) },
+        { body: recordPage([exact]) },
+      ]);
+      const conflictRecording = recordedFetch([
+        { body: domainPage([domain]) },
+        { body: recordPage([conflicting]) },
+      ]);
+      const opaqueConflictRecording = recordedFetch([
+        { body: domainPage([domain]) },
+        { body: recordPage([record("ALIAS", "track", "alias.vercel-dns.com")]) },
+      ]);
+      return Effect.gen(function* () {
+        const exactPlan = yield* Provisioning.create({
+          requirements: [requirement],
+          zone: "example.com",
+        }).pipe(
+          Effect.provide(
+            Layer.merge(
+              Layer.succeed(DnsProvider.Service, make(exactRecording.fetch)),
+              Digest.webCryptoLayer,
+            ),
           ),
-        ),
-      );
-      assert.strictEqual(exactPlan.operations[0]?._tag, "noop");
-      const conflictPlan = yield* Provisioning.create({
-        requirements: [requirement],
-        zone: "example.com",
-      }).pipe(
-        Effect.provide(
-          Layer.merge(
-            Layer.succeed(DnsProvider.Service, make(conflictRecording.fetch)),
-            Digest.webCryptoLayer,
+        );
+        assert.strictEqual(exactPlan.operations[0]?._tag, "noop");
+        const conflictPlan = yield* Provisioning.create({
+          requirements: [requirement],
+          zone: "example.com",
+        }).pipe(
+          Effect.provide(
+            Layer.merge(
+              Layer.succeed(DnsProvider.Service, make(conflictRecording.fetch)),
+              Digest.webCryptoLayer,
+            ),
           ),
-        ),
-      );
-      assert.strictEqual(conflictPlan.operations[0]?._tag, "conflict");
-      assert.ok(
-        [...exactRecording.requests, ...conflictRecording.requests].every(
-          ({ init }) => init?.method !== "POST",
-        ),
-      );
-    });
-  });
+        );
+        assert.strictEqual(conflictPlan.operations[0]?._tag, "conflict");
+
+        const opaqueConflictPlan = yield* Provisioning.create({
+          requirements: [requirement],
+          zone: "example.com",
+        }).pipe(
+          Effect.provide(
+            Layer.merge(
+              Layer.succeed(DnsProvider.Service, make(opaqueConflictRecording.fetch)),
+              Digest.webCryptoLayer,
+            ),
+          ),
+        );
+        assert.strictEqual(opaqueConflictPlan.operations[0]?._tag, "conflict");
+        if (opaqueConflictPlan.operations[0]?._tag === "conflict") {
+          assert.strictEqual(opaqueConflictPlan.operations[0].existing[0]?._tag, "Opaque");
+        }
+        assert.ok(
+          [
+            ...exactRecording.requests,
+            ...conflictRecording.requests,
+            ...opaqueConflictRecording.requests,
+          ].every(({ init }) => init?.method !== "POST"),
+        );
+      });
+    },
+  );
 });
 
 function make(fetch: Vercel.Fetch): Vercel.Interface {

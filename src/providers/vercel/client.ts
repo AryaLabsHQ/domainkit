@@ -151,7 +151,7 @@ export function make(options: Options): Interface {
   const listRecords = Effect.fn("VercelClient.listRecords")((zoneName: DomainName.DomainName) =>
     Effect.gen(function* () {
       yield* resolveZone(zoneName);
-      const records: Array<DnsRecord.DnsRecord> = [];
+      const records: Array<DnsRecord.Observed> = [];
       let until: number | null = null;
       while (true) {
         const values: Record<string, string> = { limit: "100" };
@@ -161,9 +161,11 @@ export function make(options: Options): Interface {
           "listRecords",
         );
         const envelope = yield* decode(Protocol.RecordListEnvelope, body, "listRecords", response);
-        for (const record of envelope.records) {
-          if (Records.isSupported(record)) records.push(yield* Records.decode(zoneName, record));
-        }
+        records.push(
+          ...(yield* Effect.forEach(envelope.records, (record) =>
+            Records.decode(zoneName, record),
+          )),
+        );
         const next = envelope.pagination?.next ?? null;
         if (next === null) return records;
         until = next;

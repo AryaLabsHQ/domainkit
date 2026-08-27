@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema as S } from "effect";
 
 import * as DomainName from "../../domain/domain-name.ts";
 import * as DnsRecord from "../../domain/dns-record.ts";
@@ -74,18 +74,15 @@ export const decode = Effect.fn("VercelRecords.decode")(
           });
         }
         default:
-          return yield* Effect.fail(
-            failure("decodeRecord", `Vercel record type ${record.type} is not supported`, {
-              reason: "unsupported",
-            }),
-          );
+          return yield* S.decodeUnknownEffect(DnsRecord.Opaque)({
+            _tag: "Opaque",
+            name: common.name,
+            providerRecordId: record.id,
+            providerType: record.type,
+          }).pipe(Effect.mapError((cause) => failure("decodeRecord", cause.message)));
       }
     }),
 );
-
-export function isSupported(record: Protocol.Record): boolean {
-  return ["A", "AAAA", "CNAME", "TXT", "MX", "CAA", "NS", "SRV"].includes(record.type);
-}
 
 export function encode(zone: DomainName.DomainName, record: DnsRecord.DnsRecord): CreateBody {
   const common = {
