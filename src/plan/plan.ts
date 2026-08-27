@@ -71,10 +71,19 @@ export const create = Effect.fn("Provisioning.create")(function* (input: CreateI
     concurrency: "unbounded",
   })).sort(compareRecords);
   const existing = [...(yield* provider.listRecords(zone))].sort(compareRecords);
-  const operations = yield* Effect.forEach(
+  const { operations } = yield* Effect.reduce(
     requirements,
-    (requirement) => reconcileRequirement(requirement, existing),
-    { concurrency: "unbounded" },
+    (): PlanningState => ({ operations: [], projected: existing }),
+    (state, requirement) =>
+      reconcileRequirement(requirement, state.projected).pipe(
+        Effect.map((operation) => ({
+          operations: [...state.operations, operation],
+          projected:
+            operation._tag === "create"
+              ? [...state.projected, operation.requirement].sort(compareRecords)
+              : state.projected,
+        })),
+      ),
   );
   const unsigned: S.Schema.Type<typeof UnsignedPlan> = {
     operations,
@@ -84,6 +93,11 @@ export const create = Effect.fn("Provisioning.create")(function* (input: CreateI
   };
   return { ...unsigned, digest: yield* sha256Encoded(UnsignedPlan, unsigned) };
 });
+
+interface PlanningState {
+  readonly operations: ReadonlyArray<DnsPlan.Operation>;
+  readonly projected: ReadonlyArray<DnsRecord.DnsRecord>;
+}
 
 /** Authorizes all or a selected subset of create operations in a digest-bound plan. */
 export const authorize = Effect.fn("Provisioning.authorize")(function* (
@@ -121,14 +135,20 @@ export const apply = Effect.fn("Provisioning.apply")(function* (input: ApplyInpu
   const provider = yield* DnsProvider.Service;
   yield* validateDigest(plan);
   if (authorization.planDigest !== plan.digest) {
-    return yield* new AuthorizationError({ message: "Authorization belongs to a different plan" });
+    return yield* new AuthorizationError({
+      message: "Authorization belongs to a different plan",
+    });
   }
   if (provider.id !== plan.providerId) {
-    return yield* new AuthorizationError({ message: "Provider does not match the approved plan" });
+    return yield* new AuthorizationError({
+      message: "Provider does not match the approved plan",
+    });
   }
   const conflicts = plan.operations.filter((operation) => operation._tag === "conflict");
   if (conflicts.length > 0) {
-    return yield* new ConflictError({ operationIds: conflicts.map(({ id }) => id) });
+    return yield* new ConflictError({
+      operationIds: conflicts.map(({ id }) => id),
+    });
   }
 
   const creates = plan.operations.filter(DnsPlan.Operation.guards.create);
@@ -158,13 +178,19 @@ export const apply = Effect.fn("Provisioning.apply")(function* (input: ApplyInpu
     });
   }
 
-  const operations: Array<{ operationId: string; providerRecordId: string | null }> = [];
+  const operations: Array<{
+    operationId: string;
+    providerRecordId: string | null;
+  }> = [];
   for (const operation of creates) {
     if (!approved.has(operation.id)) continue;
     yield* Effect.gen(function* () {
       yield* assertStillCreatable(plan, operation);
       const result = yield* provider.createRecord(plan.zone, operation.requirement);
-      operations.push({ operationId: operation.id, providerRecordId: result.providerRecordId });
+      operations.push({
+        operationId: operation.id,
+        providerRecordId: result.providerRecordId,
+      });
     }).pipe(
       Effect.catch((failure): Effect.Effect<never, CreateError | StaleError | PartialApplyError> =>
         operations.length === 0
@@ -239,7 +265,10 @@ function assertStillCreatable(
   plan: DnsPlan.DnsPlan,
   operation: Extract<DnsPlan.Operation, { readonly _tag: "create" }>,
 ): Effect.Effect<void, CreateError | StaleError, DnsProvider.Service | Crypto.Crypto> {
-  return create({ requirements: [operation.requirement], zone: plan.zone }).pipe(
+  return create({
+    requirements: [operation.requirement],
+    zone: plan.zone,
+  }).pipe(
     Effect.flatMap((currentPlan) => {
       const currentOperation = currentPlan.operations[0];
       return currentOperation?._tag === "create" && currentOperation.id === operation.id
@@ -264,7 +293,12 @@ function reconcileRequirement(
     const exact = sameSet.find((record) => DnsRecord.equals(record, requirement));
     const id = yield* sha256Encoded(RequirementDigest, { requirement });
     if (exact !== undefined) {
-      return { _tag: "noop", id, requirement, ttlDrift: exact.ttl !== requirement.ttl };
+      return {
+        _tag: "noop",
+        id,
+        requirement,
+        ttlDrift: exact.ttl !== requirement.ttl,
+      };
     }
     const cnameConflict =
       sameName.length > 0 &&
@@ -278,7 +312,10 @@ function reconcileRequirement(
         requirement,
       };
     }
-    if (sameSet.length > 0 && requirement.policy === "exclusive") {
+    if (
+      sameSet.length > 0 &&
+      (requirement.policy === "exclusive" || sameSet.some(({ policy }) => policy === "exclusive"))
+    ) {
       return {
         _tag: "conflict",
         existing: sameSet,
@@ -303,7 +340,9 @@ function validateDigest(plan: DnsPlan.DnsPlan): Effect.Effect<void, AuthorizeErr
       digest === plan.digest
         ? Effect.void
         : Effect.fail(
-            new AuthorizationError({ message: "Plan digest does not match its contents" }),
+            new AuthorizationError({
+              message: "Plan digest does not match its contents",
+            }),
           ),
     ),
   );

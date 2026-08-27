@@ -41,7 +41,10 @@ describe("provisioning tracer", () => {
       );
 
       const authorization = yield* EffectProvisioning.authorize(first);
-      const receipt = yield* EffectProvisioning.apply({ authorization, plan: first });
+      const receipt = yield* EffectProvisioning.apply({
+        authorization,
+        plan: first,
+      });
       assert.strictEqual(receipt.status, "complete");
       assert.ok(receipt.appliedAt instanceof Date);
 
@@ -93,8 +96,38 @@ describe("provisioning tracer", () => {
       });
       assert.strictEqual(plan.operations[0]?._tag, "conflict");
       const authorization = yield* EffectProvisioning.authorize(plan);
-      const failure = yield* EffectProvisioning.apply({ authorization, plan }).pipe(Effect.flip);
+      const failure = yield* EffectProvisioning.apply({
+        authorization,
+        plan,
+      }).pipe(Effect.flip);
       assert.ok(failure instanceof EffectProvisioning.ConflictError);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("rejects mutually incompatible requirements before any provider write", () => {
+    const provider = InMemoryDnsProvider.make();
+    const layer = Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer);
+    const incompatible = DnsRecord.parse({
+      ...requirement,
+      target: "other.example.net",
+    });
+    return Effect.gen(function* () {
+      const plan = yield* EffectProvisioning.create({
+        requirements: [requirement, incompatible],
+        zone: "example.com",
+      });
+      assert.deepStrictEqual(
+        plan.operations.map(({ _tag }) => _tag),
+        ["create", "conflict"],
+      );
+
+      const authorization = yield* EffectProvisioning.authorize(plan);
+      const failure = yield* EffectProvisioning.apply({
+        authorization,
+        plan,
+      }).pipe(Effect.flip);
+      assert.ok(failure instanceof EffectProvisioning.ConflictError);
+      assert.deepStrictEqual(yield* provider.listRecords(plan.zone), []);
     }).pipe(Effect.provide(layer));
   });
 
@@ -127,7 +160,10 @@ describe("provisioning tracer", () => {
         plan.zone,
         DnsRecord.parse({ ...requirement, target: "unexpected.example.net" }),
       );
-      const failure = yield* EffectProvisioning.apply({ authorization, plan }).pipe(Effect.flip);
+      const failure = yield* EffectProvisioning.apply({
+        authorization,
+        plan,
+      }).pipe(Effect.flip);
       assert.ok(failure instanceof EffectProvisioning.StaleError);
     }).pipe(Effect.provide(layer));
   });
@@ -166,7 +202,10 @@ describe("provisioning tracer", () => {
         zone: "example.com",
       });
       const authorization = yield* EffectProvisioning.authorize(plan);
-      const failure = yield* EffectProvisioning.apply({ authorization, plan }).pipe(Effect.flip);
+      const failure = yield* EffectProvisioning.apply({
+        authorization,
+        plan,
+      }).pipe(Effect.flip);
       assert.ok(failure instanceof EffectProvisioning.PartialApplyError);
       if (failure instanceof EffectProvisioning.PartialApplyError) {
         assert.strictEqual(failure.receipt.status, "partial");
