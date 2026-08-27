@@ -20,3 +20,4 @@ export type * as Stores from "./promise/stores.ts";
 export * as TokenConnection from "./promise/token.ts";
 export * as Verification from "./promise/verification.ts";
 export * as CloudflareDnsOverHttps from "./promise/cloudflare-doh.ts";
+export * as DnsOverHttps from "./promise/doh.ts";

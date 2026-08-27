@@ -21,7 +21,7 @@ const foreignPromiseFiles = new Set([
   "src/stores/credential.ts",
   "src/stores/oauth-state.ts",
   "src/stores/receipt.ts",
-  "src/verification/cloudflare-doh.ts",
+  "src/verification/doh.ts",
   "src/verification/resolver.ts",
 ]);
 

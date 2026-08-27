@@ -26,7 +26,7 @@ export type Resolution = typeof Resolution.Type;
 export class Error extends Schema.TaggedError<Error>()("ResolverError", {
   cause: Schema.optionalKey(Schema.Unknown),
   message: Schema.String,
-  reason: Schema.Literals(["timeout", "transport"]),
+  reason: Schema.Literals(["response", "timeout", "transport"]),
 }) {}
 
 export interface Interface {

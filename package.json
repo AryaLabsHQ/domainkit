@@ -55,6 +55,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@leichtgewicht/dns-packet": "6.0.3",
     "oauth4webapi": "^3.8.7",
     "tldts": "^7.4.11"
   },

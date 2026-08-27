@@ -17,6 +17,8 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof effectApi.DnsProvider.Service, "function");
     assert.strictEqual(typeof effectApi.Provisioning.create, "function");
     assert.strictEqual(typeof effectApi.CloudflareDnsOverHttps.layer, "function");
+    assert.strictEqual(typeof effectApi.DnsOverHttps.make, "function");
+    assert.strictEqual(typeof promiseApi.DnsOverHttps.make, "function");
     assert.strictEqual(typeof testingApi.InMemoryDnsProvider.layer, "function");
   });
 
