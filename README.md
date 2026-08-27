@@ -13,18 +13,13 @@ DomainKit separates four concerns:
 3. provider adapters that reconcile and apply records;
 4. host-owned credentials, persistence, routes, and user interaction.
 
-The initial provider work will target Cloudflare and Vercel. Manual DNS instructions remain a
-permanent fallback. Domain Connect can be supported later as a compatibility adapter, but it is not
-the core abstraction.
-
 ## Package shape
 
 - `domainkit` — Promise-based API for application code;
 - `domainkit/effect` — canonical Effect-native services and programs;
 - `domainkit/testing` — deterministic provider and store implementations for tests.
 
-The package is portable ESM built on Fetch and Web APIs. Effect is a peer dependency. Executor is
-not required; a later optional bridge can implement DomainKit's host interfaces.
+The package is portable ESM built on Fetch and Web APIs. Effect is a peer dependency.
 
 Both entry points are organized by capability namespaces. The root API accepts ordinary async
 providers and stores:
@@ -63,16 +58,6 @@ live behind the owning namespace.
 Schemas own external parsing. For example, `DomainName.parse` and `DnsRecord.parse` decode and
 canonicalize strings through codecs, while encoded protocol dates remain ISO strings and decoded
 domain values use `Date`.
-
-## v0.1 boundary
-
-The first release will create missing records, report exact no-ops, and fail closed on conflicts.
-It will not update or delete DNS records. Plans and authorizations are digest-bound so a host cannot
-silently apply operations the user did not approve.
-
-DNS providers do not share a transactional write primitive. DomainKit revalidates each approved
-create and reports any successful writes in a typed partial receipt if a later operation fails,
-allowing the host to reconcile and resume without destructive rollback.
 
 See [the architecture decisions](docs/adr/README.md) for the durable rationale and
 [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
