@@ -33,7 +33,8 @@ export const recordPage = (records: ReadonlyArray<unknown>, next: number | null 
 });
 
 export const authoritativeConfig = {
-  misconfigured: false,
+  // Vercel uses this flag for project traffic routing, not DNS authority.
+  misconfigured: true,
   serviceType: "zeit.world",
 } as const;
 

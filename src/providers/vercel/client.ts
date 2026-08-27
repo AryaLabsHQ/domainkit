@@ -141,7 +141,7 @@ export function make(options: Options): Interface {
         "resolveZone",
         configResult.response,
       );
-      if (config.serviceType !== "zeit.world" || config.misconfigured) {
+      if (config.serviceType !== "zeit.world") {
         return yield* Effect.fail(
           failure(
             "resolveZone",
