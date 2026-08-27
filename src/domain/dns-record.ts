@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { InvalidInputError } from "../errors.ts";
+import { InvalidInputError } from "../invalid-input-error.ts";
 import { DomainName, parseDomainName } from "./domain-name.ts";
 
 export const DnsRecordType = Schema.Literals([

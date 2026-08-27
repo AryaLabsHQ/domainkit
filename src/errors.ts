@@ -1,11 +1,9 @@
 import { Schema } from "effect";
 
-export class InvalidInputError extends Schema.TaggedError<InvalidInputError>()(
-  "InvalidInputError",
-  {
-    message: Schema.String,
-  },
-) {}
+import { InvalidInputError } from "./invalid-input-error.ts";
+import { ApplyReceipt } from "./plan/types.ts";
+
+export { InvalidInputError } from "./invalid-input-error.ts";
 
 export class PlanConflictError extends Schema.TaggedError<PlanConflictError>()(
   "PlanConflictError",
@@ -29,9 +27,21 @@ export class StalePlanError extends Schema.TaggedError<StalePlanError>()("StaleP
   currentPlanDigest: Schema.String,
 }) {}
 
+/** A loud, recoverable failure after one or more approved DNS creates succeeded. */
+export class PartialApplyError extends Schema.TaggedError<PartialApplyError>()(
+  "PartialApplyError",
+  {
+    causeTag: Schema.Literals(["ProviderError", "StalePlanError"]),
+    failedOperationId: Schema.String,
+    message: Schema.String,
+    receipt: ApplyReceipt,
+  },
+) {}
+
 export type DomainKitError =
   | InvalidInputError
   | PlanConflictError
   | AuthorizationError
+  | PartialApplyError
   | ProviderError
   | StalePlanError;

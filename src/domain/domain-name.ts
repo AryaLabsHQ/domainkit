@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { InvalidInputError } from "../errors.ts";
+import { InvalidInputError } from "../invalid-input-error.ts";
 
 const labelPattern = /^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/;
 

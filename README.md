@@ -35,6 +35,10 @@ The first release will create missing records, report exact no-ops, and fail clo
 It will not update or delete DNS records. Plans and authorizations are digest-bound so a host cannot
 silently apply operations the user did not approve.
 
+DNS providers do not share a transactional write primitive. DomainKit revalidates each approved
+create and reports any successful writes in a typed partial receipt if a later operation fails,
+allowing the host to reconcile and resume without destructive rollback.
+
 See [the architecture decisions](docs/adr/README.md) for the durable rationale and
 [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
 

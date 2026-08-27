@@ -49,6 +49,7 @@ export const ApplyReceipt = Schema.Struct({
   ),
   planDigest: Schema.String,
   providerId: Schema.String,
+  status: Schema.Literals(["complete", "partial"]),
   version: Schema.Literal("domainkit.apply-receipt.v1"),
   zone: DomainName,
 });

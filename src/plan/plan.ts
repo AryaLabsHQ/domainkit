@@ -3,7 +3,13 @@ import { Schema } from "effect";
 import { parseDomainName } from "../domain/domain-name.ts";
 import type { DnsRecord, DnsRecordInput } from "../domain/dns-record.ts";
 import { parseDnsRecord, sameRecordData } from "../domain/dns-record.ts";
-import { AuthorizationError, PlanConflictError, ProviderError, StalePlanError } from "../errors.ts";
+import {
+  AuthorizationError,
+  PartialApplyError,
+  PlanConflictError,
+  ProviderError,
+  StalePlanError,
+} from "../errors.ts";
 import type { DnsProvider } from "../provider/provider.ts";
 import { canonicalJson, sha256 } from "./canonical-json.ts";
 import { ApplyReceipt, type DnsPlan, type PlanAuthorization, type PlanOperation } from "./types.ts";
@@ -115,21 +121,71 @@ export async function applyPlan(input: {
   for (const operation of creates) {
     if (!approved.has(operation.id)) continue;
     try {
+      await assertOperationStillCreatable(provider, plan, operation);
       const result = await provider.createRecord(plan.zone, operation.requirement);
       operations.push({ operationId: operation.id, providerRecordId: result.providerRecordId });
     } catch (cause) {
-      throw new ProviderError({ message: messageOf(cause), providerId: provider.id });
+      const failure = normalizeApplyFailure(cause, provider.id);
+      if (operations.length === 0) throw failure;
+      throw new PartialApplyError({
+        causeTag: failure._tag,
+        failedOperationId: operation.id,
+        message: applyFailureMessage(failure),
+        receipt: createApplyReceipt(input, operations, "partial"),
+      });
     }
   }
 
+  return createApplyReceipt(input, operations, "complete");
+}
+
+function createApplyReceipt(
+  input: Parameters<typeof applyPlan>[0],
+  operations: ReadonlyArray<{
+    readonly operationId: string;
+    readonly providerRecordId: string | null;
+  }>,
+  status: "complete" | "partial",
+): typeof ApplyReceipt.Type {
   return Schema.decodeUnknownSync(ApplyReceipt)({
     appliedAt: (input.now ?? (() => new Date()))().toISOString(),
     operations,
-    planDigest: plan.digest,
-    providerId: plan.providerId,
+    planDigest: input.plan.digest,
+    providerId: input.plan.providerId,
+    status,
     version: "domainkit.apply-receipt.v1",
+    zone: input.plan.zone,
+  });
+}
+
+async function assertOperationStillCreatable(
+  provider: DnsProvider,
+  plan: DnsPlan,
+  operation: Extract<PlanOperation, { readonly _tag: "create" }>,
+): Promise<void> {
+  const currentPlan = await createPlan({
+    provider,
+    requirements: [operation.requirement],
     zone: plan.zone,
   });
+  const currentOperation = currentPlan.operations[0];
+  if (currentOperation?._tag !== "create" || currentOperation.id !== operation.id) {
+    throw new StalePlanError({
+      approvedPlanDigest: plan.digest,
+      currentPlanDigest: currentPlan.digest,
+    });
+  }
+}
+
+function normalizeApplyFailure(cause: unknown, providerId: string): ProviderError | StalePlanError {
+  if (cause instanceof ProviderError || cause instanceof StalePlanError) return cause;
+  return new ProviderError({ message: messageOf(cause), providerId });
+}
+
+function applyFailureMessage(failure: ProviderError | StalePlanError): string {
+  return failure._tag === "ProviderError"
+    ? failure.message
+    : "DNS state changed while applying the approved plan";
 }
 
 export function renderManualInstructions(plan: DnsPlan): ReadonlyArray<string> {

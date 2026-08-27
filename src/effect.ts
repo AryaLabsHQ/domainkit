@@ -122,6 +122,7 @@ function toDomainKitError(cause: unknown): DomainKitError {
       "InvalidInputError",
       "PlanConflictError",
       "AuthorizationError",
+      "PartialApplyError",
       "ProviderError",
       "StalePlanError",
     ].includes(String(cause._tag))

@@ -5,6 +5,7 @@ import {
   applyPlan,
   authorizePlan,
   createPlan,
+  type DnsProvider,
   parseDomainName,
   parseDnsRecord,
   renderManualInstructions,
@@ -45,6 +46,7 @@ describe("plan and apply tracer", () => {
       provider,
     });
     expect(receipt.operations).toHaveLength(1);
+    expect(receipt.status).toBe("complete");
 
     const second = await createPlan({ provider, requirements: [requirement], zone: "example.com" });
     expect(second.operations).toMatchObject([{ _tag: "noop", ttlDrift: false }]);
@@ -112,6 +114,64 @@ describe("plan and apply tracer", () => {
     await expect(applyPlan({ authorization, plan, provider })).rejects.toMatchObject({
       _tag: "StalePlanError",
       approvedPlanDigest: plan.digest,
+    });
+  });
+
+  it("reports successful writes when DNS changes between plan operations", async () => {
+    const backing = new InMemoryDnsProvider();
+    let created = 0;
+    let injected = false;
+    let conflictingRecord: ReturnType<typeof parseDnsRecord> | undefined;
+    const provider: DnsProvider = {
+      id: backing.id,
+      createRecord: async (zone, record) => {
+        const result = await backing.createRecord(zone, record);
+        created += 1;
+        return result;
+      },
+      listRecords: async (zone) => {
+        if (created === 1 && !injected && conflictingRecord !== undefined) {
+          injected = true;
+          await backing.createRecord(zone, conflictingRecord);
+        }
+        return backing.listRecords(zone);
+      },
+    };
+    const additional = parseDnsRecord({
+      ...requirement,
+      name: "second.example.com",
+      target: "second-target.example.net",
+    });
+    const plan = await createPlan({
+      provider,
+      requirements: [requirement, additional],
+      zone: "example.com",
+    });
+    const creates = plan.operations.filter((operation) => operation._tag === "create");
+    expect(creates).toHaveLength(2);
+    const second = creates[1]!;
+    if (second.requirement._tag !== "CNAME") throw new Error("Expected a CNAME operation");
+    conflictingRecord = parseDnsRecord({
+      ...second.requirement,
+      target: "concurrent.example.net",
+    });
+
+    await expect(
+      applyPlan({
+        authorization: await authorizePlan(plan),
+        now: () => new Date("2026-08-27T00:00:00.000Z"),
+        plan,
+        provider,
+      }),
+    ).rejects.toMatchObject({
+      _tag: "PartialApplyError",
+      causeTag: "StalePlanError",
+      failedOperationId: second.id,
+      receipt: {
+        operations: [{ operationId: creates[0]!.id }],
+        planDigest: plan.digest,
+        status: "partial",
+      },
     });
   });
 

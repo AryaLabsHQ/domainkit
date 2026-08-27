@@ -46,6 +46,7 @@ export type {
 export {
   AuthorizationError,
   InvalidInputError,
+  PartialApplyError,
   PlanConflictError,
   ProviderError,
   StalePlanError,
