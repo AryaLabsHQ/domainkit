@@ -69,6 +69,8 @@
     "test": "vitest run --exclude tests/artifact/**/*.test.ts",
     "test:artifact": "vitest run tests/artifact",
     "test:consumers": "vitest run tests/artifact/packed-consumers.test.ts",
+    "test:live:cloudflare": "bun tests/live/cloudflare.ts",
+    "test:live:vercel": "bun tests/live/vercel.ts",
     "test:providers": "vitest run tests/providers",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
