@@ -6,6 +6,11 @@ import { Error as InvalidInputError } from "../invalid-input.ts";
 import type { Value as Secret } from "./secret.ts";
 
 export const Method = S.TaggedUnion({
+  integration: {
+    capabilities: S.Array(S.Literals(["dns:read", "dns:write"])),
+    installUrl: S.String,
+    tokenEndpoint: S.String,
+  },
   oauth2: {
     authorizationServer: S.Struct({
       authorization_endpoint: S.String,
@@ -29,6 +34,10 @@ export const Schema = S.Struct({
 });
 export interface Manifest extends S.Schema.Type<typeof Schema> {}
 export type OAuthMethod = Extract<Manifest["methods"][number], { readonly _tag: "oauth2" }>;
+export type IntegrationMethod = Extract<
+  Manifest["methods"][number],
+  { readonly _tag: "integration" }
+>;
 
 export const decode = Effect.fn("ProviderAuth.decode")((input: unknown) =>
   S.decodeUnknownEffect(Schema)(input).pipe(

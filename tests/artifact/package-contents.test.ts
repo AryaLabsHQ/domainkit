@@ -17,11 +17,15 @@ const requiredFiles = new Set([
   "dist/effect.d.mts",
   "dist/effect-cloudflare.d.mts",
   "dist/effect-cloudflare.mjs",
+  "dist/effect-vercel.d.mts",
+  "dist/effect-vercel.mjs",
   "dist/effect.mjs",
   "dist/index.d.mts",
   "dist/index.mjs",
   "dist/testing.d.mts",
   "dist/testing.mjs",
+  "dist/vercel.d.mts",
+  "dist/vercel.mjs",
   "package.json",
 ]);
 
