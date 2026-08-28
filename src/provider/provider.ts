@@ -7,11 +7,28 @@ export interface CreateResult {
   readonly providerRecordId: string | null;
 }
 
+export const ErrorReason = Schema.Literals([
+  "authentication",
+  "authorization",
+  "conflict",
+  "not_found",
+  "rate_limit",
+  "request",
+  "response",
+  "transport",
+  "unsupported",
+]);
+export type ErrorReason = typeof ErrorReason.Type;
+
 export class Error extends Schema.TaggedError<Error>()("ProviderError", {
   cause: Schema.optionalKey(Schema.Unknown),
+  code: Schema.optionalKey(Schema.Number),
   message: Schema.String,
   operation: Schema.String,
   providerId: Schema.String,
+  reason: Schema.optionalKey(ErrorReason),
+  retryAfterMs: Schema.optionalKey(Schema.Number),
+  status: Schema.optionalKey(Schema.Number),
 }) {}
 
 /** The provider capability used by DNS planning, application, and verification. */
@@ -23,7 +40,7 @@ export interface Interface {
   ) => Effect.Effect<CreateResult, Error>;
   readonly listRecords: (
     zone: DomainName.DomainName,
-  ) => Effect.Effect<ReadonlyArray<DnsRecord.DnsRecord>, Error>;
+  ) => Effect.Effect<ReadonlyArray<DnsRecord.Observed>, Error>;
 }
 
 export class Service extends Context.Service<Service, Interface>()("@domainkit/DnsProvider") {}
@@ -35,9 +52,7 @@ export interface AsyncInterface {
     zone: DomainName.DomainName,
     record: DnsRecord.DnsRecord,
   ) => Promise<CreateResult>;
-  readonly listRecords: (
-    zone: DomainName.DomainName,
-  ) => Promise<ReadonlyArray<DnsRecord.DnsRecord>>;
+  readonly listRecords: (zone: DomainName.DomainName) => Promise<ReadonlyArray<DnsRecord.Observed>>;
 }
 
 export const layerFromAsync = (provider: AsyncInterface): Layer.Layer<Service> =>

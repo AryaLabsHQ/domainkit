@@ -17,6 +17,8 @@ DomainKit separates four concerns:
 
 - `domainkit` — Promise-based API for application code;
 - `domainkit/effect` — canonical Effect-native services and programs;
+- `domainkit/cloudflare` — Promise-based Cloudflare authoritative-DNS adapter;
+- `domainkit/effect/cloudflare` — canonical Effect-native Cloudflare adapter;
 - `domainkit/testing` — deterministic provider and store implementations for tests.
 
 The package is portable ESM built on Fetch and Web APIs. Effect is a peer dependency.
@@ -53,6 +55,31 @@ const program = Provisioning.create({ requirements, zone: "example.com" }).pipe(
 The Promise namespaces delegate to the canonical Effect programs rather than maintaining a second
 planning, authorization, or verification implementation. Hosts supply providers and stores
 explicitly; DomainKit does not own a hidden runtime.
+
+The Cloudflare adapter accepts a host-owned API or OAuth token and an explicitly selected account.
+The host also declares the capabilities required when that credential was issued; Cloudflare's
+non-mutating token-verification endpoint cannot infer DNS write permission. The adapter creates
+DNS-only records and leaves credential storage and user interaction to the host:
+
+```ts
+import { Cloudflare, Provisioning, Secret } from "domainkit";
+
+const provider = Cloudflare.make({
+  accountId: "cloudflare-account-id",
+  capabilities: ["dns:read", "dns:write"],
+  token: Secret.make(apiToken),
+});
+
+const plan = await Provisioning.create({ provider, requirements, zone: "example.com" });
+```
+
+OAuth helpers own Cloudflare's endpoints and client-auth variants while accepting the scope IDs
+assigned during OAuth client registration. `Cloudflare.Auth.tokenMethod` describes the equivalent
+API-token capability.
+
+`listAccounts()` returns the distinct accounts represented by zones visible to the credential.
+Accounts with no visible zones are not returned because Cloudflare does not document bearer-token
+authentication for its separate account-list endpoint.
 
 Schemas own external parsing. For example, `DomainName.parse` and `DnsRecord.parse` decode and
 canonicalize strings through codecs, while encoded protocol dates remain ISO strings and decoded

@@ -15,7 +15,7 @@ export const Operation = S.TaggedUnion({
     ttlDrift: S.Boolean,
   },
   conflict: {
-    existing: S.Array(DnsRecord.Schema),
+    existing: S.Array(DnsRecord.Observed),
     id: S.String,
     reason: S.String,
     requirement: DnsRecord.Schema,

@@ -6,12 +6,12 @@ import * as DnsProvider from "./provider.ts";
 
 export interface Options {
   readonly id?: string;
-  readonly records?: Readonly<Record<string, ReadonlyArray<DnsRecord.DnsRecord>>>;
+  readonly records?: Readonly<Record<string, ReadonlyArray<DnsRecord.Observed>>>;
 }
 
 export function make(options: Options = {}): DnsProvider.Interface {
   const id = options.id ?? "memory";
-  const records = new Map<DomainName.DomainName, Array<DnsRecord.DnsRecord>>();
+  const records = new Map<DomainName.DomainName, Array<DnsRecord.Observed>>();
   for (const [zone, initial] of Object.entries(options.records ?? {})) {
     records.set(DomainName.parse(zone), [...initial]);
   }

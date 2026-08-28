@@ -75,11 +75,18 @@ function observeProvider(
 ): Effect.Effect<ProviderObservation, DnsProvider.Error> {
   return provider.listRecords(zone).pipe(
     Effect.map((records): ProviderObservation => {
-      if (records.some((existing) => DnsRecord.equals(existing, requirement))) {
+      if (
+        records.some(
+          (existing) => existing._tag !== "Opaque" && DnsRecord.equals(existing, requirement),
+        )
+      ) {
         return { _tag: "match" };
       }
       const sameSet = records.filter(
-        (existing) => existing.name === requirement.name && existing._tag === requirement._tag,
+        (existing): existing is DnsRecord.DnsRecord =>
+          existing._tag !== "Opaque" &&
+          existing.name === requirement.name &&
+          existing._tag === requirement._tag,
       );
       return sameSet.length === 0 ? { _tag: "missing" } : { _tag: "mismatch", records: sameSet };
     }),

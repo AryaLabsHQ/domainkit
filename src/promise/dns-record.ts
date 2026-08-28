@@ -7,6 +7,8 @@ export {
   equals,
   Mx,
   Ns,
+  Opaque,
+  Observed,
   parse,
   RequirementMetadata,
   Schema,

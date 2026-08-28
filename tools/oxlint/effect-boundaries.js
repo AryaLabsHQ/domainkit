@@ -15,6 +15,7 @@ const foreignPromiseFiles = new Set([
   "src/auth/oauth.ts",
   "src/plan/canonical-json.ts",
   "src/provider/provider.ts",
+  "src/providers/cloudflare/client.ts",
   "src/promise/oauth.ts",
   "src/promise/token.ts",
   "src/stores/connection.ts",
