@@ -6,14 +6,14 @@ import * as CredentialStore from "./credential.ts";
 export function make(): CredentialStore.Interface {
   const credentials = new Map<string, Connection.StoredCredential>();
   return {
-    delete: Effect.fn("InMemoryCredentialStore.delete")((connectionId) =>
-      Effect.sync(() => void credentials.delete(connectionId)),
+    delete: Effect.fn("InMemoryCredentialStore.delete")((authorizationId) =>
+      Effect.sync(() => void credentials.delete(authorizationId)),
     ),
-    get: Effect.fn("InMemoryCredentialStore.get")((connectionId) =>
-      Effect.sync(() => credentials.get(connectionId) ?? null),
+    get: Effect.fn("InMemoryCredentialStore.get")((authorizationId) =>
+      Effect.sync(() => credentials.get(authorizationId) ?? null),
     ),
-    put: Effect.fn("InMemoryCredentialStore.put")((connectionId, credential) =>
-      Effect.sync(() => void credentials.set(connectionId, credential)),
+    put: Effect.fn("InMemoryCredentialStore.put")((authorizationId, credential) =>
+      Effect.sync(() => void credentials.set(authorizationId, credential)),
     ),
   };
 }

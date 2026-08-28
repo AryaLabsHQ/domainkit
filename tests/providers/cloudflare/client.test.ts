@@ -145,6 +145,38 @@ describe("Cloudflare Effect client", () => {
     });
   });
 
+  it.effect("reads and deletes an exact record by Cloudflare record id", () => {
+    const existing = record("TXT", "verify.example.com", { content: "proof" });
+    const existingId = "record-txt";
+    const recording = recordedFetch([
+      { body: page([zone]), expect: { pathname: "/client/v4/zones" } },
+      {
+        body: single(existing),
+        expect: { pathname: `/client/v4/zones/zone-1/dns_records/${existingId}` },
+      },
+      { body: page([zone]), expect: { pathname: "/client/v4/zones" } },
+      {
+        body: single(existing),
+        expect: {
+          method: "DELETE",
+          pathname: `/client/v4/zones/zone-1/dns_records/${existingId}`,
+        },
+      },
+    ]);
+    const client = Cloudflare.make({
+      accountId: "account-1",
+      capabilities,
+      fetch: recording.fetch,
+      token,
+    });
+    return Effect.gen(function* () {
+      const observed = yield* client.getRecord(DomainName.parse("example.com"), existingId);
+      assert.strictEqual(observed?._tag, "TXT");
+      yield* client.deleteRecord(DomainName.parse("example.com"), existingId);
+      assert.strictEqual(recording.requests[3]?.init?.method, "DELETE");
+    });
+  });
+
   it.effect("classifies rate limits without leaking credentials", () => {
     const recording = recordedFetch([
       {

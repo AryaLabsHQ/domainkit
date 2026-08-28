@@ -12,8 +12,10 @@ export interface Options {
 export function make(options: Options = {}): DnsProvider.Interface {
   const id = options.id ?? "memory";
   const records = new Map<DomainName.DomainName, Array<DnsRecord.Observed>>();
+  const recordIds = new Map<string, DnsRecord.Observed>();
   for (const [zone, initial] of Object.entries(options.records ?? {})) {
     records.set(DomainName.parse(zone), [...initial]);
+    for (const [index, record] of initial.entries()) recordIds.set(`${id}:${index + 1}`, record);
   }
   return {
     id,
@@ -25,8 +27,24 @@ export function make(options: Options = {}): DnsProvider.Interface {
         const current = records.get(zone) ?? [];
         current.push(record);
         records.set(zone, current);
-        return { providerRecordId: `${id}:${current.length}` };
+        const providerRecordId = `${id}:${current.length}`;
+        recordIds.set(providerRecordId, record);
+        return { providerRecordId };
       }),
+    ),
+    deleteRecord: Effect.fn("InMemoryDnsProvider.deleteRecord")((zone, providerRecordId) =>
+      Effect.sync(() => {
+        const record = recordIds.get(providerRecordId);
+        if (record === undefined) return;
+        records.set(
+          zone,
+          (records.get(zone) ?? []).filter((candidate) => candidate !== record),
+        );
+        recordIds.delete(providerRecordId);
+      }),
+    ),
+    getRecord: Effect.fn("InMemoryDnsProvider.getRecord")((_zone, providerRecordId) =>
+      Effect.sync(() => recordIds.get(providerRecordId) ?? null),
     ),
   };
 }

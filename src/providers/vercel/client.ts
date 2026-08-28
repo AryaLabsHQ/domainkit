@@ -230,6 +230,42 @@ export function make(options: Options): Interface {
       }),
   );
 
+  const getRecord = Effect.fn("VercelClient.getRecord")(
+    (zoneName: DomainName.DomainName, providerRecordId: string) =>
+      Effect.gen(function* () {
+        const storageZone = yield* resolveZone(zoneName);
+        let until: number | null = null;
+        while (true) {
+          const values: Record<string, string> = { limit: "100" };
+          if (until !== null) values.until = String(until);
+          const { body, response } = yield* request(
+            withContext(`/v5/domains/${encodeURIComponent(storageZone)}/records`, values),
+            "getRecord",
+          );
+          const envelope = yield* decode(Protocol.RecordListEnvelope, body, "getRecord", response);
+          const record = envelope.records.find(({ id }) => id === providerRecordId);
+          if (record !== undefined) return yield* Records.decode(storageZone, record);
+          const next = envelope.pagination?.next ?? null;
+          if (next === null) return null;
+          until = next;
+        }
+      }),
+  );
+
+  const deleteRecord = Effect.fn("VercelClient.deleteRecord")(
+    (zoneName: DomainName.DomainName, providerRecordId: string) =>
+      Effect.gen(function* () {
+        const storageZone = yield* resolveZone(zoneName);
+        yield* request(
+          withContext(
+            `/v2/domains/${encodeURIComponent(storageZone)}/records/${encodeURIComponent(providerRecordId)}`,
+          ),
+          "deleteRecord",
+          { method: "DELETE" },
+        );
+      }),
+  );
+
   const listAccounts = Effect.fn("VercelClient.listAccounts")(() =>
     Effect.gen(function* () {
       const userResult = yield* request(new URL(`${baseUrl}/v2/user`), "listAccounts");
@@ -290,6 +326,8 @@ export function make(options: Options): Interface {
   return {
     id: "vercel",
     createRecord,
+    deleteRecord,
+    getRecord,
     listAccounts,
     listRecords,
     listZones,

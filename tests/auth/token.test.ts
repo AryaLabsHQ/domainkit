@@ -1,10 +1,18 @@
 import { assert, describe, expect, it } from "@effect/vitest";
 
-import { Connection, DnsRecord, Provisioning, Secret, TokenConnection } from "../../src/index.ts";
+import {
+  Connection,
+  ConnectionLifecycle,
+  DnsRecord,
+  Provisioning,
+  Secret,
+  TokenConnection,
+} from "../../src/index.ts";
 import {
   InMemoryConnectionStore,
   InMemoryCredentialStore,
   InMemoryDnsProvider,
+  InMemoryProviderAuthorizationStore,
 } from "../../src/testing.ts";
 
 describe("token connections", () => {
@@ -12,10 +20,12 @@ describe("token connections", () => {
     const connections = InMemoryConnectionStore.toAsync();
     const credentialStore = InMemoryCredentialStore.make();
     const credentials = InMemoryCredentialStore.toAsync(credentialStore);
-    const connection = await TokenConnection.connect({
+    const result = await TokenConnection.connect({
+      authorizationStore: InMemoryProviderAuthorizationStore.toAsync(),
       connectionStore: connections,
       credentialStore: credentials,
       grant: { _tag: "account" },
+      ownerId: "organization-1",
       providerId: "example-provider",
       subjectId: "user-1",
       token: Secret.make("personal-access-token"),
@@ -29,16 +39,19 @@ describe("token connections", () => {
         };
       },
     });
+    const { authorization, connection } = result;
     assert.strictEqual(
-      Connection.assertGrant(connection, {
-        accountId: "account-1",
+      Connection.assertGrant(connection, authorization, {
         capability: "dns:read",
         domain: "anything.example.com",
         providerId: "example-provider",
       }),
       "anything.example.com",
     );
-    assert.notMatch(JSON.stringify(await credentials.get(connection.id)), /personal-access-token/);
+    assert.notMatch(
+      JSON.stringify(await credentials.get(authorization.id)),
+      /personal-access-token/,
+    );
 
     const provider = InMemoryDnsProvider.toAsync({ id: "example-provider" });
     const plan = await Provisioning.create({
@@ -58,36 +71,36 @@ describe("token connections", () => {
 
     await expect(
       Provisioning.authorizeForConnection({
-        accountId: "wrong-account",
+        authorization: { ...authorization, id: "other-authorization" },
         connection,
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
-    const authorization = await Provisioning.authorizeForConnection({
-      accountId: "account-1",
+    const planAuthorization = await Provisioning.authorizeForConnection({
+      authorization,
       connection,
       plan,
     });
-    assert.strictEqual(authorization.planDigest, plan.digest);
+    assert.strictEqual(planAuthorization.planDigest, plan.digest);
 
     await expect(
       Provisioning.authorizeForConnection({
-        accountId: "account-1",
-        connection: { ...connection, capabilities: ["dns:read"] },
+        authorization: { ...authorization, capabilities: ["dns:read"] },
+        connection,
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
     await expect(
       Provisioning.authorizeForConnection({
-        accountId: "account-1",
-        connection: { ...connection, expiresAt: new Date(0) },
+        authorization: { ...authorization, expiresAt: new Date(0) },
+        connection,
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
     await expect(
       Provisioning.authorizeForConnection({
-        accountId: "account-1",
-        connection: { ...connection, expiresAt: new Date(Number.NaN) },
+        authorization: { ...authorization, expiresAt: new Date(Number.NaN) },
+        connection,
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
@@ -96,9 +109,11 @@ describe("token connections", () => {
   it("rejects invalid expiration metadata returned by token validation", async () => {
     await expect(
       TokenConnection.connect({
+        authorizationStore: InMemoryProviderAuthorizationStore.toAsync(),
         connectionStore: InMemoryConnectionStore.toAsync(),
         credentialStore: InMemoryCredentialStore.toAsync(),
         grant: { _tag: "account" },
+        ownerId: "organization-1",
         providerId: "example-provider",
         subjectId: "user-1",
         token: Secret.make("personal-access-token"),
@@ -110,5 +125,122 @@ describe("token connections", () => {
         }),
       }),
     ).rejects.toMatchObject({ _tag: "InvalidInputError" });
+  });
+
+  it("shares one provider authorization across owner bindings and revokes it last", async () => {
+    const authorizationStore = InMemoryProviderAuthorizationStore.toAsync();
+    const connectionStore = InMemoryConnectionStore.toAsync();
+    const credentialStore = InMemoryCredentialStore.toAsync();
+    const connect = (ownerId: string) =>
+      TokenConnection.connect({
+        authorizationStore,
+        connectionStore,
+        credentialStore,
+        grant: { _tag: "account" },
+        ownerId,
+        providerId: "cloudflare",
+        subjectId: `admin:${ownerId}`,
+        token: Secret.make(`token:${ownerId}`),
+        validate: async () => ({
+          accountId: "cloudflare-account-1",
+          capabilities: ["dns:read", "dns:write"],
+          expiresAt: null,
+          scopes: ["dns:write"],
+        }),
+      });
+    const first = await connect("organization-1");
+    const second = await connect("organization-2");
+    assert.strictEqual(first.authorization.id, second.authorization.id);
+    assert.notStrictEqual(first.connection.id, second.connection.id);
+    assert.strictEqual(
+      (await connectionStore.listByAuthorizationId(first.authorization.id)).length,
+      2,
+    );
+
+    let revocations = 0;
+    const detach = (connectionId: string) =>
+      ConnectionLifecycle.detach({
+        authorizationStore,
+        connectionId,
+        connectionStore,
+        credentialStore,
+        revokeAuthorization: async () => {
+          revocations += 1;
+        },
+      });
+    const firstDetach = await detach(first.connection.id);
+    assert.deepStrictEqual(
+      {
+        remainingBindings: firstDetach.remainingBindings,
+        revoked: firstDetach.revokedAuthorization,
+      },
+      { remainingBindings: 1, revoked: false },
+    );
+    assert.strictEqual(revocations, 0);
+    assert.notStrictEqual(await credentialStore.get(first.authorization.id), null);
+
+    const finalDetach = await detach(second.connection.id);
+    assert.deepStrictEqual(
+      {
+        remainingBindings: finalDetach.remainingBindings,
+        revoked: finalDetach.revokedAuthorization,
+      },
+      { remainingBindings: 0, revoked: true },
+    );
+    assert.strictEqual(revocations, 1);
+    assert.strictEqual(await credentialStore.get(first.authorization.id), null);
+    assert.strictEqual(await authorizationStore.get(first.authorization.id), null);
+  });
+
+  it("finishes local cleanup when final-binding deletion previously failed", async () => {
+    const authorizationStore = InMemoryProviderAuthorizationStore.toAsync();
+    const persistentConnections = InMemoryConnectionStore.toAsync();
+    const credentialStore = InMemoryCredentialStore.toAsync();
+    const result = await TokenConnection.connect({
+      authorizationStore,
+      connectionStore: persistentConnections,
+      credentialStore,
+      grant: { _tag: "account" },
+      ownerId: "organization-1",
+      providerId: "cloudflare",
+      subjectId: "admin-1",
+      token: Secret.make("token"),
+      validate: async () => ({
+        accountId: "account-1",
+        capabilities: ["dns:read", "dns:write"],
+        expiresAt: null,
+        scopes: ["dns:write"],
+      }),
+    });
+    let failDelete = true;
+    const connectionStore = {
+      ...persistentConnections,
+      delete: async (connectionId: string) => {
+        if (failDelete) {
+          failDelete = false;
+          throw new Error("injected connection delete failure");
+        }
+        await persistentConnections.delete(connectionId);
+      },
+    };
+    let revocations = 0;
+    const detach = () =>
+      ConnectionLifecycle.detach({
+        authorizationStore,
+        connectionId: result.connection.id,
+        connectionStore,
+        credentialStore,
+        revokeAuthorization: async () => {
+          revocations += 1;
+        },
+      });
+    await expect(detach()).rejects.toMatchObject({ _tag: "StorageError" });
+    assert.strictEqual(await authorizationStore.get(result.authorization.id), null);
+    assert.notStrictEqual(await persistentConnections.get(result.connection.id), null);
+
+    const retry = await detach();
+    assert.strictEqual(retry.revokedAuthorization, true);
+    assert.strictEqual(revocations, 1);
+    assert.strictEqual(await persistentConnections.get(result.connection.id), null);
   });
 });
