@@ -77,7 +77,7 @@ export type TokenValidatorOptions = CredentialOptions &
     | {
         readonly accountId?: never;
         readonly domain: DomainName.DomainName;
-        readonly tokenKind?: "user";
+        readonly tokenKind?: "account" | "user";
       }
   );
 
@@ -126,6 +126,7 @@ export function tokenValidator(
           domain: options.domain,
           ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
           token,
+          ...(options.tokenKind === undefined ? {} : { tokenKind: options.tokenKind }),
         })
       : Client.make({
           accountId: options.accountId,

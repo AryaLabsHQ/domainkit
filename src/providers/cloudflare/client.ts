@@ -55,6 +55,7 @@ interface CredentialOptions {
 interface DomainCredentialOptions extends CredentialOptions {
   readonly capabilities: ProviderAuth.TokenValidation["capabilities"];
   readonly domain: DomainName.DomainName;
+  readonly tokenKind?: "account" | "user";
 }
 
 const makeTransport = (options: CredentialOptions) => {
@@ -196,10 +197,16 @@ export const discoverAuthorizationAccount = discoverAccount;
 export const validateDomainToken = Effect.fn("CloudflareClient.validateDomainToken")(
   (options: DomainCredentialOptions) =>
     Effect.gen(function* () {
-      const expiresAt = yield* makeTransport(options).inspectToken("/user/tokens/verify");
-      const account = yield* discoverAccount(options);
+      const transport = makeTransport(options);
+      const account = options.tokenKind === "account" ? yield* discoverAccount(options) : undefined;
+      const expiresAt = yield* transport.inspectToken(
+        account === undefined
+          ? "/user/tokens/verify"
+          : `/accounts/${encodeURIComponent(account.id)}/tokens/verify`,
+      );
+      const discoveredAccount = account ?? (yield* discoverAccount(options));
       return {
-        accountId: account.id,
+        accountId: discoveredAccount.id,
         capabilities: options.capabilities,
         expiresAt,
         scopes: [],

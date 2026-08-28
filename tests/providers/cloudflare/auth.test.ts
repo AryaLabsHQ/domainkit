@@ -152,6 +152,31 @@ describe("Cloudflare authentication", () => {
     });
   });
 
+  it.effect("discovers an account before verifying an account-owned token", () => {
+    const recording = recordedFetch([
+      { body: page([zone]) },
+      {
+        body: single({
+          expires_on: "2030-01-01T00:00:00Z",
+          id: "account-token-id",
+          status: "active",
+        }),
+      },
+    ]);
+    const validate = Cloudflare.Auth.tokenValidator({
+      capabilities: ["dns:read", "dns:write"],
+      domain: DomainName.parse("example.com"),
+      fetch: recording.fetch,
+      tokenKind: "account",
+    });
+    return Effect.gen(function* () {
+      const validation = yield* validate(Secret.make("account-api-token"));
+      assert.strictEqual(validation.accountId, "account-1");
+      assert.ok(recording.requests[0]?.url.includes("/zones?"));
+      assert.ok(recording.requests[1]?.url.endsWith("/accounts/account-1/tokens/verify"));
+    });
+  });
+
   it.effect("fails account discovery when no zone is visible or one name is ambiguous", () =>
     Effect.gen(function* () {
       const missing = Cloudflare.Auth.subjectResolver({

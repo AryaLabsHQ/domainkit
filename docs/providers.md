@@ -16,6 +16,10 @@ After authorization, Cloudflare DNS clients remain explicitly account-scoped. Th
 records what the host requested when it issued or authorized the credential because Cloudflare's
 non-mutating token verification response does not enumerate DNS permissions.
 
+Domain-targeted token validation supports both user-owned and account-owned API tokens. User tokens
+are verified before discovery; account tokens discover the account from the authorized zone first
+and then use Cloudflare's account-scoped verification endpoint.
+
 Cloudflare's adapter supports API tokens and standards-based OAuth authorization code flow. OAuth
 scope IDs come from the OAuth client registration and are supplied by the host rather than
 hard-coded by DomainKit. Existing proxied records are readable, while every record created by
