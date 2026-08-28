@@ -134,7 +134,7 @@ export function make(options: Options): Interface {
     }),
   );
 
-  const resolveZone = Effect.fn("VercelClient.resolveZone")((name: DomainName.DomainName) =>
+  const discoverZone = Effect.fn("VercelClient.discoverZone")((name: DomainName.DomainName) =>
     Effect.gen(function* () {
       const configResult = yield* request(
         withContext(`/v6/domains/${encodeURIComponent(name)}/config`),
@@ -157,6 +157,20 @@ export function make(options: Options): Interface {
         domainResult.response,
       );
       if (!hasDnsStorage(envelope.domain, config.serviceType)) {
+        return null;
+      }
+      return envelope.domain;
+    }).pipe(
+      Effect.catchTag("ProviderError", (cause) =>
+        cause.reason === "not_found" ? Effect.succeed(null) : Effect.fail(cause),
+      ),
+    ),
+  );
+
+  const resolveZone = Effect.fn("VercelClient.resolveZone")((name: DomainName.DomainName) =>
+    Effect.gen(function* () {
+      const domain = yield* discoverZone(name);
+      if (domain === null) {
         return yield* Effect.fail(
           failure(
             "resolveZone",
@@ -165,7 +179,7 @@ export function make(options: Options): Interface {
           ),
         );
       }
-      return yield* DomainName.decode(envelope.domain.name).pipe(
+      return yield* DomainName.decode(domain.name).pipe(
         Effect.mapError((cause) =>
           failure("resolveZone", `Vercel returned an invalid storage zone: ${cause.message}`),
         ),
@@ -293,7 +307,11 @@ export function make(options: Options): Interface {
         (domain) =>
           hasDnsStorage(domain) && (input.name === undefined || domain.name === input.name),
       );
-      return yield* Effect.forEach(domains, projectZone);
+      if (domains.length > 0 || input.name === undefined) {
+        return yield* Effect.forEach(domains, projectZone);
+      }
+      const discovered = yield* discoverZone(input.name);
+      return discovered === null ? [] : [yield* projectZone(discovered)];
     }),
   );
 
