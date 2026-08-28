@@ -18,7 +18,7 @@ describe("Vercel authorization", () => {
       _tag: "integration",
       capabilities,
       installUrl: "https://vercel.com/integrations/domainkit/new",
-      tokenEndpoint: "https://api.vercel.com/v2/oauth/access_token",
+      tokenEndpoint: "https://api.vercel.com/oauth/access_token",
     });
   });
 
@@ -34,7 +34,7 @@ describe("Vercel authorization", () => {
           token_type: "Bearer",
           user_id: "user-1",
         },
-        expect: { method: "POST", pathname: "/v2/oauth/access_token" },
+        expect: { method: "POST", pathname: "/oauth/access_token" },
       },
     ]);
     return Effect.gen(function* () {
