@@ -47,6 +47,7 @@ export function authorizeForConnection(input: {
   readonly allowPartial?: boolean;
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly connection: Connection.Connection;
+  readonly domain: string;
   readonly operationIds?: ReadonlyArray<string>;
   readonly plan: DnsPlan.DnsPlan;
 }): Promise<DnsPlan.PlanAuthorization> {

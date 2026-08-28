@@ -73,12 +73,14 @@ describe("token connections", () => {
       Provisioning.authorizeForConnection({
         authorization: { ...authorization, id: "other-authorization" },
         connection,
+        domain: plan.zone,
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
     const planAuthorization = await Provisioning.authorizeForConnection({
       authorization,
       connection,
+      domain: plan.zone,
       plan,
     });
     assert.strictEqual(planAuthorization.planDigest, plan.digest);
@@ -87,6 +89,7 @@ describe("token connections", () => {
       Provisioning.authorizeForConnection({
         authorization: { ...authorization, capabilities: ["dns:read"] },
         connection,
+        domain: plan.zone,
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
@@ -94,6 +97,7 @@ describe("token connections", () => {
       Provisioning.authorizeForConnection({
         authorization: { ...authorization, expiresAt: new Date(0) },
         connection,
+        domain: plan.zone,
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });
@@ -101,6 +105,7 @@ describe("token connections", () => {
       Provisioning.authorizeForConnection({
         authorization: { ...authorization, expiresAt: new Date(Number.NaN) },
         connection,
+        domain: plan.zone,
         plan,
       }),
     ).rejects.toMatchObject({ _tag: "AuthorizationError" });

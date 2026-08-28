@@ -11,14 +11,15 @@ export const authorize = Effect.fn("ConnectionAuthorization.authorize")(function
   readonly allowPartial?: boolean;
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly connection: Connection.Connection;
+  readonly domain: string;
   readonly operationIds?: ReadonlyArray<string>;
   readonly plan: DnsPlan.DnsPlan;
 }) {
-  yield* Effect.try({
+  const domain = yield* Effect.try({
     try: () =>
       Connection.assertGrant(input.connection, input.authorization, {
         capability: "dns:write",
-        domain: input.plan.zone,
+        domain: input.domain,
         providerId: input.plan.providerId,
       }),
     catch: (cause) =>
@@ -26,11 +27,25 @@ export const authorize = Effect.fn("ConnectionAuthorization.authorize")(function
         ? cause
         : new Connection.AuthorizationError({ message: "Connection grant is invalid" }),
   });
-  return yield* Provisioning.authorize(
+  const authorization = yield* Provisioning.authorize(
     input.plan,
     input.operationIds,
     input.allowPartial === undefined ? {} : { allowPartial: input.allowPartial },
   );
+  const selected = new Set(authorization.operationIds);
+  const outsideGrant = input.plan.operations.filter(
+    (operation) =>
+      operation._tag === "create" &&
+      selected.has(operation.id) &&
+      operation.requirement.name !== domain &&
+      !operation.requirement.name.endsWith(`.${domain}`),
+  );
+  if (outsideGrant.length > 0) {
+    return yield* new Connection.AuthorizationError({
+      message: `Plan operations are outside the granted domain ${domain}`,
+    });
+  }
+  return authorization;
 });
 
 export type Error = Connection.AuthorizationError | InvalidInputError | CryptoError;
