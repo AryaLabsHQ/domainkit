@@ -97,6 +97,42 @@ describe("Vercel Effect client", () => {
     });
   });
 
+  it.effect("resolves a requested subdomain to its parent DNS storage zone", () => {
+    const recording = recordedFetch([
+      { body: domainPage([]), expect: { pathname: "/v5/domains" } },
+      {
+        body: authoritativeConfig,
+        expect: { pathname: "/v6/domains/mail.example.com/config" },
+      },
+      { body: domainEnvelope, expect: { pathname: "/v5/domains/mail.example.com" } },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      assert.deepStrictEqual(
+        yield* client.listZones({ name: DomainName.parse("mail.example.com") }),
+        [portableZone],
+      );
+    });
+  });
+
+  it.effect("returns no zone when direct discovery cannot find the requested domain", () => {
+    const recording = recordedFetch([
+      { body: domainPage([]), expect: { pathname: "/v5/domains" } },
+      {
+        body: { error: { code: "not_found", message: "Domain not found" } },
+        expect: { pathname: "/v6/domains/missing.example/config" },
+        init: { status: 404 },
+      },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      assert.deepStrictEqual(
+        yield* client.listZones({ name: DomainName.parse("missing.example") }),
+        [],
+      );
+    });
+  });
+
   it.effect("decodes every portable record type across cursor pages", () => {
     const first = [
       record("A", "a", "192.0.2.1"),
