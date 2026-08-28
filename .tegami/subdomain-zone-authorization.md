@@ -1,7 +1,8 @@
 ---
 packages:
   domainkit:
-    type: patch
+    replay:
+      - exit-prerelease(npm:domainkit)
 ---
 
 ## Authorize subdomains in parent DNS zones
