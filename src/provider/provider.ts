@@ -38,6 +38,14 @@ export interface Interface {
     zone: DomainName.DomainName,
     record: DnsRecord.DnsRecord,
   ) => Effect.Effect<CreateResult, Error>;
+  readonly deleteRecord: (
+    zone: DomainName.DomainName,
+    providerRecordId: string,
+  ) => Effect.Effect<void, Error>;
+  readonly getRecord: (
+    zone: DomainName.DomainName,
+    providerRecordId: string,
+  ) => Effect.Effect<DnsRecord.Observed | null, Error>;
   readonly listRecords: (
     zone: DomainName.DomainName,
   ) => Effect.Effect<ReadonlyArray<DnsRecord.Observed>, Error>;
@@ -52,6 +60,11 @@ export interface AsyncInterface {
     zone: DomainName.DomainName,
     record: DnsRecord.DnsRecord,
   ) => Promise<CreateResult>;
+  readonly deleteRecord: (zone: DomainName.DomainName, providerRecordId: string) => Promise<void>;
+  readonly getRecord: (
+    zone: DomainName.DomainName,
+    providerRecordId: string,
+  ) => Promise<DnsRecord.Observed | null>;
   readonly listRecords: (zone: DomainName.DomainName) => Promise<ReadonlyArray<DnsRecord.Observed>>;
 }
 
@@ -62,6 +75,18 @@ export const layerFromAsync = (provider: AsyncInterface): Layer.Layer<Service> =
       Effect.tryPromise({
         try: () => provider.createRecord(zone, record),
         catch: (cause) => failure(provider, "createRecord", cause),
+      }),
+    ),
+    deleteRecord: Effect.fn("DnsProvider.deleteRecord")((zone, providerRecordId) =>
+      Effect.tryPromise({
+        try: () => provider.deleteRecord(zone, providerRecordId),
+        catch: (cause) => failure(provider, "deleteRecord", cause),
+      }),
+    ),
+    getRecord: Effect.fn("DnsProvider.getRecord")((zone, providerRecordId) =>
+      Effect.tryPromise({
+        try: () => provider.getRecord(zone, providerRecordId),
+        catch: (cause) => failure(provider, "getRecord", cause),
       }),
     ),
     listRecords: Effect.fn("DnsProvider.listRecords")((zone) =>
@@ -75,6 +100,10 @@ export const layerFromAsync = (provider: AsyncInterface): Layer.Layer<Service> =
 export const toAsync = (provider: Interface): AsyncInterface => ({
   id: provider.id,
   createRecord: (zone, record) => Effect.runPromise(provider.createRecord(zone, record)),
+  deleteRecord: (zone, providerRecordId) =>
+    Effect.runPromise(provider.deleteRecord(zone, providerRecordId)),
+  getRecord: (zone, providerRecordId) =>
+    Effect.runPromise(provider.getRecord(zone, providerRecordId)),
   listRecords: (zone) => Effect.runPromise(provider.listRecords(zone)),
 });
 

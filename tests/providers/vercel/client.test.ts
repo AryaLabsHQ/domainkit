@@ -156,6 +156,37 @@ describe("Vercel Effect client", () => {
     });
   });
 
+  it.effect("reads and deletes an exact record by Vercel record id", () => {
+    const existing = record("TXT", "verify", "proof");
+    const recording = recordedFetch([
+      {
+        body: authoritativeConfig,
+        expect: { pathname: "/v6/domains/example.com/config" },
+      },
+      { body: domainEnvelope, expect: { pathname: "/v5/domains/example.com" } },
+      {
+        body: { pagination: { count: 1, next: null, prev: null }, records: [existing] },
+        expect: { pathname: "/v5/domains/example.com/records" },
+      },
+      {
+        body: authoritativeConfig,
+        expect: { pathname: "/v6/domains/example.com/config" },
+      },
+      { body: domainEnvelope, expect: { pathname: "/v5/domains/example.com" } },
+      {
+        body: { uid: "record-txt" },
+        expect: { method: "DELETE", pathname: "/v2/domains/example.com/records/record-txt" },
+      },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      const observed = yield* client.getRecord(DomainName.parse("example.com"), "record-txt");
+      assert.strictEqual(observed?._tag, "TXT");
+      yield* client.deleteRecord(DomainName.parse("example.com"), "record-txt");
+      assert.strictEqual(recording.requests[5]?.init?.method, "DELETE");
+    });
+  });
+
   it.effect("validates an exact delegated zone through the domain configuration endpoint", () => {
     const zone = DomainName.parse("dk-live.example.com");
     const recording = recordedFetch([

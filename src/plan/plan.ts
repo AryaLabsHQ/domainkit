@@ -105,7 +105,7 @@ export const authorize = Effect.fn("Provisioning.authorize")(function* (
   operationIds?: ReadonlyArray<string>,
   options: { readonly allowPartial?: boolean } = {},
 ) {
-  yield* validateDigest(plan);
+  yield* validate(plan);
   const createIds = plan.operations
     .filter((operation) => operation._tag === "create")
     .map(({ id }) => id);
@@ -133,7 +133,7 @@ export const authorize = Effect.fn("Provisioning.authorize")(function* (
 export const apply = Effect.fn("Provisioning.apply")(function* (input: ApplyInput) {
   const { authorization, plan } = input;
   const provider = yield* DnsProvider.Service;
-  yield* validateDigest(plan);
+  yield* validate(plan);
   if (authorization.planDigest !== plan.digest) {
     return yield* new AuthorizationError({
       message: "Authorization belongs to a different plan",
@@ -331,7 +331,9 @@ function reconcileRequirement(
   });
 }
 
-function validateDigest(plan: DnsPlan.DnsPlan): Effect.Effect<void, AuthorizeError, Crypto.Crypto> {
+export function validate(
+  plan: DnsPlan.DnsPlan,
+): Effect.Effect<void, AuthorizeError, Crypto.Crypto> {
   const unsigned: S.Schema.Type<typeof UnsignedPlan> = {
     operations: plan.operations,
     providerId: plan.providerId,

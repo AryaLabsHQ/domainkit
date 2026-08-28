@@ -14,6 +14,7 @@ export * as DnsRecord from "./promise/dns-record.ts";
 export * as DomainName from "./promise/domain-name.ts";
 export * as InvalidInput from "./invalid-input.ts";
 export * as DnsPlan from "./promise/dns-plan.ts";
+export * as Deletion from "./promise/deletion.ts";
 export type * as DnsProvider from "./promise/dns-provider.ts";
 export * as Cloudflare from "./promise/cloudflare.ts";
 export * as Vercel from "./promise/vercel.ts";

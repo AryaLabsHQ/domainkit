@@ -27,6 +27,10 @@ export function make(options: Cloudflare.Client.Options): Interface {
   return {
     id: client.id,
     createRecord: (zone, record) => Effect.runPromise(client.createRecord(zone, record)),
+    deleteRecord: (zone, providerRecordId) =>
+      Effect.runPromise(client.deleteRecord(zone, providerRecordId)),
+    getRecord: (zone, providerRecordId) =>
+      Effect.runPromise(client.getRecord(zone, providerRecordId)),
     listAccounts: () => Effect.runPromise(client.listAccounts()),
     listRecords: (zone) => Effect.runPromise(client.listRecords(zone)),
     listZones: (input) => Effect.runPromise(client.listZones(input)),

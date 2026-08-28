@@ -182,6 +182,34 @@ export function make(options: Options): Interface {
       }),
   );
 
+  const getRecord = Effect.fn("CloudflareClient.getRecord")(
+    (zoneName: DomainName.DomainName, providerRecordId: string) =>
+      Effect.gen(function* () {
+        const zone = yield* resolveZone(zoneName);
+        const { body, response } = yield* request(
+          `/zones/${encodeURIComponent(zone.id)}/dns_records/${encodeURIComponent(providerRecordId)}`,
+          "getRecord",
+        );
+        if (response.status === 404) return null;
+        yield* ensureSuccess(body, "getRecord", response);
+        const envelope = yield* decode(Protocol.RecordEnvelope, body, "getRecord", response);
+        return yield* Records.decode(envelope.result);
+      }),
+  );
+
+  const deleteRecord = Effect.fn("CloudflareClient.deleteRecord")(
+    (zoneName: DomainName.DomainName, providerRecordId: string) =>
+      Effect.gen(function* () {
+        const zone = yield* resolveZone(zoneName);
+        const { body, response } = yield* request(
+          `/zones/${encodeURIComponent(zone.id)}/dns_records/${encodeURIComponent(providerRecordId)}`,
+          "deleteRecord",
+          { method: "DELETE" },
+        );
+        yield* ensureSuccess(body, "deleteRecord", response);
+      }),
+  );
+
   const listAccounts = Effect.fn("CloudflareClient.listAccounts")(() =>
     allZones().pipe(
       Effect.map((zones) => {
@@ -238,6 +266,8 @@ export function make(options: Options): Interface {
   return {
     id: "cloudflare",
     createRecord,
+    deleteRecord,
+    getRecord,
     listAccounts,
     listRecords,
     listZones,

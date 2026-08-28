@@ -1,4 +1,4 @@
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 
 import {
@@ -8,7 +8,7 @@ import {
   Digest,
   Provisioning as EffectProvisioning,
 } from "../../src/effect.ts";
-import { Provisioning } from "../../src/index.ts";
+import { Deletion, Provisioning } from "../../src/index.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
 
 const metadata = {
@@ -69,6 +69,55 @@ describe("provisioning tracer", () => {
     const authorization = await Provisioning.authorize(plan);
     const receipt = await Provisioning.apply({ authorization, plan, provider });
     assert.strictEqual(receipt.status, "complete");
+  });
+
+  it("deletes only receipt-proven records after separate consent and fresh readback", async () => {
+    const provider = InMemoryDnsProvider.toAsync();
+    const plan = await Provisioning.create({
+      provider,
+      requirements: [requirement],
+      zone: "example.com",
+    });
+    const createAuthorization = await Provisioning.authorize(plan);
+    const createReceipt = await Provisioning.apply({
+      authorization: createAuthorization,
+      plan,
+      provider,
+    });
+    const deletion = await Deletion.create({ plan, provider, receipt: createReceipt });
+    const deletionAuthorization = await Deletion.authorize(deletion);
+    const deletionReceipt = await Deletion.apply({
+      authorization: deletionAuthorization,
+      plan: deletion,
+      provider,
+    });
+    assert.strictEqual(deletionReceipt.status, "complete");
+    assert.deepStrictEqual(await provider.listRecords(plan.zone), []);
+  });
+
+  it("fails closed when a receipt-proven record changed before deletion", async () => {
+    const provider = InMemoryDnsProvider.toAsync();
+    const plan = await Provisioning.create({
+      provider,
+      requirements: [requirement],
+      zone: "example.com",
+    });
+    const createAuthorization = await Provisioning.authorize(plan);
+    const createReceipt = await Provisioning.apply({
+      authorization: createAuthorization,
+      plan,
+      provider,
+    });
+    const createdId = createReceipt.operations[0]?.providerRecordId;
+    if (createdId === null || createdId === undefined) throw new Error("create ID missing");
+    const changedProvider: DnsProvider.AsyncInterface = {
+      ...provider,
+      getRecord: async () => DnsRecord.parse({ ...requirement, target: "changed.example.net" }),
+    };
+    await expect(
+      Deletion.create({ plan, provider: changedProvider, receipt: createReceipt }),
+    ).rejects.toMatchObject({ _tag: "UnsafeDeletionError" });
+    assert.notStrictEqual(await provider.getRecord(plan.zone, createdId), null);
   });
 
   it.effect("fails closed on incompatible CNAME state", () => {
@@ -173,6 +222,8 @@ describe("provisioning tracer", () => {
     let creates = 0;
     const provider: DnsProvider.Interface = {
       id: backing.id,
+      deleteRecord: backing.deleteRecord,
+      getRecord: backing.getRecord,
       listRecords: backing.listRecords,
       createRecord: Effect.fn("TestDnsProvider.createRecord")((zone, record) => {
         creates += 1;
