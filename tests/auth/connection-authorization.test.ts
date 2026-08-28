@@ -60,4 +60,33 @@ describe("connection authorization", () => {
       assert.strictEqual(approved.planDigest, plan.digest);
     }).pipe(Effect.provide(layer));
   });
+
+  it.effect("rejects selected operations outside the granted domain", () => {
+    const provider = InMemoryDnsProvider.make({ id: authorization.providerId });
+    const layer = Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer);
+    return Effect.gen(function* () {
+      const plan = yield* Provisioning.create({
+        requirements: [
+          DnsRecord.parse({
+            _tag: "TXT",
+            metadata: { ownership: "customer", provenance: "test", purpose: "verification" },
+            name: "other.example.com",
+            policy: "append",
+            ttl: 300,
+            value: "proof",
+          }),
+        ],
+        zone: "example.com",
+      });
+      const failure = yield* Effect.flip(
+        ConnectionAuthorization.authorize({
+          authorization,
+          connection,
+          domain: "mail.example.com",
+          plan,
+        }),
+      );
+      assert.strictEqual(failure._tag, "AuthorizationError");
+    }).pipe(Effect.provide(layer));
+  });
 });
