@@ -1,5 +1,6 @@
 import { Effect, Layer, Schema as S } from "effect";
 
+import type * as ProviderAuth from "../../src/auth/manifest.ts";
 import * as DnsRecord from "../../src/domain/dns-record.ts";
 import * as Digest from "../../src/plan/canonical-json.ts";
 import * as Provisioning from "../../src/plan/plan.ts";
@@ -11,15 +12,39 @@ export class Error extends S.TaggedError<Error>()("LiveRunnerError", {
   message: S.String,
 }) {}
 
+export const ProviderScope = S.Struct({
+  providerId: S.String,
+  subjectId: S.String,
+  subjectType: S.Literals(["account", "team"]),
+});
+export interface ProviderScope extends S.Schema.Type<typeof ProviderScope> {}
+
+const Approval = S.Struct({
+  planDigest: S.String,
+  providerId: S.String,
+  subjectId: S.String,
+  subjectType: S.Literals(["account", "team"]),
+  version: S.Literal("domainkit.live-approval.v1"),
+});
+
 export interface Input {
   readonly config: LiveConfig.Common;
   readonly provider: DnsProvider.Interface;
-  readonly validateCredential: Effect.Effect<unknown, DnsProvider.Error>;
+  readonly providerScope: ProviderScope;
+  readonly validateCredential: Effect.Effect<ProviderAuth.TokenValidation, DnsProvider.Error>;
 }
 
 export const run = Effect.fn("LiveRunner.run")((input: Input) =>
   Effect.gen(function* () {
-    yield* input.validateCredential;
+    const validation = yield* input.validateCredential;
+    if (
+      input.provider.id !== input.providerScope.providerId ||
+      validation.accountId !== input.providerScope.subjectId
+    ) {
+      return yield* new Error({
+        message: "Validated credential scope does not match the approval scope",
+      });
+    }
     const requirement = yield* DnsRecord.decode({
       _tag: "TXT",
       metadata: {
@@ -36,14 +61,15 @@ export const run = Effect.fn("LiveRunner.run")((input: Input) =>
       requirements: [requirement],
       zone: input.config.zone,
     });
+    const approval = yield* makeApproval(plan.digest, input.providerScope);
 
     if (input.config.command === "preview") {
-      yield* print(DnsPlan.encode(plan));
+      yield* print({ approval, plan: DnsPlan.encode(plan) });
       return;
     }
-    if (plan.digest !== input.config.approvedDigest) {
+    if (approval.digest !== input.config.approvedDigest) {
       return yield* new Error({
-        message: `Approved digest does not match the current plan. Current digest: ${plan.digest}`,
+        message: `Approved digest does not match the current plan and provider scope. Current digest: ${approval.digest}`,
       });
     }
 
@@ -55,6 +81,18 @@ export const run = Effect.fn("LiveRunner.run")((input: Input) =>
       Layer.merge(Layer.succeed(DnsProvider.Service, input.provider), Digest.webCryptoLayer),
     ),
   ),
+);
+
+export const makeApproval = Effect.fn("LiveRunner.makeApproval")(
+  (planDigest: string, scope: ProviderScope) =>
+    Effect.gen(function* () {
+      const value: S.Schema.Type<typeof Approval> = {
+        planDigest,
+        ...scope,
+        version: "domainkit.live-approval.v1",
+      };
+      return { ...value, digest: yield* Digest.sha256Encoded(Approval, value) };
+    }),
 );
 
 const print = Effect.fn("LiveRunner.print")((value: unknown) =>

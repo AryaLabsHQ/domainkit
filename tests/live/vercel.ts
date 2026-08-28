@@ -22,7 +22,16 @@ const program = Effect.gen(function* () {
     context: { _tag: "team", teamId: config.teamId },
     token: Secret.make(config.token),
   });
-  yield* LiveRunner.run({ config, provider, validateCredential: provider.validateToken() });
+  yield* LiveRunner.run({
+    config,
+    provider,
+    providerScope: {
+      providerId: provider.id,
+      subjectId: config.teamId,
+      subjectType: "team",
+    },
+    validateCredential: provider.validateToken(),
+  });
 });
 
 await Effect.runPromise(program);

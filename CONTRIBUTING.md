@@ -39,10 +39,11 @@ Cloudflare additionally requires `DOMAINKIT_LIVE_CLOUDFLARE_ACCOUNT_ID` and
 `DOMAINKIT_LIVE_VERCEL_TOKEN`. Keep credentials in a local secret manager or scoped process
 environment; never commit them.
 
-To apply a reviewed plan, set `DOMAINKIT_LIVE_APPROVED_DIGEST` to the digest printed by `preview`
-and replace `preview` with `apply`. The harness recomputes the plan and refuses to apply if the
-digest, zone allowlist, or record-name allowlist differs. Apply creates DNS state and does not delete
-it, so use an explicitly disposable record and clean it up through the provider when testing ends.
+To apply a reviewed plan, set `DOMAINKIT_LIVE_APPROVED_DIGEST` to the approval digest printed by
+`preview` and replace `preview` with `apply`. The harness recomputes the approval and refuses to apply
+if the DNS plan, Cloudflare account or Vercel team, zone allowlist, or record-name allowlist differs.
+Apply creates DNS state and does not delete it, so use an explicitly disposable record and clean it
+up through the provider when testing ends.
 
 ## Compatibility
 

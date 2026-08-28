@@ -22,7 +22,16 @@ const program = Effect.gen(function* () {
     capabilities: ["dns:read", "dns:write"],
     token: Secret.make(config.token),
   });
-  yield* LiveRunner.run({ config, provider, validateCredential: provider.validateToken() });
+  yield* LiveRunner.run({
+    config,
+    provider,
+    providerScope: {
+      providerId: provider.id,
+      subjectId: config.accountId,
+      subjectType: "account",
+    },
+    validateCredential: provider.validateToken(),
+  });
 });
 
 await Effect.runPromise(program);
