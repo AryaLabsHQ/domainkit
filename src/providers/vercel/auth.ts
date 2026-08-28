@@ -30,7 +30,7 @@ export function integrationMethod(
     _tag: "integration",
     capabilities: [...options.capabilities],
     installUrl: `https://vercel.com/integrations/${encodeURIComponent(options.slug)}/new`,
-    tokenEndpoint: "https://api.vercel.com/v2/oauth/access_token",
+    tokenEndpoint: "https://api.vercel.com/oauth/access_token",
   };
 }
 
@@ -71,7 +71,7 @@ export const exchangeCode = Effect.fn("VercelAuth.exchangeCode")((options: Excha
     });
     const response = yield* Effect.tryPromise({
       try: () =>
-        fetch(`${baseUrl}/v2/oauth/access_token`, {
+        fetch(`${baseUrl}/oauth/access_token`, {
           body,
           headers: {
             Accept: "application/json",
