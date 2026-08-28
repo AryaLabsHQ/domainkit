@@ -10,6 +10,7 @@ export const domain = {
   teamId: "team-1",
   userId: "user-1",
   verified: true,
+  zone: true,
 } as const;
 
 export const portableZone = {

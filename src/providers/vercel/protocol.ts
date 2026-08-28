@@ -53,6 +53,7 @@ export const Domain = S.Struct({
   teamId: S.NullOr(S.String),
   userId: S.String,
   verified: S.Boolean,
+  zone: S.optionalKey(S.Boolean),
 });
 export interface Domain extends S.Schema.Type<typeof Domain> {}
 

@@ -52,6 +52,7 @@ describe("Vercel Effect client", () => {
       name: "external.example",
       nameservers: ["external.example.net"],
       serviceType: "external",
+      zone: false,
     };
     const recording = recordedFetch([
       { body: domainPage([domain, external]), expect: { pathname: "/v5/domains" } },
@@ -62,6 +63,21 @@ describe("Vercel Effect client", () => {
       const url = new URL(recording.requests[0]?.url ?? "");
       assert.strictEqual(url.searchParams.get("teamId"), "team-1");
       assert.strictEqual(url.searchParams.get("limit"), "100");
+    });
+  });
+
+  it.effect("exposes an external domain with Vercel DNS storage enabled", () => {
+    const storageZone = {
+      ...domain,
+      nameservers: ["external.example.net"],
+      serviceType: "external",
+    };
+    const recording = recordedFetch([
+      { body: domainPage([storageZone]), expect: { pathname: "/v5/domains" } },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      assert.deepStrictEqual(yield* client.listZones(), [portableZone]);
     });
   });
 
@@ -215,7 +231,10 @@ describe("Vercel Effect client", () => {
       assert.ok(recording.requests.every(({ url }) => url.includes("teamId=team-1")));
 
       const external = make(
-        recordedFetch([{ body: { misconfigured: false, serviceType: "external" } }]).fetch,
+        recordedFetch([
+          { body: { misconfigured: false, serviceType: "external" } },
+          { body: { domain: { ...domain, serviceType: "external", zone: false } } },
+        ]).fetch,
         { _tag: "team", teamId: "team-1" },
       );
       const failure = yield* external.listRecords(zone).pipe(Effect.flip);
@@ -257,6 +276,45 @@ describe("Vercel Effect client", () => {
         type: "TXT",
         value: "delegated-zone",
       });
+    });
+  });
+
+  it.effect("creates records in an external Vercel DNS storage zone", () => {
+    const storageZone = {
+      ...domain,
+      nameservers: ["external.example.net"],
+      serviceType: "external",
+    };
+    const recording = recordedFetch([
+      {
+        body: { misconfigured: false, serviceType: "external" },
+        expect: { pathname: "/v6/domains/example.com/config" },
+      },
+      {
+        body: { domain: storageZone },
+        expect: { pathname: "/v5/domains/example.com" },
+      },
+      {
+        body: { uid: "storage-record" },
+        expect: { method: "POST", pathname: "/v2/domains/example.com/records" },
+      },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      assert.deepStrictEqual(
+        yield* client.createRecord(
+          DomainName.parse("example.com"),
+          DnsRecord.parse({
+            _tag: "TXT",
+            metadata: { ownership: "customer", provenance: "test", purpose: "verification" },
+            name: "mail.example.com",
+            policy: "append",
+            ttl: 300,
+            value: "storage-zone",
+          }),
+        ),
+        { providerRecordId: "storage-record" },
+      );
     });
   });
 
