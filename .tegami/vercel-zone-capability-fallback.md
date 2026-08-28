@@ -1,7 +1,8 @@
 ---
 packages:
   domainkit:
-    type: patch
+    replay:
+      - exit-prerelease(npm:domainkit)
 ---
 
 ## Detect Vercel DNS capability from intended nameservers

@@ -1,7 +1,8 @@
 ---
 packages:
   domainkit:
-    type: patch
+    replay:
+      - exit-prerelease(npm:domainkit)
 ---
 
 ## Resolve Vercel zones through direct domain discovery
