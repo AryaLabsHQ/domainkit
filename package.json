@@ -65,6 +65,7 @@
     "lint": "oxlint --deny-warnings .",
     "lint:rules": "node --test tools/oxlint/*.test.js",
     "release:check": "bun run lint && bun run lint:rules && bun run format:check && bun run typecheck && bun run test && bun run build && bun run typecheck:examples && bun run test:artifact",
+    "tegami": "bun scripts/tegami.mts",
     "test": "vitest run --exclude tests/artifact/**/*.test.ts",
     "test:artifact": "vitest run tests/artifact",
     "test:consumers": "vitest run tests/artifact/packed-consumers.test.ts",
@@ -85,6 +86,7 @@
     "miniflare": "3.20250718.3",
     "oxfmt": "0.65.0",
     "oxlint": "1.80.0",
+    "tegami": "1.4.0",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
