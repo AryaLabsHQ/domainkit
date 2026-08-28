@@ -1,11 +1,12 @@
 import { Schema } from "effect";
 
+import * as ProviderAuthorization from "../auth/authorization.ts";
 import * as Connection from "../auth/connection.ts";
 import * as DomainName from "../domain/domain-name.ts";
 import * as Zones from "./zones.ts";
 
 export interface ConnectedZone {
-  readonly accountId: string;
+  readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly connection: Connection.Connection;
   readonly nameservers: ReadonlyArray<string>;
   readonly providerId: string;
@@ -52,8 +53,7 @@ export function select(input: {
   const eligible = input.connectedZones.filter((connected) => {
     if (!zoneCandidates.has(DomainName.parse(connected.zone))) return false;
     try {
-      Connection.assertGrant(connected.connection, {
-        accountId: connected.accountId,
+      Connection.assertGrant(connected.connection, connected.authorization, {
         capability: "dns:read",
         domain,
         ...(input.now === undefined ? {} : { now: input.now }),
@@ -71,7 +71,7 @@ export function select(input: {
     const index = eligible.findIndex(
       (connected) =>
         connected.providerId === input.explicit?.providerId &&
-        connected.accountId === input.explicit.accountId &&
+        connected.authorization.accountId === input.explicit.accountId &&
         DomainName.parse(connected.zone) === explicitZone,
     );
     if (index < 0) {
@@ -102,7 +102,7 @@ function evidenceFor(
   const configured = new Set(nameserverSet(connected.nameservers));
   const matchedNameservers = authoritative.filter((nameserver) => configured.has(nameserver));
   return {
-    accountId: connected.accountId,
+    accountId: connected.authorization.accountId,
     connectionId: connected.connection.id,
     decisiveNameserverMatch:
       authoritative.length > 0 && matchedNameservers.length === authoritative.length,

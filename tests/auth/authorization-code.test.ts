@@ -1,10 +1,18 @@
 import { assert, describe, expect, it } from "@effect/vitest";
 
-import { Connection, DomainName, OAuth, ProviderAuth, Secret } from "../../src/index.ts";
+import {
+  Connection,
+  DomainName,
+  OAuth,
+  ProviderAuth,
+  ProviderAuthorization,
+  Secret,
+} from "../../src/index.ts";
 import {
   InMemoryConnectionStore,
   InMemoryCredentialStore,
   InMemoryOAuthStateStore,
+  InMemoryProviderAuthorizationStore,
 } from "../../src/testing.ts";
 
 const method: ProviderAuth.OAuthMethod = {
@@ -25,10 +33,12 @@ describe("OAuth Promise facade", () => {
     const state = InMemoryOAuthStateStore.make();
     const connections = InMemoryConnectionStore.make();
     const credentials = InMemoryCredentialStore.make();
+    const authorizations = InMemoryProviderAuthorizationStore.make();
     const begin = await OAuth.begin({
       client: { clientId: "client-id" },
       grant: { _tag: "domains", domains: [DomainName.parse("example.com")] },
       method,
+      ownerId: "organization-1",
       redirectUri: "https://app.example/oauth/callback",
       stateStore: InMemoryOAuthStateStore.toAsync(state),
       subjectId: "user-1",
@@ -53,7 +63,8 @@ describe("OAuth Promise facade", () => {
       code: "authorization-code",
       state: oauthState,
     }).toString();
-    const connection = await OAuth.complete({
+    const result = await OAuth.complete({
+      authorizationStore: InMemoryProviderAuthorizationStore.toAsync(authorizations),
       callbackUrl,
       client: { clientId: "client-id" },
       connectionStore: InMemoryConnectionStore.toAsync(connections),
@@ -66,19 +77,19 @@ describe("OAuth Promise facade", () => {
       },
       stateStore: InMemoryOAuthStateStore.toAsync(state),
     });
+    const { authorization, connection } = result;
 
     assert.match(requestBody, /code_verifier=/);
     assert.match(requestBody, /code=authorization-code/);
     assert.notMatch(JSON.stringify(connection), /token-value/);
     assert.strictEqual(
       JSON.stringify(
-        await InMemoryCredentialStore.toAsync(credentials).get(connection.id),
+        await InMemoryCredentialStore.toAsync(credentials).get(authorization.id),
       ).includes("token-value"),
       false,
     );
     assert.strictEqual(
-      Connection.assertGrant(connection, {
-        accountId: "account-1",
+      Connection.assertGrant(connection, authorization, {
         capability: "dns:read",
         domain: "example.com",
         providerId: "example-provider",
@@ -86,8 +97,7 @@ describe("OAuth Promise facade", () => {
       "example.com",
     );
     assert.throws(() =>
-      Connection.assertGrant(connection, {
-        accountId: "account-1",
+      Connection.assertGrant(connection, authorization, {
         capability: "dns:read",
         domain: "other.example.com",
         providerId: "example-provider",
@@ -96,6 +106,7 @@ describe("OAuth Promise facade", () => {
 
     await expect(
       OAuth.complete({
+        authorizationStore: InMemoryProviderAuthorizationStore.toAsync(authorizations),
         callbackUrl,
         client: { clientId: "client-id" },
         connectionStore: InMemoryConnectionStore.toAsync(connections),
@@ -111,19 +122,18 @@ describe("OAuth Promise facade", () => {
   it("refreshes and revokes stored credentials", async () => {
     const credentials = InMemoryCredentialStore.make();
     const asyncCredentials = InMemoryCredentialStore.toAsync(credentials);
-    const connection: Connection.Connection = {
+    const authorization: ProviderAuthorization.ProviderAuthorization = {
       accountId: "account-1",
       capabilities: ["dns:read", "dns:write"],
       createdAt: new Date("2026-08-27T00:00:00.000Z"),
       expiresAt: null,
-      grant: { _tag: "account" },
-      id: "connection-1",
+      id: "authorization-1",
       kind: "oauth2",
       providerId: "example-provider",
       scopes: ["dns:write"],
       subjectId: "user-1",
     };
-    await asyncCredentials.put(connection.id, {
+    await asyncCredentials.put(authorization.id, {
       accessToken: Secret.make("old-access"),
       refreshToken: Secret.make("old-refresh"),
       tokenType: "bearer",
@@ -139,24 +149,24 @@ describe("OAuth Promise facade", () => {
 
     await OAuth.refresh({
       client: { clientId: "client-id" },
-      connection,
+      authorization,
       credentialStore: asyncCredentials,
       fetch,
       method,
     });
     assert.strictEqual(
-      (await asyncCredentials.get(connection.id))?.accessToken.expose(),
+      (await asyncCredentials.get(authorization.id))?.accessToken.expose(),
       "new-access",
     );
 
     await OAuth.revoke({
       client: { clientId: "client-id" },
-      connection,
+      authorization,
       credentialStore: asyncCredentials,
       fetch,
       method,
     });
-    assert.strictEqual(await asyncCredentials.get(connection.id), null);
+    assert.strictEqual(await asyncCredentials.get(authorization.id), null);
   });
 
   it("rejects invalid expiration metadata returned by subject resolution", async () => {
@@ -165,6 +175,7 @@ describe("OAuth Promise facade", () => {
       client: { clientId: "client-id" },
       grant: { _tag: "account" },
       method,
+      ownerId: "organization-1",
       redirectUri: "https://app.example/oauth/callback",
       stateStore: InMemoryOAuthStateStore.toAsync(state),
       subjectId: "user-1",
@@ -176,6 +187,7 @@ describe("OAuth Promise facade", () => {
 
     await expect(
       OAuth.complete({
+        authorizationStore: InMemoryProviderAuthorizationStore.toAsync(),
         callbackUrl,
         client: { clientId: "client-id" },
         connectionStore: InMemoryConnectionStore.toAsync(),

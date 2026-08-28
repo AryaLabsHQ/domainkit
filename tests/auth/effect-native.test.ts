@@ -10,6 +10,7 @@ import {
   OAuth,
   OAuthStateStore,
   ProviderAuth,
+  ProviderAuthorizationStore,
   Secret,
   TokenConnection,
 } from "../../src/effect.ts";
@@ -17,6 +18,7 @@ import {
   InMemoryConnectionStore,
   InMemoryCredentialStore,
   InMemoryOAuthStateStore,
+  InMemoryProviderAuthorizationStore,
 } from "../../src/testing.ts";
 
 const method: ProviderAuth.OAuthMethod = {
@@ -35,14 +37,17 @@ describe("Effect-native authorization", () => {
   it.effect("runs token validation and persistence through services", () => {
     const connections = InMemoryConnectionStore.make();
     const credentials = InMemoryCredentialStore.make();
+    const authorizations = InMemoryProviderAuthorizationStore.make();
     const layer = Layer.mergeAll(
       Layer.succeed(ConnectionStore.Service, connections),
       Layer.succeed(CredentialStore.Service, credentials),
+      Layer.succeed(ProviderAuthorizationStore.Service, authorizations),
       Digest.webCryptoLayer,
     );
     return Effect.gen(function* () {
-      const connection = yield* TokenConnection.connect({
+      const result = yield* TokenConnection.connect({
         grant: { _tag: "account" },
+        ownerId: "organization-1",
         providerId: "example-provider",
         subjectId: "user-1",
         token: Secret.make("token"),
@@ -54,8 +59,11 @@ describe("Effect-native authorization", () => {
             scopes: ["dns:write"],
           }),
       });
-      assert.strictEqual((yield* credentials.get(connection.id))?.accessToken.expose(), "token");
-      assert.ok(connection.createdAt instanceof Date);
+      assert.strictEqual(
+        (yield* credentials.get(result.authorization.id))?.accessToken.expose(),
+        "token",
+      );
+      assert.ok(result.connection.createdAt instanceof Date);
     }).pipe(Effect.provide(layer));
   });
 
@@ -63,10 +71,12 @@ describe("Effect-native authorization", () => {
     const oauthState = InMemoryOAuthStateStore.make();
     const connections = InMemoryConnectionStore.make();
     const credentials = InMemoryCredentialStore.make();
+    const authorizations = InMemoryProviderAuthorizationStore.make();
     const layer = Layer.mergeAll(
       Layer.succeed(OAuthStateStore.Service, oauthState),
       Layer.succeed(ConnectionStore.Service, connections),
       Layer.succeed(CredentialStore.Service, credentials),
+      Layer.succeed(ProviderAuthorizationStore.Service, authorizations),
       Digest.webCryptoLayer,
     );
     return Effect.gen(function* () {
@@ -74,6 +84,7 @@ describe("Effect-native authorization", () => {
         client: { clientId: "client-id" },
         grant: { _tag: "domains", domains: [DomainName.parse("example.com")] },
         method,
+        ownerId: "organization-1",
         redirectUri: "https://app.example/oauth/callback",
         subjectId: "user-1",
       });
@@ -84,7 +95,7 @@ describe("Effect-native authorization", () => {
         code: "authorization-code",
         state,
       }).toString();
-      const connection = yield* OAuth.complete({
+      const result = yield* OAuth.complete({
         callbackUrl,
         client: { clientId: "client-id" },
         fetch: async () =>
@@ -96,9 +107,9 @@ describe("Effect-native authorization", () => {
         providerId: "example-provider",
         resolveSubject: () => Effect.succeed({ accountId: "account-1", expiresAt: null }),
       });
-      assert.strictEqual(connection.kind, "oauth2");
+      assert.strictEqual(result.authorization.kind, "oauth2");
       assert.strictEqual(
-        (yield* credentials.get(connection.id))?.accessToken.expose(),
+        (yield* credentials.get(result.authorization.id))?.accessToken.expose(),
         "access-token",
       );
     }).pipe(Effect.provide(layer));
@@ -109,6 +120,7 @@ describe("Effect-native authorization", () => {
       InMemoryOAuthStateStore.layer(),
       InMemoryConnectionStore.layer(),
       InMemoryCredentialStore.layer(),
+      InMemoryProviderAuthorizationStore.layer(),
       Digest.webCryptoLayer,
     );
     return Effect.gen(function* () {
@@ -116,6 +128,7 @@ describe("Effect-native authorization", () => {
         client: { clientId: "client-id" },
         grant: { _tag: "account" },
         method,
+        ownerId: "organization-1",
         redirectUri: "https://app.example/oauth/callback",
         subjectId: "user-1",
         ttlMs: 1,

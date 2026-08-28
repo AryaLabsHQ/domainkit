@@ -1,6 +1,7 @@
 import { Effect, Layer } from "effect";
 
 import type * as Connection from "../auth/connection.ts";
+import type * as ProviderAuthorization from "../auth/authorization.ts";
 import * as ConnectionAuthorization from "../plan/connection-authorization.ts";
 import { webCryptoLayer } from "../plan/canonical-json.ts";
 import * as ProvisioningEffect from "../plan/plan.ts";
@@ -43,8 +44,8 @@ export function apply(input: {
 }
 
 export function authorizeForConnection(input: {
-  readonly accountId: string;
   readonly allowPartial?: boolean;
+  readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly connection: Connection.Connection;
   readonly operationIds?: ReadonlyArray<string>;
   readonly plan: DnsPlan.DnsPlan;

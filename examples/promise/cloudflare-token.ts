@@ -10,8 +10,10 @@ import {
 export interface CloudflareTokenInput {
   readonly accountId: string;
   readonly apiToken: string;
+  readonly authorizationStore: Stores.ProviderAuthorization;
   readonly connectionStore: Stores.Connection;
   readonly credentialStore: Stores.Credential;
+  readonly ownerId: string;
   readonly subjectId: string;
 }
 
@@ -25,10 +27,12 @@ export async function connectCloudflareToken(input: CloudflareTokenInput) {
     _tag: "domains",
     domains: [DomainName.parse("example.com")],
   };
-  const connection = await TokenConnection.connect({
+  const result = await TokenConnection.connect({
+    authorizationStore: input.authorizationStore,
     connectionStore: input.connectionStore,
     credentialStore: input.credentialStore,
     grant,
+    ownerId: input.ownerId,
     providerId: provider.id,
     subjectId: input.subjectId,
     token: Secret.make(input.apiToken),
@@ -39,5 +43,5 @@ export async function connectCloudflareToken(input: CloudflareTokenInput) {
         token,
       }).validateToken(),
   });
-  return { connection, provider };
+  return { ...result, provider };
 }

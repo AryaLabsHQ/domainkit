@@ -1,22 +1,22 @@
 import { Crypto, Effect } from "effect";
 
 import * as Connection from "../auth/connection.ts";
+import * as ProviderAuthorization from "../auth/authorization.ts";
 import { Error as InvalidInputError } from "../invalid-input.ts";
 import { CryptoError } from "./canonical-json.ts";
 import * as Provisioning from "./plan.ts";
 import type * as DnsPlan from "./types.ts";
 
 export const authorize = Effect.fn("ConnectionAuthorization.authorize")(function* (input: {
-  readonly accountId: string;
   readonly allowPartial?: boolean;
+  readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly connection: Connection.Connection;
   readonly operationIds?: ReadonlyArray<string>;
   readonly plan: DnsPlan.DnsPlan;
 }) {
   yield* Effect.try({
     try: () =>
-      Connection.assertGrant(input.connection, {
-        accountId: input.accountId,
+      Connection.assertGrant(input.connection, input.authorization, {
         capability: "dns:write",
         domain: input.plan.zone,
         providerId: input.plan.providerId,

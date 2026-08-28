@@ -4,6 +4,8 @@ import packageJson from "../package.json" with { type: "json" };
 export const VERSION = packageJson.version;
 
 export * as Connection from "./promise/connection.ts";
+export * as ConnectionLifecycle from "./promise/connection-lifecycle.ts";
+export * as ProviderAuthorization from "./promise/provider-authorization.ts";
 export * as ProviderAuth from "./promise/provider-auth.ts";
 export * as Secret from "./auth/secret.ts";
 export * as ProviderDiscovery from "./discovery/selection.ts";

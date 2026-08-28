@@ -1,14 +1,27 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import { Connection, DomainName, ProviderDiscovery, Zones } from "../../src/index.ts";
+import {
+  Connection,
+  DomainName,
+  ProviderAuthorization,
+  ProviderDiscovery,
+  Zones,
+} from "../../src/index.ts";
 
 const connection: Connection.Connection = {
+  authorizationId: "authorization-1",
+  createdAt: new Date("2026-08-27T00:00:00.000Z"),
+  grant: { _tag: "account" },
+  id: "connection-1",
+  ownerId: "organization-1",
+};
+
+const authorization: ProviderAuthorization.ProviderAuthorization = {
   accountId: "account-1",
   capabilities: ["dns:read", "dns:write"],
   createdAt: new Date("2026-08-27T00:00:00.000Z"),
   expiresAt: null,
-  grant: { _tag: "account" },
-  id: "connection-1",
+  id: "authorization-1",
   kind: "token",
   providerId: "cloudflare",
   scopes: [],
@@ -33,7 +46,7 @@ describe("provider discovery", () => {
       authoritativeNameservers: ["ADA.NS.CLOUDFLARE.COM.", "BOB.NS.CLOUDFLARE.COM"],
       connectedZones: [
         {
-          accountId: "account-1",
+          authorization,
           connection,
           nameservers: ["ada.ns.cloudflare.com", "bob.ns.cloudflare.com"],
           providerId: "cloudflare",
@@ -57,7 +70,7 @@ describe("provider discovery", () => {
       authoritativeNameservers: ["ns1.unknown.example"],
       connectedZones: [
         {
-          accountId: "account-1",
+          authorization,
           connection,
           nameservers: ["ada.ns.cloudflare.com"],
           providerId: "cloudflare",
