@@ -50,12 +50,6 @@ const paper = tegami({
     },
     updateLockFile: true,
   },
-  packages: {
-    domainkit: {
-      // Remove this prerelease line in the stable-release change.
-      prerelease: "beta",
-    },
-  },
   plugins: [
     github({
       repo: REPOSITORY,
