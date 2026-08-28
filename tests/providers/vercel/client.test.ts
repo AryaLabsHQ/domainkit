@@ -49,6 +49,7 @@ describe("Vercel Effect client", () => {
     const external = {
       ...domain,
       id: "external-domain",
+      intendedNameservers: [],
       name: "external.example",
       nameservers: ["external.example.net"],
       serviceType: "external",
@@ -68,6 +69,21 @@ describe("Vercel Effect client", () => {
 
   it.effect("exposes an external domain with Vercel DNS storage enabled", () => {
     const storageZone = {
+      ...domain,
+      nameservers: ["external.example.net"],
+      serviceType: "external",
+    };
+    const recording = recordedFetch([
+      { body: domainPage([storageZone]), expect: { pathname: "/v5/domains" } },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      assert.deepStrictEqual(yield* client.listZones(), [portableZone]);
+    });
+  });
+
+  it.effect("uses intended nameservers when an integration response omits the zone flag", () => {
+    const { zone: _zone, ...storageZone } = {
       ...domain,
       nameservers: ["external.example.net"],
       serviceType: "external",
@@ -233,7 +249,16 @@ describe("Vercel Effect client", () => {
       const external = make(
         recordedFetch([
           { body: { misconfigured: false, serviceType: "external" } },
-          { body: { domain: { ...domain, serviceType: "external", zone: false } } },
+          {
+            body: {
+              domain: {
+                ...domain,
+                intendedNameservers: [],
+                serviceType: "external",
+                zone: false,
+              },
+            },
+          },
         ]).fetch,
         { _tag: "team", teamId: "team-1" },
       );

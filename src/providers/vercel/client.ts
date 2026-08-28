@@ -156,7 +156,7 @@ export function make(options: Options): Interface {
         "resolveZone",
         domainResult.response,
       );
-      if (config.serviceType !== "zeit.world" && envelope.domain.zone !== true) {
+      if (!hasDnsStorage(envelope.domain, config.serviceType)) {
         return yield* Effect.fail(
           failure(
             "resolveZone",
@@ -291,8 +291,7 @@ export function make(options: Options): Interface {
     Effect.gen(function* () {
       const domains = (yield* allDomains()).filter(
         (domain) =>
-          (domain.serviceType === "zeit.world" || domain.zone === true) &&
-          (input.name === undefined || domain.name === input.name),
+          hasDnsStorage(domain) && (input.name === undefined || domain.name === input.name),
       );
       return yield* Effect.forEach(domains, projectZone);
     }),
@@ -333,6 +332,17 @@ export function make(options: Options): Interface {
     listZones,
     validateToken,
   };
+}
+
+function hasDnsStorage(
+  domain: Protocol.Domain,
+  configuredServiceType: Protocol.DomainConfig["serviceType"] = domain.serviceType,
+): boolean {
+  return (
+    configuredServiceType === "zeit.world" ||
+    domain.zone === true ||
+    domain.intendedNameservers.length > 0
+  );
 }
 
 const projectZone = Effect.fn("VercelClient.projectZone")((domain: Protocol.Domain) =>
