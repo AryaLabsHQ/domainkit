@@ -11,6 +11,7 @@ export const authorize = Effect.fn("ConnectionAuthorization.authorize")(function
   readonly allowPartial?: boolean;
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly connection: Connection.Connection;
+  readonly domain: string;
   readonly operationIds?: ReadonlyArray<string>;
   readonly plan: DnsPlan.DnsPlan;
 }) {
@@ -18,7 +19,7 @@ export const authorize = Effect.fn("ConnectionAuthorization.authorize")(function
     try: () =>
       Connection.assertGrant(input.connection, input.authorization, {
         capability: "dns:write",
-        domain: input.plan.zone,
+        domain: input.domain,
         providerId: input.plan.providerId,
       }),
     catch: (cause) =>
