@@ -19,6 +19,8 @@ DomainKit separates four concerns:
 - `domainkit/effect` — canonical Effect-native services and programs;
 - `domainkit/cloudflare` — Promise-based Cloudflare authoritative-DNS adapter;
 - `domainkit/effect/cloudflare` — canonical Effect-native Cloudflare adapter;
+- `domainkit/vercel` — Promise-based Vercel authoritative-DNS adapter;
+- `domainkit/effect/vercel` — canonical Effect-native Vercel adapter;
 - `domainkit/testing` — deterministic provider and store implementations for tests.
 
 The package is portable ESM built on Fetch and Web APIs. Effect is a peer dependency.
@@ -77,6 +79,20 @@ OAuth helpers own Cloudflare's endpoints and client-auth variants while acceptin
 assigned during OAuth client registration. `Cloudflare.Auth.tokenMethod` describes the equivalent
 API-token capability.
 
+The Vercel adapter accepts either explicit personal or team context. It supports personal access
+tokens and Vercel's integration-code exchange without treating that provider-specific installation
+flow as generic OAuth:
+
+```ts
+import { Secret, Vercel } from "domainkit";
+
+const provider = Vercel.make({
+  capabilities: ["dns:read", "dns:write"],
+  context: { _tag: "team", teamId: "team-id" },
+  token: Secret.make(apiToken),
+});
+```
+
 `listAccounts()` returns the distinct accounts represented by zones visible to the credential.
 Accounts with no visible zones are not returned because Cloudflare does not document bearer-token
 authentication for its separate account-list endpoint.
@@ -86,6 +102,12 @@ canonicalize strings through codecs, while encoded protocol dates remain ISO str
 domain values use `Date`.
 
 See [the architecture decisions](docs/adr/README.md) for the durable rationale and
+[the provider contract](docs/providers.md) for adapter differences. Runnable TypeScript examples
+cover [manual Promise provisioning](examples/promise/manual-provider.ts),
+[token connections](examples/promise/cloudflare-token.ts),
+[Cloudflare OAuth](examples/promise/cloudflare-oauth.ts),
+[Vercel integration exchange](examples/promise/vercel-integration.ts), and
+[Effect-native provisioning](examples/effect/provisioning.ts). See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
 
 ## License

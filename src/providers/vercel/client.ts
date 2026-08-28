@@ -10,10 +10,12 @@ import * as Records from "./records.ts";
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
+/** Selects whether Vercel requests operate on a personal account or a team. */
 export type AccountContext =
   | { readonly _tag: "personal" }
   | { readonly _tag: "team"; readonly teamId: string };
 
+/** Configuration for an Effect-native Vercel authoritative-DNS client. */
 export interface Options {
   readonly baseUrl?: string;
   /** Capabilities the host required when issuing or authorizing this credential. */
@@ -27,12 +29,14 @@ export interface ListZonesInput {
   readonly name?: DomainName.DomainName;
 }
 
+/** A Vercel account visible to the supplied credential. */
 export interface Account {
   readonly id: string;
   readonly name: string;
   readonly type: "personal" | "team";
 }
 
+/** A Vercel-managed authoritative zone with normalized nameserver evidence. */
 export interface Zone {
   readonly accountId: string;
   readonly id: string;
@@ -49,6 +53,7 @@ export interface Interface extends DnsProvider.Interface {
   readonly validateToken: () => Effect.Effect<ProviderAuth.TokenValidation, DnsProvider.Error>;
 }
 
+/** Creates an Effect-native Vercel client without owning the credential lifecycle. */
 export function make(options: Options): Interface {
   const fetch = options.fetch ?? globalThis.fetch;
   const baseUrl = (options.baseUrl ?? "https://api.vercel.com").replace(/\/$/, "");

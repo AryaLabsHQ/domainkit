@@ -20,6 +20,7 @@ export interface Interface extends DnsProvider.AsyncInterface {
   readonly validateToken: () => Promise<ProviderAuth.TokenValidation>;
 }
 
+/** Creates a Promise-compatible facade over the Effect-native Vercel client. */
 export function make(options: Vercel.Client.Options): Interface {
   const client = Vercel.make(options);
   return {
