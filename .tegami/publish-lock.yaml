@@ -1,0 +1,12 @@
+core:changelogs:
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## First beta\n\nShip the first public DomainKit contract with Effect-native and Promise APIs for portable DNS\nprovisioning plans, authorization, verification, and Cloudflare and Vercel provider adapters.\n"
+    filename: first-beta.md
+    v: 0.0.0
+core:packages:
+  - changelogIds:
+      - first-beta.md
+    id: npm:domainkit
+    updated: true
+npm:packages:
+  - distTag: beta
+    id: npm:domainkit
