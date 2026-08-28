@@ -60,7 +60,11 @@ export function detach<E, R>(input: {
 
     const authorization = yield* authorizationStore.get(connection.authorizationId);
     if (authorization === null) {
-      return yield* new Error({ message: "Provider authorization does not exist" });
+      // A prior attempt may have revoked and removed the authorization before its final binding
+      // delete failed. Both local deletes are idempotent, so finish that interrupted cleanup.
+      yield* credentialStore.delete(connection.authorizationId);
+      yield* connectionStore.delete(connection.id);
+      return { connection, remainingBindings: 0, revokedAuthorization: true };
     }
     yield* input.revokeAuthorization(authorization);
     yield* credentialStore.delete(authorization.id);

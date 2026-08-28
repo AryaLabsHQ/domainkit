@@ -34,10 +34,15 @@ export function authorize(
 export function apply(input: {
   readonly authorization: DeletionEffect.Authorization;
   readonly plan: DeletionEffect.Plan;
+  readonly priorReceipt?: DeletionEffect.Receipt;
   readonly provider: DnsProvider.AsyncInterface;
 }): Promise<DeletionEffect.Receipt> {
   return Effect.runPromise(
-    DeletionEffect.apply({ authorization: input.authorization, plan: input.plan }).pipe(
+    DeletionEffect.apply({
+      authorization: input.authorization,
+      plan: input.plan,
+      ...(input.priorReceipt === undefined ? {} : { priorReceipt: input.priorReceipt }),
+    }).pipe(
       Effect.provide(Layer.merge(DnsProvider.layerFromAsync(input.provider), webCryptoLayer)),
     ),
   );

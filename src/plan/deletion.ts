@@ -145,6 +145,7 @@ export const authorize = Effect.fn("Deletion.authorize")(function* (
 export const apply = Effect.fn("Deletion.apply")(function* (input: {
   readonly authorization: Authorization;
   readonly plan: Plan;
+  readonly priorReceipt?: Receipt;
 }) {
   const provider = yield* DnsProvider.Service;
   yield* validate(input.plan);
@@ -164,7 +165,17 @@ export const apply = Effect.fn("Deletion.apply")(function* (input: {
   if (selected.length !== input.authorization.operationIds.length) {
     return yield* new Error({ message: "Deletion authorization contains unknown operations" });
   }
-  yield* Effect.forEach(selected, (operation) =>
+  const previouslyDeleted = yield* validatePriorReceipt(input.plan, input.priorReceipt);
+  const completedIds = new Set(previouslyDeleted.map(({ operationId }) => operationId));
+  if (
+    previouslyDeleted.some(
+      ({ operationId }) => !input.authorization.operationIds.includes(operationId),
+    )
+  ) {
+    return yield* new Error({ message: "Prior receipt contains an unauthorized operation" });
+  }
+  const remaining = selected.filter(({ id }) => !completedIds.has(id));
+  yield* Effect.forEach(remaining, (operation) =>
     assertExact(
       provider,
       input.plan.zone,
@@ -174,8 +185,8 @@ export const apply = Effect.fn("Deletion.apply")(function* (input: {
     ),
   );
 
-  const deleted: Array<{ operationId: string; providerRecordId: string }> = [];
-  for (const operation of selected) {
+  const deleted: Array<{ operationId: string; providerRecordId: string }> = [...previouslyDeleted];
+  for (const operation of remaining) {
     const failure = yield* Effect.gen(function* () {
       yield* assertExact(
         provider,
@@ -216,6 +227,32 @@ export function validate(plan: Plan): Effect.Effect<void, Error | CryptoError, C
         : Effect.fail(new Error({ message: "Deletion plan digest does not match its contents" })),
     ),
   );
+}
+
+function validatePriorReceipt(
+  plan: Plan,
+  receipt: Receipt | undefined,
+): Effect.Effect<ReadonlyArray<{ operationId: string; providerRecordId: string }>, Error> {
+  if (receipt === undefined) return Effect.succeed([]);
+  if (
+    receipt.planDigest !== plan.digest ||
+    receipt.providerId !== plan.providerId ||
+    receipt.zone !== plan.zone ||
+    receipt.status !== "partial"
+  ) {
+    return Effect.fail(
+      new Error({ message: "Prior receipt does not belong to this deletion plan" }),
+    );
+  }
+  for (const completed of receipt.operations) {
+    const operation = plan.operations.find(({ id }) => id === completed.operationId);
+    if (operation === undefined || operation.providerRecordId !== completed.providerRecordId) {
+      return Effect.fail(
+        new Error({ message: "Prior receipt operation does not match the deletion plan" }),
+      );
+    }
+  }
+  return Effect.succeed([...receipt.operations]);
 }
 
 function assertExact(

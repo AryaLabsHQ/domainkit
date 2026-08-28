@@ -191,4 +191,56 @@ describe("token connections", () => {
     assert.strictEqual(await credentialStore.get(first.authorization.id), null);
     assert.strictEqual(await authorizationStore.get(first.authorization.id), null);
   });
+
+  it("finishes local cleanup when final-binding deletion previously failed", async () => {
+    const authorizationStore = InMemoryProviderAuthorizationStore.toAsync();
+    const persistentConnections = InMemoryConnectionStore.toAsync();
+    const credentialStore = InMemoryCredentialStore.toAsync();
+    const result = await TokenConnection.connect({
+      authorizationStore,
+      connectionStore: persistentConnections,
+      credentialStore,
+      grant: { _tag: "account" },
+      ownerId: "organization-1",
+      providerId: "cloudflare",
+      subjectId: "admin-1",
+      token: Secret.make("token"),
+      validate: async () => ({
+        accountId: "account-1",
+        capabilities: ["dns:read", "dns:write"],
+        expiresAt: null,
+        scopes: ["dns:write"],
+      }),
+    });
+    let failDelete = true;
+    const connectionStore = {
+      ...persistentConnections,
+      delete: async (connectionId: string) => {
+        if (failDelete) {
+          failDelete = false;
+          throw new Error("injected connection delete failure");
+        }
+        await persistentConnections.delete(connectionId);
+      },
+    };
+    let revocations = 0;
+    const detach = () =>
+      ConnectionLifecycle.detach({
+        authorizationStore,
+        connectionId: result.connection.id,
+        connectionStore,
+        credentialStore,
+        revokeAuthorization: async () => {
+          revocations += 1;
+        },
+      });
+    await expect(detach()).rejects.toMatchObject({ _tag: "StorageError" });
+    assert.strictEqual(await authorizationStore.get(result.authorization.id), null);
+    assert.notStrictEqual(await persistentConnections.get(result.connection.id), null);
+
+    const retry = await detach();
+    assert.strictEqual(retry.revokedAuthorization, true);
+    assert.strictEqual(revocations, 1);
+    assert.strictEqual(await persistentConnections.get(result.connection.id), null);
+  });
 });

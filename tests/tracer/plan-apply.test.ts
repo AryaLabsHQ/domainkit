@@ -120,6 +120,58 @@ describe("provisioning tracer", () => {
     assert.notStrictEqual(await provider.getRecord(plan.zone, createdId), null);
   });
 
+  it("resumes only the remaining operations from a partial deletion receipt", async () => {
+    const backing = InMemoryDnsProvider.toAsync();
+    const second = DnsRecord.parse({
+      _tag: "TXT",
+      metadata,
+      name: "verify.example.com",
+      policy: "append",
+      ttl: 300,
+      value: "proof",
+    });
+    const plan = await Provisioning.create({
+      provider: backing,
+      requirements: [requirement, second],
+      zone: "example.com",
+    });
+    const createReceipt = await Provisioning.apply({
+      authorization: await Provisioning.authorize(plan),
+      plan,
+      provider: backing,
+    });
+    const deletion = await Deletion.create({ plan, provider: backing, receipt: createReceipt });
+    const authorization = await Deletion.authorize(deletion);
+    let deletes = 0;
+    const flakyProvider: DnsProvider.AsyncInterface = {
+      ...backing,
+      deleteRecord: async (zone, providerRecordId) => {
+        deletes += 1;
+        if (deletes === 2) throw new Error("injected delete failure");
+        await backing.deleteRecord(zone, providerRecordId);
+      },
+    };
+    let partial: Deletion.DeletionReceipt;
+    try {
+      await Deletion.apply({ authorization, plan: deletion, provider: flakyProvider });
+      throw new Error("expected partial deletion");
+    } catch (cause) {
+      if (!(cause instanceof Deletion.PartialError)) throw cause;
+      partial = cause.receipt;
+    }
+    assert.strictEqual(partial.operations.length, 1);
+
+    const complete = await Deletion.apply({
+      authorization,
+      plan: deletion,
+      priorReceipt: partial,
+      provider: flakyProvider,
+    });
+    assert.strictEqual(complete.status, "complete");
+    assert.strictEqual(complete.operations.length, 2);
+    assert.deepStrictEqual(await backing.listRecords(plan.zone), []);
+  });
+
   it.effect("fails closed on incompatible CNAME state", () => {
     const layer = Layer.merge(
       InMemoryDnsProvider.layer({
