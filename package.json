@@ -94,7 +94,7 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "effect": ">=4.0.0-rc.112 <5"
+    "effect": ">=4.0.0-rc.111 <5"
   },
   "engines": {
     "node": ">=24.10.0"

@@ -38,7 +38,7 @@ describe("packed package contents", () => {
     assert.strictEqual(packageJson.type, "module");
     assert.strictEqual(packageJson.sideEffects, false);
     assert.strictEqual(packageJson.engines.node, ">=24.10.0");
-    assert.strictEqual(packageJson.peerDependencies.effect, ">=4.0.0-rc.112 <5");
+    assert.strictEqual(packageJson.peerDependencies.effect, ">=4.0.0-rc.111 <5");
     assert.strictEqual("effect" in packageJson.dependencies, false);
     assert.strictEqual("executor" in packageJson.dependencies, false);
 
