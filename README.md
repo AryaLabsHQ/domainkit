@@ -58,10 +58,25 @@ The Promise namespaces delegate to the canonical Effect programs rather than mai
 planning, authorization, or verification implementation. Hosts supply providers and stores
 explicitly; DomainKit does not own a hidden runtime.
 
-The Cloudflare adapter accepts a host-owned API or OAuth token and an explicitly selected account.
-The host also declares the capabilities required when that credential was issued; Cloudflare's
-non-mutating token-verification endpoint cannot infer DNS write permission. The adapter creates
-DNS-only records and leaves credential storage and user interaction to the host:
+The Cloudflare authorization helpers can discover the account selected by an OAuth grant or API
+token from a domain the host already owns. They walk from the requested name to its registrable
+domain, require exactly one accessible authoritative zone, and return its Cloudflare account ID.
+Hosts therefore do not need to ask users to find or paste an account ID. The host still declares
+the capabilities required when the credential was issued because Cloudflare's non-mutating token
+verification endpoint cannot infer DNS write permission:
+
+```ts
+import { Cloudflare, DomainName } from "domainkit";
+
+const resolveSubject = Cloudflare.Auth.subjectResolver({
+  capabilities: ["dns:read", "dns:write"],
+  domain: DomainName.parse("mail.customer.example.com"),
+});
+```
+
+Once authorized, the DNS client remains explicitly account-scoped. The host supplies the discovered
+account ID with its stored credential. The adapter creates DNS-only records and leaves credential
+storage and user interaction to the host:
 
 ```ts
 import { Cloudflare, Provisioning, Secret } from "domainkit";
@@ -77,7 +92,8 @@ const plan = await Provisioning.create({ provider, requirements, zone: "example.
 
 OAuth helpers own Cloudflare's endpoints and client-auth variants while accepting the scope IDs
 assigned during OAuth client registration. `Cloudflare.Auth.tokenMethod` describes the equivalent
-API-token capability.
+API-token capability. Explicit `accountId` authorization remains available for hosts that already
+have a trusted account selection.
 
 The Vercel adapter accepts either explicit personal or team context. It supports personal access
 tokens and Vercel's integration-code exchange without treating that provider-specific installation
