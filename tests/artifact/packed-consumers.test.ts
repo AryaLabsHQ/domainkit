@@ -25,7 +25,12 @@ describe("packed consumers", () => {
 
       await writeFile(
         join(directory, "package.json"),
-        JSON.stringify({ name: "domainkit-packed-consumer", private: true, type: "module" }),
+        JSON.stringify({
+          name: "domainkit-packed-consumer",
+          private: true,
+          type: "module",
+          dependencies: { effect: "4.0.0-rc.111" },
+        }),
       );
       await run(
         [
