@@ -146,15 +146,6 @@ export function make(options: Options): Interface {
         "resolveZone",
         configResult.response,
       );
-      if (config.serviceType !== "zeit.world") {
-        return yield* Effect.fail(
-          failure(
-            "resolveZone",
-            `Vercel zone ${name} is not configured for authoritative DNS in the selected account`,
-            { reason: "not_found" },
-          ),
-        );
-      }
       const domainResult = yield* request(
         withContext(`/v5/domains/${encodeURIComponent(name)}`),
         "resolveZone",
@@ -165,6 +156,15 @@ export function make(options: Options): Interface {
         "resolveZone",
         domainResult.response,
       );
+      if (config.serviceType !== "zeit.world" && envelope.domain.zone !== true) {
+        return yield* Effect.fail(
+          failure(
+            "resolveZone",
+            `Vercel zone ${name} is not configured for authoritative DNS in the selected account`,
+            { reason: "not_found" },
+          ),
+        );
+      }
       return yield* DomainName.decode(envelope.domain.name).pipe(
         Effect.mapError((cause) =>
           failure("resolveZone", `Vercel returned an invalid storage zone: ${cause.message}`),
@@ -291,7 +291,7 @@ export function make(options: Options): Interface {
     Effect.gen(function* () {
       const domains = (yield* allDomains()).filter(
         (domain) =>
-          domain.serviceType === "zeit.world" &&
+          (domain.serviceType === "zeit.world" || domain.zone === true) &&
           (input.name === undefined || domain.name === input.name),
       );
       return yield* Effect.forEach(domains, projectZone);
@@ -340,7 +340,7 @@ const projectZone = Effect.fn("VercelClient.projectZone")((domain: Protocol.Doma
     const name = yield* DomainName.decode(domain.name).pipe(
       Effect.mapError((cause) => failure("listZones", cause.message, { reason: "response" })),
     );
-    const nameservers = yield* Effect.forEach(domain.nameservers, (nameserver) =>
+    const nameservers = yield* Effect.forEach(domain.intendedNameservers, (nameserver) =>
       DomainName.decode(nameserver).pipe(
         Effect.mapError((cause) => failure("listZones", cause.message, { reason: "response" })),
       ),
