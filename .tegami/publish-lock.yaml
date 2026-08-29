@@ -1,10 +1,10 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Preserve domain grants across reconnects\n\nPreserve an owner's existing domain grants when the same provider account is connected again. This\nlets one authorization safely provision additional domains without silently disconnecting earlier\ndomains.\n"
-    filename: domain-grant-reconnect.md
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Reuse an existing provider connection for another domain\n\nAdd `Connection.extend` to the Effect-native and Promise APIs. Hosts can extend an owner's stored\ndomain grant after proving provider ownership and obtaining consent, without repeating provider\nauthentication. Extension preserves existing grants and rejects cross-owner, expired, or revoking\nconnections.\n"
+    filename: provider-authorization-extension.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - domain-grant-reconnect.md
+      - provider-authorization-extension.md
     id: npm:domainkit
     updated: true
 npm:packages:
