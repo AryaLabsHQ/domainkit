@@ -69,6 +69,7 @@ function createReadbackCleanup(
   prefix: string,
 ) {
   const requirements = createRequirements(zone, prefix);
+  let cleanupRecordIds: ReadonlyArray<string> = [];
   return Effect.gen(function* () {
     const { plan } = yield* Provisioning.create({
       requirements,
@@ -79,6 +80,7 @@ function createReadbackCleanup(
       authorization: yield* Provisioning.authorize(plan),
       plan,
     });
+    cleanupRecordIds = providerRecordIds(receipt.operations);
     yield* requireCondition(
       provider,
       "create-readback-cleanup",
@@ -106,16 +108,21 @@ function createReadbackCleanup(
       provider,
       "create-readback-cleanup",
       deletionReceipt.status === "complete" &&
-        requirementsAbsent(yield* provider.listRecords(zone), requirements),
+        (yield* recordIdsAbsent(provider, zone, cleanupRecordIds)),
       "receipt-bound cleanup must remove every created record",
     );
-  }).pipe(Effect.provide(providerLayer(provider)));
+  }).pipe(
+    Effect.ensuring(bestEffortDelete(provider, zone, () => cleanupRecordIds)),
+    Effect.provide(providerLayer(provider)),
+  );
 }
 
 function exactNoop(provider: DnsProvider.Interface, zone: DomainName.DomainName, prefix: string) {
   const requirement = cname(zone, `${prefix}-exact`);
+  let cleanupRecordIds: ReadonlyArray<string> = [];
   return Effect.gen(function* () {
     const created = yield* provider.createRecord(zone, requirement);
+    cleanupRecordIds = created.providerRecordId === null ? [] : [created.providerRecordId];
     const { plan } = yield* Provisioning.create({
       requirements: [requirement],
       target: Provisioning.Target.ExactZone({ zone }),
@@ -132,14 +139,19 @@ function exactNoop(provider: DnsProvider.Interface, zone: DomainName.DomainName,
       "an exact plan must not create another record",
     );
     yield* deleteCreated(provider, zone, created.providerRecordId, "exact-noop");
-  }).pipe(Effect.provide(providerLayer(provider)));
+  }).pipe(
+    Effect.ensuring(bestEffortDelete(provider, zone, () => cleanupRecordIds)),
+    Effect.provide(providerLayer(provider)),
+  );
 }
 
 function conflict(provider: DnsProvider.Interface, zone: DomainName.DomainName, prefix: string) {
   const requirement = cname(zone, `${prefix}-conflict`);
   const occupied = txt(zone, `${prefix}-conflict`, "occupied");
+  let cleanupRecordIds: ReadonlyArray<string> = [];
   return Effect.gen(function* () {
     const created = yield* provider.createRecord(zone, occupied);
+    cleanupRecordIds = created.providerRecordId === null ? [] : [created.providerRecordId];
     const { plan } = yield* Provisioning.create({
       requirements: [requirement],
       target: Provisioning.Target.ExactZone({ zone }),
@@ -156,11 +168,15 @@ function conflict(provider: DnsProvider.Interface, zone: DomainName.DomainName, 
       "apply must fail closed on incompatible state",
     );
     yield* deleteCreated(provider, zone, created.providerRecordId, "conflict");
-  }).pipe(Effect.provide(providerLayer(provider)));
+  }).pipe(
+    Effect.ensuring(bestEffortDelete(provider, zone, () => cleanupRecordIds)),
+    Effect.provide(providerLayer(provider)),
+  );
 }
 
 function stalePlan(provider: DnsProvider.Interface, zone: DomainName.DomainName, prefix: string) {
   const requirement = cname(zone, `${prefix}-stale`);
+  let cleanupRecordIds: ReadonlyArray<string> = [];
   return Effect.gen(function* () {
     const { plan } = yield* Provisioning.create({
       requirements: [requirement],
@@ -168,6 +184,7 @@ function stalePlan(provider: DnsProvider.Interface, zone: DomainName.DomainName,
     });
     const authorization = yield* Provisioning.authorize(plan);
     const created = yield* provider.createRecord(zone, requirement);
+    cleanupRecordIds = created.providerRecordId === null ? [] : [created.providerRecordId];
     const failure = yield* Provisioning.apply({ authorization, plan }).pipe(Effect.flip);
     yield* requireCondition(
       provider,
@@ -176,7 +193,10 @@ function stalePlan(provider: DnsProvider.Interface, zone: DomainName.DomainName,
       "apply must reject provider state that changed after authorization",
     );
     yield* deleteCreated(provider, zone, created.providerRecordId, "stale-plan");
-  }).pipe(Effect.provide(providerLayer(provider)));
+  }).pipe(
+    Effect.ensuring(bestEffortDelete(provider, zone, () => cleanupRecordIds)),
+    Effect.provide(providerLayer(provider)),
+  );
 }
 
 function partialApplyCleanup(
@@ -204,6 +224,7 @@ function partialApplyCleanup(
     cname(zone, `${prefix}-partial-one`),
     txt(zone, `${prefix}-partial-two`, "domainkit"),
   ];
+  let cleanupRecordIds: ReadonlyArray<string> = [];
   return Effect.gen(function* () {
     const { plan } = yield* Provisioning.create({
       requirements,
@@ -213,6 +234,10 @@ function partialApplyCleanup(
       authorization: yield* Provisioning.authorize(plan),
       plan,
     }).pipe(Effect.flip);
+    cleanupRecordIds =
+      failure instanceof Provisioning.PartialApplyError
+        ? providerRecordIds(failure.receipt.operations)
+        : [];
     yield* requireCondition(
       provider,
       "partial-apply-cleanup",
@@ -230,18 +255,44 @@ function partialApplyCleanup(
     yield* requireCondition(
       provider,
       "partial-apply-cleanup",
-      requirementsAbsent(yield* provider.listRecords(zone), requirements),
+      yield* recordIdsAbsent(provider, zone, cleanupRecordIds),
       "partial receipt cleanup must remove the confirmed write",
     );
-  }).pipe(Effect.provide(providerLayer(flaky)));
+  }).pipe(
+    Effect.ensuring(bestEffortDelete(provider, zone, () => cleanupRecordIds)),
+    Effect.provide(providerLayer(flaky)),
+  );
 }
 
-function requirementsAbsent(
-  observed: ReadonlyArray<DnsRecord.Observed>,
-  requirements: ReadonlyArray<DnsRecord.DnsRecord>,
-): boolean {
-  return requirements.every((requirement) =>
-    observed.every((record) => record._tag === "Opaque" || !DnsRecord.equals(record, requirement)),
+function providerRecordIds(
+  operations: ReadonlyArray<{ readonly providerRecordId: string | null }>,
+): ReadonlyArray<string> {
+  return operations.flatMap(({ providerRecordId }) =>
+    providerRecordId === null ? [] : [providerRecordId],
+  );
+}
+
+function recordIdsAbsent(
+  provider: DnsProvider.Interface,
+  zone: DomainName.DomainName,
+  recordIds: ReadonlyArray<string>,
+) {
+  return Effect.forEach(recordIds, (providerRecordId) =>
+    provider.getRecord(zone, providerRecordId),
+  ).pipe(Effect.map((records) => records.every((record) => record === null)));
+}
+
+function bestEffortDelete(
+  provider: DnsProvider.Interface,
+  zone: DomainName.DomainName,
+  recordIds: () => ReadonlyArray<string>,
+) {
+  return Effect.suspend(() =>
+    Effect.forEach(
+      recordIds(),
+      (providerRecordId) => provider.deleteRecord(zone, providerRecordId).pipe(Effect.ignore),
+      { discard: true },
+    ),
   );
 }
 
