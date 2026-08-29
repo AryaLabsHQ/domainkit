@@ -2,6 +2,7 @@ import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type ComponentPropsWithoutRef,
   type FormEvent,
@@ -36,26 +37,33 @@ export function useController(domain: string): Controller {
   const { navigate, transport } = useDomainKit();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<State>({ _tag: "Loading" });
+  const activeRequest = useRef(0);
+  const renderedDomain = useRef(domain);
+  if (renderedDomain.current !== domain) {
+    renderedDomain.current = domain;
+    activeRequest.current += 1;
+  }
 
   useEffect(() => {
-    let active = true;
+    const request = ++activeRequest.current;
     setState({ _tag: "Loading" });
     void transport.connection.inspect({ domain }).then(
       (snapshot) => {
-        if (active) setState(snapshot);
+        if (activeRequest.current === request) setState(snapshot);
       },
       (cause: unknown) => {
-        if (active) setState(failure(cause));
+        if (activeRequest.current === request) setState(failure(cause));
       },
     );
     return () => {
-      active = false;
+      if (activeRequest.current === request) activeRequest.current += 1;
     };
   }, [attempt, domain, transport]);
 
   const connect = useCallback(
     async (method: "oauth" | "token", token?: string) => {
       if (state._tag !== "Disconnected") return;
+      const request = ++activeRequest.current;
       const snapshot = state;
       setState({ _tag: "Submitting", snapshot });
       try {
@@ -65,6 +73,7 @@ export function useController(domain: string): Controller {
           providerId: snapshot.provider.id,
           ...(token === undefined ? {} : { token }),
         });
+        if (activeRequest.current !== request) return;
         if (result._tag === "Redirect") {
           setState({ _tag: "Redirecting", snapshot });
           navigate(result.authorizationUrl);
@@ -72,7 +81,7 @@ export function useController(domain: string): Controller {
         }
         setState(result);
       } catch (cause) {
-        setState(failure(cause));
+        if (activeRequest.current === request) setState(failure(cause));
       }
     },
     [domain, navigate, state, transport],
@@ -80,18 +89,18 @@ export function useController(domain: string): Controller {
 
   const reuse = useCallback(async () => {
     if (state._tag !== "Disconnected" || state.reusableConnection === undefined) return;
+    const request = ++activeRequest.current;
     const snapshot = state;
     const reusableConnection = state.reusableConnection;
     setState({ _tag: "Submitting", snapshot });
     try {
-      setState(
-        await transport.connection.reuse({
-          connectionId: reusableConnection.connectionId,
-          domain,
-        }),
-      );
+      const result = await transport.connection.reuse({
+        connectionId: reusableConnection.connectionId,
+        domain,
+      });
+      if (activeRequest.current === request) setState(result);
     } catch (cause) {
-      setState(failure(cause));
+      if (activeRequest.current === request) setState(failure(cause));
     }
   }, [domain, state, transport]);
 
@@ -235,7 +244,9 @@ export function Flow({ domain, ...props }: FlowProps) {
   return (
     <Root {...props}>
       <Status state={state} />
-      {state._tag === "Failure" ? <button onClick={controller.retry}>Try again</button> : null}
+      {state._tag === "Failure" && (state.retry === "safe" || state.retry === "unknown") ? (
+        <button onClick={controller.retry}>Try again</button>
+      ) : null}
       {snapshot === undefined ? null : (
         <BaseDialog.Root>
           <Trigger providerName={snapshot.provider.name} />

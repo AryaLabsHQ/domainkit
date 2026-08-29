@@ -127,6 +127,64 @@ describe("Connection.Flow", () => {
     expect(transport.calls.inspect).toHaveLength(2);
   });
 
+  it("does not offer retry when the failure requires user action", async () => {
+    const transport = Testing.makeFakeTransport({
+      inspect: {
+        _tag: "Failure",
+        message: "Update provider permissions before continuing",
+        retry: "after-user-action",
+      },
+    });
+    render(
+      <DomainKit.Root transport={transport}>
+        <Connection.Flow domain="mail.example.com" />
+      </DomainKit.Root>,
+    );
+
+    expect(await screen.findByText("Update provider permissions before continuing")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("ignores a pending connection after the domain changes", async () => {
+    const pending = Promise.withResolvers<Connection.Connected>();
+    const fake = Testing.makeFakeTransport({
+      inspect: [disconnected(), { ...disconnected(), domain: "other.example.com" }],
+    });
+    const transport = {
+      ...fake,
+      connection: {
+        ...fake.connection,
+        connect: async (input: Parameters<typeof fake.connection.connect>[0]) => {
+          fake.calls.connect.push(input);
+          return pending.promise;
+        },
+      },
+    };
+    const { rerender } = render(
+      <DomainKit.Root transport={transport}>
+        <Connection.Flow domain="mail.example.com" />
+      </DomainKit.Root>,
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Connect Cloudflare" }));
+    await user.click(screen.getByRole("button", { name: "Continue with OAuth" }));
+
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Connection.Flow domain="other.example.com" />
+      </DomainKit.Root>,
+    );
+    pending.resolve({
+      _tag: "Connected",
+      connectionId: "connection-1",
+      domain: "mail.example.com",
+      provider: Testing.provider(),
+    });
+
+    expect(await screen.findByText("Cloudflare is available")).toBeTruthy();
+    expect(transport.calls.inspect.at(-1)).toEqual({ domain: "other.example.com" });
+  });
+
   it("imports and renders on the server without browser access", () => {
     const transport = Testing.makeFakeTransport({
       inspect: { _tag: "Unsupported", domain: "mail.example.com" },
