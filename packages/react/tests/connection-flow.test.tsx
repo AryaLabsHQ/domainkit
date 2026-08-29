@@ -164,13 +164,17 @@ describe("Connection.Flow", () => {
     expect(transport.calls.inspect).toHaveLength(2);
   });
 
-  it("does not offer retry when the failure requires user action", async () => {
+  it("rechecks after the user completes a required action", async () => {
+    const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({
-      inspect: {
-        _tag: "Failure",
-        message: "Update provider permissions before continuing",
-        retry: "after-user-action",
-      },
+      inspect: [
+        {
+          _tag: "Failure",
+          message: "Update provider permissions before continuing",
+          retry: "after-user-action",
+        },
+        disconnected(),
+      ],
     });
     render(
       <DomainKit.Root transport={transport}>
@@ -180,6 +184,9 @@ describe("Connection.Flow", () => {
 
     expect(await screen.findByText("Update provider permissions before continuing")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Check again" }));
+    expect(await screen.findByText("Cloudflare is available")).toBeTruthy();
+    expect(transport.calls.inspect).toHaveLength(2);
   });
 
   it("ignores a pending connection after the domain changes", async () => {

@@ -281,8 +281,10 @@ export function Flow({ domain, ...props }: FlowProps) {
   return (
     <Root {...props}>
       <Status state={state} />
-      {state._tag === "Failure" && (state.retry === "safe" || state.retry === "unknown") ? (
-        <button onClick={controller.retry}>Try again</button>
+      {state._tag === "Failure" && state.retry !== "never" ? (
+        <button onClick={controller.retry}>
+          {state.retry === "after-user-action" ? "Check again" : "Try again"}
+        </button>
       ) : null}
       {snapshot === undefined ? null : (
         <BaseDialog.Root>
