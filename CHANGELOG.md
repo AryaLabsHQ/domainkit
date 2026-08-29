@@ -6,8 +6,9 @@ DomainKit now provides one Effect-native authorization lifecycle, authoritative 
 resilient multi-resolver DNS observation, and a reusable provider conformance runner. Promise APIs
 delegate to the same canonical implementation.
 
-Adapter authors now use `domainkit/adapter` or `domainkit/effect/adapter`; obsolete generic root
-exports and split authorization-store exports have been removed.
+Generic provider contracts now live on the canonical `domainkit` and `domainkit/effect` entry
+points. Cloudflare and Vercel retain explicit first-party provider subpaths; DomainKit does not
+publish adapter subpaths or a third-party plug-in API.
 
 ## domainkit@0.1.1
 
