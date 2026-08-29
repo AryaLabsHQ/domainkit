@@ -9,7 +9,7 @@ export {
   validate,
 } from "./connection.ts";
 export type { Connection, StoredCredential } from "./connection.ts";
-export { complete, Error, Method, start, StartResult } from "./connect.ts";
+export { complete, Error, extend, Method, start, StartResult } from "./connect.ts";
 export type {
   Authentication,
   AuthenticationFailure,
@@ -20,6 +20,7 @@ export type {
   Failure,
   InteractiveFlow,
   InteractiveStart,
+  ExtendInput,
   Method as ConnectionMethod,
   Requirements,
   StartResult as ConnectionStartResult,

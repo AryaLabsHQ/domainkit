@@ -62,6 +62,11 @@ or `Redirect`; `Connection.complete` consumes an interactive continuation exactl
 implements OAuth and token methods. Vercel implements its installation-code flow without
 mislabeling it as generic OAuth.
 
+After a host proves that an existing connected account owns another domain and obtains the owner's
+consent, `Connection.extend` adds that domain to the existing owner grant without repeating provider
+authentication. It preserves earlier domain grants and rejects cross-owner, expired, or revoking
+connections.
+
 Cloudflare can discover the selected account from a domain already visible to the credential, so a
 customer does not need to find or type an account ID. Vercel retains explicit personal or team
 context returned by the installation. Both contexts are versioned, non-secret values that can

@@ -164,5 +164,18 @@ export async function complete(input: {
   );
 }
 
+/** Extends one owner binding without repeating provider authentication. */
+export async function extend(
+  input: Connect.ExtendInput & { readonly repository: Repository.Repository },
+): Promise<Repository.Aggregate> {
+  return Effect.runPromise(
+    Connect.extend({
+      connectionId: input.connectionId,
+      grant: input.grant,
+      ownerId: input.ownerId,
+    }).pipe(Effect.provide(LifecycleRepository.layerFrom(input.repository))),
+  );
+}
+
 export { Error, StartResult } from "../auth/connect.ts";
-export type { Authentication, ConnectionStartResult } from "../auth/connection-api.ts";
+export type { Authentication, ConnectionStartResult, ExtendInput } from "../auth/connection-api.ts";

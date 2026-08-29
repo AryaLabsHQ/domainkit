@@ -108,6 +108,118 @@ describe("Effect-native connections", () => {
     );
   });
 
+  it.effect("extends a stored connection without repeating provider authentication", () => {
+    const repository = InMemoryAuthorizationLifecycle.make();
+    return Effect.gen(function* () {
+      const connected = yield* Connection.start({
+        authorizedById: "user-1",
+        grant: { _tag: "domains", domains: [DomainName.parse("domlens.dev")] },
+        method: Connection.Method.Token({
+          authenticate: () => Effect.succeed(authentication()),
+          providerId: "example",
+          requiredCapabilities: ["dns:read", "dns:write"],
+          token: Secret.make("access-token"),
+        }),
+        ownerId: "organization-1",
+      });
+      if (connected._tag !== "Connected") return;
+      const binding = connected.aggregate.bindings[0];
+      if (binding === undefined) return yield* Effect.die("connection binding is missing");
+      const extended = yield* Connection.extend({
+        connectionId: binding.id,
+        grant: { _tag: "domains", domains: [DomainName.parse("samva.arya.sh")] },
+        ownerId: "organization-1",
+      });
+      assert.deepStrictEqual(extended.bindings[0]?.grant, {
+        _tag: "domains",
+        domains: [DomainName.parse("domlens.dev"), DomainName.parse("samva.arya.sh")],
+      });
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          Layer.succeed(AuthorizationLifecycle.Service, repository),
+          Digest.webCryptoLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("rejects extension for another owner without changing the grant", () => {
+    const repository = InMemoryAuthorizationLifecycle.make();
+    return Effect.gen(function* () {
+      const connected = yield* Connection.start({
+        authorizedById: "user-1",
+        grant: { _tag: "domains", domains: [DomainName.parse("domlens.dev")] },
+        method: Connection.Method.Token({
+          authenticate: () => Effect.succeed(authentication()),
+          providerId: "example",
+          requiredCapabilities: ["dns:read", "dns:write"],
+          token: Secret.make("access-token"),
+        }),
+        ownerId: "organization-1",
+      });
+      if (connected._tag !== "Connected") return;
+      const binding = connected.aggregate.bindings[0];
+      if (binding === undefined) return yield* Effect.die("connection binding is missing");
+      const result = yield* Connection.extend({
+        connectionId: binding.id,
+        grant: { _tag: "account" },
+        ownerId: "organization-2",
+      }).pipe(Effect.result);
+      assert.strictEqual(result._tag, "Failure");
+      const stored = yield* repository.get(connected.aggregate.authorization.id);
+      assert.deepStrictEqual(stored?.bindings[0]?.grant, binding.grant);
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          Layer.succeed(AuthorizationLifecycle.Service, repository),
+          Digest.webCryptoLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("rejects extension after the provider authorization expires", () => {
+    const repository = InMemoryAuthorizationLifecycle.make();
+    return Effect.gen(function* () {
+      const connected = yield* Connection.start({
+        authorizedById: "user-1",
+        grant: { _tag: "domains", domains: [DomainName.parse("domlens.dev")] },
+        method: Connection.Method.Token({
+          authenticate: () =>
+            Effect.succeed({
+              ...authentication(),
+              expiresAt: new Date("1960-01-01T00:00:00.000Z"),
+            }),
+          providerId: "example",
+          requiredCapabilities: ["dns:read", "dns:write"],
+          token: Secret.make("access-token"),
+        }),
+        ownerId: "organization-1",
+      });
+      if (connected._tag !== "Connected") return;
+      const binding = connected.aggregate.bindings[0];
+      if (binding === undefined) return yield* Effect.die("connection binding is missing");
+      const result = yield* Connection.extend({
+        connectionId: binding.id,
+        grant: { _tag: "account" },
+        ownerId: "organization-1",
+      }).pipe(Effect.result);
+      assert.strictEqual(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        assert.strictEqual(result.failure._tag, "ConnectionError");
+        assert.strictEqual(result.failure.retry, "after-user-action");
+      }
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          Layer.succeed(AuthorizationLifecycle.Service, repository),
+          Digest.webCryptoLayer,
+        ),
+      ),
+    );
+  });
+
   it.effect("redirects and completes an interactive connection through the same repository", () => {
     const repository = InMemoryAuthorizationLifecycle.make();
     const continuations = InMemoryConnectionContinuations.make();

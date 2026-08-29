@@ -24,7 +24,9 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof promiseApi.Provisioning.create, "function");
     assert.strictEqual(typeof promiseApi.ZoneDiscovery.discover, "function");
     assert.strictEqual(typeof promiseApi.Connection.start, "function");
+    assert.strictEqual(typeof promiseApi.Connection.extend, "function");
     assert.strictEqual(typeof effectApi.Connection.start, "function");
+    assert.strictEqual(typeof effectApi.Connection.extend, "function");
     assert.strictEqual(typeof effectApi.AuthorizationLifecycle.Service, "function");
     assert.strictEqual(typeof effectApi.DnsProvider.Service, "function");
     assert.strictEqual(typeof effectApi.ZoneDiscovery.Service, "function");

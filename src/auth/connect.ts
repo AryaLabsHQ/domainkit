@@ -95,6 +95,12 @@ export interface CompleteInput {
   readonly flow: InteractiveFlow;
 }
 
+export interface ExtendInput {
+  readonly connectionId: string;
+  readonly grant: Binding.Grant;
+  readonly ownerId: string;
+}
+
 const mergeGrant = (
   current: Binding.Grant | undefined,
   requested: Binding.Grant,
@@ -271,6 +277,46 @@ export const complete = Effect.fn("Connection.complete")(function* (input: Compl
     ownerId: continuation.ownerId,
     providerId: continuation.providerId,
     requiredCapabilities: continuation.requiredCapabilities,
+  });
+});
+
+/** Extends one owner binding without repeating provider authentication. */
+export const extend = Effect.fn("Connection.extend")(function* (input: ExtendInput) {
+  const repository = yield* Repository.Service;
+  const aggregate = yield* repository.getByConnectionId(input.connectionId);
+  const binding = aggregate?.bindings.find(({ id }) => id === input.connectionId);
+  if (aggregate === null || binding === undefined || binding.ownerId !== input.ownerId) {
+    return yield* new Error({
+      category: "authorization",
+      message: "Connection does not belong to this owner",
+      operation: "Connection.extend",
+      retry: "never",
+    });
+  }
+  if (aggregate.authorization.revocation._tag !== "Active") {
+    return yield* new Error({
+      category: "authorization",
+      message: "Provider authorization is awaiting revocation",
+      operation: "Connection.extend",
+      retry: "after-user-action",
+    });
+  }
+  const now = new Date(yield* Clock.currentTimeMillis);
+  if (
+    aggregate.authorization.expiresAt !== null &&
+    (Number.isNaN(aggregate.authorization.expiresAt.getTime()) ||
+      aggregate.authorization.expiresAt <= now)
+  ) {
+    return yield* new Error({
+      category: "authorization",
+      message: "Provider authorization has expired",
+      operation: "Connection.extend",
+      retry: "after-user-action",
+    });
+  }
+  return yield* repository.bind(aggregate.authorization.id, {
+    ...binding,
+    grant: mergeGrant(binding.grant, input.grant),
   });
 });
 
