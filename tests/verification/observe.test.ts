@@ -3,6 +3,7 @@ import { Effect, Layer } from "effect";
 
 import {
   DnsRecord,
+  DnsResolver,
   DnsResolverPool,
   DomainName,
   Verification as EffectVerification,
@@ -134,6 +135,44 @@ describe("Verification.observe", () => {
         record,
       });
       assert.strictEqual(quorum._tag, "Verified");
+    }).pipe(Effect.provide(pool));
+  });
+
+  it.effect("returns unavailable when an outage could still satisfy quorum", () => {
+    const pool = Layer.succeed(
+      DnsResolverPool.Service,
+      DnsResolverPool.make([
+        {
+          id: "matched",
+          resolver: InMemoryDnsResolver.make(() => ({ _tag: "answer", answers: [answer] })),
+        },
+        {
+          id: "mismatch",
+          resolver: InMemoryDnsResolver.make(() => ({
+            _tag: "answer",
+            answers: [{ ...answer, data: "other.example.net" }],
+          })),
+        },
+        {
+          id: "unavailable",
+          resolver: {
+            resolve: () =>
+              Effect.fail(
+                new DnsResolver.Error({ message: "resolver unavailable", reason: "transport" }),
+              ),
+          },
+        },
+      ]),
+    );
+    return Effect.gen(function* () {
+      const result = yield* EffectVerification.observe({
+        publicDns: EffectVerification.PublicDns.Enabled({
+          policy: DnsResolverPool.Policy.Quorum({ minimum: 2 }),
+        }),
+        record,
+      });
+      assert.strictEqual(result._tag, "Unavailable");
+      assert.strictEqual(result.publicDns?._tag, "Unavailable");
     }).pipe(Effect.provide(pool));
   });
 

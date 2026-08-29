@@ -1,4 +1,4 @@
-import { Context, Data, Effect, Layer } from "effect";
+import { Context, Data, Effect, Layer, Schema } from "effect";
 
 import * as CloudflareDnsOverHttps from "./cloudflare-doh.ts";
 import * as DnsOverHttps from "./doh.ts";
@@ -28,7 +28,14 @@ export type Policy = Data.TaggedEnum<{
   AnyMatch: {};
   Quorum: { readonly minimum: number };
 }>;
-export const Policy = Data.taggedEnum<Policy>();
+const PolicyVariants = Data.taggedEnum<Policy>();
+const QuorumMinimum = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
+export const Policy = {
+  AllMatch: PolicyVariants.AllMatch,
+  AnyMatch: PolicyVariants.AnyMatch,
+  Quorum: ({ minimum }: { readonly minimum: number }): Policy =>
+    PolicyVariants.Quorum({ minimum: Schema.decodeUnknownSync(QuorumMinimum)(minimum) }),
+};
 
 export interface Interface {
   readonly observe: (query: DnsResolver.Query) => Effect.Effect<ReadonlyArray<Observation>>;

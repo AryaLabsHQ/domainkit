@@ -103,6 +103,12 @@ describe("DnsResolverPool", () => {
       minimum: 2,
     });
   });
+
+  it("rejects invalid quorum thresholds at construction", () => {
+    for (const minimum of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.throws(() => DnsResolverPool.Policy.Quorum({ minimum }));
+    }
+  });
 });
 
 function wireResponse(questions: ReadonlyArray<DnsPacket.Question>): Response {

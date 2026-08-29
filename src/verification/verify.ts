@@ -155,6 +155,12 @@ function evaluatePublicDns(
   if (required > 0 && matchedResolverIds.length >= required) {
     return PublicDnsObservation.Verified({ evidence, matchedResolverIds });
   }
+  const unavailable = evidence.filter(
+    (observation) => observation._tag === "TimedOut" || observation._tag === "Failed",
+  ).length;
+  if (unavailable > 0 && matchedResolverIds.length + unavailable >= required) {
+    return PublicDnsObservation.Unavailable({ evidence });
+  }
   if (
     evidence.some(
       (observation) =>
