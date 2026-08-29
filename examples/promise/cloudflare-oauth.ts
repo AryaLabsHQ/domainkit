@@ -1,14 +1,14 @@
-import { Cloudflare, OAuth, Secret, type Stores } from "domainkit";
+import { Cloudflare, DomainName, OAuth, Secret, type Stores } from "domainkit";
 
 const capabilities = ["dns:read", "dns:write"] as const;
 
 export interface CloudflareOAuthInput {
-  readonly accountId: string;
   readonly clientId: string;
   readonly clientSecret: string;
   readonly authorizationStore: Stores.ProviderAuthorization;
   readonly connectionStore: Stores.Connection;
   readonly credentialStore: Stores.Credential;
+  readonly domain: string;
   readonly redirectUri: string;
   readonly ownerId: string;
   readonly scopeIds: ReadonlyArray<string>;
@@ -42,8 +42,8 @@ export async function completeCloudflareOAuth(input: CloudflareOAuthInput, callb
     credentialStore: input.credentialStore,
     providerId: "cloudflare",
     resolveSubject: Cloudflare.Auth.subjectResolver({
-      accountId: input.accountId,
       capabilities,
+      domain: DomainName.parse(input.domain),
     }),
     stateStore: input.stateStore,
   });

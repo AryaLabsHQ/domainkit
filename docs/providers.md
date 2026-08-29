@@ -6,9 +6,19 @@ persist secrets, render consent UI, or depend on a provider SDK.
 
 ## Cloudflare
 
-Cloudflare clients require an explicit account ID, token, and capability claim. The capability
-claim records what the host requested when it issued or authorized the credential because
-Cloudflare's non-mutating token verification response does not enumerate DNS permissions.
+Cloudflare authorization accepts either an explicit account ID or a domain visible to the
+credential. Domain-based authorization queries the requested name and its parent zone candidates,
+nearest first, and succeeds only when exactly one accessible authoritative zone identifies the
+account. This lets OAuth and API-token flows avoid asking users to find an account ID while failing
+closed when the credential cannot identify the requested domain unambiguously.
+
+After authorization, Cloudflare DNS clients remain explicitly account-scoped. The capability claim
+records what the host requested when it issued or authorized the credential because Cloudflare's
+non-mutating token verification response does not enumerate DNS permissions.
+
+Domain-targeted token validation supports both user-owned and account-owned API tokens. User tokens
+are verified before discovery; account tokens discover the account from the authorized zone first
+and then use Cloudflare's account-scoped verification endpoint.
 
 Cloudflare's adapter supports API tokens and standards-based OAuth authorization code flow. OAuth
 scope IDs come from the OAuth client registration and are supplied by the host rather than

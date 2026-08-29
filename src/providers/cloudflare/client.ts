@@ -4,6 +4,7 @@ import type * as ProviderAuth from "../../auth/manifest.ts";
 import type * as Secret from "../../auth/secret.ts";
 import * as DomainName from "../../domain/domain-name.ts";
 import type * as DnsRecord from "../../domain/dns-record.ts";
+import * as Zones from "../../discovery/zones.ts";
 import * as DnsProvider from "../../provider/provider.ts";
 import * as Protocol from "./protocol.ts";
 import * as Records from "./records.ts";
@@ -45,8 +46,19 @@ export interface Interface extends DnsProvider.Interface {
   readonly validateToken: () => Effect.Effect<ProviderAuth.TokenValidation, DnsProvider.Error>;
 }
 
-/** Creates an Effect-native Cloudflare client without owning the credential lifecycle. */
-export function make(options: Options): Interface {
+interface CredentialOptions {
+  readonly baseUrl?: string;
+  readonly fetch?: Fetch;
+  readonly token: Secret.Value;
+}
+
+interface DomainCredentialOptions extends CredentialOptions {
+  readonly capabilities: ProviderAuth.TokenValidation["capabilities"];
+  readonly domain: DomainName.DomainName;
+  readonly tokenKind?: "account" | "user";
+}
+
+const makeTransport = (options: CredentialOptions) => {
   const fetch = options.fetch ?? globalThis.fetch;
   const baseUrl = (options.baseUrl ?? "https://api.cloudflare.com/client/v4").replace(/\/$/, "");
 
@@ -99,8 +111,7 @@ export function make(options: Options): Interface {
         if (name !== undefined) query.set("name", name);
         const { body, response } = yield* request(`/zones?${query}`, "listZones");
         yield* ensureSuccess(body, "listZones", response);
-        const envelope = yield* decode(Protocol.ZoneListEnvelope, body, "listZones", response);
-        return envelope;
+        return yield* decode(Protocol.ZoneListEnvelope, body, "listZones", response);
       }),
   );
 
@@ -123,6 +134,89 @@ export function make(options: Options): Interface {
         }
       }),
   );
+
+  const inspectToken = Effect.fn("CloudflareClient.inspectToken")((path: string) =>
+    Effect.gen(function* () {
+      const { body, response } = yield* request(path, "validateToken");
+      yield* ensureSuccess(body, "validateToken", response);
+      const envelope = yield* decode(Protocol.TokenEnvelope, body, "validateToken", response);
+      if (envelope.result.status !== "active") {
+        return yield* Effect.fail(
+          failure("validateToken", `Cloudflare token is ${envelope.result.status}`, {
+            reason: "authentication",
+            status: response.status,
+          }),
+        );
+      }
+      const expiresAt =
+        envelope.result.expires_on === undefined ? null : new Date(envelope.result.expires_on);
+      if (expiresAt !== null && Number.isNaN(expiresAt.valueOf())) {
+        return yield* Effect.fail(
+          failure("validateToken", "Cloudflare token expiry is not a valid timestamp", {
+            reason: "response",
+            status: response.status,
+          }),
+        );
+      }
+      return expiresAt;
+    }),
+  );
+
+  return { allZones, inspectToken, request } as const;
+};
+
+const discoverAccount = Effect.fn("CloudflareClient.discoverAccount")(
+  (options: CredentialOptions & { readonly domain: DomainName.DomainName }) =>
+    Effect.gen(function* () {
+      const { allZones } = makeTransport(options);
+      for (const candidate of Zones.candidates(options.domain)) {
+        const matches = yield* allZones(undefined, candidate);
+        const match = matches[0];
+        if (matches.length === 0) continue;
+        if (matches.length === 1 && match !== undefined) return match.account;
+        return yield* Effect.fail(
+          failure(
+            "discoverAccount",
+            `Cloudflare returned multiple accessible zones named ${candidate}`,
+            { reason: "conflict" },
+          ),
+        );
+      }
+      return yield* Effect.fail(
+        failure(
+          "discoverAccount",
+          `Cloudflare did not expose an accessible zone for ${options.domain}`,
+          { reason: "not_found" },
+        ),
+      );
+    }),
+);
+
+export const discoverAuthorizationAccount = discoverAccount;
+
+export const validateDomainToken = Effect.fn("CloudflareClient.validateDomainToken")(
+  (options: DomainCredentialOptions) =>
+    Effect.gen(function* () {
+      const transport = makeTransport(options);
+      const account = options.tokenKind === "account" ? yield* discoverAccount(options) : undefined;
+      const expiresAt = yield* transport.inspectToken(
+        account === undefined
+          ? "/user/tokens/verify"
+          : `/accounts/${encodeURIComponent(account.id)}/tokens/verify`,
+      );
+      const discoveredAccount = account ?? (yield* discoverAccount(options));
+      return {
+        accountId: discoveredAccount.id,
+        capabilities: options.capabilities,
+        expiresAt,
+        scopes: [],
+      } satisfies ProviderAuth.TokenValidation;
+    }),
+);
+
+/** Creates an Effect-native Cloudflare client without owning the credential lifecycle. */
+export function make(options: Options): Interface {
+  const { allZones, inspectToken, request } = makeTransport(options);
 
   const resolveZone = Effect.fn("CloudflareClient.resolveZone")((name: DomainName.DomainName) =>
     Effect.gen(function* () {
@@ -232,28 +326,8 @@ export function make(options: Options): Interface {
         options.tokenKind === "account"
           ? `/accounts/${encodeURIComponent(options.accountId)}/tokens/verify`
           : "/user/tokens/verify";
-      const { body, response } = yield* request(path, "validateToken");
-      yield* ensureSuccess(body, "validateToken", response);
-      const envelope = yield* decode(Protocol.TokenEnvelope, body, "validateToken", response);
-      if (envelope.result.status !== "active") {
-        return yield* Effect.fail(
-          failure("validateToken", `Cloudflare token is ${envelope.result.status}`, {
-            reason: "authentication",
-            status: response.status,
-          }),
-        );
-      }
+      const expiresAt = yield* inspectToken(path);
       yield* allZones(options.accountId);
-      const expiresAt =
-        envelope.result.expires_on === undefined ? null : new Date(envelope.result.expires_on);
-      if (expiresAt !== null && Number.isNaN(expiresAt.valueOf())) {
-        return yield* Effect.fail(
-          failure("validateToken", "Cloudflare token expiry is not a valid timestamp", {
-            reason: "response",
-            status: response.status,
-          }),
-        );
-      }
       return {
         accountId: options.accountId,
         capabilities: options.capabilities,

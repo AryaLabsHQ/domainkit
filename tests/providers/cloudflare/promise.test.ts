@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import { Secret } from "../../../src/index.ts";
+import { DomainName, Secret } from "../../../src/index.ts";
 import * as Cloudflare from "../../../src/promise/cloudflare.ts";
 import { page, portableZone, recordedFetch, zone } from "./fixtures.ts";
 
@@ -14,5 +14,19 @@ describe("Cloudflare Promise facade", () => {
       token: Secret.make("token"),
     });
     assert.deepStrictEqual(await client.listZones(), [portableZone]);
+  });
+
+  it("discovers OAuth account context through the Effect-native implementation", async () => {
+    const recording = recordedFetch([{ body: page([zone]) }]);
+    const resolve = Cloudflare.Auth.subjectResolver({
+      capabilities: ["dns:read"],
+      domain: DomainName.parse("example.com"),
+      fetch: recording.fetch,
+    });
+    const subject = await resolve(
+      { access_token: "oauth-token", token_type: "bearer" },
+      Secret.make("oauth-token"),
+    );
+    assert.strictEqual(subject.accountId, "account-1");
   });
 });
