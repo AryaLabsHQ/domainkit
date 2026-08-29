@@ -12,10 +12,11 @@ export function createPlan(provider: DnsProvider.Interface) {
   });
   return Provisioning.create({
     requirements: [requirement],
-    zone: DomainName.parse("example.com"),
+    target: Provisioning.Target.ExactZone({ zone: DomainName.parse("example.com") }),
   }).pipe(
     Effect.provide(
       Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer),
     ),
+    Effect.map(({ plan }) => plan),
   );
 }

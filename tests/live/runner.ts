@@ -57,9 +57,9 @@ export const run = Effect.fn("LiveRunner.run")((input: Input) =>
       ttl: 300,
       value: input.config.recordValue,
     });
-    const plan = yield* Provisioning.create({
+    const { plan } = yield* Provisioning.create({
       requirements: [requirement],
-      zone: input.config.zone,
+      target: Provisioning.Target.ExactZone({ zone: input.config.zone }),
     });
     const approval = yield* makeApproval(plan.digest, input.providerScope);
 

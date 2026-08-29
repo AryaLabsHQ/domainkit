@@ -73,9 +73,9 @@ const input = {
     ttl: 300,
     value: "domainkit",
   }],
-  zone: "example.com",
+  target: Provisioning.Target.ExactZone({ zone: "example.com" }),
 };
-const promisePlan = await Provisioning.create({ ...input, provider });
+const { plan: promisePlan } = await Provisioning.create({ ...input, provider });
 const cloudflareOptions = {
   accountId: "packed-account",
   capabilities: ["dns:read", "dns:write"],
@@ -92,7 +92,7 @@ const vercelOptions = {
 };
 const vercel = makeVercel(vercelOptions);
 const effectVercel = makeEffectVercel(vercelOptions);
-const effectPlan = await Effect.runPromise(
+const { plan: effectPlan } = await Effect.runPromise(
   EffectProvisioning.create(input).pipe(
     Effect.provide(
       Layer.merge(DnsProvider.layerFromAsync(provider), Digest.webCryptoLayer),

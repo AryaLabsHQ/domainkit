@@ -1,7 +1,8 @@
-import { Cause, Clock, Crypto, Effect, Schema as S } from "effect";
+import { Cause, Clock, Crypto, Data, Effect, Schema as S } from "effect";
 
 import * as DomainName from "../domain/domain-name.ts";
 import * as DnsRecord from "../domain/dns-record.ts";
+import * as ZoneDiscovery from "../discovery/zone-discovery.ts";
 import { Error as InvalidInputError } from "../invalid-input.ts";
 import * as DnsProvider from "../provider/provider.ts";
 import { CryptoError, sha256Encoded, stringify } from "./canonical-json.ts";
@@ -42,10 +43,33 @@ export class PartialApplyError extends S.TaggedError<PartialApplyError>()("Parti
   receipt: DnsPlan.Receipt,
 }) {}
 
+export type Target = Data.TaggedEnum<{
+  DiscoverFromDomain: { readonly domain: string };
+  ExactZone: { readonly zone: string };
+}>;
+export const Target = Data.taggedEnum<Target>();
+
+export type CreateResult = Data.TaggedEnum<{
+  NotFound: { readonly domain: DomainName.DomainName };
+  Resolved: {
+    readonly candidate: ZoneDiscovery.Candidate | null;
+    readonly plan: DnsPlan.DnsPlan;
+  };
+  SelectionRequired: { readonly candidates: ReadonlyArray<ZoneDiscovery.Candidate> };
+}>;
+export const CreateResult = Data.taggedEnum<CreateResult>();
+export type ResolvedCreateResult = Extract<CreateResult, { readonly _tag: "Resolved" }>;
+
 export interface CreateInput {
   readonly requirements: ReadonlyArray<DnsRecord.Encoded | DnsRecord.DnsRecord>;
-  readonly zone: string;
+  readonly target: Target;
 }
+export type ExactCreateInput = Omit<CreateInput, "target"> & {
+  readonly target: Extract<Target, { readonly _tag: "ExactZone" }>;
+};
+export type DiscoverCreateInput = Omit<CreateInput, "target"> & {
+  readonly target: Extract<Target, { readonly _tag: "DiscoverFromDomain" }>;
+};
 
 export interface ApplyInput {
   readonly authorization: DnsPlan.PlanAuthorization;
@@ -63,11 +87,55 @@ export type ApplyError =
   | StaleError
   | PartialApplyError;
 
-/** Builds a deterministic DNS plan through the provider in the Effect environment. */
-export const create = Effect.fn("Provisioning.create")(function* (input: CreateInput) {
-  const provider = yield* DnsProvider.Service;
-  const zone = yield* DomainName.decode(input.zone);
-  const requirements = (yield* Effect.forEach(input.requirements, DnsRecord.decode, {
+/** Builds a deterministic DNS plan through an exact or discoverable authoritative-zone target. */
+export function create(
+  input: ExactCreateInput,
+): Effect.Effect<ResolvedCreateResult, CreateError, Crypto.Crypto | DnsProvider.Service>;
+export function create(
+  input: DiscoverCreateInput,
+): Effect.Effect<CreateResult, CreateError, Crypto.Crypto | ZoneDiscovery.Service>;
+export function create(
+  input: CreateInput,
+): Effect.Effect<
+  CreateResult,
+  CreateError,
+  Crypto.Crypto | DnsProvider.Service | ZoneDiscovery.Service
+> {
+  const target = input.target;
+  if (target._tag === "ExactZone") {
+    return Effect.gen(function* () {
+      const provider = yield* DnsProvider.Service;
+      const zone = yield* DomainName.decode(target.zone);
+      return CreateResult.Resolved({
+        candidate: null,
+        plan: yield* planAgainst(provider, zone, input.requirements),
+      });
+    }).pipe(Effect.withSpan("Provisioning.create"));
+  }
+  return Effect.gen(function* () {
+    const discovery = yield* ZoneDiscovery.Service;
+    const domain = yield* DomainName.decode(target.domain);
+    const outcome = yield* discovery.discover(domain);
+    switch (outcome._tag) {
+      case "NotFound":
+        return CreateResult.NotFound({ domain: outcome.domain });
+      case "SelectionRequired":
+        return CreateResult.SelectionRequired({ candidates: outcome.candidates });
+      case "Resolved":
+        return CreateResult.Resolved({
+          candidate: outcome.candidate,
+          plan: yield* planAgainst(outcome.provider, outcome.candidate.name, input.requirements),
+        });
+    }
+  }).pipe(Effect.withSpan("Provisioning.create"));
+}
+
+const planAgainst = Effect.fn("Provisioning.planAgainst")(function* (
+  provider: DnsProvider.Interface,
+  zone: DomainName.DomainName,
+  inputs: ReadonlyArray<DnsRecord.Encoded | DnsRecord.DnsRecord>,
+) {
+  const requirements = (yield* Effect.forEach(inputs, DnsRecord.decode, {
     concurrency: "unbounded",
   })).sort(compareRecords);
   const existing = [...(yield* provider.listRecords(zone))].sort(compareRecords);
@@ -167,10 +235,11 @@ export const apply = Effect.fn("Provisioning.apply")(function* (input: ApplyInpu
     });
   }
 
-  const currentPlan = yield* create({
-    requirements: plan.operations.map(({ requirement }) => requirement),
-    zone: plan.zone,
-  });
+  const currentPlan = yield* planAgainst(
+    provider,
+    plan.zone,
+    plan.operations.map(({ requirement }) => requirement),
+  );
   if (currentPlan.digest !== plan.digest) {
     return yield* new StaleError({
       approvedPlanDigest: plan.digest,
@@ -265,10 +334,8 @@ function assertStillCreatable(
   plan: DnsPlan.DnsPlan,
   operation: Extract<DnsPlan.Operation, { readonly _tag: "create" }>,
 ): Effect.Effect<void, CreateError | StaleError, DnsProvider.Service | Crypto.Crypto> {
-  return create({
-    requirements: [operation.requirement],
-    zone: plan.zone,
-  }).pipe(
+  return DnsProvider.Service.pipe(
+    Effect.flatMap((provider) => planAgainst(provider, plan.zone, [operation.requirement])),
     Effect.flatMap((currentPlan) => {
       const currentOperation = currentPlan.operations[0];
       return currentOperation?._tag === "create" && currentOperation.id === operation.id

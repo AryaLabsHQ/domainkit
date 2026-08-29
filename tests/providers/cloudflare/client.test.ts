@@ -9,6 +9,21 @@ const token = Secret.make("test-token-that-must-remain-secret");
 const capabilities = ["dns:read", "dns:write"] as const;
 
 describe("Cloudflare Effect client", () => {
+  it.effect("exposes normalized optional zone discovery", () => {
+    const recording = recordedFetch([{ body: page([{ ...zone, status: "moved" }]) }]);
+    const client = Cloudflare.make({
+      accountId: "account-1",
+      capabilities,
+      fetch: recording.fetch,
+      token,
+    });
+    return Effect.gen(function* () {
+      const zones = yield* Cloudflare.discovery(client).listZones(DomainName.parse("example.com"));
+      assert.strictEqual(zones[0]?.status, "unknown");
+      assert.strictEqual(Cloudflare.discovery(client).provider, client);
+    });
+  });
+
   it.effect("discovers accounts from paginated zones without the legacy accounts endpoint", () => {
     const recording = recordedFetch([
       { body: page([zone], 1, 2) },

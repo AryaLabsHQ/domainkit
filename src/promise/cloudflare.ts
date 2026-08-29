@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import type * as ProviderAuth from "../auth/manifest.ts";
 import type * as DnsProvider from "../provider/provider.ts";
 import * as Cloudflare from "../providers/cloudflare/index.ts";
+import type * as ZoneDiscovery from "./zone-discovery.ts";
 
 export * as Auth from "./cloudflare-auth.ts";
 export type {
@@ -35,5 +36,18 @@ export function make(options: Cloudflare.Client.Options): Interface {
     listRecords: (zone) => Effect.runPromise(client.listRecords(zone)),
     listZones: (input) => Effect.runPromise(client.listZones(input)),
     validateToken: () => Effect.runPromise(client.validateToken()),
+  };
+}
+
+/** Creates the optional Cloudflare discovery source for Promise consumers. */
+export function discovery(options: Cloudflare.Client.Options): ZoneDiscovery.Source {
+  const client = make(options);
+  return {
+    listZones: async (name) =>
+      (await client.listZones({ name })).map((zone) => ({
+        ...zone,
+        status: zone.status === "active" || zone.status === "pending" ? zone.status : "unknown",
+      })),
+    provider: client,
   };
 }

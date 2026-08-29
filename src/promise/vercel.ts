@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import type * as ProviderAuth from "../auth/manifest.ts";
 import type * as DnsProvider from "../provider/provider.ts";
 import * as Vercel from "../providers/vercel/index.ts";
+import type * as ZoneDiscovery from "./zone-discovery.ts";
 
 export * as Auth from "./vercel-auth.ts";
 export type {
@@ -34,5 +35,14 @@ export function make(options: Vercel.Client.Options): Interface {
     listRecords: (zone) => Effect.runPromise(client.listRecords(zone)),
     listZones: (input) => Effect.runPromise(client.listZones(input)),
     validateToken: () => Effect.runPromise(client.validateToken()),
+  };
+}
+
+/** Creates the optional Vercel discovery source for Promise consumers. */
+export function discovery(options: Vercel.Client.Options): ZoneDiscovery.Source {
+  const client = make(options);
+  return {
+    listZones: (name) => client.listZones({ name }),
+    provider: client,
   };
 }

@@ -44,7 +44,7 @@ describe("connection authorization", () => {
     const provider = InMemoryDnsProvider.make({ id: authorization.providerId });
     const layer = Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer);
     return Effect.gen(function* () {
-      const plan = yield* Provisioning.create({
+      const { plan } = yield* Provisioning.create({
         requirements: [
           DnsRecord.parse({
             _tag: "TXT",
@@ -55,7 +55,7 @@ describe("connection authorization", () => {
             value: "proof",
           }),
         ],
-        zone: "example.com",
+        target: Provisioning.Target.ExactZone({ zone: "example.com" }),
       });
       const approved = yield* ConnectionAuthorization.authorize({
         authorization,
@@ -71,7 +71,7 @@ describe("connection authorization", () => {
     const provider = InMemoryDnsProvider.make({ id: authorization.providerId });
     const layer = Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer);
     return Effect.gen(function* () {
-      const plan = yield* Provisioning.create({
+      const { plan } = yield* Provisioning.create({
         requirements: [
           DnsRecord.parse({
             _tag: "TXT",
@@ -82,7 +82,7 @@ describe("connection authorization", () => {
             value: "proof",
           }),
         ],
-        zone: "example.com",
+        target: Provisioning.Target.ExactZone({ zone: "example.com" }),
       });
       const failure = yield* Effect.flip(
         ConnectionAuthorization.authorize({

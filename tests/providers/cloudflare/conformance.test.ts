@@ -44,7 +44,10 @@ describe("Cloudflare provider conformance", () => {
     const layer = Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer);
 
     return Effect.gen(function* () {
-      const plan = yield* Provisioning.create({ requirements: [requirement], zone: "example.com" });
+      const { plan } = yield* Provisioning.create({
+        requirements: [requirement],
+        target: Provisioning.Target.ExactZone({ zone: "example.com" }),
+      });
       assert.strictEqual(plan.operations[0]?._tag, "create");
       const authorization = yield* Provisioning.authorize(plan);
       const receipt = yield* Provisioning.apply({ authorization, plan });
@@ -104,9 +107,9 @@ describe("Cloudflare provider conformance", () => {
           fetch: exactRecording.fetch,
           token: Secret.make("token"),
         });
-        const exactPlan = yield* Provisioning.create({
+        const { plan: exactPlan } = yield* Provisioning.create({
           requirements: [requirement],
-          zone: "example.com",
+          target: Provisioning.Target.ExactZone({ zone: "example.com" }),
         }).pipe(
           Effect.provide(
             Layer.merge(Layer.succeed(DnsProvider.Service, exactProvider), Digest.webCryptoLayer),
@@ -120,9 +123,9 @@ describe("Cloudflare provider conformance", () => {
           fetch: conflictRecording.fetch,
           token: Secret.make("token"),
         });
-        const conflictPlan = yield* Provisioning.create({
+        const { plan: conflictPlan } = yield* Provisioning.create({
           requirements: [requirement],
-          zone: "example.com",
+          target: Provisioning.Target.ExactZone({ zone: "example.com" }),
         }).pipe(
           Effect.provide(
             Layer.merge(
@@ -139,9 +142,9 @@ describe("Cloudflare provider conformance", () => {
           fetch: opaqueConflictRecording.fetch,
           token: Secret.make("token"),
         });
-        const opaqueConflictPlan = yield* Provisioning.create({
+        const { plan: opaqueConflictPlan } = yield* Provisioning.create({
           requirements: [requirement],
-          zone: "example.com",
+          target: Provisioning.Target.ExactZone({ zone: "example.com" }),
         }).pipe(
           Effect.provide(
             Layer.merge(
