@@ -17,10 +17,12 @@ describe("public namespaces", () => {
 
   it("exposes cohesive Promise, Effect, and testing namespace surfaces", () => {
     assert.strictEqual(typeof promiseApi.Provisioning.create, "function");
+    assert.strictEqual(typeof promiseApi.ZoneDiscovery.discover, "function");
     assert.strictEqual(typeof promiseApi.Connection.start, "function");
     assert.strictEqual(typeof effectApi.Connection.start, "function");
     assert.strictEqual(typeof effectApi.AuthorizationLifecycle.Service, "function");
     assert.strictEqual(typeof effectApi.DnsProvider.Service, "function");
+    assert.strictEqual(typeof effectApi.ZoneDiscovery.Service, "function");
     assert.strictEqual(typeof effectApi.Provisioning.create, "function");
     assert.strictEqual(typeof effectApi.CloudflareDnsOverHttps.layer, "function");
     assert.strictEqual(typeof effectApi.DnsOverHttps.make, "function");
@@ -28,12 +30,16 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof testingApi.InMemoryDnsProvider.layer, "function");
     assert.strictEqual(typeof effectApi.Cloudflare.make, "function");
     assert.strictEqual(typeof effectCloudflareApi.make, "function");
+    assert.strictEqual(typeof effectCloudflareApi.discovery, "function");
     assert.strictEqual(typeof promiseApi.Cloudflare.make, "function");
     assert.strictEqual(typeof promiseCloudflareApi.make, "function");
+    assert.strictEqual(typeof promiseCloudflareApi.discovery, "function");
     assert.strictEqual(typeof effectApi.Vercel.make, "function");
     assert.strictEqual(typeof effectVercelApi.make, "function");
+    assert.strictEqual(typeof effectVercelApi.discovery, "function");
     assert.strictEqual(typeof promiseApi.Vercel.make, "function");
     assert.strictEqual(typeof promiseVercelApi.make, "function");
+    assert.strictEqual(typeof promiseVercelApi.discovery, "function");
   });
 
   it("does not flatten service tags or operations onto either entry point", () => {

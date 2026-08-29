@@ -7,12 +7,38 @@ import { webCryptoLayer } from "../plan/canonical-json.ts";
 import * as ProvisioningEffect from "../plan/plan.ts";
 import type * as DnsPlan from "../plan/types.ts";
 import * as DnsProvider from "../provider/provider.ts";
+import * as ZoneDiscoveryEffect from "../discovery/zone-discovery.ts";
+import * as ZoneDiscovery from "./zone-discovery.ts";
 
-export interface CreateInput extends ProvisioningEffect.CreateInput {
+export interface ExactCreateInput extends ProvisioningEffect.ExactCreateInput {
   readonly provider: DnsProvider.AsyncInterface;
 }
 
-export function create(input: CreateInput): Promise<DnsPlan.DnsPlan> {
+export interface DiscoverCreateInput extends ProvisioningEffect.DiscoverCreateInput {
+  readonly sources: ReadonlyArray<ZoneDiscovery.Source>;
+}
+
+export function create(input: ExactCreateInput): Promise<ProvisioningEffect.ResolvedCreateResult>;
+export function create(input: DiscoverCreateInput): Promise<ProvisioningEffect.CreateResult>;
+export function create(
+  input: ExactCreateInput | DiscoverCreateInput,
+): Promise<ProvisioningEffect.CreateResult> {
+  if ("sources" in input) {
+    const { sources, ...programInput } = input;
+    return Effect.runPromise(
+      ProvisioningEffect.create(programInput).pipe(
+        Effect.provide(
+          Layer.merge(
+            Layer.succeed(
+              ZoneDiscoveryEffect.Service,
+              ZoneDiscoveryEffect.make(sources.map(ZoneDiscovery.toEffectSource)),
+            ),
+            webCryptoLayer,
+          ),
+        ),
+      ),
+    );
+  }
   const { provider, ...programInput } = input;
   return Effect.runPromise(
     ProvisioningEffect.create(programInput).pipe(
@@ -57,3 +83,4 @@ export function authorizeForConnection(input: {
 }
 
 export const renderManualInstructions = ProvisioningEffect.renderManualInstructions;
+export { CreateResult, Target } from "../plan/plan.ts";

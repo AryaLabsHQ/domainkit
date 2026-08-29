@@ -25,7 +25,11 @@ export async function provisionWithManualApproval(
     ttl: 300,
     value: "verification-value",
   });
-  const plan = await Provisioning.create({ provider, requirements: [requirement], zone });
+  const { plan } = await Provisioning.create({
+    provider,
+    requirements: [requirement],
+    target: Provisioning.Target.ExactZone({ zone }),
+  });
 
   const approved = await requestApproval({
     instructions: Provisioning.renderManualInstructions(plan),

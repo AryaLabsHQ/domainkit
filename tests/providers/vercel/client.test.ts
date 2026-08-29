@@ -18,6 +18,18 @@ const token = Secret.make("test-token-that-must-remain-secret");
 const capabilities = ["dns:read", "dns:write"] as const;
 
 describe("Vercel Effect client", () => {
+  it.effect("exposes normalized optional zone discovery", () => {
+    const recording = recordedFetch([{ body: domainPage([domain]) }]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      assert.deepStrictEqual(
+        yield* Vercel.discovery(client).listZones(DomainName.parse("example.com")),
+        [portableZone],
+      );
+      assert.strictEqual(Vercel.discovery(client).provider, client);
+    });
+  });
+
   it.effect("discovers personal and paginated team accounts", () => {
     const recording = recordedFetch([
       { body: { user: { id: "user-1", name: null, username: "saatvik" } } },

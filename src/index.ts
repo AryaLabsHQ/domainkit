@@ -11,6 +11,7 @@ export * as ProviderAuthorization from "./promise/provider-authorization.ts";
 export * as ProviderAuth from "./promise/provider-auth.ts";
 export * as Secret from "./auth/secret.ts";
 export * as ProviderDiscovery from "./discovery/selection.ts";
+export * as ZoneDiscovery from "./promise/zone-discovery.ts";
 export * as Zones from "./discovery/zones.ts";
 export * as DnsRecord from "./promise/dns-record.ts";
 export * as DomainName from "./promise/domain-name.ts";

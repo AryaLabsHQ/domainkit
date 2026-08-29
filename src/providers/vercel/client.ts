@@ -4,6 +4,7 @@ import type * as ProviderAuth from "../../auth/manifest.ts";
 import type * as Secret from "../../auth/secret.ts";
 import * as DomainName from "../../domain/domain-name.ts";
 import type * as DnsRecord from "../../domain/dns-record.ts";
+import type * as ZoneDiscovery from "../../discovery/zone-discovery.ts";
 import * as DnsProvider from "../../provider/provider.ts";
 import * as Protocol from "./protocol.ts";
 import * as Records from "./records.ts";
@@ -51,6 +52,14 @@ export interface Interface extends DnsProvider.Interface {
     input?: ListZonesInput,
   ) => Effect.Effect<ReadonlyArray<Zone>, DnsProvider.Error>;
   readonly validateToken: () => Effect.Effect<ProviderAuth.TokenValidation, DnsProvider.Error>;
+}
+
+/** Exposes Vercel zone lookup as the optional provider discovery capability. */
+export function discovery(client: Interface): ZoneDiscovery.Source {
+  return {
+    listZones: (name) => client.listZones({ name }),
+    provider: client,
+  };
 }
 
 /** Creates an Effect-native Vercel client without owning the credential lifecycle. */

@@ -4,6 +4,7 @@ import type * as ProviderAuth from "../../auth/manifest.ts";
 import type * as Secret from "../../auth/secret.ts";
 import * as DomainName from "../../domain/domain-name.ts";
 import type * as DnsRecord from "../../domain/dns-record.ts";
+import type * as ZoneDiscovery from "../../discovery/zone-discovery.ts";
 import * as Zones from "../../discovery/zones.ts";
 import * as DnsProvider from "../../provider/provider.ts";
 import * as Protocol from "./protocol.ts";
@@ -44,6 +45,22 @@ export interface Interface extends DnsProvider.Interface {
     input?: ListZonesInput,
   ) => Effect.Effect<ReadonlyArray<Zone>, DnsProvider.Error>;
   readonly validateToken: () => Effect.Effect<ProviderAuth.TokenValidation, DnsProvider.Error>;
+}
+
+/** Exposes Cloudflare zone lookup as the optional provider discovery capability. */
+export function discovery(client: Interface): ZoneDiscovery.Source {
+  return {
+    listZones: (name) =>
+      client.listZones({ name }).pipe(
+        Effect.map((zones) =>
+          zones.map((zone) => ({
+            ...zone,
+            status: zone.status === "active" || zone.status === "pending" ? zone.status : "unknown",
+          })),
+        ),
+      ),
+    provider: client,
+  };
 }
 
 interface CredentialOptions {

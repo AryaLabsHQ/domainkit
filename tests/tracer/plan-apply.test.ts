@@ -31,9 +31,9 @@ describe("provisioning tracer", () => {
     const provider = InMemoryDnsProvider.make();
     const layer = Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer);
     return Effect.gen(function* () {
-      const first = yield* EffectProvisioning.create({
+      const { plan: first } = yield* EffectProvisioning.create({
         requirements: [requirement],
-        zone: "example.com",
+        target: EffectProvisioning.Target.ExactZone({ zone: "example.com" }),
       });
       assert.deepStrictEqual(
         first.operations.map(({ _tag }) => _tag),
@@ -48,9 +48,9 @@ describe("provisioning tracer", () => {
       assert.strictEqual(receipt.status, "complete");
       assert.ok(receipt.appliedAt instanceof Date);
 
-      const second = yield* EffectProvisioning.create({
+      const { plan: second } = yield* EffectProvisioning.create({
         requirements: [requirement],
-        zone: "example.com",
+        target: EffectProvisioning.Target.ExactZone({ zone: "example.com" }),
       });
       assert.deepStrictEqual(
         second.operations.map(({ _tag }) => _tag),
@@ -61,10 +61,10 @@ describe("provisioning tracer", () => {
 
   it("mirrors the tracer through the Promise namespace", async () => {
     const provider = InMemoryDnsProvider.toAsync();
-    const plan = await Provisioning.create({
+    const { plan } = await Provisioning.create({
       provider,
       requirements: [requirement],
-      zone: "example.com",
+      target: Provisioning.Target.ExactZone({ zone: "example.com" }),
     });
     const authorization = await Provisioning.authorize(plan);
     const receipt = await Provisioning.apply({ authorization, plan, provider });
@@ -73,10 +73,10 @@ describe("provisioning tracer", () => {
 
   it("deletes only receipt-proven records after separate consent and fresh readback", async () => {
     const provider = InMemoryDnsProvider.toAsync();
-    const plan = await Provisioning.create({
+    const { plan } = await Provisioning.create({
       provider,
       requirements: [requirement],
-      zone: "example.com",
+      target: Provisioning.Target.ExactZone({ zone: "example.com" }),
     });
     const createAuthorization = await Provisioning.authorize(plan);
     const createReceipt = await Provisioning.apply({
@@ -97,10 +97,10 @@ describe("provisioning tracer", () => {
 
   it("fails closed when a receipt-proven record changed before deletion", async () => {
     const provider = InMemoryDnsProvider.toAsync();
-    const plan = await Provisioning.create({
+    const { plan } = await Provisioning.create({
       provider,
       requirements: [requirement],
-      zone: "example.com",
+      target: Provisioning.Target.ExactZone({ zone: "example.com" }),
     });
     const createAuthorization = await Provisioning.authorize(plan);
     const createReceipt = await Provisioning.apply({
@@ -130,10 +130,10 @@ describe("provisioning tracer", () => {
       ttl: 300,
       value: "proof",
     });
-    const plan = await Provisioning.create({
+    const { plan } = await Provisioning.create({
       provider: backing,
       requirements: [requirement, second],
-      zone: "example.com",
+      target: Provisioning.Target.ExactZone({ zone: "example.com" }),
     });
     const createReceipt = await Provisioning.apply({
       authorization: await Provisioning.authorize(plan),
@@ -191,9 +191,9 @@ describe("provisioning tracer", () => {
       Digest.webCryptoLayer,
     );
     return Effect.gen(function* () {
-      const plan = yield* EffectProvisioning.create({
+      const { plan } = yield* EffectProvisioning.create({
         requirements: [requirement],
-        zone: "example.com",
+        target: EffectProvisioning.Target.ExactZone({ zone: "example.com" }),
       });
       assert.strictEqual(plan.operations[0]?._tag, "conflict");
       const authorization = yield* EffectProvisioning.authorize(plan);
@@ -213,9 +213,9 @@ describe("provisioning tracer", () => {
       target: "other.example.net",
     });
     return Effect.gen(function* () {
-      const plan = yield* EffectProvisioning.create({
+      const { plan } = yield* EffectProvisioning.create({
         requirements: [requirement, incompatible],
-        zone: "example.com",
+        target: EffectProvisioning.Target.ExactZone({ zone: "example.com" }),
       });
       assert.deepStrictEqual(
         plan.operations.map(({ _tag }) => _tag),
@@ -235,9 +235,9 @@ describe("provisioning tracer", () => {
   it.effect("rejects a plan whose digest-bound contents were altered", () => {
     const layer = Layer.merge(InMemoryDnsProvider.layer(), Digest.webCryptoLayer);
     return Effect.gen(function* () {
-      const plan = yield* EffectProvisioning.create({
+      const { plan } = yield* EffectProvisioning.create({
         requirements: [requirement],
-        zone: "example.com",
+        target: EffectProvisioning.Target.ExactZone({ zone: "example.com" }),
       });
       const altered: DnsPlan.DnsPlan = {
         ...plan,
@@ -252,9 +252,9 @@ describe("provisioning tracer", () => {
     const provider = InMemoryDnsProvider.make();
     const layer = Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer);
     return Effect.gen(function* () {
-      const plan = yield* EffectProvisioning.create({
+      const { plan } = yield* EffectProvisioning.create({
         requirements: [requirement],
-        zone: "example.com",
+        target: EffectProvisioning.Target.ExactZone({ zone: "example.com" }),
       });
       const authorization = yield* EffectProvisioning.authorize(plan);
       yield* provider.createRecord(
@@ -300,9 +300,9 @@ describe("provisioning tracer", () => {
       value: "second",
     });
     return Effect.gen(function* () {
-      const plan = yield* EffectProvisioning.create({
+      const { plan } = yield* EffectProvisioning.create({
         requirements: [requirement, second],
-        zone: "example.com",
+        target: EffectProvisioning.Target.ExactZone({ zone: "example.com" }),
       });
       const authorization = yield* EffectProvisioning.authorize(plan);
       const failure = yield* EffectProvisioning.apply({
