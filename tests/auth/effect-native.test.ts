@@ -5,6 +5,7 @@ import {
   AuthorizationLifecycle,
   Connection,
   Digest,
+  DomainName,
   ProviderAuthorization,
   Secret,
 } from "../../src/effect.ts";
@@ -60,6 +61,43 @@ describe("Effect-native connections", () => {
       assert.strictEqual(stored?.bindings.length, 1);
       assert.strictEqual(stored?.authorization.providerAccountId, "account-1");
       assert.strictEqual(stored?.credential.accessToken.expose(), "access-token");
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          Layer.succeed(AuthorizationLifecycle.Service, repository),
+          Digest.webCryptoLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("extends an existing owner grant when another domain uses the same account", () => {
+    const repository = InMemoryAuthorizationLifecycle.make();
+    const connect = (domain: "domlens.dev" | "samva.arya.sh") =>
+      Connection.start({
+        authorizedById: "user-1",
+        grant: { _tag: "domains", domains: [DomainName.parse(domain)] },
+        method: Connection.Method.Token({
+          authenticate: () => Effect.succeed(authentication()),
+          providerId: "example",
+          requiredCapabilities: ["dns:read", "dns:write"],
+          token: Secret.make("access-token"),
+        }),
+        ownerId: "organization-1",
+      });
+
+    return Effect.gen(function* () {
+      const first = yield* connect("domlens.dev");
+      const second = yield* connect("samva.arya.sh");
+      assert.strictEqual(first._tag, "Connected");
+      assert.strictEqual(second._tag, "Connected");
+      if (first._tag !== "Connected" || second._tag !== "Connected") return;
+      assert.strictEqual(second.aggregate.bindings.length, 1);
+      assert.strictEqual(second.aggregate.bindings[0]?.id, first.aggregate.bindings[0]?.id);
+      assert.deepStrictEqual(second.aggregate.bindings[0]?.grant, {
+        _tag: "domains",
+        domains: [DomainName.parse("domlens.dev"), DomainName.parse("samva.arya.sh")],
+      });
     }).pipe(
       Effect.provide(
         Layer.merge(

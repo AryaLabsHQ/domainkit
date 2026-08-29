@@ -95,6 +95,18 @@ export interface CompleteInput {
   readonly flow: InteractiveFlow;
 }
 
+const mergeGrant = (
+  current: Binding.Grant | undefined,
+  requested: Binding.Grant,
+): Binding.Grant => {
+  if (current === undefined) return requested;
+  if (current._tag === "account" || requested._tag === "account") return { _tag: "account" };
+  return {
+    _tag: "domains",
+    domains: [...new Set([...current.domains, ...requested.domains])],
+  };
+};
+
 const persist = Effect.fn("Connection.persist")(function* (
   input: BaseInput & {
     readonly authentication: Authentication;
@@ -139,7 +151,7 @@ const persist = Effect.fn("Connection.persist")(function* (
   const binding: Binding.Connection = {
     authorizationId,
     createdAt: existingBinding?.createdAt ?? now,
-    grant: input.grant,
+    grant: mergeGrant(existingBinding?.grant, input.grant),
     id:
       existingBinding?.id ??
       (yield* crypto.randomUUIDv4.pipe(
