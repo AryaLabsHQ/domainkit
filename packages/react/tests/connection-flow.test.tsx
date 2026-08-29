@@ -69,6 +69,43 @@ describe("Connection.Flow", () => {
     ]);
   });
 
+  it("collects provider-declared token parameters", async () => {
+    const user = userEvent.setup();
+    const snapshot = disconnected();
+    const transport = Testing.makeFakeTransport({
+      inspect: {
+        ...snapshot,
+        provider: Testing.provider({
+          authentication: [
+            {
+              _tag: "Token",
+              label: "Connect with token",
+              parameters: [
+                {
+                  key: "accountId",
+                  label: "Team ID",
+                  required: true,
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    });
+    render(
+      <DomainKit.Root transport={transport}>
+        <Connection.Flow domain="mail.example.com" />
+      </DomainKit.Root>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Connect Cloudflare" }));
+    await user.type(screen.getByLabelText("Team ID"), "team_arya");
+    await user.type(screen.getByLabelText("API token"), "secret-token");
+    await user.click(screen.getByRole("button", { name: "Connect with token" }));
+
+    expect(transport.calls.connect[0]?.parameters).toEqual({ accountId: "team_arya" });
+  });
+
   it("reuses a provider authorization without another OAuth round trip", async () => {
     const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: disconnected(true) });

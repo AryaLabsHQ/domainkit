@@ -4,9 +4,22 @@ export interface Failure {
   readonly retry: "never" | "after-user-action" | "safe" | "unknown";
 }
 
+export interface AuthenticationParameter {
+  readonly description?: string;
+  readonly key: string;
+  readonly label: string;
+  readonly placeholder?: string;
+  readonly required?: boolean;
+}
+
 export type AuthenticationMethod =
   | { readonly _tag: "OAuth"; readonly label: string }
-  | { readonly _tag: "Token"; readonly label: string; readonly placeholder?: string };
+  | {
+      readonly _tag: "Token";
+      readonly label: string;
+      readonly parameters?: ReadonlyArray<AuthenticationParameter>;
+      readonly placeholder?: string;
+    };
 
 export interface Provider {
   readonly authentication: ReadonlyArray<AuthenticationMethod>;
@@ -46,6 +59,7 @@ export interface ConnectionTransport {
   readonly connect: (input: {
     readonly domain: string;
     readonly method: "oauth" | "token";
+    readonly parameters?: Readonly<Record<string, string>>;
     readonly providerId: string;
     readonly token?: string;
   }) => Promise<ConnectionResult>;

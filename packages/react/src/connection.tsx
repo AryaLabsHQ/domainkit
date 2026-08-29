@@ -21,7 +21,11 @@ export type State =
 type Disconnected = Extract<ConnectionSnapshot, { readonly _tag: "Disconnected" }>;
 
 export interface Controller {
-  readonly connect: (method: "oauth" | "token", token?: string) => Promise<void>;
+  readonly connect: (
+    method: "oauth" | "token",
+    token?: string,
+    parameters?: Readonly<Record<string, string>>,
+  ) => Promise<void>;
   readonly retry: () => void;
   readonly reuse: () => Promise<void>;
   readonly state: State;
@@ -56,7 +60,11 @@ export function useController(domain: string): Controller {
   }, [attempt, domain, transport]);
 
   const connect = useCallback(
-    async (method: "oauth" | "token", token?: string) => {
+    async (
+      method: "oauth" | "token",
+      token?: string,
+      parameters?: Readonly<Record<string, string>>,
+    ) => {
       if (state._tag !== "Disconnected") return;
       const request = ++activeRequest.current;
       const snapshot = state;
@@ -65,6 +73,7 @@ export function useController(domain: string): Controller {
         const result = await transport.connection.connect({
           domain,
           method,
+          ...(parameters === undefined ? {} : { parameters }),
           providerId: snapshot.provider.id,
           ...(token === undefined ? {} : { token }),
         });
@@ -164,6 +173,7 @@ interface MethodProps {
 
 function Method({ controller, method }: MethodProps) {
   const [token, setToken] = useState("");
+  const [parameters, setParameters] = useState<Readonly<Record<string, string>>>({});
   if (method._tag === "OAuth") {
     return (
       <button data-domainkit-part="oauth-connect" onClick={() => void controller.connect("oauth")}>
@@ -173,10 +183,42 @@ function Method({ controller, method }: MethodProps) {
   }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (token.length > 0) void controller.connect("token", token);
+    if (token.length > 0) {
+      const populated = Object.fromEntries(
+        Object.entries(parameters).filter(([, value]) => value.length > 0),
+      );
+      void controller.connect(
+        "token",
+        token,
+        Object.keys(populated).length === 0 ? undefined : populated,
+      );
+    }
   };
+  const missingRequiredParameter = method.parameters?.some(
+    (parameter) => parameter.required === true && !parameters[parameter.key],
+  );
   return (
     <form data-domainkit-part="token-connect" onSubmit={submit}>
+      {method.parameters?.map((parameter) => (
+        <label key={parameter.key}>
+          {parameter.label}
+          <input
+            name={parameter.key}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              setParameters((current) => ({
+                ...current,
+                [parameter.key]: value,
+              }));
+            }}
+            placeholder={parameter.placeholder}
+            required={parameter.required}
+            type="text"
+            value={parameters[parameter.key] ?? ""}
+          />
+          {parameter.description === undefined ? null : <small>{parameter.description}</small>}
+        </label>
+      ))}
       <label>
         API token
         <input
@@ -188,7 +230,7 @@ function Method({ controller, method }: MethodProps) {
           value={token}
         />
       </label>
-      <button disabled={token.length === 0} type="submit">
+      <button disabled={token.length === 0 || missingRequiredParameter === true} type="submit">
         {method.label}
       </button>
     </form>
