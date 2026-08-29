@@ -47,10 +47,12 @@ export function make(sources: ReadonlyArray<Source>): Interface {
             (source) =>
               source.listZones(name).pipe(
                 Effect.map((zones) =>
-                  zones.map((zone) => ({
-                    candidate: { ...zone, providerId: source.provider.id },
-                    provider: source.provider,
-                  })),
+                  zones
+                    .filter((zone) => zone.name === name)
+                    .map((zone) => ({
+                      candidate: { ...zone, providerId: source.provider.id },
+                      provider: source.provider,
+                    })),
                 ),
               ),
             { concurrency: "unbounded" },

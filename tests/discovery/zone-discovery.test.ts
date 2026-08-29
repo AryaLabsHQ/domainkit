@@ -56,6 +56,32 @@ describe("ZoneDiscovery", () => {
     }),
   );
 
+  it.effect("does not let a source's parent zone preempt a closer candidate", () =>
+    Effect.gen(function* () {
+      const parent = DomainName.parse("example.com");
+      const outcome = yield* ZoneDiscovery.make([
+        {
+          listZones: () =>
+            Effect.succeed([
+              {
+                accountId: "account-parent",
+                id: "zone-parent",
+                name: parent,
+                nameservers: [DomainName.parse("ns1.example.com")],
+                status: "active" as const,
+              },
+            ]),
+          provider: provider("vercel"),
+        },
+        source({ accountId: "account-near", providerId: "cloudflare", zone: "mail.example.com" }),
+      ]).discover(DomainName.parse("track.mail.example.com"));
+      assert.strictEqual(outcome._tag, "Resolved");
+      if (outcome._tag !== "Resolved") return;
+      assert.strictEqual(outcome.candidate.name, "mail.example.com");
+      assert.strictEqual(outcome.provider.id, "cloudflare");
+    }),
+  );
+
   it.effect("returns deterministic account candidates instead of guessing ambiguity", () =>
     Effect.gen(function* () {
       const outcome = yield* ZoneDiscovery.make([
