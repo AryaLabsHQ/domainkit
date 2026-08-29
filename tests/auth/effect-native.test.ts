@@ -100,21 +100,24 @@ describe("Effect-native connections", () => {
       });
       assert.strictEqual(started._tag, "Redirect");
       if (started._tag !== "Redirect") return;
-      const aggregate = yield* Connection.complete({
-        callbackUrl: new URL("https://app.example/callback?code=code"),
-        continuationId: started.continuationId,
-        continuations,
-        flow,
-      });
-      assert.strictEqual(aggregate.authorization.method, "oauth2");
-      assert.strictEqual(aggregate.bindings.length, 1);
-      const failure = yield* Connection.complete({
-        callbackUrl: new URL("https://app.example/callback?code=replay"),
-        continuationId: started.continuationId,
-        continuations,
-        flow,
-      }).pipe(Effect.flip);
-      assert.strictEqual(failure._tag, "ConnectionError");
+      const completions = yield* Effect.all(
+        ["first", "second"].map((code) =>
+          Connection.complete({
+            callbackUrl: new URL(`https://app.example/callback?code=${code}`),
+            continuationId: started.continuationId,
+            continuations,
+            flow,
+          }).pipe(Effect.result),
+        ),
+        { concurrency: "unbounded" },
+      );
+      const successes = completions.filter((completion) => completion._tag === "Success");
+      const failures = completions.filter((completion) => completion._tag === "Failure");
+      assert.strictEqual(successes.length, 1);
+      assert.strictEqual(failures.length, 1);
+      assert.strictEqual(successes[0]?.success.authorization.method, "oauth2");
+      assert.strictEqual(successes[0]?.success.bindings.length, 1);
+      assert.strictEqual(failures[0]?.failure._tag, "ConnectionError");
     }).pipe(Effect.provide(layer));
   });
 });

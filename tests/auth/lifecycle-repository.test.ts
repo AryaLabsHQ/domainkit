@@ -53,20 +53,25 @@ describe("authorization lifecycle repository", () => {
       let revocations = 0;
       const firstBinding = first.aggregate.bindings[0];
       if (firstBinding === undefined) return yield* Effect.die("first binding is missing");
-      const firstDetach = yield* repository.detach({
-        connectionId: firstBinding.id,
-        revoke: () => Effect.sync(() => void revocations++),
-      });
-      assert.strictEqual(firstDetach.remainingBindings, 1);
-      assert.strictEqual(revocations, 0);
-      const remaining = yield* repository.get(second.aggregate.authorization.id);
-      const finalBinding = remaining?.bindings[0];
-      if (finalBinding === undefined) return yield* Effect.die("final binding is missing");
-      const finalDetach = yield* repository.detach({
-        connectionId: finalBinding.id,
-        revoke: () => Effect.sync(() => void revocations++),
-      });
-      assert.strictEqual(finalDetach.revokedAuthorization, true);
+      const secondBinding = second.aggregate.bindings.find(({ id }) => id !== firstBinding.id);
+      if (secondBinding === undefined) return yield* Effect.die("second binding is missing");
+      const results = yield* Effect.all(
+        [firstBinding.id, secondBinding.id].map((connectionId) =>
+          repository.detach({
+            connectionId,
+            revoke: () => Effect.sync(() => void revocations++),
+          }),
+        ),
+        { concurrency: "unbounded" },
+      );
+      assert.deepStrictEqual(
+        results.map(({ remainingBindings }) => remainingBindings).sort(),
+        [0, 1],
+      );
+      assert.strictEqual(
+        results.some(({ revokedAuthorization }) => revokedAuthorization),
+        true,
+      );
       assert.strictEqual(revocations, 1);
       assert.strictEqual(yield* repository.get(second.aggregate.authorization.id), null);
     }).pipe(

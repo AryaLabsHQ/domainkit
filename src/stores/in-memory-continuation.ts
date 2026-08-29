@@ -6,22 +6,15 @@ export function make(): Connection.ContinuationStore {
   const state = Effect.runSync(Ref.make<ReadonlyMap<string, Connection.Continuation>>(new Map()));
   return {
     consume: Effect.fn("ConnectionContinuations.consume")(function* (id, now) {
-      const entries = yield* Ref.get(state);
-      const continuation = entries.get(id);
-      if (continuation === undefined || continuation.expiresAt <= now) {
-        yield* Ref.update(state, (current) => {
-          const next = new Map(current);
-          next.delete(id);
-          return next;
-        });
-        return null;
-      }
-      yield* Ref.update(state, (current) => {
-        const next = new Map(current);
+      return yield* Ref.modify(state, (entries) => {
+        const continuation = entries.get(id);
+        const next = new Map(entries);
         next.delete(id);
-        return next;
+        return [
+          continuation !== undefined && continuation.expiresAt > now ? continuation : null,
+          next,
+        ] as const;
       });
-      return continuation;
     }),
     put: Effect.fn("ConnectionContinuations.put")((continuation) =>
       Ref.update(state, (entries) => {

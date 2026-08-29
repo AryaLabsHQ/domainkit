@@ -1,7 +1,5 @@
-import { Effect, Layer, Ref } from "effect";
+import { Effect, Layer, Ref, Semaphore } from "effect";
 
-import type * as ProviderAuthorization from "../auth/authorization.ts";
-import type * as Connection from "../auth/connection.ts";
 import * as Repository from "../auth/lifecycle-repository.ts";
 
 export interface Options {
@@ -22,6 +20,8 @@ function missing(operation: string, message: string): Repository.Error {
 
 export function make(options: Options = {}): Repository.Interface {
   const state = Effect.runSync(Ref.make<ReadonlyMap<string, Repository.Aggregate>>(new Map()));
+  const mutations = Semaphore.makeUnsafe(1);
+  const serialize = <A, E, R>(effect: Effect.Effect<A, E, R>) => mutations.withPermit(effect);
 
   const commit = Effect.fn("InMemoryAuthorizationLifecycleRepository.commit")(function* (
     operation: string,
@@ -90,45 +90,52 @@ export function make(options: Options = {}): Repository.Interface {
   );
 
   return Repository.Service.of({
-    bind: Effect.fn("AuthorizationLifecycleRepository.bind")(function* (
-      authorizationId: string,
-      binding: Connection.Connection,
-    ) {
-      const aggregate = yield* get(authorizationId);
-      if (aggregate === null) {
-        return yield* missing("bind", "Authorization aggregate does not exist");
-      }
-      const next = {
-        ...aggregate,
-        bindings: [
-          ...aggregate.bindings.filter((candidate) => candidate.id !== binding.id),
-          binding,
-        ],
-      };
-      yield* commit("bind", next);
-      return next;
-    }),
-    connect: Effect.fn("AuthorizationLifecycleRepository.connect")(function* (aggregate) {
-      yield* commit("connect", aggregate);
-      return aggregate;
-    }),
-    detach: ({ connectionId, revoke }) =>
-      Effect.gen(function* () {
-        const aggregate = yield* getByConnectionId(connectionId);
-        if (aggregate === null) {
-          return yield* missing("detach", "Connection binding does not exist");
-        }
-        const remaining = aggregate.bindings.filter((binding) => binding.id !== connectionId);
-        if (remaining.length > 0) {
-          yield* commit("detachBinding", { ...aggregate, bindings: remaining });
-          return {
-            authorizationId: aggregate.authorization.id,
-            remainingBindings: remaining.length,
-            revokedAuthorization: false,
+    bind: Effect.fn("AuthorizationLifecycleRepository.bind")((authorizationId, binding) =>
+      serialize(
+        Effect.gen(function* () {
+          const aggregate = yield* get(authorizationId);
+          if (aggregate === null) {
+            return yield* missing("bind", "Authorization aggregate does not exist");
+          }
+          const next = {
+            ...aggregate,
+            bindings: [
+              ...aggregate.bindings.filter((candidate) => candidate.id !== binding.id),
+              binding,
+            ],
           };
-        }
-        return yield* finishRevocation(aggregate, revoke);
-      }).pipe(Effect.withSpan("AuthorizationLifecycleRepository.detach")),
+          yield* commit("bind", next);
+          return next;
+        }),
+      ),
+    ),
+    connect: Effect.fn("AuthorizationLifecycleRepository.connect")((aggregate) =>
+      serialize(
+        Effect.gen(function* () {
+          yield* commit("connect", aggregate);
+          return aggregate;
+        }),
+      ),
+    ),
+    detach: ({ connectionId, revoke }) =>
+      serialize(
+        Effect.gen(function* () {
+          const aggregate = yield* getByConnectionId(connectionId);
+          if (aggregate === null) {
+            return yield* missing("detach", "Connection binding does not exist");
+          }
+          const remaining = aggregate.bindings.filter((binding) => binding.id !== connectionId);
+          if (remaining.length > 0) {
+            yield* commit("detachBinding", { ...aggregate, bindings: remaining });
+            return {
+              authorizationId: aggregate.authorization.id,
+              remainingBindings: remaining.length,
+              revokedAuthorization: false,
+            };
+          }
+          return yield* finishRevocation(aggregate, revoke);
+        }).pipe(Effect.withSpan("AuthorizationLifecycleRepository.detach")),
+      ),
     findByProviderAccount: Effect.fn("AuthorizationLifecycleRepository.findByProviderAccount")(
       (providerId: string, providerAccountId: string) =>
         Ref.get(state).pipe(
@@ -144,56 +151,61 @@ export function make(options: Options = {}): Repository.Interface {
     ),
     get,
     getByConnectionId,
-    promoteEvidence: Effect.fn("AuthorizationLifecycleRepository.promoteEvidence")(function* (
-      authorizationId: string,
-      evidence: ReadonlyArray<ProviderAuthorization.CapabilityEvidence>,
-    ) {
-      const aggregate = yield* get(authorizationId);
-      if (aggregate === null) {
-        return yield* missing("promoteEvidence", "Authorization aggregate does not exist");
-      }
-      const byCapability = new Map(
-        aggregate.authorization.capabilityEvidence.map((item) => [item.capability, item]),
-      );
-      for (const item of evidence) byCapability.set(item.capability, item);
-      const next = {
-        ...aggregate,
-        authorization: {
-          ...aggregate.authorization,
-          capabilityEvidence: [...byCapability.values()],
-        },
-      };
-      yield* commit("promoteEvidence", next);
-      return next;
-    }),
+    promoteEvidence: Effect.fn("AuthorizationLifecycleRepository.promoteEvidence")(
+      (authorizationId, evidence) =>
+        serialize(
+          Effect.gen(function* () {
+            const aggregate = yield* get(authorizationId);
+            if (aggregate === null) {
+              return yield* missing("promoteEvidence", "Authorization aggregate does not exist");
+            }
+            const byCapability = new Map(
+              aggregate.authorization.capabilityEvidence.map((item) => [item.capability, item]),
+            );
+            for (const item of evidence) byCapability.set(item.capability, item);
+            const next = {
+              ...aggregate,
+              authorization: {
+                ...aggregate.authorization,
+                capabilityEvidence: [...byCapability.values()],
+              },
+            };
+            yield* commit("promoteEvidence", next);
+            return next;
+          }),
+        ),
+    ),
     recover: ({ authorizationId, revoke }) =>
-      Effect.gen(function* () {
-        const aggregate = yield* get(authorizationId);
-        if (aggregate === null) {
-          return yield* missing("recover", "Authorization aggregate does not exist");
-        }
-        if (aggregate.authorization.revocation._tag !== "Pending") {
-          return yield* missing("recover", "Authorization is not awaiting revocation");
-        }
-        return yield* finishRevocation(aggregate, revoke);
-      }).pipe(Effect.withSpan("AuthorizationLifecycleRepository.recover")),
-    rotate: Effect.fn("AuthorizationLifecycleRepository.rotate")(function* (
-      authorizationId: string,
-      credential: Connection.StoredCredential,
-      expiresAt: Date | null,
-    ) {
-      const aggregate = yield* get(authorizationId);
-      if (aggregate === null) {
-        return yield* missing("rotate", "Authorization aggregate does not exist");
-      }
-      const next = {
-        ...aggregate,
-        authorization: { ...aggregate.authorization, expiresAt },
-        credential,
-      };
-      yield* commit("rotate", next);
-      return next;
-    }),
+      serialize(
+        Effect.gen(function* () {
+          const aggregate = yield* get(authorizationId);
+          if (aggregate === null) {
+            return yield* missing("recover", "Authorization aggregate does not exist");
+          }
+          if (aggregate.authorization.revocation._tag !== "Pending") {
+            return yield* missing("recover", "Authorization is not awaiting revocation");
+          }
+          return yield* finishRevocation(aggregate, revoke);
+        }).pipe(Effect.withSpan("AuthorizationLifecycleRepository.recover")),
+      ),
+    rotate: Effect.fn("AuthorizationLifecycleRepository.rotate")(
+      (authorizationId, credential, expiresAt) =>
+        serialize(
+          Effect.gen(function* () {
+            const aggregate = yield* get(authorizationId);
+            if (aggregate === null) {
+              return yield* missing("rotate", "Authorization aggregate does not exist");
+            }
+            const next = {
+              ...aggregate,
+              authorization: { ...aggregate.authorization, expiresAt },
+              credential,
+            };
+            yield* commit("rotate", next);
+            return next;
+          }),
+        ),
+    ),
   });
 }
 
