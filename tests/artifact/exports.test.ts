@@ -17,7 +17,9 @@ describe("public namespaces", () => {
 
   it("exposes cohesive Promise, Effect, and testing namespace surfaces", () => {
     assert.strictEqual(typeof promiseApi.Provisioning.create, "function");
-    assert.strictEqual(typeof promiseApi.OAuth.begin, "function");
+    assert.strictEqual(typeof promiseApi.Connection.start, "function");
+    assert.strictEqual(typeof effectApi.Connection.start, "function");
+    assert.strictEqual(typeof effectApi.AuthorizationLifecycle.Service, "function");
     assert.strictEqual(typeof effectApi.DnsProvider.Service, "function");
     assert.strictEqual(typeof effectApi.Provisioning.create, "function");
     assert.strictEqual(typeof effectApi.CloudflareDnsOverHttps.layer, "function");

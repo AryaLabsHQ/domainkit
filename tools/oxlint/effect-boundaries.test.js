@@ -38,8 +38,16 @@ tester.run("domainkit/no-runtime-exit", noRuntimeExit, {
 tester.run("domainkit/no-foreign-promise-outside-boundary", noForeignPromiseOutsideBoundary, {
   valid: [
     {
+      filename: path.join(process.cwd(), "src/auth/authorization-code.ts"),
+      code: "Effect.tryPromise(() => request());",
+    },
+    {
       filename: path.join(process.cwd(), "src/auth/oauth.ts"),
       code: "Effect.tryPromise(() => request());",
+    },
+    {
+      filename: path.join(process.cwd(), "src/promise/connection.ts"),
+      code: "Effect.tryPromise(() => callback());",
     },
   ],
   invalid: [

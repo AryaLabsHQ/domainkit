@@ -1,251 +1,75 @@
 import { assert, describe, expect, it } from "@effect/vitest";
 
 import {
+  AuthorizationLifecycle,
   Connection,
-  ConnectionLifecycle,
-  DnsRecord,
-  Provisioning,
+  ProviderAuthorization,
   Secret,
-  TokenConnection,
 } from "../../src/index.ts";
-import {
-  InMemoryConnectionStore,
-  InMemoryCredentialStore,
-  InMemoryDnsProvider,
-  InMemoryProviderAuthorizationStore,
-} from "../../src/testing.ts";
+import { InMemoryAuthorizationLifecycle } from "../../src/testing.ts";
 
-describe("token connections", () => {
-  it("validates caller tokens and authorizes a digest-bound DNS plan", async () => {
-    const connections = InMemoryConnectionStore.toAsync();
-    const credentialStore = InMemoryCredentialStore.make();
-    const credentials = InMemoryCredentialStore.toAsync(credentialStore);
-    const result = await TokenConnection.connect({
-      authorizationStore: InMemoryProviderAuthorizationStore.toAsync(),
-      connectionStore: connections,
-      credentialStore: credentials,
+const authenticate = async (): Promise<Connection.Authentication> => ({
+  capabilityEvidence: [
+    {
+      capability: "dns:read",
+      evidence: ProviderAuthorization.Evidence.Introspected({ observedAt: new Date() }),
+    },
+    {
+      capability: "dns:write",
+      evidence: ProviderAuthorization.Evidence.Introspected({ observedAt: new Date() }),
+    },
+  ],
+  credential: {
+    accessToken: Secret.make("token"),
+    refreshToken: null,
+    tokenType: "bearer",
+  },
+  expiresAt: null,
+  providerAccountId: "account-1",
+  providerContext: { value: {}, version: "example.v1" },
+  scopes: ["dns:write"],
+});
+
+describe("Promise connections", () => {
+  it("delegates token connections to the Effect lifecycle", async () => {
+    const repository = AuthorizationLifecycle.toAsync(InMemoryAuthorizationLifecycle.make());
+    const result = await Connection.start({
+      authorizedById: "user-1",
       grant: { _tag: "account" },
+      method: Connection.Method.Token({
+        authenticate,
+        providerId: "example",
+        requiredCapabilities: ["dns:read", "dns:write"],
+        token: Secret.make("token"),
+      }),
       ownerId: "organization-1",
-      providerId: "example-provider",
-      subjectId: "user-1",
-      token: Secret.make("personal-access-token"),
-      validate: async (token) => {
-        assert.strictEqual(token.expose(), "personal-access-token");
-        return {
-          accountId: "account-1",
-          capabilities: ["dns:read", "dns:write"],
-          expiresAt: null,
-          scopes: ["dns:write"],
-        };
-      },
+      repository,
     });
-    const { authorization, connection } = result;
+    assert.strictEqual(result._tag, "Connected");
+    if (result._tag !== "Connected") return;
     assert.strictEqual(
-      Connection.assertGrant(connection, authorization, {
-        capability: "dns:read",
-        domain: "anything.example.com",
-        providerId: "example-provider",
-      }),
-      "anything.example.com",
+      (await repository.get(result.aggregate.authorization.id))?.credential.accessToken.expose(),
+      "token",
     );
-    assert.notMatch(
-      JSON.stringify(await credentials.get(authorization.id)),
-      /personal-access-token/,
-    );
-
-    const provider = InMemoryDnsProvider.toAsync({ id: "example-provider" });
-    const plan = await Provisioning.create({
-      provider,
-      requirements: [
-        DnsRecord.parse({
-          _tag: "TXT",
-          metadata: { ownership: "example-app", provenance: "test", purpose: "Verify domain" },
-          name: "_verify.example.com",
-          policy: "append",
-          ttl: 300,
-          value: "verification",
-        }),
-      ],
-      zone: "example.com",
-    });
-
-    await expect(
-      Provisioning.authorizeForConnection({
-        authorization: { ...authorization, id: "other-authorization" },
-        connection,
-        domain: plan.zone,
-        plan,
-      }),
-    ).rejects.toMatchObject({ _tag: "AuthorizationError" });
-    const planAuthorization = await Provisioning.authorizeForConnection({
-      authorization,
-      connection,
-      domain: plan.zone,
-      plan,
-    });
-    assert.strictEqual(planAuthorization.planDigest, plan.digest);
-
-    await expect(
-      Provisioning.authorizeForConnection({
-        authorization: { ...authorization, capabilities: ["dns:read"] },
-        connection,
-        domain: plan.zone,
-        plan,
-      }),
-    ).rejects.toMatchObject({ _tag: "AuthorizationError" });
-    await expect(
-      Provisioning.authorizeForConnection({
-        authorization: { ...authorization, expiresAt: new Date(0) },
-        connection,
-        domain: plan.zone,
-        plan,
-      }),
-    ).rejects.toMatchObject({ _tag: "AuthorizationError" });
-    await expect(
-      Provisioning.authorizeForConnection({
-        authorization: { ...authorization, expiresAt: new Date(Number.NaN) },
-        connection,
-        domain: plan.zone,
-        plan,
-      }),
-    ).rejects.toMatchObject({ _tag: "AuthorizationError" });
   });
 
-  it("rejects invalid expiration metadata returned by token validation", async () => {
+  it("fails loudly when required capability evidence is absent", async () => {
     await expect(
-      TokenConnection.connect({
-        authorizationStore: InMemoryProviderAuthorizationStore.toAsync(),
-        connectionStore: InMemoryConnectionStore.toAsync(),
-        credentialStore: InMemoryCredentialStore.toAsync(),
+      Connection.start({
+        authorizedById: "user-1",
         grant: { _tag: "account" },
+        method: Connection.Method.Token({
+          authenticate: async () => ({
+            ...(await authenticate()),
+            capabilityEvidence: [],
+          }),
+          providerId: "example",
+          requiredCapabilities: ["dns:write"],
+          token: Secret.make("token"),
+        }),
         ownerId: "organization-1",
-        providerId: "example-provider",
-        subjectId: "user-1",
-        token: Secret.make("personal-access-token"),
-        validate: async () => ({
-          accountId: "account-1",
-          capabilities: ["dns:read", "dns:write"],
-          expiresAt: new Date(Number.NaN),
-          scopes: ["dns:write"],
-        }),
+        repository: AuthorizationLifecycle.toAsync(InMemoryAuthorizationLifecycle.make()),
       }),
-    ).rejects.toMatchObject({ _tag: "InvalidInputError" });
-  });
-
-  it("shares one provider authorization across owner bindings and revokes it last", async () => {
-    const authorizationStore = InMemoryProviderAuthorizationStore.toAsync();
-    const connectionStore = InMemoryConnectionStore.toAsync();
-    const credentialStore = InMemoryCredentialStore.toAsync();
-    const connect = (ownerId: string) =>
-      TokenConnection.connect({
-        authorizationStore,
-        connectionStore,
-        credentialStore,
-        grant: { _tag: "account" },
-        ownerId,
-        providerId: "cloudflare",
-        subjectId: `admin:${ownerId}`,
-        token: Secret.make(`token:${ownerId}`),
-        validate: async () => ({
-          accountId: "cloudflare-account-1",
-          capabilities: ["dns:read", "dns:write"],
-          expiresAt: null,
-          scopes: ["dns:write"],
-        }),
-      });
-    const first = await connect("organization-1");
-    const second = await connect("organization-2");
-    assert.strictEqual(first.authorization.id, second.authorization.id);
-    assert.notStrictEqual(first.connection.id, second.connection.id);
-    assert.strictEqual(
-      (await connectionStore.listByAuthorizationId(first.authorization.id)).length,
-      2,
-    );
-
-    let revocations = 0;
-    const detach = (connectionId: string) =>
-      ConnectionLifecycle.detach({
-        authorizationStore,
-        connectionId,
-        connectionStore,
-        credentialStore,
-        revokeAuthorization: async () => {
-          revocations += 1;
-        },
-      });
-    const firstDetach = await detach(first.connection.id);
-    assert.deepStrictEqual(
-      {
-        remainingBindings: firstDetach.remainingBindings,
-        revoked: firstDetach.revokedAuthorization,
-      },
-      { remainingBindings: 1, revoked: false },
-    );
-    assert.strictEqual(revocations, 0);
-    assert.notStrictEqual(await credentialStore.get(first.authorization.id), null);
-
-    const finalDetach = await detach(second.connection.id);
-    assert.deepStrictEqual(
-      {
-        remainingBindings: finalDetach.remainingBindings,
-        revoked: finalDetach.revokedAuthorization,
-      },
-      { remainingBindings: 0, revoked: true },
-    );
-    assert.strictEqual(revocations, 1);
-    assert.strictEqual(await credentialStore.get(first.authorization.id), null);
-    assert.strictEqual(await authorizationStore.get(first.authorization.id), null);
-  });
-
-  it("finishes local cleanup when final-binding deletion previously failed", async () => {
-    const authorizationStore = InMemoryProviderAuthorizationStore.toAsync();
-    const persistentConnections = InMemoryConnectionStore.toAsync();
-    const credentialStore = InMemoryCredentialStore.toAsync();
-    const result = await TokenConnection.connect({
-      authorizationStore,
-      connectionStore: persistentConnections,
-      credentialStore,
-      grant: { _tag: "account" },
-      ownerId: "organization-1",
-      providerId: "cloudflare",
-      subjectId: "admin-1",
-      token: Secret.make("token"),
-      validate: async () => ({
-        accountId: "account-1",
-        capabilities: ["dns:read", "dns:write"],
-        expiresAt: null,
-        scopes: ["dns:write"],
-      }),
-    });
-    let failDelete = true;
-    const connectionStore = {
-      ...persistentConnections,
-      delete: async (connectionId: string) => {
-        if (failDelete) {
-          failDelete = false;
-          throw new Error("injected connection delete failure");
-        }
-        await persistentConnections.delete(connectionId);
-      },
-    };
-    let revocations = 0;
-    const detach = () =>
-      ConnectionLifecycle.detach({
-        authorizationStore,
-        connectionId: result.connection.id,
-        connectionStore,
-        credentialStore,
-        revokeAuthorization: async () => {
-          revocations += 1;
-        },
-      });
-    await expect(detach()).rejects.toMatchObject({ _tag: "StorageError" });
-    assert.strictEqual(await authorizationStore.get(result.authorization.id), null);
-    assert.notStrictEqual(await persistentConnections.get(result.connection.id), null);
-
-    const retry = await detach();
-    assert.strictEqual(retry.revokedAuthorization, true);
-    assert.strictEqual(revocations, 1);
-    assert.strictEqual(await persistentConnections.get(result.connection.id), null);
+    ).rejects.toMatchObject({ _tag: "ConnectionError" });
   });
 });

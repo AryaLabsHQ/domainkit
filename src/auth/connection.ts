@@ -4,7 +4,7 @@ import * as DomainName from "../domain/domain-name.ts";
 import { Error as InvalidInputError } from "../invalid-input.ts";
 import type { Value as Secret } from "./secret.ts";
 import type { OAuthMethod } from "./manifest.ts";
-import type * as ProviderAuthorization from "./authorization.ts";
+import * as ProviderAuthorization from "./authorization.ts";
 
 export const Grant = S.TaggedUnion({
   account: {},
@@ -45,7 +45,7 @@ export interface OAuthContinuation {
   readonly ownerId: string;
   readonly redirectUri: string;
   readonly stateHash: string;
-  readonly subjectId: string;
+  readonly authorizedById: string;
 }
 
 export interface StoredCredential {
@@ -55,8 +55,19 @@ export interface StoredCredential {
 }
 
 export class AuthorizationError extends S.TaggedError<AuthorizationError>()("AuthorizationError", {
+  category: S.Literal("authorization"),
   message: S.String,
+  operation: S.String,
+  retry: S.Literals(["never", "after-user-action", "safe", "unknown"]),
 }) {}
+
+export const authorizationError = (message: string, operation: string): AuthorizationError =>
+  new AuthorizationError({
+    category: "authorization",
+    message,
+    operation,
+    retry: "after-user-action",
+  });
 
 export function assertGrant(
   connection: Connection,
@@ -70,22 +81,33 @@ export function assertGrant(
 ): DomainName.DomainName {
   if (
     connection.authorizationId !== authorization.id ||
-    authorization.providerId !== request.providerId
+    authorization.providerId !== request.providerId ||
+    authorization.revocation._tag !== "Active"
   ) {
-    throw new AuthorizationError({ message: "Connection does not grant this provider account" });
+    throw authorizationError(
+      "Connection does not grant this provider account",
+      "Connection.assertGrant",
+    );
   }
   if (authorization.expiresAt !== null) {
     if (Number.isNaN(authorization.expiresAt.getTime())) {
-      throw new AuthorizationError({ message: "Connection expiration is invalid" });
+      throw authorizationError("Connection expiration is invalid", "Connection.assertGrant");
     }
     if (authorization.expiresAt <= (request.now ?? new Date())) {
-      throw new AuthorizationError({ message: "Connection has expired" });
+      throw authorizationError("Connection has expired", "Connection.assertGrant");
     }
   }
-  if (!authorization.capabilities.includes(request.capability)) {
-    throw new AuthorizationError({
-      message: `Connection lacks the ${request.capability} capability`,
-    });
+  if (!authorization.requiredCapabilities.includes(request.capability)) {
+    throw authorizationError(
+      `Connection lacks the ${request.capability} capability`,
+      "Connection.assertGrant",
+    );
+  }
+  if (ProviderAuthorization.evidenceFor(authorization, request.capability) === undefined) {
+    throw authorizationError(
+      `Connection has no evidence for the ${request.capability} capability`,
+      "Connection.assertGrant",
+    );
   }
   let domain: DomainName.DomainName;
   try {
@@ -97,7 +119,7 @@ export function assertGrant(
     });
   }
   if (connection.grant._tag === "domains" && !connection.grant.domains.includes(domain)) {
-    throw new AuthorizationError({ message: "Connection does not grant this domain" });
+    throw authorizationError("Connection does not grant this domain", "Connection.assertGrant");
   }
   return domain;
 }

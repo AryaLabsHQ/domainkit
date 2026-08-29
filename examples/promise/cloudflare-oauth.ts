@@ -1,50 +1,57 @@
-import { Cloudflare, DomainName, OAuth, Secret, type Stores } from "domainkit";
+import { type AuthorizationLifecycle, Cloudflare, Connection, DomainName, Secret } from "domainkit";
 
 const capabilities = ["dns:read", "dns:write"] as const;
 
 export interface CloudflareOAuthInput {
+  readonly authorizedById: string;
   readonly clientId: string;
   readonly clientSecret: string;
-  readonly authorizationStore: Stores.ProviderAuthorization;
-  readonly connectionStore: Stores.Connection;
-  readonly credentialStore: Stores.Credential;
+  readonly continuations: Connection.ContinuationStore;
   readonly domain: string;
-  readonly redirectUri: string;
   readonly ownerId: string;
+  readonly redirectUri: string;
+  readonly repository: AuthorizationLifecycle.Repository;
   readonly scopeIds: ReadonlyArray<string>;
-  readonly stateStore: Stores.OAuthState;
-  readonly subjectId: string;
 }
 
-export async function beginCloudflareOAuth(input: CloudflareOAuthInput) {
-  const method = Cloudflare.Auth.oauthMethod({
+function flow(input: CloudflareOAuthInput): Connection.InteractiveFlow {
+  return Cloudflare.Auth.oauthFlow({
     capabilities,
+    client: {
+      clientId: input.clientId,
+      clientSecret: Secret.make(input.clientSecret),
+    },
     clientAuth: "client_secret_basic",
+    domain: DomainName.parse(input.domain),
+    redirectUri: input.redirectUri,
     scopes: input.scopeIds,
   });
-  return OAuth.begin({
-    client: { clientId: input.clientId, clientSecret: Secret.make(input.clientSecret) },
+}
+
+export function beginCloudflareOAuth(input: CloudflareOAuthInput) {
+  const oauth = flow(input);
+  return Connection.start({
+    authorizedById: input.authorizedById,
     grant: { _tag: "account" },
-    method,
+    method: Connection.Method.Interactive({
+      continuations: input.continuations,
+      flow: oauth,
+    }),
     ownerId: input.ownerId,
-    redirectUri: input.redirectUri,
-    stateStore: input.stateStore,
-    subjectId: input.subjectId,
+    repository: input.repository,
   });
 }
 
-export async function completeCloudflareOAuth(input: CloudflareOAuthInput, callbackUrl: URL) {
-  return OAuth.complete({
+export function completeCloudflareOAuth(
+  input: CloudflareOAuthInput,
+  continuationId: string,
+  callbackUrl: URL,
+) {
+  return Connection.complete({
     callbackUrl,
-    authorizationStore: input.authorizationStore,
-    client: { clientId: input.clientId, clientSecret: Secret.make(input.clientSecret) },
-    connectionStore: input.connectionStore,
-    credentialStore: input.credentialStore,
-    providerId: "cloudflare",
-    resolveSubject: Cloudflare.Auth.subjectResolver({
-      capabilities,
-      domain: DomainName.parse(input.domain),
-    }),
-    stateStore: input.stateStore,
+    continuationId,
+    continuations: input.continuations,
+    flow: flow(input),
+    repository: input.repository,
   });
 }

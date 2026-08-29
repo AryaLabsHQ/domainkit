@@ -13,6 +13,7 @@ const runtimeExitFiles = new Set([
 ]);
 
 const foreignPromiseFiles = new Set([
+  "src/auth/authorization-code.ts",
   "src/auth/oauth.ts",
   "src/plan/canonical-json.ts",
   "src/provider/provider.ts",
@@ -55,6 +56,7 @@ function boundaryRule(property, allowed, message) {
       const filename = relative(context.filename);
       if (!filename.startsWith("src/")) return {};
       if (filename.startsWith("src/promise/") && property === "runPromise") return {};
+      if (filename.startsWith("src/promise/") && property === "tryPromise") return {};
       if (allowed.has(filename)) return {};
       return {
         CallExpression(node) {

@@ -13,7 +13,7 @@ export function make(): ProviderAuthorizationStore.Interface {
       Effect.sync(() => {
         const authorization = authorizations.get(authorizationId);
         if (authorization !== undefined) {
-          accounts.delete(accountKey(authorization.providerId, authorization.accountId));
+          accounts.delete(accountKey(authorization.providerId, authorization.providerAccountId));
           authorizations.delete(authorizationId);
         }
       }),
@@ -32,7 +32,7 @@ export function make(): ProviderAuthorizationStore.Interface {
       Effect.sync(() => {
         authorizations.set(authorization.id, authorization);
         accounts.set(
-          accountKey(authorization.providerId, authorization.accountId),
+          accountKey(authorization.providerId, authorization.providerAccountId),
           authorization.id,
         );
       }),

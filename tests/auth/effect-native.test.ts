@@ -1,150 +1,120 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { TestClock } from "effect/testing";
 
 import {
-  ConnectionStore,
-  CredentialStore,
+  AuthorizationLifecycle,
+  Connection,
   Digest,
-  DomainName,
-  OAuth,
-  OAuthStateStore,
-  ProviderAuth,
-  ProviderAuthorizationStore,
+  ProviderAuthorization,
   Secret,
-  TokenConnection,
 } from "../../src/effect.ts";
 import {
-  InMemoryConnectionStore,
-  InMemoryCredentialStore,
-  InMemoryOAuthStateStore,
-  InMemoryProviderAuthorizationStore,
+  InMemoryAuthorizationLifecycle,
+  InMemoryConnectionContinuations,
 } from "../../src/testing.ts";
 
-const method: ProviderAuth.OAuthMethod = {
-  _tag: "oauth2",
-  authorizationServer: {
-    authorization_endpoint: "https://auth.example/authorize",
-    issuer: "https://auth.example",
-    token_endpoint: "https://auth.example/token",
+const authentication = (providerAccountId = "account-1"): Connection.Authentication => ({
+  capabilityEvidence: [
+    {
+      capability: "dns:read",
+      evidence: ProviderAuthorization.Evidence.Introspected({
+        observedAt: new Date("2026-08-29T00:00:00.000Z"),
+      }),
+    },
+    {
+      capability: "dns:write",
+      evidence: ProviderAuthorization.Evidence.Introspected({
+        observedAt: new Date("2026-08-29T00:00:00.000Z"),
+      }),
+    },
+  ],
+  credential: {
+    accessToken: Secret.make("access-token"),
+    refreshToken: null,
+    tokenType: "bearer",
   },
-  capabilities: ["dns:read", "dns:write"],
-  clientAuth: "none",
-  scopes: ["dns:read", "dns:write"],
-};
+  expiresAt: null,
+  providerAccountId,
+  providerContext: { value: { accountType: "team" }, version: "example.v1" },
+  scopes: ["dns:write"],
+});
 
-describe("Effect-native authorization", () => {
-  it.effect("runs token validation and persistence through services", () => {
-    const connections = InMemoryConnectionStore.make();
-    const credentials = InMemoryCredentialStore.make();
-    const authorizations = InMemoryProviderAuthorizationStore.make();
-    const layer = Layer.mergeAll(
-      Layer.succeed(ConnectionStore.Service, connections),
-      Layer.succeed(CredentialStore.Service, credentials),
-      Layer.succeed(ProviderAuthorizationStore.Service, authorizations),
-      Digest.webCryptoLayer,
-    );
+describe("Effect-native connections", () => {
+  it.effect("commits one complete aggregate for a token connection", () => {
+    const repository = InMemoryAuthorizationLifecycle.make();
     return Effect.gen(function* () {
-      const result = yield* TokenConnection.connect({
+      const result = yield* Connection.start({
+        authorizedById: "user-1",
         grant: { _tag: "account" },
+        method: Connection.Method.Token({
+          authenticate: () => Effect.succeed(authentication()),
+          providerId: "example",
+          requiredCapabilities: ["dns:read", "dns:write"],
+          token: Secret.make("access-token"),
+        }),
         ownerId: "organization-1",
-        providerId: "example-provider",
-        subjectId: "user-1",
-        token: Secret.make("token"),
-        validate: () =>
-          Effect.succeed({
-            accountId: "account-1",
-            capabilities: ["dns:read", "dns:write"],
-            expiresAt: null,
-            scopes: ["dns:write"],
-          }),
       });
-      assert.strictEqual(
-        (yield* credentials.get(result.authorization.id))?.accessToken.expose(),
-        "token",
-      );
-      assert.ok(result.connection.createdAt instanceof Date);
-    }).pipe(Effect.provide(layer));
+      assert.strictEqual(result._tag, "Connected");
+      if (result._tag !== "Connected") return;
+      const stored = yield* repository.get(result.aggregate.authorization.id);
+      assert.strictEqual(stored?.bindings.length, 1);
+      assert.strictEqual(stored?.authorization.providerAccountId, "account-1");
+      assert.strictEqual(stored?.credential.accessToken.expose(), "access-token");
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          Layer.succeed(AuthorizationLifecycle.Service, repository),
+          Digest.webCryptoLayer,
+        ),
+      ),
+    );
   });
 
-  it.effect("runs PKCE, exchange, and persistence through Layers", () => {
-    const oauthState = InMemoryOAuthStateStore.make();
-    const connections = InMemoryConnectionStore.make();
-    const credentials = InMemoryCredentialStore.make();
-    const authorizations = InMemoryProviderAuthorizationStore.make();
-    const layer = Layer.mergeAll(
-      Layer.succeed(OAuthStateStore.Service, oauthState),
-      Layer.succeed(ConnectionStore.Service, connections),
-      Layer.succeed(CredentialStore.Service, credentials),
-      Layer.succeed(ProviderAuthorizationStore.Service, authorizations),
+  it.effect("redirects and completes an interactive connection through the same repository", () => {
+    const repository = InMemoryAuthorizationLifecycle.make();
+    const continuations = InMemoryConnectionContinuations.make();
+    const flow: Connection.InteractiveFlow = {
+      complete: () => Effect.succeed(authentication()),
+      method: "oauth2",
+      providerId: "example",
+      requiredCapabilities: ["dns:read", "dns:write"],
+      start: () =>
+        Effect.succeed({
+          authorizationUrl: new URL("https://provider.example/connect"),
+          payload: Secret.make('{"verifier":"opaque"}'),
+        }),
+    };
+    const layer = Layer.merge(
+      Layer.succeed(AuthorizationLifecycle.Service, repository),
       Digest.webCryptoLayer,
     );
     return Effect.gen(function* () {
-      const started = yield* OAuth.begin({
-        client: { clientId: "client-id" },
-        grant: { _tag: "domains", domains: [DomainName.parse("example.com")] },
-        method,
-        ownerId: "organization-1",
-        redirectUri: "https://app.example/oauth/callback",
-        subjectId: "user-1",
-      });
-      const state = started.authorizationUrl.searchParams.get("state");
-      if (state === null) return yield* Effect.die("OAuth state was not generated");
-      const callbackUrl = new URL("https://app.example/oauth/callback");
-      callbackUrl.search = new URLSearchParams({
-        code: "authorization-code",
-        state,
-      }).toString();
-      const result = yield* OAuth.complete({
-        callbackUrl,
-        client: { clientId: "client-id" },
-        fetch: async () =>
-          Response.json({
-            access_token: "access-token",
-            refresh_token: "refresh-token",
-            token_type: "Bearer",
-          }),
-        providerId: "example-provider",
-        resolveSubject: () => Effect.succeed({ accountId: "account-1", expiresAt: null }),
-      });
-      assert.strictEqual(result.authorization.kind, "oauth2");
-      assert.strictEqual(
-        (yield* credentials.get(result.authorization.id))?.accessToken.expose(),
-        "access-token",
-      );
-    }).pipe(Effect.provide(layer));
-  });
-
-  it.effect("expires OAuth continuations with TestClock", () => {
-    const layer = Layer.mergeAll(
-      InMemoryOAuthStateStore.layer(),
-      InMemoryConnectionStore.layer(),
-      InMemoryCredentialStore.layer(),
-      InMemoryProviderAuthorizationStore.layer(),
-      Digest.webCryptoLayer,
-    );
-    return Effect.gen(function* () {
-      const started = yield* OAuth.begin({
-        client: { clientId: "client-id" },
+      const started = yield* Connection.start({
+        authorizedById: "user-1",
         grant: { _tag: "account" },
-        method,
+        method: Connection.Method.Interactive({
+          continuations,
+          flow,
+        }),
         ownerId: "organization-1",
-        redirectUri: "https://app.example/oauth/callback",
-        subjectId: "user-1",
-        ttlMs: 1,
       });
-      yield* TestClock.adjust("2 millis");
-      const state = started.authorizationUrl.searchParams.get("state");
-      if (state === null) return yield* Effect.die("OAuth state was not generated");
-      const callbackUrl = new URL("https://app.example/oauth/callback");
-      callbackUrl.search = new URLSearchParams({ code: "code", state }).toString();
-      const failure = yield* OAuth.complete({
-        callbackUrl,
-        client: { clientId: "client-id" },
-        providerId: "example-provider",
-        resolveSubject: () => Effect.succeed({ accountId: "account-1", expiresAt: null }),
+      assert.strictEqual(started._tag, "Redirect");
+      if (started._tag !== "Redirect") return;
+      const aggregate = yield* Connection.complete({
+        callbackUrl: new URL("https://app.example/callback?code=code"),
+        continuationId: started.continuationId,
+        continuations,
+        flow,
+      });
+      assert.strictEqual(aggregate.authorization.method, "oauth2");
+      assert.strictEqual(aggregate.bindings.length, 1);
+      const failure = yield* Connection.complete({
+        callbackUrl: new URL("https://app.example/callback?code=replay"),
+        continuationId: started.continuationId,
+        continuations,
+        flow,
       }).pipe(Effect.flip);
-      assert.strictEqual(failure._tag, "AuthorizationError");
+      assert.strictEqual(failure._tag, "ConnectionError");
     }).pipe(Effect.provide(layer));
   });
 });

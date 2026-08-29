@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { Secret } from "../../../src/effect.ts";
+import { Digest, Secret } from "../../../src/effect.ts";
 import * as Vercel from "../../../src/providers/vercel/index.ts";
 import { recordedFetch } from "./fixtures.ts";
 
@@ -88,5 +88,75 @@ describe("Vercel authorization", () => {
       assert.ok(!JSON.stringify(failure).includes(options.clientSecret.expose()));
       assert.ok(!JSON.stringify(failure).includes(options.code.expose()));
     });
+  });
+
+  it.effect("adapts an integration exchange into canonical connection authentication", () => {
+    const recording = recordedFetch([
+      {
+        body: {
+          access_token: "access-token",
+          installation_id: "icfg-1",
+          team_id: "team-1",
+          token_type: "Bearer",
+          user_id: "user-1",
+        },
+      },
+    ]);
+    return Effect.gen(function* () {
+      const authentication = yield* Vercel.Auth.integrationAuthentication({
+        capabilities,
+        clientId: "client-1",
+        clientSecret: Secret.make("secret"),
+        code: Secret.make("code"),
+        fetch: recording.fetch,
+        redirectUri: "https://app.example/callback",
+      });
+      assert.strictEqual(authentication.providerAccountId, "team-1");
+      assert.deepStrictEqual(authentication.providerContext, {
+        value: { _tag: "team", installationId: "icfg-1", teamId: "team-1" },
+        version: "vercel.v1",
+      });
+      assert.ok(
+        authentication.capabilityEvidence.every(({ evidence }) => evidence._tag === "Introspected"),
+      );
+    });
+  });
+
+  it.effect("implements Integration through the common interactive flow", () => {
+    const recording = recordedFetch([
+      {
+        body: {
+          access_token: "access-token",
+          installation_id: "icfg-1",
+          team_id: "team-1",
+          token_type: "Bearer",
+          user_id: "user-1",
+        },
+        expect: { method: "POST", pathname: "/oauth/access_token" },
+      },
+    ]);
+    const flow = Vercel.Auth.integrationFlow({
+      capabilities,
+      clientId: "client-1",
+      clientSecret: Secret.make("secret"),
+      fetch: recording.fetch,
+      redirectUri: "https://app.example/vercel/callback",
+      slug: "domainkit",
+    });
+    return Effect.gen(function* () {
+      const started = yield* flow.start("continuation-1");
+      assert.strictEqual(started.authorizationUrl.searchParams.get("state"), "continuation-1");
+      assert.strictEqual(started.authorizationUrl.searchParams.get("source"), "external");
+      assert.strictEqual(JSON.stringify(started.payload), '"[REDACTED]"');
+      const authentication = yield* flow.complete(
+        started.payload,
+        new URL("https://app.example/vercel/callback?code=authorization-code&state=continuation-1"),
+      );
+      assert.strictEqual(authentication.providerAccountId, "team-1");
+      assert.deepStrictEqual(authentication.providerContext, {
+        value: { _tag: "team", installationId: "icfg-1", teamId: "team-1" },
+        version: "vercel.v1",
+      });
+    }).pipe(Effect.provide(Digest.webCryptoLayer));
   });
 });
