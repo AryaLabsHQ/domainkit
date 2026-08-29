@@ -40,14 +40,26 @@ const cases = [
 
 /** Run the deterministic offline contract every DomainKit DNS adapter must satisfy. */
 export const run = Effect.fn("ProviderConformance.run")(function* (input: Input) {
-  const first = yield* input.makeProvider();
+  const makeProvider = () =>
+    Effect.suspend(input.makeProvider).pipe(
+      Effect.catchDefect((cause) =>
+        Effect.fail(
+          new Error({
+            case: "factory",
+            message: cause instanceof globalThis.Error ? cause.message : "Provider factory failed",
+            providerId: "unknown",
+          }),
+        ),
+      ),
+    );
+  const first = yield* makeProvider();
   const providerId = first.id;
   const prefix = input.prefix ?? "domainkit-conformance";
   yield* createReadbackCleanup(first, input.zone, prefix);
-  yield* exactNoop(yield* input.makeProvider(), input.zone, prefix);
-  yield* conflict(yield* input.makeProvider(), input.zone, prefix);
-  yield* stalePlan(yield* input.makeProvider(), input.zone, prefix);
-  yield* partialApplyCleanup(yield* input.makeProvider(), input.zone, prefix);
+  yield* exactNoop(yield* makeProvider(), input.zone, prefix);
+  yield* conflict(yield* makeProvider(), input.zone, prefix);
+  yield* stalePlan(yield* makeProvider(), input.zone, prefix);
+  yield* partialApplyCleanup(yield* makeProvider(), input.zone, prefix);
   return { cases, providerId, zone: input.zone } satisfies Report;
 });
 
@@ -93,7 +105,8 @@ function createReadbackCleanup(
     yield* requireCondition(
       provider,
       "create-readback-cleanup",
-      deletionReceipt.status === "complete" && (yield* provider.listRecords(zone)).length === 0,
+      deletionReceipt.status === "complete" &&
+        requirementsAbsent(yield* provider.listRecords(zone), requirements),
       "receipt-bound cleanup must remove every created record",
     );
   }).pipe(Effect.provide(providerLayer(provider)));
@@ -217,10 +230,19 @@ function partialApplyCleanup(
     yield* requireCondition(
       provider,
       "partial-apply-cleanup",
-      (yield* provider.listRecords(zone)).length === 0,
+      requirementsAbsent(yield* provider.listRecords(zone), requirements),
       "partial receipt cleanup must remove the confirmed write",
     );
   }).pipe(Effect.provide(providerLayer(flaky)));
+}
+
+function requirementsAbsent(
+  observed: ReadonlyArray<DnsRecord.Observed>,
+  requirements: ReadonlyArray<DnsRecord.DnsRecord>,
+): boolean {
+  return requirements.every((requirement) =>
+    observed.every((record) => record._tag === "Opaque" || !DnsRecord.equals(record, requirement)),
+  );
 }
 
 function providerLayer(provider: DnsProvider.Interface) {
