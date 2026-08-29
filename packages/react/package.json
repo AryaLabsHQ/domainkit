@@ -14,19 +14,23 @@
     "README.md"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/styles.css"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
+    "./styles.css": "./dist/styles.css",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsdown",
-    "release:check": "bun run typecheck && bun run test && bun run build && bun run test:artifact",
+    "build": "tsdown && bun scripts/copy-styles.ts",
+    "release:check": "bun run typecheck && bun run test && bun run build && bun run test:artifact && bun run test:browser",
     "test": "vitest run --exclude tests/artifact/**/*.test.ts",
     "test:artifact": "vitest run tests/artifact",
+    "test:browser": "playwright test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -34,6 +38,7 @@
     "domainkit": "workspace:*"
   },
   "devDependencies": {
+    "@playwright/test": "1.57.0",
     "@testing-library/react": "16.3.1",
     "@testing-library/user-event": "14.6.1",
     "@types/react": "19.2.14",
