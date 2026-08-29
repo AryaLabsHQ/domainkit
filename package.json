@@ -31,17 +31,9 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
-    "./adapter": {
-      "types": "./dist/adapter.d.mts",
-      "import": "./dist/adapter.mjs"
-    },
     "./effect": {
       "types": "./dist/effect.d.mts",
       "import": "./dist/effect.mjs"
-    },
-    "./effect/adapter": {
-      "types": "./dist/effect-adapter.d.mts",
-      "import": "./dist/effect-adapter.mjs"
     },
     "./cloudflare": {
       "types": "./dist/cloudflare.d.mts",

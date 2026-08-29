@@ -49,21 +49,21 @@ describe("packed consumers", () => {
 import {
   AuthorizationLifecycle,
   Connection,
+  ProviderAuthorization,
   Provisioning,
   Secret,
   Verification,
   VERSION,
 } from "domainkit";
-import { ProviderAuthorization } from "domainkit/adapter";
 import { make as makeCloudflare } from "domainkit/cloudflare";
 import { make as makeVercel } from "domainkit/vercel";
 import { InMemoryAuthorizationLifecycle } from "domainkit/testing";
 import { Effect, Layer } from "effect";
 import {
   Digest,
+  DnsProvider,
   Provisioning as EffectProvisioning,
 } from "domainkit/effect";
-import { DnsProvider } from "domainkit/effect/adapter";
 import { make as makeEffectCloudflare } from "domainkit/effect/cloudflare";
 import { make as makeEffectVercel } from "domainkit/effect/vercel";
 
@@ -179,7 +179,7 @@ if (
       await writeFile(
         join(directory, "types.ts"),
         `
-import type { DnsProvider } from "domainkit/adapter";
+import type { DnsProvider } from "domainkit";
 import type { Interface as Cloudflare } from "domainkit/cloudflare";
 import type { Interface as EffectCloudflare } from "domainkit/effect/cloudflare";
 import type { Interface as Vercel } from "domainkit/vercel";

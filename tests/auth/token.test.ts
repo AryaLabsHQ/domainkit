@@ -1,7 +1,11 @@
 import { assert, describe, expect, it } from "@effect/vitest";
 
-import { AuthorizationLifecycle, Connection, Secret } from "../../src/index.ts";
-import { ProviderAuthorization } from "../../src/adapter.ts";
+import {
+  AuthorizationLifecycle,
+  Connection,
+  ProviderAuthorization,
+  Secret,
+} from "../../src/index.ts";
 import { InMemoryAuthorizationLifecycle } from "../../src/testing.ts";
 
 const authenticate = async (): Promise<Connection.Authentication> => ({

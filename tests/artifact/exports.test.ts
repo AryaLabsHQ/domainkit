@@ -1,7 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 
 import packageJson from "../../package.json" with { type: "json" };
-import * as effectAdapterApi from "../../src/effect-adapter.ts";
 import * as effectApi from "../../src/effect.ts";
 import * as effectCloudflareApi from "../../src/effect-cloudflare.ts";
 import * as effectVercelApi from "../../src/effect-vercel.ts";
@@ -16,15 +15,9 @@ describe("public namespaces", () => {
     assert.strictEqual(effectApi.VERSION, packageJson.version);
   });
 
-  it("publishes explicit Promise and Effect adapter-author subpaths", () => {
-    assert.deepStrictEqual(packageJson.exports["./adapter"], {
-      import: "./dist/adapter.mjs",
-      types: "./dist/adapter.d.mts",
-    });
-    assert.deepStrictEqual(packageJson.exports["./effect/adapter"], {
-      import: "./dist/effect-adapter.mjs",
-      types: "./dist/effect-adapter.d.mts",
-    });
+  it("keeps generic provider contracts on the canonical roots", () => {
+    assert.strictEqual("./adapter" in packageJson.exports, false);
+    assert.strictEqual("./effect/adapter" in packageJson.exports, false);
   });
 
   it("exposes cohesive Promise, Effect, and testing namespace surfaces", () => {
@@ -33,7 +26,7 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof promiseApi.Connection.start, "function");
     assert.strictEqual(typeof effectApi.Connection.start, "function");
     assert.strictEqual(typeof effectApi.AuthorizationLifecycle.Service, "function");
-    assert.strictEqual(typeof effectAdapterApi.DnsProvider.Service, "function");
+    assert.strictEqual(typeof effectApi.DnsProvider.Service, "function");
     assert.strictEqual(typeof effectApi.ZoneDiscovery.Service, "function");
     assert.strictEqual(typeof effectApi.Provisioning.create, "function");
     assert.strictEqual(typeof effectApi.CloudflareDnsOverHttps.layer, "function");
@@ -66,14 +59,6 @@ describe("public namespaces", () => {
     assert.strictEqual("createPlan" in promiseApi, false);
     assert.strictEqual("DnsProviderService" in effectApi, false);
     assert.strictEqual("layerDnsProviderFromPromise" in effectApi, false);
-    assert.strictEqual("DnsProvider" in effectApi, false);
-    assert.strictEqual("DnsProvider" in promiseApi, false);
-    assert.strictEqual("ProviderAuthorization" in effectApi, false);
-    assert.strictEqual("ProviderAuthorization" in promiseApi, false);
-    assert.strictEqual("ProviderAuth" in effectApi, false);
-    assert.strictEqual("ProviderAuth" in promiseApi, false);
-    assert.strictEqual("ProviderContext" in effectApi, false);
-    assert.strictEqual("ProviderContext" in promiseApi, false);
     assert.strictEqual("InMemoryConnectionStore" in testingApi, false);
     assert.strictEqual("InMemoryCredentialStore" in testingApi, false);
     assert.strictEqual("record" in effectApi.Verification, false);

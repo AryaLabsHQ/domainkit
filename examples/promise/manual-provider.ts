@@ -1,5 +1,12 @@
-import { DnsRecord, DomainName, type DnsPlan, Provisioning, Verification } from "domainkit";
-import type { DnsProvider, DnsResolver } from "domainkit/adapter";
+import {
+  DnsRecord,
+  DomainName,
+  type DnsPlan,
+  type DnsProvider,
+  type DnsResolver,
+  Provisioning,
+  Verification,
+} from "domainkit";
 
 export async function provisionWithManualApproval(
   provider: DnsProvider.Interface,

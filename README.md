@@ -12,10 +12,8 @@ bound to an approved plan digest and recorded in a receipt that can authorize a 
 
 - `domainkit` — Promise API for application code;
 - `domainkit/effect` — canonical Effect-native services and programs;
-- `domainkit/adapter` — Promise-shaped contracts for adapter authors;
-- `domainkit/effect/adapter` — canonical Effect adapter services and contracts;
-- `domainkit/cloudflare` and `domainkit/vercel` — Promise provider adapters;
-- `domainkit/effect/cloudflare` and `domainkit/effect/vercel` — Effect provider adapters;
+- `domainkit/cloudflare` and `domainkit/vercel` — Promise provider integrations;
+- `domainkit/effect/cloudflare` and `domainkit/effect/vercel` — Effect provider integrations;
 - `domainkit/testing` — in-memory lifecycle capabilities and the provider conformance runner.
 
 The package is portable ESM built on Fetch, Web Crypto, and Web APIs. Effect is a peer dependency.
@@ -43,8 +41,7 @@ directly:
 
 ```ts
 import { Effect, Layer } from "effect";
-import { DnsProvider } from "domainkit/effect/adapter";
-import { Digest, Provisioning } from "domainkit/effect";
+import { Digest, DnsProvider, Provisioning } from "domainkit/effect";
 
 const program = Provisioning.create({
   requirements,
@@ -107,11 +104,10 @@ const result = await Verification.observe({
 When both sources are requested, both must match for `Verified`. Every result is exhaustive and
 tagged as `NotObserved`, `Pending`, `Mismatch`, `Unavailable`, or `Verified`.
 
-## Write an adapter
+## Implement a DNS provider
 
-Implement the narrow DNS provider contract from `domainkit/adapter` or
-`domainkit/effect/adapter`. Then run the deterministic offline contract exported from
-`domainkit/testing`:
+Implement the narrow `DnsProvider` contract exported from `domainkit` or `domainkit/effect`. Then
+run the deterministic offline contract exported from `domainkit/testing`:
 
 ```ts
 import { Effect } from "effect";
@@ -127,7 +123,7 @@ const report = await Effect.runPromise(
 ```
 
 The contract covers complete readback across provider pages, exact no-op, conflict, create, stale
-plans, partial receipts, and receipt-bound cleanup. First-party adapters run the same contract and
+plans, partial receipts, and receipt-bound cleanup. First-party providers run the same contract and
 credential-gated live profiles against disposable records.
 
 Schemas own external and persisted parsing; Effect `Data` values own in-process configuration and

@@ -1,8 +1,14 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 
-import { Digest, DnsRecord, DomainName, Provisioning, ZoneDiscovery } from "../../src/effect.ts";
-import { DnsProvider } from "../../src/effect-adapter.ts";
+import {
+  Digest,
+  DnsProvider,
+  DnsRecord,
+  DomainName,
+  Provisioning,
+  ZoneDiscovery,
+} from "../../src/effect.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
 
 const requirement = DnsRecord.parse({

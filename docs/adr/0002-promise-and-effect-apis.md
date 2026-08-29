@@ -22,10 +22,9 @@ operations. Promise functions build bridge Layers and call `Effect.runPromise` o
 JavaScript boundary. `Effect.tryPromise` is reserved for foreign Promise APIs such as Fetch,
 `oauth4webapi`, and caller-provided provider or store callbacks.
 
-Application capabilities live at `domainkit` and `domainkit/effect`. Generic provider, resolver,
-authorization-manifest, and provider-context contracts are adapter-author concerns and live at
-`domainkit/adapter` and `domainkit/effect/adapter`. Provider implementations retain their own
-explicit subpaths.
+Application capabilities and their generic provider, resolver, authorization-manifest, and
+provider-context contracts live at `domainkit` and `domainkit/effect`. First-party provider
+implementations retain their own explicit subpaths.
 
 DomainKit does not expose an aggregate client or own a hidden runtime because it has no default
 provider, credential store, or persistence graph. Unknown IO values are schema-decoded before
@@ -50,9 +49,7 @@ entering domain logic; comparison and rendering remain pure over decoded values.
 ## References
 
 - `src/effect.ts`
-- `src/effect-adapter.ts`
 - `src/index.ts`
-- `src/adapter.ts`
 - `src/promise/`
 - `tools/oxlint/`
 - `tests/artifact/packed-consumers.test.ts`

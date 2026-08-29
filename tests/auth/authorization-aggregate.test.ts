@@ -1,9 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { ProviderAuthorization } from "../../src/effect-adapter.ts";
-import { Diagnostic } from "../../src/effect.ts";
-import { Connection } from "../../src/effect.ts";
+import { Connection, Diagnostic, ProviderAuthorization } from "../../src/effect.ts";
 
 describe("authorization aggregate model", () => {
   it.effect("round-trips evidence and versioned provider context", () =>

@@ -1,6 +1,5 @@
 import { Effect, Layer } from "effect";
-import { DnsProvider } from "domainkit/effect/adapter";
-import { Digest, DnsRecord, DomainName, Provisioning } from "domainkit/effect";
+import { Digest, DnsProvider, DnsRecord, DomainName, Provisioning } from "domainkit/effect";
 
 export function createPlan(provider: DnsProvider.Interface) {
   const requirement = DnsRecord.parse({
