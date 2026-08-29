@@ -151,6 +151,28 @@ export function make(options: Options = {}): Repository.Interface {
     ),
     get,
     getByConnectionId,
+    modifyBinding: (connectionId, modify) =>
+      serialize(
+        Effect.gen(function* () {
+          const aggregate = yield* getByConnectionId(connectionId);
+          if (aggregate === null) {
+            return yield* missing("modifyBinding", "Connection binding does not exist");
+          }
+          const binding = aggregate.bindings.find((candidate) => candidate.id === connectionId);
+          if (binding === undefined) {
+            return yield* missing("modifyBinding", "Connection binding does not exist");
+          }
+          const modification = modify(binding);
+          const next = {
+            ...aggregate,
+            bindings: aggregate.bindings.map((candidate) =>
+              candidate.id === connectionId ? modification.binding : candidate,
+            ),
+          };
+          yield* commit("modifyBinding", next);
+          return { aggregate: next, value: modification.value };
+        }),
+      ),
     promoteEvidence: Effect.fn("AuthorizationLifecycleRepository.promoteEvidence")(
       (authorizationId, evidence) =>
         serialize(

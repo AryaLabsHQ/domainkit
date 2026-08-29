@@ -41,6 +41,22 @@ const authentication = (providerAccountId = "account-1"): Connection.Authenticat
 });
 
 describe("Effect-native connections", () => {
+  it("keeps existing domain access when expanding to an account grant", () => {
+    assert.deepStrictEqual(
+      Connection.includeDomains(
+        { _tag: "domains", domains: [DomainName.parse("domlens.dev")] },
+        {
+          _tag: "account",
+          excludedDomains: [DomainName.parse("domlens.dev"), DomainName.parse("blocked.example")],
+        },
+      ),
+      {
+        _tag: "account",
+        excludedDomains: [DomainName.parse("blocked.example")],
+      },
+    );
+  });
+
   it.effect("commits one complete aggregate for a token connection", () => {
     const repository = InMemoryAuthorizationLifecycle.make();
     return Effect.gen(function* () {
@@ -178,6 +194,54 @@ describe("Effect-native connections", () => {
         _tag: "domains",
         domains: [DomainName.parse("samva.arya.sh")],
       });
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          Layer.succeed(AuthorizationLifecycle.Service, repository),
+          Digest.webCryptoLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("serializes concurrent domain removals from one binding", () => {
+    const repository = InMemoryAuthorizationLifecycle.make();
+    return Effect.gen(function* () {
+      const connected = yield* Connection.start({
+        authorizedById: "user-1",
+        grant: {
+          _tag: "domains",
+          domains: [DomainName.parse("domlens.dev"), DomainName.parse("samva.arya.sh")],
+        },
+        method: Connection.Method.Token({
+          authenticate: () => Effect.succeed(authentication()),
+          providerId: "example",
+          requiredCapabilities: ["dns:read", "dns:write"],
+          token: Secret.make("access-token"),
+        }),
+        ownerId: "organization-1",
+      });
+      if (connected._tag !== "Connected") return;
+      const binding = connected.aggregate.bindings[0];
+      if (binding === undefined) return yield* Effect.die("connection binding is missing");
+
+      const removed = yield* Effect.all(
+        ["domlens.dev", "samva.arya.sh"].map((domain) =>
+          Connection.removeDomain({
+            connectionId: binding.id,
+            domain,
+            ownerId: "organization-1",
+          }),
+        ),
+        { concurrency: "unbounded" },
+      );
+
+      assert.deepStrictEqual(
+        removed.map((result) => result._tag),
+        ["Removed", "Removed"],
+      );
+      const stored = yield* repository.get(connected.aggregate.authorization.id);
+      assert.deepStrictEqual(stored?.bindings[0]?.grant, { _tag: "domains", domains: [] });
     }).pipe(
       Effect.provide(
         Layer.merge(

@@ -347,14 +347,18 @@ export const removeDomain = Effect.fn("Connection.removeDomain")(function* (
         }),
     ),
   );
-  if (!Binding.coversDomain(binding.grant, domain)) {
-    return RemoveDomainResult.AlreadyRemoved({ aggregate });
-  }
-  const updated = yield* repository.bind(aggregate.authorization.id, {
-    ...binding,
-    grant: Binding.removeDomain(binding.grant, domain),
+  const updated = yield* repository.modifyBinding(input.connectionId, (current) => {
+    if (!Binding.coversDomain(current.grant, domain)) {
+      return { binding: current, value: false };
+    }
+    return {
+      binding: { ...current, grant: Binding.removeDomain(current.grant, domain) },
+      value: true,
+    };
   });
-  return RemoveDomainResult.Removed({ aggregate: updated });
+  return updated.value
+    ? RemoveDomainResult.Removed({ aggregate: updated.aggregate })
+    : RemoveDomainResult.AlreadyRemoved({ aggregate: updated.aggregate });
 });
 
 export type Requirements = Repository.Service | Crypto.Crypto;

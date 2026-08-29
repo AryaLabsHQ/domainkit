@@ -20,6 +20,13 @@ export interface Repository {
   ) => Promise<Lifecycle.Aggregate | null>;
   readonly get: (authorizationId: string) => Promise<Lifecycle.Aggregate | null>;
   readonly getByConnectionId: (connectionId: string) => Promise<Lifecycle.Aggregate | null>;
+  readonly modifyBinding: <A>(
+    connectionId: string,
+    modify: (binding: Connection.Connection) => {
+      readonly binding: Connection.Connection;
+      readonly value: A;
+    },
+  ) => Promise<Lifecycle.BindingModification<A>>;
   readonly promoteEvidence: (
     authorizationId: string,
     evidence: ReadonlyArray<ProviderAuthorization.CapabilityEvidence>,
@@ -89,6 +96,11 @@ export const layerFrom = (repository: Repository): Layer.Layer<Lifecycle.Service
           catch: (cause) => failure("AuthorizationLifecycleRepository.getByConnectionId", cause),
         }),
     ),
+    modifyBinding: (connectionId, modify) =>
+      Effect.tryPromise({
+        try: () => repository.modifyBinding(connectionId, modify),
+        catch: (cause) => failure("AuthorizationLifecycleRepository.modifyBinding", cause),
+      }),
     promoteEvidence: Effect.fn("AuthorizationLifecycleRepository.promoteEvidence")(
       (authorizationId, evidence) =>
         Effect.tryPromise({
@@ -129,6 +141,8 @@ export const toAsync = (repository: Lifecycle.Interface): Repository => ({
   get: (authorizationId) => Effect.runPromise(repository.get(authorizationId)),
   getByConnectionId: (connectionId) =>
     Effect.runPromise(repository.getByConnectionId(connectionId)),
+  modifyBinding: (connectionId, modify) =>
+    Effect.runPromise(repository.modifyBinding(connectionId, modify)),
   promoteEvidence: (authorizationId, evidence) =>
     Effect.runPromise(repository.promoteEvidence(authorizationId, evidence)),
   recover: ({ authorizationId, revoke }) =>
@@ -145,4 +159,4 @@ export const toAsync = (repository: Lifecycle.Interface): Repository => ({
 export const from = (repository: Repository): Repository => repository;
 
 export { Error } from "../auth/lifecycle-repository.ts";
-export type { Aggregate, DetachResult } from "../auth/lifecycle-repository.ts";
+export type { Aggregate, BindingModification, DetachResult } from "../auth/lifecycle-repository.ts";

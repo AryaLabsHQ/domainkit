@@ -37,7 +37,15 @@ export const includeDomains = (current: Grant | undefined, requested: Grant): Gr
       ),
     };
   }
-  if (requested._tag === "account") return requested;
+  if (requested._tag === "account") {
+    const includedDomains = current._tag === "domains" ? current.domains : [];
+    return {
+      _tag: "account",
+      excludedDomains: requested.excludedDomains.filter(
+        (domain) => !includedDomains.includes(domain),
+      ),
+    };
+  }
   if (current._tag === "account") return current;
   return {
     _tag: "domains",
