@@ -3,7 +3,7 @@ import { Effect, Schema } from "effect";
 
 import { ProviderContext, Secret } from "../../src/effect.ts";
 
-describe("adapter-owned provider context", () => {
+describe("provider-owned context", () => {
   const Context = Schema.Struct({
     installationId: Schema.NullOr(Schema.String),
     teamId: Schema.String,

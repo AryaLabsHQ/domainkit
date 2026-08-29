@@ -83,3 +83,60 @@ export function recordedFetch(
     },
   };
 }
+
+/** Stateful Cloudflare API fixture with one-record pages for the shared conformance contract. */
+export function conformanceFetch(): Fetch {
+  const records = new Map<string, Record<string, unknown>>();
+  let nextId = 1;
+  return async (input, init) => {
+    const url = new URL(String(input));
+    const method = init?.method ?? "GET";
+    if (method === "GET" && url.pathname === "/client/v4/zones") {
+      return json(page([zone]));
+    }
+    const recordPath = url.pathname.match(/^\/client\/v4\/zones\/zone-1\/dns_records\/([^/]+)$/);
+    if (recordPath !== null) {
+      const id = decodeURIComponent(recordPath[1] ?? "");
+      if (method === "GET") {
+        const record = records.get(id);
+        return record === undefined
+          ? json(
+              {
+                errors: [{ code: 81044, message: "not found" }],
+                messages: [],
+                result: null,
+                success: false,
+              },
+              { status: 404 },
+            )
+          : json(single(record));
+      }
+      if (method === "DELETE") {
+        records.delete(id);
+        return json(single({ id }));
+      }
+    }
+    if (url.pathname === "/client/v4/zones/zone-1/dns_records") {
+      if (method === "POST") {
+        const id = `record-${nextId++}`;
+        const record = { ...(JSON.parse(String(init?.body)) as Record<string, unknown>), id };
+        records.set(id, record);
+        return json(single(record));
+      }
+      if (method === "GET") {
+        const current = Number(url.searchParams.get("page") ?? "1");
+        const all = [...records.values()];
+        const total = Math.max(1, all.length);
+        return json(page(all.slice(current - 1, current), current, total));
+      }
+    }
+    throw new Error(`Unhandled Cloudflare conformance request: ${method} ${url.pathname}`);
+  };
+}
+
+function json(body: unknown, init: ResponseInit = {}): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+    ...init,
+  });
+}

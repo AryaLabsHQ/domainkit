@@ -8,8 +8,8 @@ import {
   Digest,
   DomainName,
   Provisioning,
-  type Connection,
   ProviderAuthorization,
+  type Connection,
 } from "../../src/effect.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
 

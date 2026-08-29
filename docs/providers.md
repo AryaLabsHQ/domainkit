@@ -1,6 +1,6 @@
-# Provider adapters
+# Provider integrations
 
-DomainKit's provider adapters translate documented authoritative-DNS APIs into the same portable
+DomainKit's provider integrations translate documented authoritative-DNS APIs into the same portable
 record and provisioning contracts. They use Fetch and accept host-owned credentials; they do not
 persist secrets, render consent UI, or depend on a provider SDK.
 
@@ -20,7 +20,7 @@ Domain-targeted token validation supports both user-owned and account-owned API 
 are verified before discovery; account tokens discover the account from the authorized zone first
 and then use Cloudflare's account-scoped verification endpoint.
 
-Cloudflare's adapter supports API tokens and standards-based OAuth authorization code flow. OAuth
+Cloudflare supports API tokens and standards-based OAuth authorization code flow. OAuth
 scope IDs come from the OAuth client registration and are supplied by the host rather than
 hard-coded by DomainKit. Existing proxied records are readable, while every record created by
 DomainKit is DNS-only.
@@ -28,9 +28,9 @@ DomainKit is DNS-only.
 ## Vercel
 
 Vercel clients require an explicit personal or team context. Team clients add `teamId` to resource
-requests; personal clients do not. Only domains whose `serviceType` says Vercel handles DNS are
-exposed as authoritative zones. Current nameservers are retained as provider evidence, while
-intended nameservers are not treated as observed authority.
+requests; personal clients do not. Domains are treated as DNS storage zones when Vercel exposes its
+DNS service type, zone flag, or intended nameservers. Current and intended nameservers remain
+provider evidence; they are not substituted for independent public authority observation.
 
 Vercel supports personal access tokens and its provider-specific integration installation flow.
 That flow begins at the integration install URL and exchanges the one-time callback code at
@@ -48,3 +48,8 @@ state conflicts without an automatic update or delete.
 Provider errors are decoded at the HTTP boundary, classified into portable reasons, and stripped
 of request credentials. Provider status and error codes remain diagnostic metadata without leaking
 raw response DTOs into the planning contract.
+
+Provider implementations import generic contracts from `domainkit` or `domainkit/effect`.
+`ProviderConformance.run` from `domainkit/testing` exercises complete
+paginated readback, exact no-op, conflict, create, stale plans, partial receipts, and receipt-bound
+cleanup against a fresh provider fixture.

@@ -7,9 +7,8 @@ Every change intended for a release includes a Tegami changelog entry. A push to
 pending entries into the `tegami/version-packages` pull request. Merging that version pull request
 publishes the audited package, pushes its `v<version>` tag, and creates the matching GitHub Release.
 
-The initial release line is `beta`, so prerelease versions publish under the npm `beta` dist-tag.
-Graduating the package to stable removes the `prerelease` setting from `scripts/tegami.mts`; stable
-versions then publish under npm's default `latest` tag.
+Stable versions publish under npm's default `latest` tag. Prerelease versions, when intentionally
+configured for a release line, use their matching npm dist-tag.
 
 Before enabling publication, the saved npm trusted publisher must match:
 

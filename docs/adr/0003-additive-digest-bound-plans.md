@@ -23,13 +23,16 @@ delete DNS records.
 
 Apply is resumable rather than falsely atomic. If a later operation fails after an approved create
 succeeds, `PartialApplyError` carries a versioned receipt containing every known successful provider
-record identifier. DomainKit does not roll those records back automatically.
+record identifier. DomainKit does not roll those records back automatically. Cleanup requires a
+new digest-bound deletion plan, separate authorization, fresh record readback, and record IDs proven
+by the apply receipt.
 
 ## Consequences
 
 - Authorization cannot silently expand to operations the user did not approve.
 - Revalidation narrows but cannot eliminate the race between the final read and provider write.
 - Hosts must reconcile partial receipts and choose any destructive remediation explicitly.
+- Losing cached progress does not erase the durable plan or receipt needed to recover safely.
 - Coexistence is opt-in and visible in each requirement.
 
 ## Alternatives considered
@@ -44,5 +47,6 @@ record identifier. DomainKit does not roll those records back automatically.
 
 - `src/plan/types.ts`
 - `src/plan/plan.ts`
+- `src/plan/deletion.ts`
 - `src/domain/dns-record.ts`
 - `tests/tracer/plan-apply.test.ts`
