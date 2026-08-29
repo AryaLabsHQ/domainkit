@@ -35,7 +35,7 @@ describe("Promise connections", () => {
     const repository = AuthorizationLifecycle.toAsync(InMemoryAuthorizationLifecycle.make());
     const result = await Connection.start({
       authorizedById: "user-1",
-      grant: { _tag: "account" },
+      grant: { _tag: "account", excludedDomains: [] },
       method: Connection.Method.Token({
         authenticate,
         providerId: "example",
@@ -57,7 +57,7 @@ describe("Promise connections", () => {
     await expect(
       Connection.start({
         authorizedById: "user-1",
-        grant: { _tag: "account" },
+        grant: { _tag: "account", excludedDomains: [] },
         method: Connection.Method.Token({
           authenticate: async () => ({
             ...(await authenticate()),

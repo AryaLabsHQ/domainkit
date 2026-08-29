@@ -102,7 +102,7 @@ if (discovered._tag !== "Resolved") throw new Error("Packed discovery did not re
 const repository = AuthorizationLifecycle.toAsync(InMemoryAuthorizationLifecycle.make());
 const connected = await Connection.start({
   authorizedById: "packed-user",
-  grant: { _tag: "account" },
+  grant: { _tag: "account", excludedDomains: [] },
   method: Connection.Method.Token({
     authenticate: async () => ({
       capabilityEvidence: [
@@ -119,6 +119,15 @@ const connected = await Connection.start({
     requiredCapabilities: ["dns:read", "dns:write"],
     token: Secret.make("packed-token"),
   }),
+  ownerId: "packed-owner",
+  repository,
+});
+if (connected._tag !== "Connected") throw new Error("Packed connection did not complete");
+const binding = connected.aggregate.bindings[0];
+if (binding === undefined) throw new Error("Packed connection has no owner binding");
+const removed = await Connection.removeDomain({
+  connectionId: binding.id,
+  domain: "mail.example.com",
   ownerId: "packed-owner",
   repository,
 });
@@ -163,6 +172,7 @@ const { plan: effectPlan } = await Effect.runPromise(
 if (
   VERSION.length === 0 ||
   connected._tag !== "Connected" ||
+  removed._tag !== "Removed" ||
   discovered.plan.digest !== promisePlan.digest ||
   observed._tag !== "Verified" ||
   promisePlan.digest !== effectPlan.digest ||

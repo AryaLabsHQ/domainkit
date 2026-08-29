@@ -4,12 +4,24 @@ export {
   AuthorizationError,
   decode,
   encode,
+  coversDomain,
   Grant,
+  includeDomains,
+  removeDomain as removeDomainFromGrant,
   Schema,
   validate,
 } from "./connection.ts";
 export type { Connection, StoredCredential } from "./connection.ts";
-export { complete, Error, extend, Method, start, StartResult } from "./connect.ts";
+export {
+  complete,
+  Error,
+  extend,
+  Method,
+  removeDomain,
+  RemoveDomainResult,
+  start,
+  StartResult,
+} from "./connect.ts";
 export type {
   Authentication,
   AuthenticationFailure,
@@ -23,5 +35,7 @@ export type {
   ExtendInput,
   Method as ConnectionMethod,
   Requirements,
+  RemoveDomainInput,
+  RemoveDomainResult as ConnectionRemoveDomainResult,
   StartResult as ConnectionStartResult,
 } from "./connect.ts";

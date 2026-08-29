@@ -46,7 +46,7 @@ describe("Effect-native connections", () => {
     return Effect.gen(function* () {
       const result = yield* Connection.start({
         authorizedById: "user-1",
-        grant: { _tag: "account" },
+        grant: { _tag: "account", excludedDomains: [] },
         method: Connection.Method.Token({
           authenticate: () => Effect.succeed(authentication()),
           providerId: "example",
@@ -144,6 +144,141 @@ describe("Effect-native connections", () => {
     );
   });
 
+  it.effect("removes one exact domain without detaching the shared authorization", () => {
+    const repository = InMemoryAuthorizationLifecycle.make();
+    return Effect.gen(function* () {
+      const connected = yield* Connection.start({
+        authorizedById: "user-1",
+        grant: {
+          _tag: "domains",
+          domains: [DomainName.parse("domlens.dev"), DomainName.parse("samva.arya.sh")],
+        },
+        method: Connection.Method.Token({
+          authenticate: () => Effect.succeed(authentication()),
+          providerId: "example",
+          requiredCapabilities: ["dns:read", "dns:write"],
+          token: Secret.make("access-token"),
+        }),
+        ownerId: "organization-1",
+      });
+      if (connected._tag !== "Connected") return;
+      const binding = connected.aggregate.bindings[0];
+      if (binding === undefined) return yield* Effect.die("connection binding is missing");
+
+      const removed = yield* Connection.removeDomain({
+        connectionId: binding.id,
+        domain: "domlens.dev",
+        ownerId: "organization-1",
+      });
+
+      assert.strictEqual(removed._tag, "Removed");
+      assert.strictEqual(removed.aggregate.authorization.id, connected.aggregate.authorization.id);
+      assert.strictEqual(removed.aggregate.credential.accessToken.expose(), "access-token");
+      assert.deepStrictEqual(removed.aggregate.bindings[0]?.grant, {
+        _tag: "domains",
+        domains: [DomainName.parse("samva.arya.sh")],
+      });
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          Layer.succeed(AuthorizationLifecycle.Service, repository),
+          Digest.webCryptoLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("excludes and reconnects one domain on an account grant", () => {
+    const repository = InMemoryAuthorizationLifecycle.make();
+    return Effect.gen(function* () {
+      const connected = yield* Connection.start({
+        authorizedById: "user-1",
+        grant: { _tag: "account", excludedDomains: [] },
+        method: Connection.Method.Token({
+          authenticate: () => Effect.succeed(authentication()),
+          providerId: "example",
+          requiredCapabilities: ["dns:read", "dns:write"],
+          token: Secret.make("access-token"),
+        }),
+        ownerId: "organization-1",
+      });
+      if (connected._tag !== "Connected") return;
+      const binding = connected.aggregate.bindings[0];
+      if (binding === undefined) return yield* Effect.die("connection binding is missing");
+
+      const removed = yield* Connection.removeDomain({
+        connectionId: binding.id,
+        domain: "samva.arya.sh",
+        ownerId: "organization-1",
+      });
+      assert.strictEqual(removed._tag, "Removed");
+      assert.deepStrictEqual(removed.aggregate.bindings[0]?.grant, {
+        _tag: "account",
+        excludedDomains: [DomainName.parse("samva.arya.sh")],
+      });
+
+      const repeated = yield* Connection.removeDomain({
+        connectionId: binding.id,
+        domain: "samva.arya.sh",
+        ownerId: "organization-1",
+      });
+      assert.strictEqual(repeated._tag, "AlreadyRemoved");
+
+      const extended = yield* Connection.extend({
+        connectionId: binding.id,
+        grant: { _tag: "domains", domains: [DomainName.parse("samva.arya.sh")] },
+        ownerId: "organization-1",
+      });
+      assert.deepStrictEqual(extended.bindings[0]?.grant, {
+        _tag: "account",
+        excludedDomains: [],
+      });
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          Layer.succeed(AuthorizationLifecycle.Service, repository),
+          Digest.webCryptoLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("rejects domain removal for another owner", () => {
+    const repository = InMemoryAuthorizationLifecycle.make();
+    return Effect.gen(function* () {
+      const connected = yield* Connection.start({
+        authorizedById: "user-1",
+        grant: { _tag: "domains", domains: [DomainName.parse("domlens.dev")] },
+        method: Connection.Method.Token({
+          authenticate: () => Effect.succeed(authentication()),
+          providerId: "example",
+          requiredCapabilities: ["dns:read", "dns:write"],
+          token: Secret.make("access-token"),
+        }),
+        ownerId: "organization-1",
+      });
+      if (connected._tag !== "Connected") return;
+      const binding = connected.aggregate.bindings[0];
+      if (binding === undefined) return yield* Effect.die("connection binding is missing");
+
+      const result = yield* Connection.removeDomain({
+        connectionId: binding.id,
+        domain: "domlens.dev",
+        ownerId: "organization-2",
+      }).pipe(Effect.result);
+      assert.strictEqual(result._tag, "Failure");
+      const stored = yield* repository.get(connected.aggregate.authorization.id);
+      assert.deepStrictEqual(stored?.bindings[0]?.grant, binding.grant);
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          Layer.succeed(AuthorizationLifecycle.Service, repository),
+          Digest.webCryptoLayer,
+        ),
+      ),
+    );
+  });
+
   it.effect("rejects extension for another owner without changing the grant", () => {
     const repository = InMemoryAuthorizationLifecycle.make();
     return Effect.gen(function* () {
@@ -163,7 +298,7 @@ describe("Effect-native connections", () => {
       if (binding === undefined) return yield* Effect.die("connection binding is missing");
       const result = yield* Connection.extend({
         connectionId: binding.id,
-        grant: { _tag: "account" },
+        grant: { _tag: "account", excludedDomains: [] },
         ownerId: "organization-2",
       }).pipe(Effect.result);
       assert.strictEqual(result._tag, "Failure");
@@ -202,7 +337,7 @@ describe("Effect-native connections", () => {
       if (binding === undefined) return yield* Effect.die("connection binding is missing");
       const result = yield* Connection.extend({
         connectionId: binding.id,
-        grant: { _tag: "account" },
+        grant: { _tag: "account", excludedDomains: [] },
         ownerId: "organization-1",
       }).pipe(Effect.result);
       assert.strictEqual(result._tag, "Failure");
@@ -241,7 +376,7 @@ describe("Effect-native connections", () => {
     return Effect.gen(function* () {
       const started = yield* Connection.start({
         authorizedById: "user-1",
-        grant: { _tag: "account" },
+        grant: { _tag: "account", excludedDomains: [] },
         method: Connection.Method.Interactive({
           continuations,
           flow,

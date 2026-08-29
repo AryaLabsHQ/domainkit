@@ -8,7 +8,16 @@ import { webCryptoLayer } from "../plan/canonical-json.ts";
 import * as LifecycleRepository from "./authorization-lifecycle.ts";
 import type * as Secret from "../auth/secret.ts";
 
-export { assertGrant, AuthorizationError, encode, Grant, Schema } from "../auth/connection.ts";
+export {
+  assertGrant,
+  AuthorizationError,
+  coversDomain,
+  encode,
+  Grant,
+  includeDomains,
+  removeDomain as removeDomainFromGrant,
+  Schema,
+} from "../auth/connection.ts";
 export type { Connection, OAuthContinuation, StoredCredential } from "../auth/connection.ts";
 
 export function decode(input: unknown): Promise<Connection.Connection> {
@@ -177,5 +186,23 @@ export async function extend(
   );
 }
 
-export { Error, StartResult } from "../auth/connect.ts";
-export type { Authentication, ConnectionStartResult, ExtendInput } from "../auth/connection-api.ts";
+/** Removes one domain from an owner binding without revoking provider authorization. */
+export async function removeDomain(
+  input: Connect.RemoveDomainInput & { readonly repository: Repository.Repository },
+): Promise<Connect.RemoveDomainResult> {
+  return Effect.runPromise(
+    Connect.removeDomain({
+      connectionId: input.connectionId,
+      domain: input.domain,
+      ownerId: input.ownerId,
+    }).pipe(Effect.provide(LifecycleRepository.layerFrom(input.repository))),
+  );
+}
+
+export { Error, RemoveDomainResult, StartResult } from "../auth/connect.ts";
+export type {
+  Authentication,
+  ConnectionStartResult,
+  ExtendInput,
+  RemoveDomainInput,
+} from "../auth/connection-api.ts";

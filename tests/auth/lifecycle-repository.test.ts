@@ -31,7 +31,7 @@ const authentication = (token: string): Connection.Authentication => ({
 const connect = (ownerId: string, token: string) =>
   Connection.start({
     authorizedById: `admin:${ownerId}`,
-    grant: { _tag: "account" },
+    grant: { _tag: "account", excludedDomains: [] },
     method: Connection.Method.Token({
       authenticate: () => Effect.succeed(authentication(token)),
       providerId: "cloudflare",

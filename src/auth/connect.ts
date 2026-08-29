@@ -3,8 +3,9 @@ import { Clock, Crypto, Data, Effect, Schema } from "effect";
 import { CryptoError } from "../plan/canonical-json.ts";
 import type { Error as InvalidInputError } from "../invalid-input.ts";
 import type * as DnsProvider from "../provider/provider.ts";
+import * as DomainName from "../domain/domain-name.ts";
 import * as ProviderAuthorization from "./authorization.ts";
-import type * as Binding from "./connection.ts";
+import * as Binding from "./connection.ts";
 import * as Repository from "./lifecycle-repository.ts";
 import type * as ProviderContext from "./provider-context.ts";
 import type * as Secret from "./secret.ts";
@@ -101,17 +102,17 @@ export interface ExtendInput {
   readonly ownerId: string;
 }
 
-const mergeGrant = (
-  current: Binding.Grant | undefined,
-  requested: Binding.Grant,
-): Binding.Grant => {
-  if (current === undefined) return requested;
-  if (current._tag === "account" || requested._tag === "account") return { _tag: "account" };
-  return {
-    _tag: "domains",
-    domains: [...new Set([...current.domains, ...requested.domains])],
-  };
-};
+export interface RemoveDomainInput {
+  readonly connectionId: string;
+  readonly domain: string;
+  readonly ownerId: string;
+}
+
+export type RemoveDomainResult = Data.TaggedEnum<{
+  AlreadyRemoved: { readonly aggregate: Repository.Aggregate };
+  Removed: { readonly aggregate: Repository.Aggregate };
+}>;
+export const RemoveDomainResult = Data.taggedEnum<RemoveDomainResult>();
 
 const persist = Effect.fn("Connection.persist")(function* (
   input: BaseInput & {
@@ -157,7 +158,7 @@ const persist = Effect.fn("Connection.persist")(function* (
   const binding: Binding.Connection = {
     authorizationId,
     createdAt: existingBinding?.createdAt ?? now,
-    grant: mergeGrant(existingBinding?.grant, input.grant),
+    grant: Binding.includeDomains(existingBinding?.grant, input.grant),
     id:
       existingBinding?.id ??
       (yield* crypto.randomUUIDv4.pipe(
@@ -316,8 +317,44 @@ export const extend = Effect.fn("Connection.extend")(function* (input: ExtendInp
   }
   return yield* repository.bind(aggregate.authorization.id, {
     ...binding,
-    grant: mergeGrant(binding.grant, input.grant),
+    grant: Binding.includeDomains(binding.grant, input.grant),
   });
+});
+
+/** Removes one domain from an owner binding without revoking provider authorization. */
+export const removeDomain = Effect.fn("Connection.removeDomain")(function* (
+  input: RemoveDomainInput,
+) {
+  const repository = yield* Repository.Service;
+  const aggregate = yield* repository.getByConnectionId(input.connectionId);
+  const binding = aggregate?.bindings.find(({ id }) => id === input.connectionId);
+  if (aggregate === null || binding === undefined || binding.ownerId !== input.ownerId) {
+    return yield* new Error({
+      category: "authorization",
+      message: "Connection does not belong to this owner",
+      operation: "Connection.removeDomain",
+      retry: "never",
+    });
+  }
+  const domain = yield* DomainName.decode(input.domain).pipe(
+    Effect.mapError(
+      (cause) =>
+        new Error({
+          category: "validation",
+          message: cause.message,
+          operation: "Connection.removeDomain",
+          retry: "never",
+        }),
+    ),
+  );
+  if (!Binding.coversDomain(binding.grant, domain)) {
+    return RemoveDomainResult.AlreadyRemoved({ aggregate });
+  }
+  const updated = yield* repository.bind(aggregate.authorization.id, {
+    ...binding,
+    grant: Binding.removeDomain(binding.grant, domain),
+  });
+  return RemoveDomainResult.Removed({ aggregate: updated });
 });
 
 export type Requirements = Repository.Service | Crypto.Crypto;
