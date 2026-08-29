@@ -72,7 +72,7 @@ export interface ConnectionTransport {
     readonly connectionId: string;
     readonly domain: string;
     readonly preserveDns: true;
-  }) => Promise<RemoveDomainResult>;
+  }) => Promise<RemoveDomainResult | Failure>;
 }
 
 export interface RemoveDomainResult {
