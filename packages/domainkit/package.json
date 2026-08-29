@@ -1,0 +1,95 @@
+{
+  "name": "domainkit",
+  "version": "0.2.2",
+  "description": "Provider-independent DNS provisioning plans and authorization for TypeScript",
+  "keywords": [
+    "dns",
+    "domain",
+    "domain-connect",
+    "effect",
+    "typescript"
+  ],
+  "homepage": "https://github.com/AryaLabsHQ/domainkit#readme",
+  "bugs": {
+    "url": "https://github.com/AryaLabsHQ/domainkit/issues"
+  },
+  "license": "MIT",
+  "author": "Arya Labs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AryaLabsHQ/domainkit.git"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./effect": {
+      "types": "./dist/effect.d.mts",
+      "import": "./dist/effect.mjs"
+    },
+    "./cloudflare": {
+      "types": "./dist/cloudflare.d.mts",
+      "import": "./dist/cloudflare.mjs"
+    },
+    "./effect/cloudflare": {
+      "types": "./dist/effect-cloudflare.d.mts",
+      "import": "./dist/effect-cloudflare.mjs"
+    },
+    "./vercel": {
+      "types": "./dist/vercel.d.mts",
+      "import": "./dist/vercel.mjs"
+    },
+    "./effect/vercel": {
+      "types": "./dist/effect-vercel.d.mts",
+      "import": "./dist/effect-vercel.mjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.mts",
+      "import": "./dist/testing.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "clean": "rm -rf dist coverage",
+    "release:check": "bun run typecheck && bun run test && bun run build && bun run typecheck:examples && bun run test:artifact",
+    "test": "vitest run --exclude tests/artifact/**/*.test.ts",
+    "test:artifact": "vitest run tests/artifact",
+    "test:consumers": "vitest run tests/artifact/packed-consumers.test.ts",
+    "test:live:cloudflare": "bun tests/live/cloudflare.ts",
+    "test:live:vercel": "bun tests/live/vercel.ts",
+    "test:providers": "vitest run tests/providers",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "typecheck:examples": "tsc --project tsconfig.examples.json"
+  },
+  "dependencies": {
+    "@leichtgewicht/dns-packet": "6.0.3",
+    "oauth4webapi": "^3.8.7",
+    "tldts": "^7.4.11"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.0-rc.112",
+    "@types/bun": "1.4.0",
+    "effect": "4.0.0-rc.112",
+    "miniflare": "3.20250718.3",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "effect": ">=4.0.0-rc.111 <5"
+  },
+  "engines": {
+    "node": ">=24.10.0"
+  },
+  "packageManager": "bun@1.4.0"
+}

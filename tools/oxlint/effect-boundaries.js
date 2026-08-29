@@ -1,35 +1,36 @@
 import path from "node:path";
 
 const repoRoot = process.cwd();
+const coreSource = "packages/domainkit/src/";
 
 const runtimeExitFiles = new Set([
-  "src/provider/provider.ts",
-  "src/verification/resolver.ts",
-  "src/stores/connection.ts",
-  "src/stores/authorization.ts",
-  "src/stores/credential.ts",
-  "src/stores/oauth-state.ts",
-  "src/stores/receipt.ts",
+  `${coreSource}provider/provider.ts`,
+  `${coreSource}verification/resolver.ts`,
+  `${coreSource}stores/connection.ts`,
+  `${coreSource}stores/authorization.ts`,
+  `${coreSource}stores/credential.ts`,
+  `${coreSource}stores/oauth-state.ts`,
+  `${coreSource}stores/receipt.ts`,
 ]);
 
 const foreignPromiseFiles = new Set([
-  "src/auth/authorization-code.ts",
-  "src/auth/oauth.ts",
-  "src/plan/canonical-json.ts",
-  "src/provider/provider.ts",
-  "src/providers/cloudflare/client.ts",
-  "src/providers/vercel/auth.ts",
-  "src/providers/vercel/client.ts",
-  "src/promise/oauth.ts",
-  "src/promise/connection-lifecycle.ts",
-  "src/promise/token.ts",
-  "src/stores/connection.ts",
-  "src/stores/authorization.ts",
-  "src/stores/credential.ts",
-  "src/stores/oauth-state.ts",
-  "src/stores/receipt.ts",
-  "src/verification/doh.ts",
-  "src/verification/resolver.ts",
+  `${coreSource}auth/authorization-code.ts`,
+  `${coreSource}auth/oauth.ts`,
+  `${coreSource}plan/canonical-json.ts`,
+  `${coreSource}provider/provider.ts`,
+  `${coreSource}providers/cloudflare/client.ts`,
+  `${coreSource}providers/vercel/auth.ts`,
+  `${coreSource}providers/vercel/client.ts`,
+  `${coreSource}promise/oauth.ts`,
+  `${coreSource}promise/connection-lifecycle.ts`,
+  `${coreSource}promise/token.ts`,
+  `${coreSource}stores/connection.ts`,
+  `${coreSource}stores/authorization.ts`,
+  `${coreSource}stores/credential.ts`,
+  `${coreSource}stores/oauth-state.ts`,
+  `${coreSource}stores/receipt.ts`,
+  `${coreSource}verification/doh.ts`,
+  `${coreSource}verification/resolver.ts`,
 ]);
 
 function relative(filename) {
@@ -54,9 +55,9 @@ function boundaryRule(property, allowed, message) {
     },
     create(context) {
       const filename = relative(context.filename);
-      if (!filename.startsWith("src/")) return {};
-      if (filename.startsWith("src/promise/") && property === "runPromise") return {};
-      if (filename.startsWith("src/promise/") && property === "tryPromise") return {};
+      if (!filename.startsWith(coreSource)) return {};
+      if (filename.startsWith(`${coreSource}promise/`) && property === "runPromise") return {};
+      if (filename.startsWith(`${coreSource}promise/`) && property === "tryPromise") return {};
       if (allowed.has(filename)) return {};
       return {
         CallExpression(node) {
