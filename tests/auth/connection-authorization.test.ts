@@ -3,14 +3,13 @@ import { Effect, Layer } from "effect";
 
 import {
   ConnectionAuthorization,
-  DnsProvider,
   DnsRecord,
   Digest,
   DomainName,
   Provisioning,
   type Connection,
-  ProviderAuthorization,
 } from "../../src/effect.ts";
+import { DnsProvider, ProviderAuthorization } from "../../src/effect-adapter.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
 
 const authorization: ProviderAuthorization.ProviderAuthorization = {

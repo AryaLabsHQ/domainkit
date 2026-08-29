@@ -93,3 +93,42 @@ export function recordedFetch(
     },
   };
 }
+
+/** Stateful Vercel API fixture with one-record pages for the shared conformance contract. */
+export function conformanceFetch(): Fetch {
+  const records = new Map<string, Record<string, unknown>>();
+  let nextId = 1;
+  return async (input, init) => {
+    const url = new URL(String(input));
+    const method = init?.method ?? "GET";
+    if (method === "GET" && url.pathname === "/v6/domains/example.com/config") {
+      return json(authoritativeConfig);
+    }
+    if (method === "GET" && url.pathname === "/v5/domains/example.com") {
+      return json(domainEnvelope);
+    }
+    if (method === "GET" && url.pathname === "/v5/domains/example.com/records") {
+      const offset = Number(url.searchParams.get("until") ?? "0");
+      const all = [...records.values()];
+      const next = offset + 1 < all.length ? offset + 1 : null;
+      return json(recordPage(all.slice(offset, offset + 1), next));
+    }
+    if (url.pathname === "/v2/domains/example.com/records" && method === "POST") {
+      const id = `record-${nextId++}`;
+      records.set(id, { ...(JSON.parse(String(init?.body)) as Record<string, unknown>), id });
+      return json({ uid: id });
+    }
+    const recordPath = url.pathname.match(/^\/v2\/domains\/example\.com\/records\/([^/]+)$/);
+    if (recordPath !== null && method === "DELETE") {
+      records.delete(decodeURIComponent(recordPath[1] ?? ""));
+      return json({});
+    }
+    throw new Error(`Unhandled Vercel conformance request: ${method} ${url.pathname}`);
+  };
+}
+
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+  });
+}

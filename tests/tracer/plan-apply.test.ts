@@ -3,11 +3,11 @@ import { Effect, Layer } from "effect";
 
 import {
   DnsPlan,
-  DnsProvider,
   DnsRecord,
   Digest,
   Provisioning as EffectProvisioning,
 } from "../../src/effect.ts";
+import { DnsProvider } from "../../src/effect-adapter.ts";
 import { Deletion, Provisioning } from "../../src/index.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
 

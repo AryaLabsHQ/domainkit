@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 
 import packageJson from "../../package.json" with { type: "json" };
+import * as effectAdapterApi from "../../src/effect-adapter.ts";
 import * as effectApi from "../../src/effect.ts";
 import * as effectCloudflareApi from "../../src/effect-cloudflare.ts";
 import * as effectVercelApi from "../../src/effect-vercel.ts";
@@ -15,13 +16,24 @@ describe("public namespaces", () => {
     assert.strictEqual(effectApi.VERSION, packageJson.version);
   });
 
+  it("publishes explicit Promise and Effect adapter-author subpaths", () => {
+    assert.deepStrictEqual(packageJson.exports["./adapter"], {
+      import: "./dist/adapter.mjs",
+      types: "./dist/adapter.d.mts",
+    });
+    assert.deepStrictEqual(packageJson.exports["./effect/adapter"], {
+      import: "./dist/effect-adapter.mjs",
+      types: "./dist/effect-adapter.d.mts",
+    });
+  });
+
   it("exposes cohesive Promise, Effect, and testing namespace surfaces", () => {
     assert.strictEqual(typeof promiseApi.Provisioning.create, "function");
     assert.strictEqual(typeof promiseApi.ZoneDiscovery.discover, "function");
     assert.strictEqual(typeof promiseApi.Connection.start, "function");
     assert.strictEqual(typeof effectApi.Connection.start, "function");
     assert.strictEqual(typeof effectApi.AuthorizationLifecycle.Service, "function");
-    assert.strictEqual(typeof effectApi.DnsProvider.Service, "function");
+    assert.strictEqual(typeof effectAdapterApi.DnsProvider.Service, "function");
     assert.strictEqual(typeof effectApi.ZoneDiscovery.Service, "function");
     assert.strictEqual(typeof effectApi.Provisioning.create, "function");
     assert.strictEqual(typeof effectApi.CloudflareDnsOverHttps.layer, "function");
@@ -34,6 +46,8 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof promiseApi.DnsResolverPool.defaultMake, "function");
     assert.strictEqual(typeof promiseApi.Verification.observe, "function");
     assert.strictEqual(typeof testingApi.InMemoryDnsProvider.layer, "function");
+    assert.strictEqual(typeof testingApi.ProviderConformance.run, "function");
+    assert.strictEqual(typeof testingApi.ProviderConformance.fromAsync, "function");
     assert.strictEqual(typeof effectApi.Cloudflare.make, "function");
     assert.strictEqual(typeof effectCloudflareApi.make, "function");
     assert.strictEqual(typeof effectCloudflareApi.discovery, "function");
@@ -52,6 +66,16 @@ describe("public namespaces", () => {
     assert.strictEqual("createPlan" in promiseApi, false);
     assert.strictEqual("DnsProviderService" in effectApi, false);
     assert.strictEqual("layerDnsProviderFromPromise" in effectApi, false);
+    assert.strictEqual("DnsProvider" in effectApi, false);
+    assert.strictEqual("DnsProvider" in promiseApi, false);
+    assert.strictEqual("ProviderAuthorization" in effectApi, false);
+    assert.strictEqual("ProviderAuthorization" in promiseApi, false);
+    assert.strictEqual("ProviderAuth" in effectApi, false);
+    assert.strictEqual("ProviderAuth" in promiseApi, false);
+    assert.strictEqual("ProviderContext" in effectApi, false);
+    assert.strictEqual("ProviderContext" in promiseApi, false);
+    assert.strictEqual("InMemoryConnectionStore" in testingApi, false);
+    assert.strictEqual("InMemoryCredentialStore" in testingApi, false);
     assert.strictEqual("record" in effectApi.Verification, false);
     assert.strictEqual("record" in promiseApi.Verification, false);
   });

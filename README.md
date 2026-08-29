@@ -1,45 +1,41 @@
 # DomainKit
 
 DomainKit is a provider-independent TypeScript SDK for turning DNS requirements into reviewable,
-authorized provisioning plans. It is intended for products that need to connect customer domains
-without making registrar-specific APIs their product architecture.
+authorized provisioning plans. Products can connect customer domains without making one
+registrar's API or authorization model their architecture.
 
-## Direction
-
-DomainKit separates four concerns:
-
-1. a portable, versioned DNS plan and receipt format;
-2. explicit authorization for the exact operations being applied;
-3. provider adapters that reconcile and apply records;
-4. host-owned credentials, persistence, routes, and user interaction.
+DomainKit is additive and fail-closed. It creates missing records, treats exact records as no-ops,
+reports incompatible state as a conflict, and never silently overwrites DNS. Every applied write is
+bound to an approved plan digest and recorded in a receipt that can authorize a separate cleanup.
 
 ## Package shape
 
-- `domainkit` — Promise-based API for application code;
+- `domainkit` — Promise API for application code;
 - `domainkit/effect` — canonical Effect-native services and programs;
-- `domainkit/cloudflare` — Promise-based Cloudflare authoritative-DNS adapter;
-- `domainkit/effect/cloudflare` — canonical Effect-native Cloudflare adapter;
-- `domainkit/vercel` — Promise-based Vercel authoritative-DNS adapter;
-- `domainkit/effect/vercel` — canonical Effect-native Vercel adapter;
-- `domainkit/testing` — deterministic provider and store implementations for tests.
+- `domainkit/adapter` — Promise-shaped contracts for adapter authors;
+- `domainkit/effect/adapter` — canonical Effect adapter services and contracts;
+- `domainkit/cloudflare` and `domainkit/vercel` — Promise provider adapters;
+- `domainkit/effect/cloudflare` and `domainkit/effect/vercel` — Effect provider adapters;
+- `domainkit/testing` — in-memory lifecycle capabilities and the provider conformance runner.
 
-The package is portable ESM built on Fetch and Web APIs. Effect is a peer dependency.
+The package is portable ESM built on Fetch, Web Crypto, and Web APIs. Effect is a peer dependency.
+Promise namespaces delegate to the Effect implementation rather than maintaining another planner,
+authorization engine, or verifier.
 
-Both entry points are organized by capability namespaces. The root API accepts ordinary async
-providers and stores:
+## Plan, approve, and apply
 
 ```ts
 import { Provisioning } from "domainkit";
 
-const plan = await Provisioning.create({
-  provider: {
-    id: "my-provider",
-    listRecords: async (zone) => listDnsRecords(zone),
-    createRecord: async (zone, record) => createDnsRecord(zone, record),
-  },
+const { plan } = await Provisioning.create({
+  provider,
   requirements,
-  zone: "example.com",
+  target: Provisioning.Target.ExactZone({ zone: "example.com" }),
 });
+
+// Present plan.operations to the user before authorizing the exact digest.
+const authorization = await Provisioning.authorize(plan);
+const receipt = await Provisioning.apply({ authorization, plan, provider });
 ```
 
 Effect applications provide the same capabilities as Layers and run the canonical program
@@ -47,84 +43,96 @@ directly:
 
 ```ts
 import { Effect, Layer } from "effect";
-import { Digest, DnsProvider, Provisioning } from "domainkit/effect";
+import { DnsProvider } from "domainkit/effect/adapter";
+import { Digest, Provisioning } from "domainkit/effect";
 
-const program = Provisioning.create({ requirements, zone: "example.com" }).pipe(
-  Effect.provide(Layer.merge(DnsProvider.layerFromAsync(provider), Digest.webCryptoLayer)),
+const program = Provisioning.create({
+  requirements,
+  target: Provisioning.Target.ExactZone({ zone: "example.com" }),
+}).pipe(
+  Effect.provide(Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer)),
 );
 ```
 
-The Promise namespaces delegate to the canonical Effect programs rather than maintaining a second
-planning, authorization, or verification implementation. Hosts supply providers and stores
-explicitly; DomainKit does not own a hidden runtime.
+Use `DiscoverFromDomain` when the host has several authorized provider accounts. `ZoneDiscovery`
+checks the requested name and its parents, returns `Resolved`, `SelectionRequired`, or `NotFound`,
+and never guesses between ambiguous accounts.
 
-The Cloudflare authorization helpers can discover the account selected by an OAuth grant or API
-token from a domain the host already owns. They walk from the requested name to its registrable
-domain, require exactly one accessible authoritative zone, and return its Cloudflare account ID.
-Hosts therefore do not need to ask users to find or paste an account ID. The host still declares
-the capabilities required when the credential was issued because Cloudflare's non-mutating token
-verification endpoint cannot infer DNS write permission:
+## Connect provider accounts
+
+`Connection.start` handles token and interactive provider methods. It returns either `Connected`
+or `Redirect`; `Connection.complete` consumes an interactive continuation exactly once. Cloudflare
+implements OAuth and token methods. Vercel implements its installation-code flow without
+mislabeling it as generic OAuth.
+
+Cloudflare can discover the selected account from a domain already visible to the credential, so a
+customer does not need to find or type an account ID. Vercel retains explicit personal or team
+context returned by the installation. Both contexts are versioned, non-secret values that can
+reconstruct the correct provider client later.
+
+Hosts provide one `AuthorizationLifecycle` repository for an authorization aggregate, its
+credential, and its owner bindings. SQL hosts can implement one transaction; split database and
+vault hosts can implement a recoverable saga behind the same interface. Interactive continuations
+remain separate, short-lived, one-time state. DomainKit does not choose a database, cache, vault,
+callback route, session model, consent UI, or audit system.
+
+Provider scope claims are not treated as proof. Each required capability carries `Declared`,
+`Introspected`, or `Exercised` evidence. Final-binding revocation is fail-closed: durable state
+remains retryable until the provider confirms revocation.
+
+## Observe DNS
+
+`Verification.observe` is the only verification operation. Public DNS is the default:
 
 ```ts
-import { Cloudflare, DomainName } from "domainkit";
+import { Verification } from "domainkit";
 
-const resolveSubject = Cloudflare.Auth.subjectResolver({
-  capabilities: ["dns:read", "dns:write"],
-  domain: DomainName.parse("mail.customer.example.com"),
+const result = await Verification.observe({ record });
+```
+
+The default resolver pool queries Cloudflare and Google concurrently using RFC wire-format DNS over
+HTTPS and applies `AnyMatch`. Results preserve every named answer, negative response, timeout, and
+failure. Hosts can supply another resolver pool or choose tagged `AllMatch` and `Quorum` policies.
+
+Authoritative-provider observation is opt-in:
+
+```ts
+const result = await Verification.observe({
+  provider: Verification.Provider.Enabled({ provider, zone }),
+  publicDns: Verification.PublicDns.Disabled(),
+  record,
 });
 ```
 
-Once authorized, the DNS client remains explicitly account-scoped. The host supplies the discovered
-account ID with its stored credential. The adapter creates DNS-only records and leaves credential
-storage and user interaction to the host:
+When both sources are requested, both must match for `Verified`. Every result is exhaustive and
+tagged as `NotObserved`, `Pending`, `Mismatch`, `Unavailable`, or `Verified`.
+
+## Write an adapter
+
+Implement the narrow DNS provider contract from `domainkit/adapter` or
+`domainkit/effect/adapter`. Then run the deterministic offline contract exported from
+`domainkit/testing`:
 
 ```ts
-import { Cloudflare, Provisioning, Secret } from "domainkit";
+import { Effect } from "effect";
+import { DomainName } from "domainkit";
+import { ProviderConformance } from "domainkit/testing";
 
-const provider = Cloudflare.make({
-  accountId: "cloudflare-account-id",
-  capabilities: ["dns:read", "dns:write"],
-  token: Secret.make(apiToken),
-});
-
-const plan = await Provisioning.create({ provider, requirements, zone: "example.com" });
+const report = await Effect.runPromise(
+  ProviderConformance.run({
+    makeProvider: ProviderConformance.fromAsync(() => makeFreshPromiseProvider()),
+    zone: DomainName.parse("example.com"),
+  }),
+);
 ```
 
-OAuth helpers own Cloudflare's endpoints and client-auth variants while accepting the scope IDs
-assigned during OAuth client registration. `Cloudflare.Auth.tokenMethod` describes the equivalent
-API-token capability. Explicit `accountId` authorization remains available for hosts that already
-have a trusted account selection.
+The contract covers complete readback across provider pages, exact no-op, conflict, create, stale
+plans, partial receipts, and receipt-bound cleanup. First-party adapters run the same contract and
+credential-gated live profiles against disposable records.
 
-The Vercel adapter accepts either explicit personal or team context. It supports personal access
-tokens and Vercel's integration-code exchange without treating that provider-specific installation
-flow as generic OAuth:
-
-```ts
-import { Secret, Vercel } from "domainkit";
-
-const provider = Vercel.make({
-  capabilities: ["dns:read", "dns:write"],
-  context: { _tag: "team", teamId: "team-id" },
-  token: Secret.make(apiToken),
-});
-```
-
-`listAccounts()` returns the distinct accounts represented by zones visible to the credential.
-Accounts with no visible zones are not returned because Cloudflare does not document bearer-token
-authentication for its separate account-list endpoint.
-
-Schemas own external parsing. For example, `DomainName.parse` and `DnsRecord.parse` decode and
-canonicalize strings through codecs, while encoded protocol dates remain ISO strings and decoded
-domain values use `Date`.
-
-See [the architecture decisions](docs/adr/README.md) for the durable rationale and
-[the provider contract](docs/providers.md) for adapter differences. Runnable TypeScript examples
-cover [manual Promise provisioning](examples/promise/manual-provider.ts),
-[token connections](examples/promise/cloudflare-token.ts),
-[Cloudflare OAuth](examples/promise/cloudflare-oauth.ts),
-[Vercel integration exchange](examples/promise/vercel-integration.ts), and
-[Effect-native provisioning](examples/effect/provisioning.ts). See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
+Schemas own external and persisted parsing; Effect `Data` values own in-process configuration and
+control flow. See [the architecture decisions](docs/adr/README.md),
+[provider behavior](docs/providers.md), and [runnable examples](examples/).
 
 ## License
 

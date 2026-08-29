@@ -1,12 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import {
-  Connection,
-  DomainName,
-  ProviderAuthorization,
-  ProviderDiscovery,
-  Zones,
-} from "../../src/index.ts";
+import { Connection, DomainName, ProviderDiscovery, Zones } from "../../src/index.ts";
+import { ProviderAuthorization } from "../../src/adapter.ts";
 
 const connection: Connection.Connection = {
   authorizationId: "authorization-1",

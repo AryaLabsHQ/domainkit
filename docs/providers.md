@@ -28,9 +28,9 @@ DomainKit is DNS-only.
 ## Vercel
 
 Vercel clients require an explicit personal or team context. Team clients add `teamId` to resource
-requests; personal clients do not. Only domains whose `serviceType` says Vercel handles DNS are
-exposed as authoritative zones. Current nameservers are retained as provider evidence, while
-intended nameservers are not treated as observed authority.
+requests; personal clients do not. Domains are treated as DNS storage zones when Vercel exposes its
+DNS service type, zone flag, or intended nameservers. Current and intended nameservers remain
+provider evidence; they are not substituted for independent public authority observation.
 
 Vercel supports personal access tokens and its provider-specific integration installation flow.
 That flow begins at the integration install URL and exchanges the one-time callback code at
@@ -48,3 +48,8 @@ state conflicts without an automatic update or delete.
 Provider errors are decoded at the HTTP boundary, classified into portable reasons, and stripped
 of request credentials. Provider status and error codes remain diagnostic metadata without leaking
 raw response DTOs into the planning contract.
+
+Adapter authors import generic contracts from `domainkit/adapter` or
+`domainkit/effect/adapter`. `ProviderConformance.run` from `domainkit/testing` exercises complete
+paginated readback, exact no-op, conflict, create, stale plans, partial receipts, and receipt-bound
+cleanup against a fresh adapter fixture.

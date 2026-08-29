@@ -68,8 +68,8 @@ export interface AsyncInterface {
   readonly listRecords: (zone: DomainName.DomainName) => Promise<ReadonlyArray<DnsRecord.Observed>>;
 }
 
-export const layerFromAsync = (provider: AsyncInterface): Layer.Layer<Service> =>
-  Layer.succeed(Service, {
+export const fromAsync = (provider: AsyncInterface): Interface =>
+  Service.of({
     id: provider.id,
     createRecord: Effect.fn("DnsProvider.createRecord")((zone, record) =>
       Effect.tryPromise({
@@ -96,6 +96,9 @@ export const layerFromAsync = (provider: AsyncInterface): Layer.Layer<Service> =
       }),
     ),
   });
+
+export const layerFromAsync = (provider: AsyncInterface): Layer.Layer<Service> =>
+  Layer.succeed(Service, fromAsync(provider));
 
 export const toAsync = (provider: Interface): AsyncInterface => ({
   id: provider.id,

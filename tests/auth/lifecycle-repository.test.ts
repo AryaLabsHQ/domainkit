@@ -1,13 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 
-import {
-  AuthorizationLifecycle,
-  Connection,
-  Digest,
-  ProviderAuthorization,
-  Secret,
-} from "../../src/effect.ts";
+import { AuthorizationLifecycle, Connection, Digest, Secret } from "../../src/effect.ts";
+import { ProviderAuthorization } from "../../src/effect-adapter.ts";
 import { InMemoryAuthorizationLifecycle } from "../../src/testing.ts";
 
 const authentication = (token: string): Connection.Authentication => ({

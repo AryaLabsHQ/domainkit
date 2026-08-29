@@ -46,18 +46,26 @@ describe("packed consumers", () => {
       await writeFile(
         join(directory, "consumer.mjs"),
         `
-import { Provisioning, VERSION } from "domainkit";
+import {
+  AuthorizationLifecycle,
+  Connection,
+  Provisioning,
+  Secret,
+  Verification,
+  VERSION,
+} from "domainkit";
+import { ProviderAuthorization } from "domainkit/adapter";
 import { make as makeCloudflare } from "domainkit/cloudflare";
 import { make as makeVercel } from "domainkit/vercel";
+import { InMemoryAuthorizationLifecycle } from "domainkit/testing";
 import { Effect, Layer } from "effect";
 import {
   Digest,
-  DnsProvider,
   Provisioning as EffectProvisioning,
 } from "domainkit/effect";
+import { DnsProvider } from "domainkit/effect/adapter";
 import { make as makeEffectCloudflare } from "domainkit/effect/cloudflare";
 import { make as makeEffectVercel } from "domainkit/effect/vercel";
-import { Secret } from "domainkit";
 
 const provider = {
   id: "packed-consumer",
@@ -76,6 +84,59 @@ const input = {
   target: Provisioning.Target.ExactZone({ zone: "example.com" }),
 };
 const { plan: promisePlan } = await Provisioning.create({ ...input, provider });
+const discovered = await Provisioning.create({
+  requirements: input.requirements,
+  sources: [{
+    provider,
+    listZones: async (name) => name === "example.com" ? [{
+      accountId: "packed-account",
+      id: "packed-zone",
+      name: "example.com",
+      nameservers: ["ns1.example.net"],
+      status: "active",
+    }] : [],
+  }],
+  target: Provisioning.Target.DiscoverFromDomain({ domain: "mail.example.com" }),
+});
+if (discovered._tag !== "Resolved") throw new Error("Packed discovery did not resolve");
+const repository = AuthorizationLifecycle.toAsync(InMemoryAuthorizationLifecycle.make());
+const connected = await Connection.start({
+  authorizedById: "packed-user",
+  grant: { _tag: "account" },
+  method: Connection.Method.Token({
+    authenticate: async () => ({
+      capabilityEvidence: [
+        { capability: "dns:read", evidence: ProviderAuthorization.Evidence.Declared() },
+        { capability: "dns:write", evidence: ProviderAuthorization.Evidence.Declared() },
+      ],
+      credential: { accessToken: Secret.make("packed-token"), refreshToken: null, tokenType: "bearer" },
+      expiresAt: null,
+      providerAccountId: "packed-account",
+      providerContext: { value: {}, version: "packed.v1" },
+      scopes: [],
+    }),
+    providerId: provider.id,
+    requiredCapabilities: ["dns:read", "dns:write"],
+    token: Secret.make("packed-token"),
+  }),
+  ownerId: "packed-owner",
+  repository,
+});
+const observed = await Verification.observe({
+  record: input.requirements[0],
+  resolvers: [{
+    id: "packed-resolver",
+    resolver: { resolve: async () => ({
+      _tag: "answer",
+      answers: [{
+        data: "domainkit",
+        name: "_verify.example.com",
+        ttl: 60,
+        type: "TXT",
+      }],
+    }) },
+  }],
+});
 const cloudflareOptions = {
   accountId: "packed-account",
   capabilities: ["dns:read", "dns:write"],
@@ -101,6 +162,9 @@ const { plan: effectPlan } = await Effect.runPromise(
 );
 if (
   VERSION.length === 0 ||
+  connected._tag !== "Connected" ||
+  discovered.plan.digest !== promisePlan.digest ||
+  observed._tag !== "Verified" ||
   promisePlan.digest !== effectPlan.digest ||
   cloudflare.id !== "cloudflare" ||
   effectCloudflare.id !== "cloudflare" ||
@@ -115,7 +179,7 @@ if (
       await writeFile(
         join(directory, "types.ts"),
         `
-import type { DnsProvider } from "domainkit";
+import type { DnsProvider } from "domainkit/adapter";
 import type { Interface as Cloudflare } from "domainkit/cloudflare";
 import type { Interface as EffectCloudflare } from "domainkit/effect/cloudflare";
 import type { Interface as Vercel } from "domainkit/vercel";

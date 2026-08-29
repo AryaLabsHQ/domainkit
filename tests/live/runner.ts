@@ -2,10 +2,12 @@ import { Effect, Layer, Schema as S } from "effect";
 
 import type * as ProviderAuth from "../../src/auth/manifest.ts";
 import * as DnsRecord from "../../src/domain/dns-record.ts";
+import * as Deletion from "../../src/plan/deletion.ts";
 import * as Digest from "../../src/plan/canonical-json.ts";
 import * as Provisioning from "../../src/plan/plan.ts";
 import * as DnsPlan from "../../src/plan/types.ts";
 import * as DnsProvider from "../../src/provider/provider.ts";
+import * as Verification from "../../src/verification/verify.ts";
 import type * as LiveConfig from "./config.ts";
 
 export class Error extends S.TaggedError<Error>()("LiveRunnerError", {
@@ -32,10 +34,12 @@ export interface Input {
   readonly provider: DnsProvider.Interface;
   readonly providerScope: ProviderScope;
   readonly validateCredential: Effect.Effect<ProviderAuth.TokenValidation, DnsProvider.Error>;
+  readonly write?: (value: unknown) => Effect.Effect<void>;
 }
 
 export const run = Effect.fn("LiveRunner.run")((input: Input) =>
   Effect.gen(function* () {
+    const write = input.write ?? print;
     const validation = yield* input.validateCredential;
     if (
       input.provider.id !== input.providerScope.providerId ||
@@ -64,7 +68,7 @@ export const run = Effect.fn("LiveRunner.run")((input: Input) =>
     const approval = yield* makeApproval(plan.digest, input.providerScope);
 
     if (input.config.command === "preview") {
-      yield* print({ approval, plan: DnsPlan.encode(plan) });
+      yield* write({ approval, plan: DnsPlan.encode(plan) });
       return;
     }
     if (approval.digest !== input.config.approvedDigest) {
@@ -75,7 +79,36 @@ export const run = Effect.fn("LiveRunner.run")((input: Input) =>
 
     const authorization = yield* Provisioning.authorize(plan);
     const receipt = yield* Provisioning.apply({ authorization, plan });
-    yield* print(DnsPlan.encodeReceipt(receipt));
+    const observation = yield* Verification.observe({
+      provider: Verification.Provider.Enabled({ zone: input.config.zone }),
+      publicDns: Verification.PublicDns.Disabled(),
+      record: requirement,
+    });
+    const cleanup = yield* Effect.gen(function* () {
+      const deletion = yield* Deletion.create({ plan, receipt });
+      return yield* Deletion.apply({
+        authorization: yield* Deletion.authorize(deletion),
+        plan: deletion,
+      });
+    }).pipe(
+      Effect.match({
+        onFailure: (failure) => ({ _tag: "Failed" as const, failure }),
+        onSuccess: (cleanupReceipt) => ({ _tag: "Complete" as const, cleanupReceipt }),
+      }),
+    );
+    yield* write({
+      cleanup:
+        cleanup._tag === "Complete"
+          ? { _tag: cleanup._tag, receipt: cleanup.cleanupReceipt }
+          : { _tag: cleanup._tag, message: cleanup.failure.message },
+      createdRecordIds: receipt.operations.map(({ providerRecordId }) => providerRecordId),
+      observation,
+      providerScope: input.providerScope,
+      receipt: DnsPlan.encodeReceipt(receipt),
+      recordName: input.config.recordName,
+      zone: input.config.zone,
+    });
+    if (cleanup._tag === "Failed") return yield* cleanup.failure;
   }).pipe(
     Effect.provide(
       Layer.merge(Layer.succeed(DnsProvider.Service, input.provider), Digest.webCryptoLayer),
