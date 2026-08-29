@@ -4,12 +4,14 @@ import { Effect } from "effect";
 import type * as ProviderAuth from "../auth/manifest.ts";
 import type * as Secret from "../auth/secret.ts";
 import * as EffectAuth from "../providers/cloudflare/auth.ts";
+import * as Connection from "./connection.ts";
 
 export const manifest = EffectAuth.manifest;
 export const oauthMethod = EffectAuth.oauthMethod;
 export const tokenMethod = EffectAuth.tokenMethod;
 export type {
   CredentialTarget,
+  OAuthFlowOptions,
   OAuthMethodOptions,
   SubjectResolverOptions,
   TokenValidatorOptions,
@@ -21,6 +23,18 @@ export function subjectResolver(
   const resolve = EffectAuth.subjectResolver(options);
   return (tokens: oauth.TokenEndpointResponse, accessToken: Secret.Value) =>
     Effect.runPromise(resolve(tokens, accessToken));
+}
+
+/** Creates Cloudflare's OAuth implementation for the Promise connection facade. */
+export function oauthFlow(options: EffectAuth.OAuthFlowOptions): Connection.InteractiveFlow {
+  return Connection.fromEffectFlow(EffectAuth.oauthFlow(options));
+}
+
+/** Creates a Cloudflare token method for the Promise connection facade. */
+export function tokenConnectionMethod(
+  options: EffectAuth.TokenConnectionOptions,
+): Extract<Connection.Method, { readonly _tag: "Token" }> {
+  return Connection.fromEffectTokenMethod(EffectAuth.tokenConnectionMethod(options));
 }
 
 export function tokenValidator(

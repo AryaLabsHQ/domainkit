@@ -71,13 +71,14 @@ export function select(input: {
     const index = eligible.findIndex(
       (connected) =>
         connected.providerId === input.explicit?.providerId &&
-        connected.authorization.accountId === input.explicit.accountId &&
+        connected.authorization.providerAccountId === input.explicit.accountId &&
         DomainName.parse(connected.zone) === explicitZone,
     );
     if (index < 0) {
-      throw new Connection.AuthorizationError({
-        message: "Explicit provider zone is not connected or granted",
-      });
+      throw Connection.authorizationError(
+        "Explicit provider zone is not connected or granted",
+        "ProviderDiscovery.select",
+      );
     }
     const candidate = evidence[index];
     if (candidate === undefined) throw new Error("Eligible provider evidence is missing");
@@ -102,7 +103,7 @@ function evidenceFor(
   const configured = new Set(nameserverSet(connected.nameservers));
   const matchedNameservers = authoritative.filter((nameserver) => configured.has(nameserver));
   return {
-    accountId: connected.authorization.accountId,
+    accountId: connected.authorization.providerAccountId,
     connectionId: connected.connection.id,
     decisiveNameserverMatch:
       authoritative.length > 0 && matchedNameservers.length === authoritative.length,

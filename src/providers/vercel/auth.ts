@@ -1,10 +1,20 @@
-import { Effect, Schema as S } from "effect";
+import { Clock, Effect, Schema as S } from "effect";
 
+import * as Connection from "../../auth/connect.ts";
+import * as ProviderAuthorization from "../../auth/authorization.ts";
 import type * as ProviderAuth from "../../auth/manifest.ts";
+import * as ProviderContext from "../../auth/provider-context.ts";
 import * as Secret from "../../auth/secret.ts";
 import * as DnsProvider from "../../provider/provider.ts";
-import type * as Client from "./client.ts";
+import * as Client from "./client.ts";
 import * as Protocol from "./protocol.ts";
+
+const Context = S.TaggedUnion({
+  personal: { installationId: S.NullOr(S.String) },
+  team: { installationId: S.NullOr(S.String), teamId: S.String },
+});
+export type Context = typeof Context.Type;
+export const contextCodec = ProviderContext.codec("vercel.v1", Context);
 
 /** Describes Vercel's caller-created personal access-token method. */
 export function tokenMethod(
@@ -128,6 +138,131 @@ export const exchangeCode = Effect.fn("VercelAuth.exchangeCode")((options: Excha
     };
   }),
 );
+
+export interface TokenConnectionOptions extends Omit<Client.Options, "token"> {
+  readonly token: Secret.Value;
+}
+
+/** Creates a provider-independent token connection method backed by Vercel validation. */
+export function tokenConnectionMethod(
+  options: TokenConnectionOptions,
+): Extract<Connection.Method, { readonly _tag: "Token" }> {
+  const requiredCapabilities = [...options.capabilities];
+  return Connection.Method.Token({
+    authenticate: Effect.fn("VercelAuth.authenticateToken")(function* (token) {
+      const validated = yield* Client.make({ ...options, token }).validateToken();
+      const observedAt = new Date(yield* Clock.currentTimeMillis);
+      return {
+        capabilityEvidence: validated.capabilities.map((capability) => ({
+          capability,
+          evidence: ProviderAuthorization.Evidence.Introspected({ observedAt }),
+        })),
+        credential: { accessToken: token, refreshToken: null, tokenType: "bearer" },
+        expiresAt: validated.expiresAt,
+        providerAccountId: validated.accountId,
+        providerContext: yield* contextCodec.encode(
+          options.context._tag === "team"
+            ? { _tag: "team", installationId: null, teamId: options.context.teamId }
+            : { _tag: "personal", installationId: null },
+        ),
+        scopes: [...validated.scopes],
+      } satisfies Connection.Authentication;
+    }),
+    providerId: "vercel",
+    requiredCapabilities,
+    token: options.token,
+  });
+}
+
+/** Converts a completed Vercel Integration exchange into canonical connection authentication. */
+export const integrationAuthentication = Effect.fn("VercelAuth.integrationAuthentication")(
+  function* (
+    options: ExchangeCodeOptions & {
+      readonly capabilities: ReadonlyArray<ProviderAuthorization.Capability>;
+    },
+  ) {
+    const exchanged = yield* exchangeCode(options);
+    const observedAt = new Date(yield* Clock.currentTimeMillis);
+    return {
+      capabilityEvidence: options.capabilities.map((capability) => ({
+        capability,
+        evidence: ProviderAuthorization.Evidence.Introspected({ observedAt }),
+      })),
+      credential: {
+        accessToken: exchanged.accessToken,
+        refreshToken: null,
+        tokenType: "bearer",
+      },
+      expiresAt: null,
+      providerAccountId:
+        exchanged.context._tag === "team" ? exchanged.context.teamId : exchanged.userId,
+      providerContext: yield* contextCodec.encode(
+        exchanged.context._tag === "team"
+          ? {
+              _tag: "team",
+              installationId: exchanged.installationId,
+              teamId: exchanged.context.teamId,
+            }
+          : { _tag: "personal", installationId: exchanged.installationId },
+      ),
+      scopes: [],
+    } satisfies Connection.Authentication;
+  },
+);
+
+export interface IntegrationFlowOptions
+  extends Omit<ExchangeCodeOptions, "code">, IntegrationMethodOptions {}
+
+/** Creates Vercel Integration's implementation of the common interactive connection capability. */
+export function integrationFlow(options: IntegrationFlowOptions): Connection.InteractiveFlow {
+  const method = integrationMethod(options);
+  const Payload = S.fromJsonString(S.Struct({ state: S.String }));
+  return {
+    complete: Effect.fn("VercelAuth.integrationFlow.complete")(function* (payload, callbackUrl) {
+      const continuation = yield* S.decodeUnknownEffect(Payload)(payload.expose()).pipe(
+        Effect.mapError(
+          () =>
+            new Connection.Error({
+              category: "authorization",
+              message: "Vercel Integration continuation payload is invalid",
+              operation: "VercelAuth.integrationFlow.complete",
+              retry: "after-user-action",
+            }),
+        ),
+      );
+      const code = callbackUrl.searchParams.get("code");
+      if (callbackUrl.searchParams.get("state") !== continuation.state || code === null) {
+        return yield* new Connection.Error({
+          category: "authorization",
+          message: "Vercel Integration callback does not match its continuation",
+          operation: "VercelAuth.integrationFlow.complete",
+          retry: "after-user-action",
+        });
+      }
+      return yield* integrationAuthentication({
+        ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
+        capabilities: options.capabilities,
+        clientId: options.clientId,
+        clientSecret: options.clientSecret,
+        code: Secret.make(code),
+        ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+        redirectUri: options.redirectUri,
+      });
+    }),
+    method: "integration",
+    providerId: "vercel",
+    requiredCapabilities: [...options.capabilities],
+    start: (continuationId) => {
+      const authorizationUrl = new URL(method.installUrl);
+      authorizationUrl.searchParams.set("source", "external");
+      authorizationUrl.searchParams.set("state", continuationId);
+      return Effect.succeed({
+        authorizationUrl,
+        payload: Secret.make(JSON.stringify({ state: continuationId })),
+      });
+    },
+  };
+}
 
 function failure(
   operation: string,

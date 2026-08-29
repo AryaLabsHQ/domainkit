@@ -25,7 +25,10 @@ export const authorize = Effect.fn("ConnectionAuthorization.authorize")(function
     catch: (cause) =>
       cause instanceof Connection.AuthorizationError || cause instanceof InvalidInputError
         ? cause
-        : new Connection.AuthorizationError({ message: "Connection grant is invalid" }),
+        : Connection.authorizationError(
+            "Connection grant is invalid",
+            "ConnectionAuthorization.authorize",
+          ),
   });
   const authorization = yield* Provisioning.authorize(
     input.plan,
@@ -41,9 +44,10 @@ export const authorize = Effect.fn("ConnectionAuthorization.authorize")(function
       !operation.requirement.name.endsWith(`.${domain}`),
   );
   if (outsideGrant.length > 0) {
-    return yield* new Connection.AuthorizationError({
-      message: `Plan operations are outside the granted domain ${domain}`,
-    });
+    return yield* Connection.authorizationError(
+      `Plan operations are outside the granted domain ${domain}`,
+      "ConnectionAuthorization.authorize",
+    );
   }
   return authorization;
 });

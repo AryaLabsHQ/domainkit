@@ -1,21 +1,50 @@
-import { Effect, Schema as S } from "effect";
+import { Data, Effect, Schema as S } from "effect";
 
 import { Error as InvalidInputError } from "../invalid-input.ts";
+import * as ProviderContext from "./provider-context.ts";
 
 export const Capability = S.Literals(["dns:read", "dns:write"]);
 export type Capability = typeof Capability.Type;
 
+export type Evidence = Data.TaggedEnum<{
+  Declared: {};
+  Exercised: { readonly observedAt: Date };
+  Introspected: { readonly observedAt: Date };
+}>;
+export const Evidence = Data.taggedEnum<Evidence>();
+
+export const EvidenceSchema = S.TaggedUnion({
+  Declared: {},
+  Exercised: { observedAt: S.DateFromString },
+  Introspected: { observedAt: S.DateFromString },
+});
+
+export const CapabilityEvidence = S.Struct({
+  capability: Capability,
+  evidence: EvidenceSchema,
+});
+export interface CapabilityEvidence extends S.Schema.Type<typeof CapabilityEvidence> {}
+
+export const Revocation = S.TaggedUnion({
+  Active: {},
+  Pending: { requestedAt: S.DateFromString },
+});
+export type Revocation = typeof Revocation.Type;
+
 /** A provider credential authorization shared by one or more owner connections. */
 export const Schema = S.Struct({
-  accountId: S.String,
-  capabilities: S.Array(Capability),
+  authorizedById: S.String,
+  capabilityEvidence: S.Array(CapabilityEvidence),
   createdAt: S.DateFromString,
   expiresAt: S.NullOr(S.DateFromString),
   id: S.String,
-  kind: S.Literals(["oauth2", "token"]),
+  method: S.Literals(["integration", "oauth2", "token"]),
+  providerAccountId: S.String,
+  providerContext: ProviderContext.Envelope,
   providerId: S.String,
+  requiredCapabilities: S.Array(Capability),
+  revocation: Revocation,
   scopes: S.Array(S.String),
-  subjectId: S.String,
 });
 export interface ProviderAuthorization extends S.Schema.Type<typeof Schema> {}
 
@@ -32,3 +61,10 @@ export const validate = Effect.fn("ProviderAuthorization.validate")((input: unkn
 );
 
 export const encode = S.encodeSync(Schema);
+
+export function evidenceFor(
+  authorization: ProviderAuthorization,
+  capability: Capability,
+): Evidence | undefined {
+  return authorization.capabilityEvidence.find((item) => item.capability === capability)?.evidence;
+}

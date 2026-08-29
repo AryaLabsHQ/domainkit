@@ -17,15 +17,21 @@ const connection: Connection.Connection = {
 };
 
 const authorization: ProviderAuthorization.ProviderAuthorization = {
-  accountId: "account-1",
-  capabilities: ["dns:read", "dns:write"],
+  authorizedById: "subject-1",
+  capabilityEvidence: [
+    { capability: "dns:read", evidence: ProviderAuthorization.Evidence.Declared() },
+    { capability: "dns:write", evidence: ProviderAuthorization.Evidence.Declared() },
+  ],
   createdAt: new Date("2026-08-27T00:00:00.000Z"),
   expiresAt: null,
   id: "authorization-1",
-  kind: "token",
+  method: "token",
+  providerAccountId: "account-1",
+  providerContext: { value: {}, version: "cloudflare.v1" },
   providerId: "cloudflare",
+  requiredCapabilities: ["dns:read", "dns:write"],
+  revocation: { _tag: "Active" },
   scopes: [],
-  subjectId: "subject-1",
 };
 
 describe("provider discovery", () => {

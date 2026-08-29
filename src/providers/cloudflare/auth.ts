@@ -1,8 +1,12 @@
 import type * as oauth from "oauth4webapi";
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Schema } from "effect";
 
+import * as AuthorizationCode from "../../auth/authorization-code.ts";
+import * as Connection from "../../auth/connect.ts";
+import * as ProviderAuthorization from "../../auth/authorization.ts";
 import type * as ProviderAuth from "../../auth/manifest.ts";
-import type * as Secret from "../../auth/secret.ts";
+import * as ProviderContext from "../../auth/provider-context.ts";
+import * as Secret from "../../auth/secret.ts";
 import type * as DomainName from "../../domain/domain-name.ts";
 import * as Client from "./client.ts";
 
@@ -12,6 +16,10 @@ const authorizationServer = {
   revocation_endpoint: "https://dash.cloudflare.com/oauth2/revoke",
   token_endpoint: "https://dash.cloudflare.com/oauth2/token",
 } as const;
+
+const Context = Schema.Struct({ tokenKind: Schema.Literals(["account", "user"]) });
+export type Context = typeof Context.Type;
+export const contextCodec = ProviderContext.codec("cloudflare.v1", Context);
 
 /** Describes Cloudflare's caller-created API-token authorization method. */
 export function tokenMethod(
@@ -136,4 +144,112 @@ export function tokenValidator(
           token,
           ...(options.tokenKind === undefined ? {} : { tokenKind: options.tokenKind }),
         }).validateToken();
+}
+
+export type TokenConnectionOptions = TokenValidatorOptions & {
+  readonly token: Secret.Value;
+};
+
+/** Creates a provider-independent token connection method backed by Cloudflare validation. */
+export function tokenConnectionMethod(
+  options: TokenConnectionOptions,
+): Extract<Connection.Method, { readonly _tag: "Token" }> {
+  const requiredCapabilities = [...options.capabilities];
+  return Connection.Method.Token({
+    authenticate: Effect.fn("CloudflareAuth.authenticateToken")(function* (token) {
+      const validated = yield* tokenValidator(options)(token);
+      const observedAt = new Date(yield* Clock.currentTimeMillis);
+      return {
+        capabilityEvidence: validated.capabilities.map((capability) => ({
+          capability,
+          evidence: ProviderAuthorization.Evidence.Introspected({ observedAt }),
+        })),
+        credential: { accessToken: token, refreshToken: null, tokenType: "bearer" },
+        expiresAt: validated.expiresAt,
+        providerAccountId: validated.accountId,
+        providerContext: yield* contextCodec.encode({ tokenKind: options.tokenKind ?? "user" }),
+        scopes: [...validated.scopes],
+      } satisfies Connection.Authentication;
+    }),
+    providerId: "cloudflare",
+    requiredCapabilities,
+    token: options.token,
+  });
+}
+
+/** Converts a completed Cloudflare OAuth grant into the canonical connection authentication. */
+export const oauthAuthentication = Effect.fn("CloudflareAuth.oauthAuthentication")(function* (
+  options: SubjectResolverOptions & {
+    readonly accessToken: Secret.Value;
+    readonly tokens: oauth.TokenEndpointResponse;
+  },
+) {
+  const resolved = yield* subjectResolver(options)(options.tokens, options.accessToken);
+  const observedAt = new Date(yield* Clock.currentTimeMillis);
+  return {
+    capabilityEvidence: options.capabilities.map((capability) => ({
+      capability,
+      evidence: ProviderAuthorization.Evidence.Introspected({ observedAt }),
+    })),
+    credential: {
+      accessToken: options.accessToken,
+      refreshToken:
+        options.tokens.refresh_token === undefined
+          ? null
+          : Secret.Value.from(options.tokens.refresh_token),
+      tokenType: options.tokens.token_type,
+    },
+    expiresAt: resolved.expiresAt,
+    providerAccountId: resolved.accountId,
+    providerContext: yield* contextCodec.encode({ tokenKind: "user" }),
+    scopes: (options.tokens.scope ?? "").split(" ").filter(Boolean),
+  } satisfies Connection.Authentication;
+});
+
+export type OAuthFlowOptions = SubjectResolverOptions & {
+  readonly client: ProviderAuth.OAuthClientConfiguration;
+  readonly clientAuth: ProviderAuth.OAuthMethod["clientAuth"];
+  readonly redirectUri: string;
+  readonly scopes: ReadonlyArray<string>;
+};
+
+/** Creates Cloudflare's OAuth implementation of the common interactive connection capability. */
+export function oauthFlow(options: OAuthFlowOptions): Connection.InteractiveFlow {
+  const method = oauthMethod({
+    capabilities: options.capabilities,
+    clientAuth: options.clientAuth,
+    scopes: options.scopes,
+  });
+  return {
+    complete: Effect.fn("CloudflareAuth.oauthFlow.complete")(function* (payload, callbackUrl) {
+      const tokens = yield* AuthorizationCode.complete({
+        callbackUrl,
+        client: options.client,
+        ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+        method,
+        payload,
+        providerId: "cloudflare",
+      });
+      return yield* oauthAuthentication({
+        ...(options.accountId === undefined
+          ? { domain: options.domain }
+          : { accountId: options.accountId }),
+        ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
+        capabilities: options.capabilities,
+        ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+        accessToken: Secret.make(tokens.access_token),
+        tokens,
+      });
+    }),
+    method: "oauth2",
+    providerId: "cloudflare",
+    requiredCapabilities: [...options.capabilities],
+    start: (continuationId) =>
+      AuthorizationCode.start({
+        client: options.client,
+        method,
+        redirectUri: options.redirectUri,
+        state: continuationId,
+      }),
+  };
 }

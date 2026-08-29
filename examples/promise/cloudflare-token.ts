@@ -1,46 +1,32 @@
-import {
-  Cloudflare,
-  Connection,
-  DomainName,
-  Secret,
-  type Stores,
-  TokenConnection,
-} from "domainkit";
+import { type AuthorizationLifecycle, Cloudflare, Connection, DomainName, Secret } from "domainkit";
+
+const capabilities = ["dns:read", "dns:write"] as const;
 
 export interface CloudflareTokenInput {
   readonly apiToken: string;
-  readonly authorizationStore: Stores.ProviderAuthorization;
-  readonly connectionStore: Stores.Connection;
-  readonly credentialStore: Stores.Credential;
+  readonly authorizedById: string;
   readonly domain: string;
   readonly ownerId: string;
-  readonly subjectId: string;
+  readonly repository: AuthorizationLifecycle.Repository;
 }
 
 export async function connectCloudflareToken(input: CloudflareTokenInput) {
   const domain = DomainName.parse(input.domain);
-  const grant: Connection.Grant = {
-    _tag: "domains",
-    domains: [domain],
-  };
-  const result = await TokenConnection.connect({
-    authorizationStore: input.authorizationStore,
-    connectionStore: input.connectionStore,
-    credentialStore: input.credentialStore,
-    grant,
+  const token = Secret.make(input.apiToken);
+  const result = await Connection.start({
+    authorizedById: input.authorizedById,
+    grant: { _tag: "domains", domains: [domain] },
+    method: Cloudflare.Auth.tokenConnectionMethod({ capabilities, domain, token }),
     ownerId: input.ownerId,
-    providerId: "cloudflare",
-    subjectId: input.subjectId,
-    token: Secret.make(input.apiToken),
-    validate: Cloudflare.Auth.tokenValidator({
-      capabilities: ["dns:read", "dns:write"],
-      domain,
-    }),
+    repository: input.repository,
   });
+  if (result._tag !== "Connected") {
+    throw new Error("Cloudflare token connection unexpectedly requires a redirect");
+  }
   const provider = Cloudflare.make({
-    accountId: result.authorization.accountId,
-    capabilities: ["dns:read", "dns:write"],
-    token: Secret.make(input.apiToken),
+    accountId: result.aggregate.authorization.providerAccountId,
+    capabilities,
+    token,
   });
-  return { ...result, provider };
+  return { aggregate: result.aggregate, provider };
 }

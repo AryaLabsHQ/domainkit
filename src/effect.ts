@@ -3,13 +3,13 @@ import packageJson from "../package.json" with { type: "json" };
 /** The current package version from the package manifest. */
 export const VERSION = packageJson.version;
 
-export * as Connection from "./auth/connection.ts";
-export * as ConnectionLifecycle from "./auth/connection-lifecycle.ts";
+export * as Connection from "./auth/connection-api.ts";
+export * as AuthorizationLifecycle from "./auth/lifecycle-repository.ts";
+export * as ProviderContext from "./auth/provider-context.ts";
+export * as Diagnostic from "./auth/diagnostic.ts";
 export * as ProviderAuthorization from "./auth/authorization.ts";
-export * as OAuth from "./auth/oauth.ts";
 export * as ProviderAuth from "./auth/manifest.ts";
 export * as Secret from "./auth/secret.ts";
-export * as TokenConnection from "./auth/token.ts";
 export * as ProviderDiscovery from "./discovery/selection.ts";
 export * as Zones from "./discovery/zones.ts";
 export * as DnsRecord from "./domain/dns-record.ts";
@@ -23,9 +23,6 @@ export * as DnsPlan from "./plan/types.ts";
 export * as DnsProvider from "./provider/provider.ts";
 export * as Cloudflare from "./providers/cloudflare/index.ts";
 export * as Vercel from "./providers/vercel/index.ts";
-export * as ConnectionStore from "./stores/connection.ts";
-export * as ProviderAuthorizationStore from "./stores/authorization.ts";
-export * as CredentialStore from "./stores/credential.ts";
 export * as OAuthStateStore from "./stores/oauth-state.ts";
 export * as ReceiptStore from "./stores/receipt.ts";
 export * as Storage from "./stores/error.ts";

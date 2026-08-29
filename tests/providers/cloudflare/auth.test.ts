@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 import type * as oauth from "oauth4webapi";
 
-import { DomainName, Secret } from "../../../src/effect.ts";
+import { Digest, DomainName, Secret } from "../../../src/effect.ts";
 import * as Cloudflare from "../../../src/providers/cloudflare/index.ts";
 import { page, recordedFetch, single, zone } from "./fixtures.ts";
 
@@ -150,6 +150,84 @@ describe("Cloudflare authentication", () => {
         ["customer.example.com", "example.com"],
       );
     });
+  });
+
+  it.effect("adapts token validation into canonical connection authentication", () => {
+    const recording = recordedFetch([
+      {
+        body: single({
+          expires_on: "2030-01-01T00:00:00Z",
+          id: "token-id",
+          status: "active",
+        }),
+      },
+      { body: page([zone]) },
+    ]);
+    const method = Cloudflare.Auth.tokenConnectionMethod({
+      accountId: "account-1",
+      capabilities: ["dns:read", "dns:write"],
+      fetch: recording.fetch,
+      token: Secret.make("api-token"),
+      tokenKind: "account",
+    });
+    return Effect.gen(function* () {
+      if (method._tag !== "Token") return yield* Effect.die("expected token method");
+      const authentication = yield* method.authenticate(method.token);
+      assert.strictEqual(authentication.providerAccountId, "account-1");
+      assert.deepStrictEqual(authentication.providerContext, {
+        value: { tokenKind: "account" },
+        version: "cloudflare.v1",
+      });
+      assert.ok(
+        authentication.capabilityEvidence.every(
+          ({ evidence }) =>
+            Cloudflare.Auth.contextCodec.version === "cloudflare.v1" &&
+            evidence._tag === "Introspected",
+        ),
+      );
+    });
+  });
+
+  it.effect("implements OAuth through the common interactive flow", () => {
+    const requests: Array<{ readonly body: string; readonly url: string }> = [];
+    const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      requests.push({ body: String(init?.body ?? ""), url: String(input) });
+      return String(input).endsWith("/oauth2/token")
+        ? Response.json({
+            access_token: "oauth-access-token",
+            scope: "zone:read dns_records:edit",
+            token_type: "Bearer",
+          })
+        : Response.json(page([zone]));
+    };
+    const flow = Cloudflare.Auth.oauthFlow({
+      capabilities: ["dns:read", "dns:write"],
+      client: { clientId: "client-1" },
+      clientAuth: "none",
+      domain: DomainName.parse("example.com"),
+      fetch,
+      redirectUri: "https://app.example/cloudflare/callback",
+      scopes: ["zone:read", "dns_records:edit"],
+    });
+    return Effect.gen(function* () {
+      const started = yield* flow.start("continuation-1");
+      assert.strictEqual(started.authorizationUrl.searchParams.get("state"), "continuation-1");
+      assert.strictEqual(
+        started.authorizationUrl.searchParams.get("code_challenge_method"),
+        "S256",
+      );
+      assert.strictEqual(JSON.stringify(started.payload), '"[REDACTED]"');
+      const authentication = yield* flow.complete(
+        started.payload,
+        new URL(
+          "https://app.example/cloudflare/callback?code=authorization-code&state=continuation-1",
+        ),
+      );
+      assert.strictEqual(authentication.providerAccountId, "account-1");
+      assert.match(requests[0]?.body ?? "", /code_verifier=/);
+      assert.match(requests[0]?.body ?? "", /code=authorization-code/);
+      assert.ok(requests[1]?.url.includes("/zones?"));
+    }).pipe(Effect.provide(Digest.webCryptoLayer));
   });
 
   it.effect("discovers an account before verifying an account-owned token", () => {

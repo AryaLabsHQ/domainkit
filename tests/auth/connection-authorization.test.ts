@@ -9,20 +9,26 @@ import {
   DomainName,
   Provisioning,
   type Connection,
-  type ProviderAuthorization,
+  ProviderAuthorization,
 } from "../../src/effect.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
 
 const authorization: ProviderAuthorization.ProviderAuthorization = {
-  accountId: "account-1",
-  capabilities: ["dns:read", "dns:write"],
+  authorizedById: "user-1",
+  capabilityEvidence: [
+    { capability: "dns:read", evidence: ProviderAuthorization.Evidence.Declared() },
+    { capability: "dns:write", evidence: ProviderAuthorization.Evidence.Declared() },
+  ],
   createdAt: new Date("2026-08-28T00:00:00.000Z"),
   expiresAt: null,
   id: "authorization-1",
-  kind: "oauth2",
+  method: "oauth2",
+  providerAccountId: "account-1",
+  providerContext: { value: {}, version: "test.v1" },
   providerId: "test",
+  requiredCapabilities: ["dns:read", "dns:write"],
+  revocation: { _tag: "Active" },
   scopes: ["dns:read", "dns:write"],
-  subjectId: "user-1",
 };
 
 const connection: Connection.Connection = {

@@ -82,7 +82,7 @@ function beginProgram(
       ownerId: input.ownerId,
       redirectUri: input.redirectUri,
       stateHash,
-      subjectId: input.subjectId,
+      authorizedById: input.subjectId,
     });
     return { authorizationUrl };
   });
@@ -114,21 +114,24 @@ function completeProgram(input: {
     const cryptoService = yield* Crypto.Crypto;
     const state = input.callbackUrl.searchParams.get("state");
     if (state === null) {
-      return yield* new Connection.AuthorizationError({
-        message: "OAuth callback is missing state",
-      });
+      return yield* Connection.authorizationError(
+        "OAuth callback is missing state",
+        "OAuth.complete",
+      );
     }
     const now = yield* Clock.currentTimeMillis;
     const continuation = yield* stateStore.consume(yield* sha256Text(state), new Date(now));
     if (continuation === null) {
-      return yield* new Connection.AuthorizationError({
-        message: "OAuth continuation is expired, unknown, or already used",
-      });
+      return yield* Connection.authorizationError(
+        "OAuth continuation is expired, unknown, or already used",
+        "OAuth.complete",
+      );
     }
     if (continuation.clientId !== input.client.clientId) {
-      return yield* new Connection.AuthorizationError({
-        message: "OAuth client does not match the continuation",
-      });
+      return yield* Connection.authorizationError(
+        "OAuth client does not match the continuation",
+        "OAuth.complete",
+      );
     }
 
     const as = continuation.method.authorizationServer as oauth.AuthorizationServer;
@@ -159,15 +162,21 @@ function completeProgram(input: {
         Effect.mapError((cause) => new CryptoError({ message: cause.message })),
       ));
     const authorization = yield* ProviderAuthorization.validate({
-      accountId: subject.accountId,
-      capabilities: [...continuation.method.capabilities],
+      authorizedById: continuation.authorizedById,
+      capabilityEvidence: continuation.method.capabilities.map((capability) => ({
+        capability,
+        evidence: ProviderAuthorization.Evidence.Introspected({ observedAt: new Date(now) }),
+      })),
       createdAt: existingAuthorization?.createdAt ?? new Date(now),
       expiresAt: subject.expiresAt,
       id: authorizationId,
-      kind: "oauth2",
+      method: "oauth2",
+      providerAccountId: subject.accountId,
+      providerContext: { value: {}, version: `${input.providerId}.v1` },
       providerId: input.providerId,
+      requiredCapabilities: [...continuation.method.capabilities],
+      revocation: { _tag: "Active" },
       scopes: (tokens.scope ?? continuation.method.scopes.join(" ")).split(" ").filter(Boolean),
-      subjectId: continuation.subjectId,
     });
     const existingConnection = yield* connectionStore.find(continuation.ownerId, authorization.id);
     const connection = yield* Connection.validate({
@@ -203,9 +212,10 @@ function refreshProgram(input: {
     const credential = yield* requireCredential(input.authorization.id, credentialStore);
     const refreshToken = credential.refreshToken;
     if (refreshToken === null) {
-      return yield* new Connection.AuthorizationError({
-        message: "Connection has no refresh token",
-      });
+      return yield* Connection.authorizationError(
+        "Connection has no refresh token",
+        "OAuth.refresh",
+      );
     }
     const as = input.method.authorizationServer as oauth.AuthorizationServer;
     const client: oauth.Client = { client_id: input.client.clientId };
@@ -239,9 +249,10 @@ function revokeProgram(input: {
 }): Effect.Effect<void, OAuthError, CredentialStore.Service> {
   return Effect.gen(function* () {
     if (input.method.authorizationServer.revocation_endpoint === undefined) {
-      return yield* new Connection.AuthorizationError({
-        message: "Provider does not advertise token revocation",
-      });
+      return yield* Connection.authorizationError(
+        "Provider does not advertise token revocation",
+        "OAuth.revoke",
+      );
     }
     const credentialStore = yield* CredentialStore.Service;
     const credential = yield* requireCredential(input.authorization.id, credentialStore);
@@ -311,17 +322,20 @@ function requireCredential(
   connectionId: string,
   store: CredentialStore.Interface,
 ): Effect.Effect<Connection.StoredCredential, Connection.AuthorizationError | Storage.Error> {
-  return store.get(connectionId).pipe(
-    Effect.flatMap((credential) =>
-      credential === null
-        ? Effect.fail(
-            new Connection.AuthorizationError({
-              message: "Connection credentials are unavailable",
-            }),
-          )
-        : Effect.succeed(credential),
-    ),
-  );
+  return store
+    .get(connectionId)
+    .pipe(
+      Effect.flatMap((credential) =>
+        credential === null
+          ? Effect.fail(
+              Connection.authorizationError(
+                "Connection credentials are unavailable",
+                "OAuth.requireCredential",
+              ),
+            )
+          : Effect.succeed(credential),
+      ),
+    );
 }
 
 function providerRequest<A>(providerId: string, request: (signal: AbortSignal) => Promise<A>) {

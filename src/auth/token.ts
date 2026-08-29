@@ -35,8 +35,11 @@ export const connect = Effect.fn("TokenConnection.connect")(function* (input: In
     validation.accountId,
   );
   const authorization = yield* ProviderAuthorization.validate({
-    accountId: validation.accountId,
-    capabilities: [...validation.capabilities],
+    authorizedById: input.subjectId,
+    capabilityEvidence: validation.capabilities.map((capability) => ({
+      capability,
+      evidence: ProviderAuthorization.Evidence.Introspected({ observedAt: createdAt }),
+    })),
     createdAt: existingAuthorization?.createdAt ?? createdAt,
     expiresAt: validation.expiresAt,
     id:
@@ -44,10 +47,13 @@ export const connect = Effect.fn("TokenConnection.connect")(function* (input: In
       (yield* cryptoService.randomUUIDv4.pipe(
         Effect.mapError((cause) => new CryptoFailure({ message: cause.message })),
       )),
-    kind: "token",
+    method: "token",
+    providerAccountId: validation.accountId,
+    providerContext: { value: {}, version: `${input.providerId}.v1` },
     providerId: input.providerId,
+    requiredCapabilities: [...validation.capabilities],
+    revocation: { _tag: "Active" },
     scopes: [...validation.scopes],
-    subjectId: input.subjectId,
   });
   const existingConnection = yield* connectionStore.find(input.ownerId, authorization.id);
   const connection = yield* Connection.validate({
