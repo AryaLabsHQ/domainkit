@@ -145,6 +145,32 @@ describe("provisioning lifecycle", () => {
     expect(screen.queryByRole("dialog", { name: "Review DNS changes" })).toBeNull();
     expect(screen.getByRole("button", { name: "Review DNS changes" })).toBeTruthy();
   });
+
+  it("does not restore an obsolete plan after an identity cycle", async () => {
+    const transport = Testing.makeFakeTransport({ inspect: connection });
+    const { rerender } = render(
+      <DomainKit.Root transport={transport}>
+        <Provisioning.Flow connection={connection} records={[record]} />
+      </DomainKit.Root>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Review DNS changes" }));
+    expect(await screen.findByRole("dialog", { name: "Review DNS changes" })).toBeTruthy();
+
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Provisioning.Flow connection={connection} records={[replacementRecord]} />
+      </DomainKit.Root>,
+    );
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Provisioning.Flow connection={connection} records={[record]} />
+      </DomainKit.Root>,
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Review DNS changes" })).toBeNull(),
+    );
+  });
 });
 
 describe("observation and cleanup", () => {

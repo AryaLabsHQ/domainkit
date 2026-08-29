@@ -1,5 +1,5 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
@@ -110,7 +110,6 @@ export function Flow({ connection, onApplied, records, showRecords = true, ...pr
   const controller = useController(connection, records, onApplied);
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   const state = controller.state;
-  const trigger = useRef<HTMLButtonElement>(null);
   const plan = state._tag === "Review" || state._tag === "Applying" ? state.plan : undefined;
   return usePart(
     "div",
@@ -125,24 +124,19 @@ export function Flow({ connection, onApplied, records, showRecords = true, ...pr
           {state._tag === "Failure" || state._tag === "Stale" ? (
             <p role="alert">{state.message}</p>
           ) : null}
-          <button
-            ref={trigger}
-            data-domainkit-part="plan-trigger"
-            disabled={state._tag === "Planning" || state._tag === "Applying"}
-            onClick={() => void controller.plan()}
-            type="button"
-          >
-            {state._tag === "Planning" ? messages.planningDns : messages.reviewDns}
-          </button>
           <BaseDialog.Root
             onOpenChange={(open) => {
               if (!open) controller.dismiss();
             }}
             open={plan !== undefined}
-            onOpenChangeComplete={(open) => {
-              if (!open) trigger.current?.focus();
-            }}
           >
+            <BaseDialog.Trigger
+              data-domainkit-part="plan-trigger"
+              disabled={state._tag === "Planning" || state._tag === "Applying"}
+              onClick={() => void controller.plan()}
+            >
+              {state._tag === "Planning" ? messages.planningDns : messages.reviewDns}
+            </BaseDialog.Trigger>
             {plan === undefined ? null : (
               <BaseDialog.Portal container={portalContainer ?? undefined}>
                 <BaseDialog.Backdrop data-domainkit-part="dialog-backdrop" />
