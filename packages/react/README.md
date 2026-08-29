@@ -42,6 +42,8 @@ export function DomainSetup() {
 disconnect states. Each namespace also exports its controller and presentational components for
 applications that need a different layout.
 
+`Provisioning.Flow` accepts `showRecords={false}` when the host already renders the DNS record list.
+
 ## Transport ownership
 
 The browser transport is intentionally narrow and Promise-based. Implement it with authenticated

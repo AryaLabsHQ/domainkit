@@ -79,7 +79,7 @@ export interface RemoveDomainResult {
   readonly _tag: "Removed";
   readonly connectionId: string;
   readonly domain: string;
-  readonly remainingDomains: ReadonlyArray<string>;
+  readonly remainingDomainCount: number;
 }
 
 export interface DnsRecord {

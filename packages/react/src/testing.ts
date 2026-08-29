@@ -120,7 +120,7 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
             _tag: "Removed",
             connectionId: input.connectionId,
             domain: input.domain,
-            remainingDomains: [],
+            remainingDomainCount: 0,
           }
         );
       },

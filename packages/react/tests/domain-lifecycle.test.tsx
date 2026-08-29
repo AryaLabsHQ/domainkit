@@ -136,7 +136,7 @@ describe("observation and cleanup", () => {
         _tag: "Removed",
         connectionId: "connection-1",
         domain: "example.com",
-        remainingDomains: ["other.example.com"],
+        remainingDomainCount: 1,
       },
     });
     render(

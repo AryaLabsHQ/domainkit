@@ -93,9 +93,10 @@ export interface FlowProps extends PartProps<"div", { readonly status: State["_t
     result: Extract<ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
   ) => void;
   readonly records: ReadonlyArray<DnsRecord>;
+  readonly showRecords?: boolean;
 }
 
-export function Flow({ connection, onApplied, records, ...props }: FlowProps) {
+export function Flow({ connection, onApplied, records, showRecords = true, ...props }: FlowProps) {
   const controller = useController(connection, records, onApplied);
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   const state = controller.state;
@@ -107,7 +108,7 @@ export function Flow({ connection, onApplied, records, ...props }: FlowProps) {
     {
       children: (
         <>
-          <Records.Table records={records} />
+          {showRecords ? <Records.Table records={records} /> : null}
           {state._tag === "Complete" ? <p>{messages.recordsApplied}</p> : null}
           {state._tag === "Partial" ? <p role="alert">{messages.recordsPartiallyApplied}</p> : null}
           {state._tag === "Failure" || state._tag === "Stale" ? (
