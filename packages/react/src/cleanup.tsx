@@ -1,9 +1,10 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { useCallback, useState } from "react";
+import { useCallback, useRef } from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
+import * as RequestState from "./request-state.ts";
 import type {
   CleanupPlan,
   CleanupResult,
@@ -32,27 +33,34 @@ export type State =
 
 export function useController(connection: Connected, receiptId: string) {
   const { transport } = useDomainKit();
-  const [state, setState] = useState<State>({ _tag: "Idle" });
+  const requestState = RequestState.useController<State>(
+    `${connection.connectionId}:${connection.domain}:${receiptId}`,
+    { _tag: "Idle" },
+  );
+  const state = requestState.state;
 
   const plan = useCallback(async () => {
-    setState({ _tag: "Planning" });
+    const request = requestState.begin({ _tag: "Planning" });
     try {
       const result = await transport.cleanup.plan({
         connectionId: connection.connectionId,
         domain: connection.domain,
         receiptId,
       });
-      setState(result._tag === "CleanupPlan" ? { _tag: "Review", plan: result } : result);
+      requestState.commit(
+        request,
+        result._tag === "CleanupPlan" ? { _tag: "Review", plan: result } : result,
+      );
     } catch (cause) {
-      setState(toFailure(cause));
+      requestState.commit(request, toFailure(cause));
     }
-  }, [connection.connectionId, connection.domain, receiptId, transport]);
+  }, [connection.connectionId, connection.domain, receiptId, requestState, transport]);
 
   const apply = useCallback(async () => {
     if (state._tag !== "Review") return;
     const reviewedPlan = state.plan;
     if (reviewedPlan.operations.some((operation) => operation._tag === "Blocked")) return;
-    setState({ _tag: "Cleaning", plan: reviewedPlan });
+    const request = requestState.begin({ _tag: "Cleaning", plan: reviewedPlan });
     try {
       const result = await transport.cleanup.apply({
         connectionId: connection.connectionId,
@@ -60,7 +68,8 @@ export function useController(connection: Connected, receiptId: string) {
         planDigest: reviewedPlan.digest,
         receiptId,
       });
-      setState(
+      requestState.commit(
+        request,
         result._tag === "Cleaned"
           ? { _tag: "Cleaned", result }
           : result._tag === "Partial"
@@ -68,14 +77,15 @@ export function useController(connection: Connected, receiptId: string) {
             : result,
       );
     } catch (cause) {
-      setState(toFailure(cause));
+      requestState.commit(request, toFailure(cause));
     }
-  }, [connection.connectionId, connection.domain, receiptId, state, transport]);
+  }, [connection.connectionId, connection.domain, receiptId, requestState, state, transport]);
 
   const disconnect = useCallback(async () => {
-    setState({ _tag: "Disconnecting" });
+    const request = requestState.begin({ _tag: "Disconnecting" });
     try {
-      setState(
+      requestState.commit(
+        request,
         await transport.connection.removeDomain({
           connectionId: connection.connectionId,
           domain: connection.domain,
@@ -83,11 +93,17 @@ export function useController(connection: Connected, receiptId: string) {
         }),
       );
     } catch (cause) {
-      setState(toFailure(cause));
+      requestState.commit(request, toFailure(cause));
     }
-  }, [connection.connectionId, connection.domain, transport]);
+  }, [connection.connectionId, connection.domain, requestState, transport]);
 
-  return { apply, disconnect, dismiss: () => setState({ _tag: "Idle" }), plan, state } as const;
+  return {
+    apply,
+    disconnect,
+    dismiss: () => requestState.reset({ _tag: "Idle" }),
+    plan,
+    state,
+  } as const;
 }
 
 const toFailure = (cause: unknown): Failure => ({
@@ -105,6 +121,7 @@ export function Flow({ connection, receiptId, ...props }: FlowProps) {
   const controller = useController(connection, receiptId);
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   const state = controller.state;
+  const trigger = useRef<HTMLButtonElement>(null);
   const plan = state._tag === "Review" || state._tag === "Cleaning" ? state.plan : undefined;
   return usePart(
     "div",
@@ -119,6 +136,7 @@ export function Flow({ connection, receiptId, ...props }: FlowProps) {
             <p role="alert">{state._tag === "Partial" ? messages.cleanupPartial : state.message}</p>
           ) : null}
           <button
+            ref={trigger}
             data-domainkit-part="cleanup-trigger"
             disabled={state._tag === "Planning" || state._tag === "Cleaning"}
             onClick={() => void controller.plan()}
@@ -131,6 +149,9 @@ export function Flow({ connection, receiptId, ...props }: FlowProps) {
               if (!open) controller.dismiss();
             }}
             open={plan !== undefined}
+            onOpenChangeComplete={(open) => {
+              if (!open) trigger.current?.focus();
+            }}
           >
             {plan === undefined ? null : (
               <BaseDialog.Portal container={portalContainer ?? undefined}>

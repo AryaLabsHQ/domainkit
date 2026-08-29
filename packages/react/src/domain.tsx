@@ -19,7 +19,9 @@ export function Flow({ domain, receiptId, records }: FlowProps) {
   return (
     <Connection.Root status={state._tag}>
       <Connection.Status state={state} />
-      {state._tag === "Failure" ? <Connection.RetryAction controller={connection} /> : null}
+      {state._tag === "Failure" && (state.retry === "safe" || state.retry === "unknown") ? (
+        <Connection.RetryAction controller={connection} />
+      ) : null}
       {state._tag === "Disconnected" ? (
         <BaseDialog.Root>
           <Connection.Trigger providerName={state.provider.name} />
@@ -46,11 +48,18 @@ function ConnectedFlow({
   readonly initialReceiptId?: string;
   readonly records: ReadonlyArray<DnsRecord>;
 }) {
-  const [receiptId, setReceiptId] = useState(initialReceiptId);
+  const [appliedReceipt, setAppliedReceipt] = useState<{
+    readonly initialReceiptId: string | undefined;
+    readonly receiptId: string;
+  }>();
+  const receiptId =
+    appliedReceipt !== undefined && appliedReceipt.initialReceiptId === initialReceiptId
+      ? appliedReceipt.receiptId
+      : initialReceiptId;
   const rememberReceipt = (
     result: Extract<ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
   ) => {
-    setReceiptId(result.receiptId);
+    setAppliedReceipt({ initialReceiptId, receiptId: result.receiptId });
   };
   return (
     <>

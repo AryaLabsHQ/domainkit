@@ -1,8 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
+import * as RequestState from "./request-state.ts";
 import type { Connected, DnsRecord, Failure, Observation } from "./transport.ts";
 
 export type State =
@@ -23,31 +24,37 @@ export interface ObserveConfig {
 
 export function useController(config: ObserveConfig) {
   const { transport } = useDomainKit();
-  const [state, setState] = useState<State>({ _tag: "Idle" });
+  const sources = {
+    provider: config.sources?.provider ?? config.connection !== undefined,
+    publicDns: config.sources?.publicDns ?? true,
+  };
+  const requestState = RequestState.useController<State>(
+    `${config.connection?.connectionId ?? "public"}:${config.domain}:${sources.provider}:${sources.publicDns}:${RequestState.recordsIdentity(config.records)}`,
+    { _tag: "Idle" },
+  );
+  const state = requestState.state;
   const observe = useCallback(async () => {
-    setState({ _tag: "Observing" });
+    const request = requestState.begin({ _tag: "Observing" });
     try {
-      setState(
+      requestState.commit(
+        request,
         await transport.verification.observe({
           ...(config.connection === undefined
             ? {}
             : { connectionId: config.connection.connectionId }),
           domain: config.domain,
           records: config.records,
-          sources: {
-            provider: config.sources?.provider ?? config.connection !== undefined,
-            publicDns: config.sources?.publicDns ?? true,
-          },
+          sources,
         }),
       );
     } catch (cause) {
-      setState({
+      requestState.commit(request, {
         _tag: "Failure",
         message: cause instanceof Error ? cause.message : "DNS observation failed",
         retry: "safe",
       });
     }
-  }, [config, transport]);
+  }, [config, requestState, sources, transport]);
   return { observe, state } as const;
 }
 

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import {
@@ -17,6 +17,13 @@ const record: Transport.DnsRecord = {
   name: "selector._domainkey.example.com",
   type: "TXT",
   value: "v=DKIM1; p=public-key",
+};
+
+const replacementRecord: Transport.DnsRecord = {
+  id: "spf",
+  name: "example.com",
+  type: "TXT",
+  value: "v=spf1 -all",
 };
 
 const connection = {
@@ -99,6 +106,45 @@ describe("provisioning lifecycle", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(transport.calls.plan).toHaveLength(2);
   });
+
+  it("ignores a pending plan after the requested records change", async () => {
+    const pending = Promise.withResolvers<Transport.ProvisioningPlan | Transport.Failure>();
+    const fake = Testing.makeFakeTransport({ inspect: connection });
+    const transport: Transport.DomainKitTransport = {
+      ...fake,
+      provisioning: {
+        ...fake.provisioning,
+        plan: async (input) => {
+          fake.calls.plan.push(input);
+          return pending.promise;
+        },
+      },
+    };
+    const { rerender } = render(
+      <DomainKit.Root transport={transport}>
+        <Provisioning.Flow connection={connection} records={[record]} />
+      </DomainKit.Root>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Review DNS changes" }));
+
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Provisioning.Flow connection={connection} records={[replacementRecord]} />
+      </DomainKit.Root>,
+    );
+    await act(async () => {
+      pending.resolve({
+        _tag: "Plan",
+        digest: "stale-plan",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        operations: [{ _tag: "Create", id: "create-dkim", record }],
+      });
+      await pending.promise;
+    });
+
+    expect(screen.queryByRole("dialog", { name: "Review DNS changes" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Review DNS changes" })).toBeTruthy();
+  });
 });
 
 describe("observation and cleanup", () => {
@@ -166,5 +212,44 @@ describe("observation and cleanup", () => {
     });
     expect(transport.calls.cleanupApply).toEqual([]);
     expect(await screen.findByText(/DNS records were preserved/)).toBeTruthy();
+  });
+
+  it("ignores a pending cleanup plan after the receipt changes", async () => {
+    const pending = Promise.withResolvers<Transport.CleanupPlan | Transport.Failure>();
+    const fake = Testing.makeFakeTransport({ inspect: connection });
+    const transport: Transport.DomainKitTransport = {
+      ...fake,
+      cleanup: {
+        ...fake.cleanup,
+        plan: async (input) => {
+          fake.calls.cleanupPlan.push(input);
+          return pending.promise;
+        },
+      },
+    };
+    const { rerender } = render(
+      <DomainKit.Root transport={transport}>
+        <Cleanup.Flow connection={connection} receiptId="receipt-1" />
+      </DomainKit.Root>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Review DNS cleanup" }));
+
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Cleanup.Flow connection={connection} receiptId="receipt-2" />
+      </DomainKit.Root>,
+    );
+    await act(async () => {
+      pending.resolve({
+        _tag: "CleanupPlan",
+        digest: "stale-cleanup",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        operations: [{ _tag: "Delete", id: "delete-dkim", record }],
+      });
+      await pending.promise;
+    });
+
+    expect(screen.queryByRole("dialog", { name: "Review DNS cleanup" })).toBeNull();
+    expect(fake.calls.cleanupPlan[0]?.receiptId).toBe("receipt-1");
   });
 });

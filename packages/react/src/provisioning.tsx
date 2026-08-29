@@ -1,10 +1,11 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { useCallback, useState } from "react";
+import { useCallback, useRef } from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import * as Records from "./records.tsx";
+import * as RequestState from "./request-state.ts";
 import type { ApplyResult, Connected, DnsRecord, Failure, ProvisioningPlan } from "./transport.ts";
 
 export type State =
@@ -43,27 +44,32 @@ export function useController(
   onApplied?: (result: Extract<ApplyResult, { readonly _tag: "Applied" | "Partial" }>) => void,
 ): Controller {
   const { transport } = useDomainKit();
-  const [state, setState] = useState<State>({ _tag: "Idle" });
+  const identity = `${connection.connectionId}:${connection.domain}:${RequestState.recordsIdentity(records)}`;
+  const requestState = RequestState.useController<State>(identity, { _tag: "Idle" });
+  const state = requestState.state;
 
   const plan = useCallback(async () => {
-    setState({ _tag: "Planning" });
+    const request = requestState.begin({ _tag: "Planning" });
     try {
       const result = await transport.provisioning.plan({
         connectionId: connection.connectionId,
         domain: connection.domain,
         records,
       });
-      setState(result._tag === "Plan" ? { _tag: "Review", plan: result } : result);
+      requestState.commit(
+        request,
+        result._tag === "Plan" ? { _tag: "Review", plan: result } : result,
+      );
     } catch (cause) {
-      setState(failure(cause));
+      requestState.commit(request, failure(cause));
     }
-  }, [connection.connectionId, connection.domain, records, transport]);
+  }, [connection.connectionId, connection.domain, records, requestState, transport]);
 
   const apply = useCallback(async () => {
     if (state._tag !== "Review") return;
     const reviewedPlan = state.plan;
     if (reviewedPlan.operations.some((operation) => operation._tag === "Conflict")) return;
-    setState({ _tag: "Applying", plan: reviewedPlan });
+    const request = requestState.begin({ _tag: "Applying", plan: reviewedPlan });
     try {
       const result = await transport.provisioning.apply({
         connectionId: connection.connectionId,
@@ -71,20 +77,24 @@ export function useController(
         planDigest: reviewedPlan.digest,
       });
       if (result._tag === "Applied") {
-        setState({ _tag: "Complete", result });
-        onApplied?.(result);
+        if (requestState.commit(request, { _tag: "Complete", result })) onApplied?.(result);
       } else if (result._tag === "Partial") {
-        setState({ _tag: "Partial", result });
-        onApplied?.(result);
+        if (requestState.commit(request, { _tag: "Partial", result })) onApplied?.(result);
       } else {
-        setState(result);
+        requestState.commit(request, result);
       }
     } catch (cause) {
-      setState(failure(cause));
+      requestState.commit(request, failure(cause));
     }
-  }, [connection.connectionId, connection.domain, onApplied, state, transport]);
+  }, [connection.connectionId, connection.domain, onApplied, requestState, state, transport]);
 
-  return { apply, dismiss: () => setState({ _tag: "Idle" }), plan, retry: plan, state };
+  return {
+    apply,
+    dismiss: () => requestState.reset({ _tag: "Idle" }),
+    plan,
+    retry: plan,
+    state,
+  };
 }
 
 export interface FlowProps extends PartProps<"div", { readonly status: State["_tag"] }> {
@@ -100,6 +110,7 @@ export function Flow({ connection, onApplied, records, showRecords = true, ...pr
   const controller = useController(connection, records, onApplied);
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   const state = controller.state;
+  const trigger = useRef<HTMLButtonElement>(null);
   const plan = state._tag === "Review" || state._tag === "Applying" ? state.plan : undefined;
   return usePart(
     "div",
@@ -115,6 +126,7 @@ export function Flow({ connection, onApplied, records, showRecords = true, ...pr
             <p role="alert">{state.message}</p>
           ) : null}
           <button
+            ref={trigger}
             data-domainkit-part="plan-trigger"
             disabled={state._tag === "Planning" || state._tag === "Applying"}
             onClick={() => void controller.plan()}
@@ -127,6 +139,9 @@ export function Flow({ connection, onApplied, records, showRecords = true, ...pr
               if (!open) controller.dismiss();
             }}
             open={plan !== undefined}
+            onOpenChangeComplete={(open) => {
+              if (!open) trigger.current?.focus();
+            }}
           >
             {plan === undefined ? null : (
               <BaseDialog.Portal container={portalContainer ?? undefined}>
