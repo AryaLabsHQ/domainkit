@@ -39,5 +39,9 @@ export async function provisionWithManualApproval(
 
   const authorization = await Provisioning.authorize(plan);
   await Provisioning.apply({ authorization, plan, provider });
-  await Verification.record({ provider, record: requirement, resolver, zone });
+  await Verification.observe({
+    provider: Verification.Provider.Enabled({ provider, zone }),
+    record: requirement,
+    resolvers: [{ id: "public", resolver }],
+  });
 }

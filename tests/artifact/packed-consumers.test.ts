@@ -150,7 +150,7 @@ export type PublicAdapters = Cloudflare | EffectCloudflare | Vercel | EffectVerc
       await writeFile(
         join(directory, "worker.mjs"),
         `
-import { DnsRecord, DomainName, VERSION } from "domainkit";
+import { DnsRecord, DnsResolverPool, DomainName, Verification, VERSION } from "domainkit";
 
 export default {
   async fetch() {
@@ -163,7 +163,14 @@ export default {
       ttl: 300,
       value: "domainkit",
     });
-    return Response.json({ domain, type: record._tag, version: VERSION });
+    const policy = DnsResolverPool.Policy.AnyMatch();
+    return Response.json({
+      domain,
+      observe: typeof Verification.observe,
+      policy: policy._tag,
+      type: record._tag,
+      version: VERSION,
+    });
   },
 };
 `,
@@ -181,6 +188,8 @@ export default {
       assert.strictEqual(response.status, 200);
       assert.deepStrictEqual(await response.json(), {
         domain: "example.com",
+        observe: "function",
+        policy: "AnyMatch",
         type: "TXT",
         version: packageJson.version,
       });
