@@ -25,8 +25,14 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof effectApi.ZoneDiscovery.Service, "function");
     assert.strictEqual(typeof effectApi.Provisioning.create, "function");
     assert.strictEqual(typeof effectApi.CloudflareDnsOverHttps.layer, "function");
+    assert.strictEqual(typeof effectApi.GoogleDnsOverHttps.layer, "function");
+    assert.strictEqual(typeof effectApi.DnsResolverPool.defaultMake, "function");
+    assert.strictEqual(typeof effectApi.Verification.observe, "function");
     assert.strictEqual(typeof effectApi.DnsOverHttps.make, "function");
     assert.strictEqual(typeof promiseApi.DnsOverHttps.make, "function");
+    assert.strictEqual(typeof promiseApi.GoogleDnsOverHttps.make, "function");
+    assert.strictEqual(typeof promiseApi.DnsResolverPool.defaultMake, "function");
+    assert.strictEqual(typeof promiseApi.Verification.observe, "function");
     assert.strictEqual(typeof testingApi.InMemoryDnsProvider.layer, "function");
     assert.strictEqual(typeof effectApi.Cloudflare.make, "function");
     assert.strictEqual(typeof effectCloudflareApi.make, "function");
@@ -46,5 +52,7 @@ describe("public namespaces", () => {
     assert.strictEqual("createPlan" in promiseApi, false);
     assert.strictEqual("DnsProviderService" in effectApi, false);
     assert.strictEqual("layerDnsProviderFromPromise" in effectApi, false);
+    assert.strictEqual("record" in effectApi.Verification, false);
+    assert.strictEqual("record" in promiseApi.Verification, false);
   });
 });

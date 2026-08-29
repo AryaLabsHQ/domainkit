@@ -1,71 +1,111 @@
-import { Effect, Schema } from "effect";
+import { Data, Effect, Option, Schema } from "effect";
 
 import type * as DomainName from "../domain/domain-name.ts";
 import * as DnsRecord from "../domain/dns-record.ts";
+import { Error as InvalidInputError } from "../invalid-input.ts";
 import * as DnsProvider from "../provider/provider.ts";
 import * as DnsData from "./dns-data.ts";
-import * as DnsResolver from "./resolver.ts";
+import * as DnsResolverPool from "./resolver-pool.ts";
 
-export const ProviderObservation = Schema.TaggedUnion({
-  match: {},
-  missing: {},
-  mismatch: { records: Schema.Array(DnsRecord.Schema) },
-  failure: { message: Schema.String },
-});
-export type ProviderObservation = typeof ProviderObservation.Type;
+export type PublicDns = Data.TaggedEnum<{
+  Disabled: {};
+  Enabled: { readonly policy?: DnsResolverPool.Policy };
+}>;
+export const PublicDns = Data.taggedEnum<PublicDns>();
 
-export const PublicDnsObservation = Schema.TaggedUnion({
-  propagated: {},
-  missing: {},
-  mismatch: { answers: Schema.Array(Schema.String) },
-  timeout: {},
-  failure: { message: Schema.String },
-});
-export type PublicDnsObservation = typeof PublicDnsObservation.Type;
+export type Provider = Data.TaggedEnum<{
+  Disabled: {};
+  Enabled: { readonly zone: DomainName.DomainName };
+}>;
+export const Provider = Data.taggedEnum<Provider>();
 
-export const Result = Schema.Struct({
-  provider: ProviderObservation,
-  publicDns: PublicDnsObservation,
-  status: Schema.Literals(["verified", "pending", "mismatch", "unavailable"]),
-});
-export interface Result extends Schema.Schema.Type<typeof Result> {}
+type ProviderEnabled = Extract<Provider, { readonly _tag: "Enabled" }>;
+type ProviderDisabled = Extract<Provider, { readonly _tag: "Disabled" }>;
 
-export const record = Effect.fn("Verification.record")(function* (input: {
+export interface PublicOnlyConfig {
+  readonly provider?: ProviderDisabled;
+  readonly publicDns?: PublicDns;
   readonly record: DnsRecord.DnsRecord;
-  readonly zone: DomainName.DomainName;
-}) {
-  const provider = yield* DnsProvider.Service;
-  const resolver = yield* DnsResolver.Service;
-  const [providerObservation, publicDns] = yield* Effect.all(
-    [
-      observeProvider(provider, input.zone, input.record).pipe(
-        Effect.catch((failure) =>
-          Effect.succeed<ProviderObservation>({ _tag: "failure", message: failure.message }),
-        ),
-      ),
-      resolver.resolve({ name: input.record.name, type: input.record._tag }).pipe(
-        Effect.match({
-          onFailure: (failure): PublicDnsObservation =>
-            failure.reason === "timeout"
-              ? { _tag: "timeout" }
-              : { _tag: "failure", message: failure.message },
-          onSuccess: (resolution) => observePublicDns(input.record, resolution),
-        }),
-      ),
-    ] as const,
+}
+
+export interface ProviderConfig {
+  readonly provider: ProviderEnabled;
+  readonly publicDns?: PublicDns;
+  readonly record: DnsRecord.DnsRecord;
+}
+
+export type Config = ProviderConfig | PublicOnlyConfig;
+
+export type ProviderObservation = Data.TaggedEnum<{
+  Matched: {};
+  Mismatch: { readonly records: ReadonlyArray<DnsRecord.DnsRecord> };
+  Pending: {};
+  Unavailable: { readonly message: string };
+}>;
+export const ProviderObservation = Data.taggedEnum<ProviderObservation>();
+
+export type PublicDnsObservation = Data.TaggedEnum<{
+  Verified: {
+    readonly evidence: ReadonlyArray<DnsResolverPool.Observation>;
+    readonly matchedResolverIds: ReadonlyArray<string>;
+  };
+  Mismatch: { readonly evidence: ReadonlyArray<DnsResolverPool.Observation> };
+  Pending: { readonly evidence: ReadonlyArray<DnsResolverPool.Observation> };
+  Unavailable: { readonly evidence: ReadonlyArray<DnsResolverPool.Observation> };
+}>;
+export const PublicDnsObservation = Data.taggedEnum<PublicDnsObservation>();
+
+interface Evidence {
+  readonly provider: ProviderObservation | null;
+  readonly publicDns: PublicDnsObservation | null;
+}
+
+export type Result = Data.TaggedEnum<{
+  Mismatch: Evidence;
+  NotObserved: Evidence;
+  Pending: Evidence;
+  Unavailable: Evidence;
+  Verified: Evidence;
+}>;
+export const Result = Data.taggedEnum<Result>();
+
+export function observe(input: PublicOnlyConfig): Effect.Effect<Result, InvalidInputError>;
+export function observe(
+  input: ProviderConfig,
+): Effect.Effect<Result, InvalidInputError, DnsProvider.Service>;
+export function observe(
+  input: Config,
+): Effect.Effect<Result, InvalidInputError, DnsProvider.Service>;
+export function observe(
+  input: Config,
+): Effect.Effect<Result, InvalidInputError, DnsProvider.Service> {
+  return observeEffect(input);
+}
+
+const observeEffect = Effect.fn("Verification.observe")(function* (input: Config) {
+  const publicDns = input.publicDns ?? PublicDns.Enabled({});
+  const provider = input.provider ?? Provider.Disabled();
+  const publicEffect =
+    publicDns._tag === "Disabled"
+      ? Effect.succeed<PublicDnsObservation | null>(null)
+      : observePublicDns(input.record, publicDns.policy ?? DnsResolverPool.Policy.AnyMatch());
+  const providerEffect =
+    provider._tag === "Disabled"
+      ? Effect.succeed<ProviderObservation | null>(null)
+      : Effect.flatMap(DnsProvider.Service, (service) =>
+          observeProvider(service, provider.zone, input.record).pipe(
+            Effect.catch((failure) =>
+              Effect.succeed<ProviderObservation>(
+                ProviderObservation.Unavailable({ message: failure.message }),
+              ),
+            ),
+          ),
+        );
+  const [providerObservation, publicDnsObservation] = yield* Effect.all(
+    [providerEffect, publicEffect] as const,
     { concurrency: "unbounded" },
   );
-  const status: Result["status"] =
-    providerObservation._tag === "match" && publicDns._tag === "propagated"
-      ? "verified"
-      : providerObservation._tag === "failure" ||
-          publicDns._tag === "failure" ||
-          publicDns._tag === "timeout"
-        ? "unavailable"
-        : providerObservation._tag === "mismatch" || publicDns._tag === "mismatch"
-          ? "mismatch"
-          : "pending";
-  return { provider: providerObservation, publicDns, status };
+  return aggregate({ provider: providerObservation, publicDns: publicDnsObservation });
 });
 
 function observeProvider(
@@ -80,7 +120,7 @@ function observeProvider(
           (existing) => existing._tag !== "Opaque" && DnsRecord.equals(existing, requirement),
         )
       ) {
-        return { _tag: "match" };
+        return ProviderObservation.Matched();
       }
       const sameSet = records.filter(
         (existing): existing is DnsRecord.DnsRecord =>
@@ -88,25 +128,101 @@ function observeProvider(
           existing.name === requirement.name &&
           existing._tag === requirement._tag,
       );
-      return sameSet.length === 0 ? { _tag: "missing" } : { _tag: "mismatch", records: sameSet };
+      return sameSet.length === 0
+        ? ProviderObservation.Pending()
+        : ProviderObservation.Mismatch({ records: sameSet });
     }),
   );
 }
 
 function observePublicDns(
   requirement: DnsRecord.DnsRecord,
-  resolution: DnsResolver.Resolution,
+  policy: DnsResolverPool.Policy,
+): Effect.Effect<PublicDnsObservation, InvalidInputError> {
+  return Effect.gen(function* () {
+    const validatedPolicy = yield* Schema.decodeUnknownEffect(DnsResolverPool.Policy.Schema)(
+      policy,
+    ).pipe(Effect.mapError((cause) => new InvalidInputError({ message: cause.message })));
+    const configuredPool = yield* Effect.serviceOption(DnsResolverPool.Service);
+    const pool = Option.getOrElse(configuredPool, () => DnsResolverPool.defaultMake());
+    const evidence = yield* pool.observe({ name: requirement.name, type: requirement._tag });
+    if (validatedPolicy._tag === "Quorum" && validatedPolicy.minimum > evidence.length) {
+      return yield* new InvalidInputError({
+        message: `Quorum minimum ${validatedPolicy.minimum} exceeds the ${evidence.length} configured resolvers`,
+      });
+    }
+    return evaluatePublicDns(requirement, validatedPolicy, evidence);
+  });
+}
+
+function evaluatePublicDns(
+  requirement: DnsRecord.DnsRecord,
+  policy: DnsResolverPool.Policy,
+  evidence: ReadonlyArray<DnsResolverPool.Observation>,
 ): PublicDnsObservation {
-  if (resolution._tag === "nodata") return { _tag: "missing" };
+  const matchedResolverIds = evidence.flatMap((observation) =>
+    observation._tag === "Answer" && answersMatch(requirement, observation.answers)
+      ? [observation.resolverId]
+      : [],
+  );
+  const required =
+    policy._tag === "AnyMatch" ? 1 : policy._tag === "AllMatch" ? evidence.length : policy.minimum;
+  if (required > 0 && matchedResolverIds.length >= required) {
+    return PublicDnsObservation.Verified({ evidence, matchedResolverIds });
+  }
+  const unavailable = evidence.filter(
+    (observation) => observation._tag === "TimedOut" || observation._tag === "Failed",
+  ).length;
+  if (unavailable > 0 && matchedResolverIds.length + unavailable >= required) {
+    return PublicDnsObservation.Unavailable({ evidence });
+  }
+  if (
+    evidence.some(
+      (observation) =>
+        observation._tag === "Answer" && !answersMatch(requirement, observation.answers),
+    )
+  ) {
+    return PublicDnsObservation.Mismatch({ evidence });
+  }
+  if (evidence.some((observation) => observation._tag === "NoData")) {
+    return PublicDnsObservation.Pending({ evidence });
+  }
+  return PublicDnsObservation.Unavailable({ evidence });
+}
+
+function answersMatch(
+  requirement: DnsRecord.DnsRecord,
+  answers: ReadonlyArray<{ readonly data: string; readonly name: string; readonly type: string }>,
+): boolean {
   const expected = DnsData.parse(requirement._tag, recordValue(requirement));
-  return resolution.answers.some(
+  return answers.some(
     (answer) =>
       answer.name === requirement.name &&
       answer.type === requirement._tag &&
-      DnsData.parse(answer.type, answer.data) === expected,
-  )
-    ? { _tag: "propagated" }
-    : { _tag: "mismatch", answers: resolution.answers.map(({ data }) => data) };
+      DnsData.parse(requirement._tag, answer.data) === expected,
+  );
+}
+
+function aggregate(evidence: Evidence): Result {
+  const requested = [evidence.provider, evidence.publicDns].filter(
+    (observation): observation is ProviderObservation | PublicDnsObservation =>
+      observation !== null,
+  );
+  if (requested.length === 0) return Result.NotObserved(evidence);
+  if (
+    requested.every(
+      (observation) => observation._tag === "Matched" || observation._tag === "Verified",
+    )
+  ) {
+    return Result.Verified(evidence);
+  }
+  if (requested.some((observation) => observation._tag === "Unavailable")) {
+    return Result.Unavailable(evidence);
+  }
+  if (requested.some((observation) => observation._tag === "Mismatch")) {
+    return Result.Mismatch(evidence);
+  }
+  return Result.Pending(evidence);
 }
 
 function recordValue(requirement: DnsRecord.DnsRecord): string {

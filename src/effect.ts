@@ -30,5 +30,7 @@ export * as Storage from "./stores/error.ts";
 export * as CloudflareDnsOverHttps from "./verification/cloudflare-doh.ts";
 export * as DnsData from "./verification/dns-data.ts";
 export * as DnsOverHttps from "./verification/doh.ts";
+export * as GoogleDnsOverHttps from "./verification/google-doh.ts";
 export * as DnsResolver from "./verification/resolver.ts";
+export * as DnsResolverPool from "./verification/resolver-pool.ts";
 export * as Verification from "./verification/verify.ts";

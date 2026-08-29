@@ -26,3 +26,5 @@ export * as Provisioning from "./promise/provisioning.ts";
 export * as Verification from "./promise/verification.ts";
 export * as CloudflareDnsOverHttps from "./promise/cloudflare-doh.ts";
 export * as DnsOverHttps from "./promise/doh.ts";
+export * as GoogleDnsOverHttps from "./promise/google-doh.ts";
+export * as DnsResolverPool from "./promise/resolver-pool.ts";
