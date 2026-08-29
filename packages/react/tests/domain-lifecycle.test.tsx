@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import {
   Cleanup,
+  Domain,
   DomainKit,
   Provisioning,
   Testing,
@@ -174,6 +175,33 @@ describe("provisioning lifecycle", () => {
 });
 
 describe("observation and cleanup", () => {
+  it("does not revive an applied receipt after the host receipt cycles", async () => {
+    const user = userEvent.setup();
+    const transport = Testing.makeFakeTransport({ inspect: connection });
+    const { rerender } = render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain="example.com" receiptId="receipt-a" records={[record]} />
+      </DomainKit.Root>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Review DNS changes" }));
+    await user.click(await screen.findByRole("button", { name: "Apply DNS changes" }));
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain="example.com" receiptId="receipt-b" records={[record]} />
+      </DomainKit.Root>,
+    );
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain="example.com" receiptId="receipt-a" records={[record]} />
+      </DomainKit.Root>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Review DNS cleanup" }));
+    await waitFor(() => expect(transport.calls.cleanupPlan).toHaveLength(1));
+    expect(transport.calls.cleanupPlan[0]?.receiptId).toBe("receipt-a");
+  });
+
   it("uses one observe operation with explicit provider and public DNS sources", async () => {
     const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });

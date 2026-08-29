@@ -1,5 +1,5 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import * as Cleanup from "./cleanup.tsx";
 import * as Connection from "./connection.tsx";
@@ -49,17 +49,27 @@ function ConnectedFlow({
   readonly records: ReadonlyArray<DnsRecord>;
 }) {
   const [appliedReceipt, setAppliedReceipt] = useState<{
-    readonly initialReceiptId: string | undefined;
+    readonly epoch: number;
     readonly receiptId: string;
   }>();
+  const receiptEpoch = useRef({ initialReceiptId, value: 0 });
+  const epoch =
+    receiptEpoch.current.initialReceiptId === initialReceiptId
+      ? receiptEpoch.current.value
+      : receiptEpoch.current.value + 1;
+  useEffect(() => {
+    if (receiptEpoch.current.initialReceiptId === initialReceiptId) return;
+    receiptEpoch.current = { initialReceiptId, value: receiptEpoch.current.value + 1 };
+    setAppliedReceipt(undefined);
+  }, [initialReceiptId]);
   const receiptId =
-    appliedReceipt !== undefined && appliedReceipt.initialReceiptId === initialReceiptId
+    appliedReceipt !== undefined && appliedReceipt.epoch === epoch
       ? appliedReceipt.receiptId
       : initialReceiptId;
   const rememberReceipt = (
     result: Extract<ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
   ) => {
-    setAppliedReceipt({ initialReceiptId, receiptId: result.receiptId });
+    setAppliedReceipt({ epoch, receiptId: result.receiptId });
   };
   return (
     <>
