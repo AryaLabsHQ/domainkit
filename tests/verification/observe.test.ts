@@ -3,13 +3,13 @@ import { Effect, Layer } from "effect";
 
 import {
   DnsRecord,
-  DnsResolver,
   DnsResolverPool,
   DomainName,
   Verification as EffectVerification,
 } from "../../src/effect.ts";
 import { Verification } from "../../src/index.ts";
 import { InMemoryDnsProvider, InMemoryDnsResolver } from "../../src/testing.ts";
+import * as DnsResolver from "../../src/verification/resolver.ts";
 
 const record = DnsRecord.parse({
   _tag: "CNAME",
