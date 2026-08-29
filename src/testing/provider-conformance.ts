@@ -79,7 +79,15 @@ function createReadbackCleanup(
     const receipt = yield* Provisioning.apply({
       authorization: yield* Provisioning.authorize(plan),
       plan,
-    });
+    }).pipe(
+      Effect.tapError((failure) =>
+        failure instanceof Provisioning.PartialApplyError
+          ? Effect.sync(() => {
+              cleanupRecordIds = providerRecordIds(failure.receipt.operations);
+            })
+          : Effect.void,
+      ),
+    );
     cleanupRecordIds = providerRecordIds(receipt.operations);
     yield* requireCondition(
       provider,

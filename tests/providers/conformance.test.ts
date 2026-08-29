@@ -85,6 +85,38 @@ describe("provider-author conformance contract", () => {
     }),
   );
 
+  it.effect("cleans up confirmed fixture records after a partial apply", () =>
+    Effect.gen(function* () {
+      const zone = DomainName.parse("example.com");
+      const provider = InMemoryDnsProvider.make({ id: "partial-apply" });
+      let creates = 0;
+      const partiallyFailing = DnsProvider.Service.of({
+        ...provider,
+        createRecord: Effect.fn("PartialApply.createRecord")((target, record) => {
+          creates += 1;
+          return creates === 1
+            ? provider.createRecord(target, record)
+            : Effect.fail(
+                new DnsProvider.Error({
+                  message: "injected second write failure",
+                  operation: "createRecord",
+                  providerId: provider.id,
+                }),
+              );
+        }),
+      });
+
+      const result = yield* ProviderConformance.run({
+        makeProvider: () => Effect.succeed(partiallyFailing),
+        prefix: "partial-case",
+        zone,
+      }).pipe(Effect.result);
+
+      assert.strictEqual(result._tag, "Failure");
+      assert.deepStrictEqual(yield* provider.listRecords(zone), []);
+    }),
+  );
+
   it.effect("detects failed cleanup even when listRecords makes the record opaque", () =>
     Effect.gen(function* () {
       const zone = DomainName.parse("example.com");
