@@ -146,6 +146,11 @@ function observePublicDns(
     const configuredPool = yield* Effect.serviceOption(DnsResolverPool.Service);
     const pool = Option.getOrElse(configuredPool, () => DnsResolverPool.defaultMake());
     const evidence = yield* pool.observe({ name: requirement.name, type: requirement._tag });
+    if (validatedPolicy._tag === "Quorum" && validatedPolicy.minimum > evidence.length) {
+      return yield* new InvalidInputError({
+        message: `Quorum minimum ${validatedPolicy.minimum} exceeds the ${evidence.length} configured resolvers`,
+      });
+    }
     return evaluatePublicDns(requirement, validatedPolicy, evidence);
   });
 }

@@ -189,6 +189,31 @@ describe("Verification.observe", () => {
     }),
   );
 
+  it.effect("rejects quorum policies that exceed the configured resolver count", () =>
+    Effect.gen(function* () {
+      const failure = yield* EffectVerification.observe({
+        publicDns: EffectVerification.PublicDns.Enabled({
+          policy: DnsResolverPool.Policy.Quorum({ minimum: 2 }),
+        }),
+        record,
+      }).pipe(Effect.flip);
+      assert.strictEqual(failure._tag, "InvalidInputError");
+      assert.match(failure.message, /exceeds the 1 configured resolvers/);
+    }).pipe(
+      Effect.provide(
+        Layer.succeed(
+          DnsResolverPool.Service,
+          DnsResolverPool.make([
+            {
+              id: "only",
+              resolver: InMemoryDnsResolver.make(() => ({ _tag: "answer", answers: [answer] })),
+            },
+          ]),
+        ),
+      ),
+    ),
+  );
+
   it.effect("returns NotObserved when both sources are disabled", () =>
     Effect.gen(function* () {
       const result = yield* EffectVerification.observe({
