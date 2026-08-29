@@ -38,11 +38,6 @@ export function useController(domain: string): Controller {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<State>({ _tag: "Loading" });
   const activeRequest = useRef(0);
-  const renderedDomain = useRef(domain);
-  if (renderedDomain.current !== domain) {
-    renderedDomain.current = domain;
-    activeRequest.current += 1;
-  }
 
   useEffect(() => {
     const request = ++activeRequest.current;
