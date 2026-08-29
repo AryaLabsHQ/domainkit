@@ -29,7 +29,7 @@ export function usePart<
   } = {
     ...(className === undefined ? {} : { className }),
     defaultTagName,
-    props: [externalProps, internalProps] as unknown as Record<string, unknown>,
+    props: [internalProps, externalProps] as unknown as Record<string, unknown>,
     ...(render === undefined ? {} : { render }),
     state,
     ...(style === undefined ? {} : { style }),

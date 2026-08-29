@@ -61,6 +61,25 @@ describe("composition and theme", () => {
     expect(calls).toBe(1);
   });
 
+  it("lets host props override component defaults", () => {
+    const controller: Connection.Controller = {
+      connect: async () => undefined,
+      retry: () => undefined,
+      reuse: async () => undefined,
+      state: disconnected,
+    };
+    const transport = Testing.makeFakeTransport({ inspect: disconnected });
+    render(
+      <DomainKit.Root transport={transport}>
+        <Connection.OAuthAction controller={controller} label="Authorize" type="submit">
+          Host action
+        </Connection.OAuthAction>
+      </DomainKit.Root>,
+    );
+    const action = screen.getByRole("button", { name: "Host action" });
+    expect(action.getAttribute("type")).toBe("submit");
+  });
+
   it("overrides messages and provider marks through the package root", async () => {
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
     render(
@@ -76,7 +95,7 @@ describe("composition and theme", () => {
     expect(screen.getByText("Custom provider mark")).toBeTruthy();
   });
 
-  it("ports dialogs into an HTMLElement or ShadowRoot owned by the host", async () => {
+  it("ports dialogs into an HTMLElement owned by the host", async () => {
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
     const host = document.createElement("div");
     document.body.append(host);
@@ -88,17 +107,6 @@ describe("composition and theme", () => {
     fireEvent.click(await first.findByRole("button", { name: "Connect Cloudflare" }));
     expect(host.querySelector('[data-domainkit-part="connection-dialog"]')).toBeTruthy();
     first.unmount();
-
-    const shadowHost = document.createElement("div");
-    document.body.append(shadowHost);
-    const shadow = shadowHost.attachShadow({ mode: "open" });
-    const second = render(
-      <DomainKit.Root portalContainer={shadow} transport={transport}>
-        <Connection.Flow domain="mail.example.com" />
-      </DomainKit.Root>,
-    );
-    fireEvent.click(await second.findByRole("button", { name: "Connect Cloudflare" }));
-    expect(shadow.querySelector('[data-domainkit-part="connection-dialog"]')).toBeTruthy();
   });
 
   it("provides accessible referential marks without requiring provider logo rights", () => {

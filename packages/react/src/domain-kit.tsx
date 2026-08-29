@@ -19,7 +19,7 @@ export interface RootProps extends Omit<PartProps<"div", RootState>, "children">
   readonly messages?: Partial<Catalog>;
   readonly marks?: Marks;
   readonly navigate?: (url: string) => void;
-  readonly portalContainer?: HTMLElement | ShadowRoot | null;
+  readonly portalContainer?: HTMLElement | null;
   readonly theme?: Theme;
   readonly transport: DomainKitTransport;
 }
@@ -29,7 +29,7 @@ interface ContextValue {
   readonly navigate: (url: string) => void;
   readonly marks: Marks;
   readonly messages: Catalog;
-  readonly portalContainer: HTMLElement | ShadowRoot | null;
+  readonly portalContainer: HTMLElement | null;
   readonly themeStyle: ReturnType<typeof toStyle>;
   readonly transport: DomainKitTransport;
 }
