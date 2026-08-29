@@ -1,10 +1,10 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Publish the DomainKit 0.2 contract\n\nDomainKit now provides one Effect-native authorization lifecycle, authoritative zone discovery,\nresilient multi-resolver DNS observation, and a reusable provider conformance runner. Promise APIs\ndelegate to the same canonical implementation.\n\nAdapter authors now use `domainkit/adapter` or `domainkit/effect/adapter`; obsolete generic root\nexports and split authorization-store exports have been removed.\n"
-    filename: domainkit-0-2.md
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Preserve domain grants across reconnects\n\nPreserve an owner's existing domain grants when the same provider account is connected again. This\nlets one authorization safely provision additional domains without silently disconnecting earlier\ndomains.\n"
+    filename: domain-grant-reconnect.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - domainkit-0-2.md
+      - domain-grant-reconnect.md
     id: npm:domainkit
     updated: true
 npm:packages:
