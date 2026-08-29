@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "react";
 
 import type { DnsRecord } from "./transport.ts";
 
@@ -14,9 +14,12 @@ export function useController<State>(identity: string, initial: State): Controll
   const revision = useRef(0);
   const [snapshot, setSnapshot] = useState(() => ({ identity, state: initial }));
 
-  useEffect(() => {
+  useInsertionEffect(() => {
     currentIdentity.current = identity;
     revision.current += 1;
+  }, [identity]);
+
+  useEffect(() => {
     setSnapshot({ identity, state: initial });
   }, [identity]);
 
