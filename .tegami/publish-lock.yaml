@@ -1,30 +1,10 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    replay:\n      - exit-prerelease(npm:domainkit)\n---\n\n## DomainKit 0.1\n\nShip the first stable provider-independent DNS provisioning contract with Effect-native and Promise\nAPIs, reusable provider authorizations, and receipt-bound cleanup. The live-tested Cloudflare\nadapter includes record lookup and deletion, while Vercel includes parent-zone discovery for\ndelegated subdomains. Support compatible Effect 4 release candidates.\n"
-    filename: stable-v0.1.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    replay:\n      - exit-prerelease(npm:domainkit)\n---\n\n## Detect Vercel DNS capability from intended nameservers\n\nDiscover DNS storage zones from Vercel integration responses that expose intended nameservers but\nomit the optional zone flag.\n"
-    filename: vercel-zone-capability-fallback.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    replay:\n      - exit-prerelease(npm:domainkit)\n---\n\n## First beta\n\nShip the first public DomainKit contract with Effect-native and Promise APIs for portable DNS\nprovisioning plans, authorization, verification, and Cloudflare and Vercel provider adapters.\n"
-    filename: first-beta.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    replay:\n      - exit-prerelease(npm:domainkit)\n---\n\n## Discover Vercel DNS storage zones\n\nTreat Vercel domains with DNS storage enabled as manageable zones even when their public\nnameservers remain external, enabling records beneath delegated subdomains.\n"
-    filename: vercel-external-storage-zone.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    replay:\n      - exit-prerelease(npm:domainkit)\n---\n\n## Resolve Vercel zones through direct domain discovery\n\nFall back to Vercel's domain configuration endpoints when an integration omits manageable zones\nfrom the account listing, including parent DNS storage zones used by delegated subdomains.\n"
-    filename: vercel-direct-zone-discovery.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    replay:\n      - exit-prerelease(npm:domainkit)\n---\n\n## Authorize subdomains in parent DNS zones\n\nKeep domain-scoped grants valid when a provider stores records in an authoritative parent zone,\nwhile rejecting approved operations outside the granted domain subtree.\n"
-    filename: subdomain-zone-authorization.md
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Discover Cloudflare accounts from authorized domains\n\nCloudflare OAuth and API-token authorization can now derive the selected account from a domain\nvisible to the credential. Hosts can offer a one-click connection flow without asking users to\nfind an account ID, while account-scoped DNS clients and explicit account authorization remain\navailable.\n"
+    filename: cloudflare-account-discovery.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - stable-v0.1.md
-      - vercel-zone-capability-fallback.md
-      - first-beta.md
-      - vercel-external-storage-zone.md
-      - vercel-direct-zone-discovery.md
-      - subdomain-zone-authorization.md
+      - cloudflare-account-discovery.md
     id: npm:domainkit
     updated: true
 npm:packages:
