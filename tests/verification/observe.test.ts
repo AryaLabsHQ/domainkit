@@ -176,6 +176,19 @@ describe("Verification.observe", () => {
     }).pipe(Effect.provide(pool));
   });
 
+  it.effect("rejects structurally constructed invalid quorum policies", () =>
+    Effect.gen(function* () {
+      const failure = yield* EffectVerification.observe({
+        publicDns: EffectVerification.PublicDns.Enabled({
+          policy: { _tag: "Quorum", minimum: 1.5 },
+        }),
+        record,
+      }).pipe(Effect.flip);
+      assert.strictEqual(failure._tag, "InvalidInputError");
+      assert.match(failure.message, /integer/);
+    }),
+  );
+
   it.effect("returns NotObserved when both sources are disabled", () =>
     Effect.gen(function* () {
       const result = yield* EffectVerification.observe({

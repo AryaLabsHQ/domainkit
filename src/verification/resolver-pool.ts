@@ -30,11 +30,17 @@ export type Policy = Data.TaggedEnum<{
 }>;
 const PolicyVariants = Data.taggedEnum<Policy>();
 const QuorumMinimum = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
+const PolicySchema = Schema.TaggedUnion({
+  AllMatch: {},
+  AnyMatch: {},
+  Quorum: { minimum: QuorumMinimum },
+});
 export const Policy = {
   AllMatch: PolicyVariants.AllMatch,
   AnyMatch: PolicyVariants.AnyMatch,
   Quorum: ({ minimum }: { readonly minimum: number }): Policy =>
     PolicyVariants.Quorum({ minimum: Schema.decodeUnknownSync(QuorumMinimum)(minimum) }),
+  Schema: PolicySchema,
 };
 
 export interface Interface {

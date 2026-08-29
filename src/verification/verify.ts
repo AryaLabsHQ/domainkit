@@ -1,7 +1,8 @@
-import { Data, Effect, Option } from "effect";
+import { Data, Effect, Option, Schema } from "effect";
 
 import type * as DomainName from "../domain/domain-name.ts";
 import * as DnsRecord from "../domain/dns-record.ts";
+import { Error as InvalidInputError } from "../invalid-input.ts";
 import * as DnsProvider from "../provider/provider.ts";
 import * as DnsData from "./dns-data.ts";
 import * as DnsResolverPool from "./resolver-pool.ts";
@@ -68,10 +69,16 @@ export type Result = Data.TaggedEnum<{
 }>;
 export const Result = Data.taggedEnum<Result>();
 
-export function observe(input: PublicOnlyConfig): Effect.Effect<Result>;
-export function observe(input: ProviderConfig): Effect.Effect<Result, never, DnsProvider.Service>;
-export function observe(input: Config): Effect.Effect<Result, never, DnsProvider.Service>;
-export function observe(input: Config): Effect.Effect<Result, never, DnsProvider.Service> {
+export function observe(input: PublicOnlyConfig): Effect.Effect<Result, InvalidInputError>;
+export function observe(
+  input: ProviderConfig,
+): Effect.Effect<Result, InvalidInputError, DnsProvider.Service>;
+export function observe(
+  input: Config,
+): Effect.Effect<Result, InvalidInputError, DnsProvider.Service>;
+export function observe(
+  input: Config,
+): Effect.Effect<Result, InvalidInputError, DnsProvider.Service> {
   return observeEffect(input);
 }
 
@@ -131,12 +138,15 @@ function observeProvider(
 function observePublicDns(
   requirement: DnsRecord.DnsRecord,
   policy: DnsResolverPool.Policy,
-): Effect.Effect<PublicDnsObservation> {
+): Effect.Effect<PublicDnsObservation, InvalidInputError> {
   return Effect.gen(function* () {
+    const validatedPolicy = yield* Schema.decodeUnknownEffect(DnsResolverPool.Policy.Schema)(
+      policy,
+    ).pipe(Effect.mapError((cause) => new InvalidInputError({ message: cause.message })));
     const configuredPool = yield* Effect.serviceOption(DnsResolverPool.Service);
     const pool = Option.getOrElse(configuredPool, () => DnsResolverPool.defaultMake());
     const evidence = yield* pool.observe({ name: requirement.name, type: requirement._tag });
-    return evaluatePublicDns(requirement, policy, evidence);
+    return evaluatePublicDns(requirement, validatedPolicy, evidence);
   });
 }
 
