@@ -76,6 +76,13 @@
   [data-domainkit-part="oauth-connect"],
   [data-domainkit-part="reuse-connection"],
   [data-domainkit-part="connection-retry"],
+  [data-domainkit-part="plan-trigger"],
+  [data-domainkit-part="plan-apply"],
+  [data-domainkit-part="provisioning-retry"],
+  [data-domainkit-part="observe-action"],
+  [data-domainkit-part="cleanup-trigger"],
+  [data-domainkit-part="cleanup-apply"],
+  [data-domainkit-part="disconnect-action"],
   [data-domainkit-part="token-connect"] button,
   [data-domainkit-part="dialog-cancel"],
   [data-domainkit-part="dialog-close"]
@@ -99,7 +106,11 @@
     box-shadow 120ms ease;
 }
 
-:where([data-domainkit-part="connection-trigger"], [data-domainkit-part="oauth-connect"]) {
+:where(
+  [data-domainkit-part="connection-trigger"],
+  [data-domainkit-part="oauth-connect"],
+  [data-domainkit-part="plan-apply"]
+) {
   --domainkit-button-face: color-mix(in oklch, var(--domainkit-accent), white 22%);
   --domainkit-button-glint: color-mix(in oklch, var(--domainkit-accent), white 42%);
   --domainkit-button-edge: color-mix(in oklch, var(--domainkit-accent), black 18%);
@@ -118,14 +129,16 @@
 
 :where(
   [data-domainkit-part="connection-trigger"]:hover:not(:disabled),
-  [data-domainkit-part="oauth-connect"]:hover:not(:disabled)
+  [data-domainkit-part="oauth-connect"]:hover:not(:disabled),
+  [data-domainkit-part="plan-apply"]:hover:not(:disabled)
 ) {
   --domainkit-button-face: color-mix(in oklch, var(--domainkit-accent), white 28%);
 }
 
 :where(
   [data-domainkit-part="connection-trigger"]:active:not(:disabled),
-  [data-domainkit-part="oauth-connect"]:active:not(:disabled)
+  [data-domainkit-part="oauth-connect"]:active:not(:disabled),
+  [data-domainkit-part="plan-apply"]:active:not(:disabled)
 ) {
   background-image: linear-gradient(
     to bottom,
@@ -138,6 +151,9 @@
 :where(
   [data-domainkit-part="reuse-connection"],
   [data-domainkit-part="connection-retry"],
+  [data-domainkit-part="plan-trigger"],
+  [data-domainkit-part="provisioning-retry"],
+  [data-domainkit-part="observe-action"],
   [data-domainkit-part="token-connect"] button
 ) {
   background-color: var(--domainkit-background);
@@ -152,9 +168,34 @@
 :where(
   [data-domainkit-part="reuse-connection"]:hover:not(:disabled),
   [data-domainkit-part="connection-retry"]:hover:not(:disabled),
+  [data-domainkit-part="plan-trigger"]:hover:not(:disabled),
+  [data-domainkit-part="provisioning-retry"]:hover:not(:disabled),
+  [data-domainkit-part="observe-action"]:hover:not(:disabled),
   [data-domainkit-part="token-connect"] button:hover:not(:disabled)
 ) {
   background-color: var(--domainkit-fill);
+}
+
+:where(
+  [data-domainkit-part="cleanup-trigger"],
+  [data-domainkit-part="disconnect-action"]
+) {
+  background: var(--domainkit-background);
+  border-color: var(--domainkit-border);
+  color: var(--domainkit-danger);
+}
+
+:where(
+  [data-domainkit-part="cleanup-trigger"]:hover,
+  [data-domainkit-part="disconnect-action"]:hover
+) {
+  background: color-mix(in srgb, var(--domainkit-danger) 8%, var(--domainkit-background));
+}
+
+:where([data-domainkit-part="cleanup-apply"]) {
+  background: var(--domainkit-danger);
+  border-color: var(--domainkit-danger);
+  color: var(--domainkit-accent-contrast);
 }
 
 :where([data-domainkit-part="dialog-cancel"], [data-domainkit-part="dialog-close"]) {
@@ -188,7 +229,11 @@
   z-index: 1000;
 }
 
-:where([data-domainkit-part="connection-dialog"]) {
+:where(
+  [data-domainkit-part="connection-dialog"],
+  [data-domainkit-part="plan-dialog"],
+  [data-domainkit-part="cleanup-dialog"]
+) {
   background: var(--domainkit-background);
   border: 1px solid var(--domainkit-border);
   border-radius: var(--domainkit-radius);
@@ -211,8 +256,19 @@
 }
 
 :where(
+  [data-domainkit-part="plan-dialog"],
+  [data-domainkit-part="cleanup-dialog"]
+) {
+  width: 36rem;
+}
+
+:where(
   [data-domainkit-part="connection-dialog"][data-starting-style],
-  [data-domainkit-part="connection-dialog"][data-ending-style]
+  [data-domainkit-part="connection-dialog"][data-ending-style],
+  [data-domainkit-part="plan-dialog"][data-starting-style],
+  [data-domainkit-part="plan-dialog"][data-ending-style],
+  [data-domainkit-part="cleanup-dialog"][data-starting-style],
+  [data-domainkit-part="cleanup-dialog"][data-ending-style]
 ) {
   opacity: 0;
   transform: translate(-50%, -48%) scale(0.98);
@@ -262,6 +318,7 @@
 :where([data-domainkit-part="dialog-footer"]) {
   border-top: 1px solid var(--domainkit-border);
   display: flex;
+  gap: 0.5rem;
   justify-content: flex-end;
   padding: 0.75rem 1rem;
 }
@@ -321,6 +378,174 @@
 
 :where([data-domainkit-part="token-connect"] button) {
   justify-self: start;
+}
+
+:where([data-domainkit-part="connected-shell"]) {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+}
+
+:where([data-domainkit-part="connected-card"]) {
+  align-items: center;
+  background: var(--domainkit-background);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-radius);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  justify-content: space-between;
+  padding: 1rem;
+  width: 100%;
+}
+
+:where([data-domainkit-part="connected-identity"]) {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+:where([data-domainkit-part="connected-actions"]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+:where([data-domainkit-part="provisioning-flow"], [data-domainkit-part="verification-status"]) {
+  display: contents;
+}
+
+:where([data-domainkit-part="records-panel"]) {
+  background: var(--domainkit-fill);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-control-radius);
+  overflow-x: auto;
+  width: 100%;
+}
+
+:where([data-domainkit-part="records-table"]) {
+  border-collapse: collapse;
+  min-width: 36rem;
+  width: 100%;
+}
+
+:where([data-domainkit-part="records-table"] th) {
+  color: var(--domainkit-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+}
+
+:where([data-domainkit-part="records-table"] td) {
+  border-top: 1px solid var(--domainkit-border);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-all;
+}
+
+:where([data-domainkit-part="records-table"] td:first-child) {
+  font-weight: 600;
+  white-space: nowrap;
+  width: 4.5rem;
+}
+
+:where([data-domainkit-part="plan-operations"], [data-domainkit-part="cleanup-operations"]) {
+  display: grid;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+:where([data-domainkit-part="plan-operations"] li, [data-domainkit-part="cleanup-operations"] li) {
+  align-items: baseline;
+  background: var(--domainkit-fill);
+  border-radius: var(--domainkit-control-radius);
+  display: grid;
+  font-size: 0.8125rem;
+  gap: 0.5rem 0.75rem;
+  grid-template-columns: auto auto 1fr;
+  padding: 0.6rem 0.75rem;
+}
+
+:where([data-domainkit-part="operation-kind"]) {
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.15rem 0.45rem;
+  text-transform: uppercase;
+}
+
+:where([data-operation="Create"] [data-domainkit-part="operation-kind"]) {
+  background: color-mix(in srgb, var(--domainkit-success) 16%, transparent);
+  color: var(--domainkit-success);
+}
+
+:where([data-operation="Update"] [data-domainkit-part="operation-kind"]) {
+  background: color-mix(in srgb, var(--domainkit-accent) 14%, transparent);
+  color: var(--domainkit-accent);
+}
+
+:where(
+  [data-operation="Delete"] [data-domainkit-part="operation-kind"],
+  [data-operation="Remove"] [data-domainkit-part="operation-kind"]
+) {
+  background: color-mix(in srgb, var(--domainkit-danger) 14%, transparent);
+  color: var(--domainkit-danger);
+}
+
+:where(
+  [data-operation="Conflict"] [data-domainkit-part="operation-kind"],
+  [data-operation="Blocked"] [data-domainkit-part="operation-kind"],
+  [data-operation="Stale"] [data-domainkit-part="operation-kind"]
+) {
+  background: color-mix(in srgb, var(--domainkit-danger) 10%, var(--domainkit-fill));
+  color: var(--domainkit-danger);
+}
+
+:where([data-operation="Noop"] [data-domainkit-part="operation-kind"]) {
+  background: var(--domainkit-background);
+  color: var(--domainkit-muted);
+}
+
+:where([data-domainkit-part="operation-record"]) {
+  color: var(--domainkit-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+}
+
+:where([data-domainkit-part="connected-danger"]) {
+  border-top: 1px solid var(--domainkit-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  width: 100%;
+}
+
+:where([data-domainkit-part="cleanup-flow"]) {
+  display: contents;
+}
+
+:where([data-domainkit-part="flow-outcome"]) {
+  font-size: 0.875rem;
+  margin: 0;
+  width: 100%;
+}
+
+:where([data-domainkit-part="flow-outcome"][data-tone="success"]) {
+  color: var(--domainkit-success);
+}
+
+:where([data-domainkit-part="flow-outcome"][data-tone="danger"]) {
+  color: var(--domainkit-danger);
 }
 
 :where([data-domainkit-part]:focus-visible) {

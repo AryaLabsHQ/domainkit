@@ -28,3 +28,19 @@ for (const mode of ["light", "dark"] as const) {
     await expect(trigger).toBeFocused();
   });
 }
+
+test("provisioning and cleanup dialogs preserve review focus", async ({ page }) => {
+  await page.goto("/?flow=lifecycle&theme=brand");
+  await page.getByRole("button", { name: "Review DNS changes" }).click();
+  const plan = page.getByRole("dialog", { name: "Review DNS changes" });
+  await expect(plan).toBeVisible();
+  await expect(plan.getByText(/Create MX mail.example.com/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Review DNS changes" })).toBeFocused();
+
+  await page.getByRole("button", { name: "Review DNS cleanup" }).click();
+  const cleanup = page.getByRole("dialog", { name: "Review DNS cleanup" });
+  await expect(cleanup).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Review DNS cleanup" })).toBeFocused();
+});

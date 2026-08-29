@@ -18,8 +18,8 @@ const pack = async (packageDirectory: string, destination: string): Promise<stri
   return join(destination, filename);
 };
 
-describe("packed Vite consumer", () => {
-  it("installs, bundles, and server-renders the public connection tracer", async () => {
+describe.each(["18.3.1", "19.2.4"])("packed Vite consumer on React %s", (reactVersion) => {
+  it("installs, bundles, and server-renders the public lifecycle", async () => {
     const directory = await mkdtemp(join(tmpdir(), "domainkit-react-consumer-"));
     try {
       const coreTarball = await pack(resolve("../domainkit"), directory);
@@ -34,8 +34,8 @@ describe("packed Vite consumer", () => {
           dependencies: {
             "@domainkit/react": `file:${reactTarball}`,
             domainkit: `file:${coreTarball}`,
-            react: "19.2.4",
-            "react-dom": "19.2.4",
+            react: reactVersion,
+            "react-dom": reactVersion,
             vite: "7.1.12",
           },
         }),
@@ -49,7 +49,7 @@ describe("packed Vite consumer", () => {
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
-import { Connection, DomainKit, Testing } from "@domainkit/react";
+import { Domain, DomainKit, Testing } from "@domainkit/react";
 
 const transport = Testing.makeFakeTransport({
   inspect: {
@@ -62,7 +62,10 @@ const transport = Testing.makeFakeTransport({
 const app = React.createElement(
   DomainKit.Root,
   { transport },
-  React.createElement(Connection.Flow, { domain: "mail.example.com" }),
+  React.createElement(Domain.Flow, {
+    domain: "mail.example.com",
+    records: [{ id: "mx", type: "MX", name: "mail.example.com", value: "mx.example.net" }],
+  }),
 );
 export const html = renderToString(app);
 if (typeof document !== "undefined") createRoot(document.getElementById("root")).render(app);
@@ -81,5 +84,50 @@ if (typeof document !== "undefined") createRoot(document.getElementById("root"))
     } finally {
       await rm(directory, { force: true, recursive: true });
     }
-  }, 30_000);
+  }, 60_000);
+});
+
+describe("packed Next.js consumer", () => {
+  it("builds and server-renders with React 19", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "domainkit-react-next-consumer-"));
+    try {
+      const coreTarball = await pack(resolve("../domainkit"), directory);
+      const reactTarball = await pack(resolve("."), directory);
+      await writeFile(
+        join(directory, "package.json"),
+        JSON.stringify({
+          name: "domainkit-react-next-consumer",
+          private: true,
+          scripts: { build: "next build" },
+          dependencies: {
+            "@domainkit/react": `file:${reactTarball}`,
+            domainkit: `file:${coreTarball}`,
+            next: "15.5.7",
+            react: "19.2.4",
+            "react-dom": "19.2.4",
+          },
+        }),
+      );
+      await run("bun", ["install"], directory);
+      await run("mkdir", ["-p", "app"], directory);
+      await writeFile(
+        join(directory, "app/layout.js"),
+        `import "@domainkit/react/styles.css";
+export default function Layout({ children }) { return <html><body>{children}</body></html>; }`,
+      );
+      await writeFile(
+        join(directory, "app/page.js"),
+        `"use client";
+import { Connection, DomainKit, Testing } from "@domainkit/react";
+const transport = Testing.makeFakeTransport({ inspect: { _tag: "Unsupported", domain: "example.com" } });
+export default function Page() { return <DomainKit.Root transport={transport}><Connection.Flow domain="example.com" /></DomainKit.Root>; }`,
+      );
+      await run("bun", ["run", "build"], directory);
+      expect(await readFile(join(directory, ".next/server/app/index.html"), "utf8")).toContain(
+        "Detecting DNS provider",
+      );
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  }, 120_000);
 });

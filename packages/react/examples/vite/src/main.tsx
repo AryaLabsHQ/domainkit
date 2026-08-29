@@ -1,19 +1,27 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Connection, DomainKit, Testing } from "@domainkit/react";
+import { Connection, Domain, DomainKit, Testing } from "@domainkit/react";
 // oxlint-disable-next-line import/no-unassigned-import -- CSS is an explicit opt-in package side effect.
 import "@domainkit/react/styles.css";
 
 const parameters = new URLSearchParams(window.location.search);
 const branded = parameters.get("theme") === "brand";
 const mode = parameters.get("mode") === "dark" ? "dark" : "light";
+const lifecycle = parameters.get("flow") === "lifecycle";
 const transport = Testing.makeFakeTransport({
-  inspect: {
-    _tag: "Disconnected",
-    domain: "mail.example.com",
-    provider: Testing.provider(),
-    reusableConnection: { connectionId: "connection-1", label: "Arya Labs account" },
-  },
+  inspect: lifecycle
+    ? {
+        _tag: "Connected",
+        connectionId: "connection-1",
+        domain: "mail.example.com",
+        provider: Testing.provider(),
+      }
+    : {
+        _tag: "Disconnected",
+        domain: "mail.example.com",
+        provider: Testing.provider(),
+        reusableConnection: { connectionId: "connection-1", label: "Arya Labs account" },
+      },
 });
 
 const root = document.getElementById("root");
@@ -43,7 +51,29 @@ createRoot(root).render(
         }
         transport={transport}
       >
-        <Connection.Flow domain="mail.example.com" />
+        {lifecycle ? (
+          <Domain.Flow
+            domain="mail.example.com"
+            receiptId="receipt-1"
+            records={[
+              {
+                id: "mx",
+                name: "mail.example.com",
+                priority: 10,
+                type: "MX",
+                value: "feedback-smtp.example.net",
+              },
+              {
+                id: "spf",
+                name: "mail.example.com",
+                type: "TXT",
+                value: "v=spf1 include:example.net ~all",
+              },
+            ]}
+          />
+        ) : (
+          <Connection.Flow domain="mail.example.com" />
+        )}
       </DomainKit.Root>
     </main>
   </StrictMode>,
