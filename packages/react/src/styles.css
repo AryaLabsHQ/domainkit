@@ -249,9 +249,13 @@
 }
 
 :where([data-domainkit-part="copy-action"]) {
+  flex: none;
+  font-family: var(--domainkit-font-family, ui-sans-serif, system-ui, sans-serif);
   font-size: 0.6875rem;
-  min-height: 1.5rem;
-  padding: 0.15rem 0.4rem;
+  font-weight: 500;
+  line-height: 1;
+  min-height: 1.25rem;
+  padding: 0.15rem 0.35rem;
 }
 
 :where([data-domainkit-part="dialog-close"]) {
@@ -506,16 +510,17 @@
   letter-spacing: 0.02em;
   padding: 0.55rem 0.75rem;
   text-align: left;
+  white-space: nowrap;
 }
 
 :where([data-domainkit-part="records-table"] td) {
   border-top: 1px solid var(--domainkit-border);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.75rem;
+  line-height: 1.4;
   padding: 0.55rem 0.75rem;
   text-align: left;
-  vertical-align: top;
-  word-break: break-all;
+  vertical-align: middle;
 }
 
 :where([data-domainkit-part="records-table"] td:first-child) {
@@ -524,16 +529,33 @@
   width: 4.5rem;
 }
 
+:where([data-domainkit-part="records-status"]) {
+  text-align: right;
+  white-space: nowrap;
+  width: 1%;
+}
+
 :where([data-domainkit-part="copy-value"]) {
-  align-items: flex-start;
-  display: flex;
+  align-items: baseline;
+  display: inline-flex;
   gap: 0.35rem;
+  max-width: 100%;
   min-width: 0;
 }
 
 :where([data-domainkit-part="copy-value"] code) {
-  flex: 1 1 auto;
-  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: inherit;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+:where([data-domainkit-part="record-value"]) {
+  align-items: baseline;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -541,6 +563,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  justify-content: flex-start;
 }
 
 :where([data-domainkit-part="record-card"]) {
@@ -576,14 +599,17 @@
 :where([data-domainkit-part="record-card"] dd) {
   display: grid;
   gap: 0.25rem;
+  justify-items: start;
   margin: 0.25rem 0 0;
 }
 
 :where([data-domainkit-part="record-priority"]) {
   color: var(--domainkit-muted);
-  display: inline-block;
+  font-variant-numeric: tabular-nums;
+}
+
+:where([data-domainkit-part="record-card"] [data-domainkit-part="record-priority"]) {
   font-size: 0.6875rem;
-  margin-right: 0.35rem;
 }
 
 :where([data-domainkit-part="record-status"]) {

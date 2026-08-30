@@ -214,7 +214,11 @@ export function Table({ evidence, records, ...props }: TableProps) {
                   <th scope="col">Type</th>
                   <th scope="col">Name</th>
                   <th scope="col">Value</th>
-                  {evidence === undefined ? null : <th scope="col">Status</th>}
+                  {evidence === undefined ? null : (
+                    <th data-domainkit-part="records-status" scope="col">
+                      Status
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -225,13 +229,15 @@ export function Table({ evidence, records, ...props }: TableProps) {
                       <CopyValue value={record.name} />
                     </td>
                     <td>
-                      {record.priority === undefined ? null : (
-                        <span data-domainkit-part="record-priority">{record.priority}</span>
-                      )}
-                      <CopyValue value={record.value} />
+                      <span data-domainkit-part="record-value">
+                        {record.priority === undefined ? null : (
+                          <span data-domainkit-part="record-priority">{record.priority}</span>
+                        )}
+                        <CopyValue value={record.value} />
+                      </span>
                     </td>
                     {evidence === undefined ? null : (
-                      <td>
+                      <td data-domainkit-part="records-status">
                         {evidence
                           .filter((item) => item.recordId === record.id)
                           .map((item, index) => (
