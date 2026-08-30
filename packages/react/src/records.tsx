@@ -29,6 +29,16 @@ const downloadText = (filename: string, contents: string): void => {
 
 const absoluteDomainName = (value: string): string => (value.endsWith(".") ? value : `${value}.`);
 
+const srvValue = (value: string): string => {
+  const fields = value.trim().split(/\s+/);
+  if (fields.length !== 3) throw new Error(`Invalid SRV value: ${value}`);
+  const [weight, port, target] = fields;
+  if (weight === undefined || port === undefined || target === undefined) {
+    throw new Error(`Invalid SRV value: ${value}`);
+  }
+  return `${weight} ${port} ${absoluteDomainName(target)}`;
+};
+
 const zoneValue = (record: DnsRecord): string => {
   switch (record.type.toUpperCase()) {
     case "CNAME":
@@ -36,6 +46,8 @@ const zoneValue = (record: DnsRecord): string => {
     case "NS":
     case "PTR":
       return absoluteDomainName(record.value);
+    case "SRV":
+      return srvValue(record.value);
     case "TXT":
       return JSON.stringify(record.value);
     default:

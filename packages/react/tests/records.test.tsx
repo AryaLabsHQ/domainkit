@@ -93,6 +93,17 @@ describe("Records primitives", () => {
         },
       ]),
     ).toBe('example.com. IN TXT "contains \\"quotes\\" and \\\\slashes"\n');
+    expect(
+      Records.toZoneFile([
+        {
+          id: "srv",
+          name: "_service._tcp.example.com",
+          priority: 10,
+          type: "SRV",
+          value: "5 443 service.example.net",
+        },
+      ]),
+    ).toBe("_service._tcp.example.com. IN SRV 10 5 443 service.example.net.\n");
   });
 
   it("renders optional status chips and stacked cards", () => {
