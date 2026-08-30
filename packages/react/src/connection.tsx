@@ -311,7 +311,7 @@ export interface DialogProps {
 export function Dialog({ controller, snapshot }: DialogProps) {
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   return (
-    <BaseDialog.Portal container={portalContainer ?? undefined}>
+    <BaseDialog.Portal container={portalContainer}>
       <BaseDialog.Backdrop data-domainkit-part="dialog-backdrop" />
       <BaseDialog.Popup
         data-domainkit-part="connection-dialog"

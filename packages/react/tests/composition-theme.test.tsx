@@ -109,20 +109,42 @@ describe("composition and theme", () => {
     first.unmount();
   });
 
-  it("rejects portal containers inside a ShadowRoot", () => {
+  it("rejects portal containers inside a ShadowRoot", async () => {
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
     const host = document.createElement("div");
     const shadow = host.attachShadow({ mode: "open" });
     const container = document.createElement("div");
     shadow.append(container);
 
-    expect(() =>
-      render(
-        <DomainKit.Root portalContainer={container} transport={transport}>
-          <Connection.Flow domain="mail.example.com" />
-        </DomainKit.Root>,
-      ),
-    ).toThrow("ShadowRoot portals cannot receive the package stylesheet");
+    render(
+      <DomainKit.Root portalContainer={container} transport={transport}>
+        <Connection.Flow domain="mail.example.com" />
+      </DomainKit.Root>,
+    );
+
+    const trigger = await screen.findByRole("button", { name: /^Connect(?: Cloudflare)?$/ });
+    expect(() => fireEvent.click(trigger)).toThrow(
+      "ShadowRoot portals cannot receive the package stylesheet",
+    );
+  });
+
+  it("revalidates a portal container when it moves into a ShadowRoot", async () => {
+    const transport = Testing.makeFakeTransport({ inspect: disconnected });
+    const container = document.createElement("div");
+    document.body.append(container);
+    render(
+      <DomainKit.Root portalContainer={container} transport={transport}>
+        <Connection.Flow domain="mail.example.com" />
+      </DomainKit.Root>,
+    );
+    const shadowHost = document.createElement("div");
+    const shadow = shadowHost.attachShadow({ mode: "open" });
+    shadow.append(container);
+    const trigger = await screen.findByRole("button", { name: /^Connect(?: Cloudflare)?$/ });
+
+    expect(() => fireEvent.click(trigger)).toThrow(
+      "ShadowRoot portals cannot receive the package stylesheet",
+    );
   });
 
   it("loads known provider marks from integrations.sh and falls back to a letter", () => {

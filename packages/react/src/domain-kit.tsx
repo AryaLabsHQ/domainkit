@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode, type RefObject } from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
@@ -29,7 +29,7 @@ interface ContextValue {
   readonly navigate: (url: string) => void;
   readonly marks: Marks;
   readonly messages: Catalog;
-  readonly portalContainer: HTMLElement | null;
+  readonly portalContainer: RefObject<HTMLElement | null>;
   readonly themeStyle: ReturnType<typeof toStyle>;
   readonly transport: DomainKitTransport;
 }
@@ -66,7 +66,14 @@ export function Root({
   ...props
 }: RootProps) {
   const themeStyle = toStyle(theme);
-  const validatedPortalContainer = validatePortalContainer(portalContainer);
+  const portalContainerRef = useMemo<RefObject<HTMLElement | null>>(
+    () => ({
+      get current() {
+        return validatePortalContainer(portalContainer);
+      },
+    }),
+    [portalContainer],
+  );
   const content = usePart(
     "div",
     props,
@@ -85,7 +92,7 @@ export function Root({
         marks,
         messages: mergeMessages(messages),
         navigate,
-        portalContainer: validatedPortalContainer,
+        portalContainer: portalContainerRef,
         themeStyle,
         transport,
       }}
