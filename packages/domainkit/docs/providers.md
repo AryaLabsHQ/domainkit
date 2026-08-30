@@ -49,7 +49,7 @@ Provider errors are decoded at the HTTP boundary, classified into portable reaso
 of request credentials. Provider status and error codes remain diagnostic metadata without leaking
 raw response DTOs into the planning contract.
 
-Provider implementations import generic contracts from `domainkit` or `domainkit/effect`.
+Provider implementations import generic contracts from `domainkit`.
 `ProviderConformance.run` from `domainkit/testing` exercises complete
 paginated readback, exact no-op, conflict, create, stale plans, partial receipts, and receipt-bound
 cleanup against a fresh provider fixture.

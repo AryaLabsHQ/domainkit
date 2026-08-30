@@ -1,4 +1,4 @@
-import { Secret, Vercel } from "domainkit";
+import { Secret, Vercel } from "domainkit/promise";
 
 export async function connectVercelIntegration(input: {
   readonly clientId: string;

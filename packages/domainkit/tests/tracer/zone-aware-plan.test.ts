@@ -8,7 +8,7 @@ import {
   DomainName,
   Provisioning,
   ZoneDiscovery,
-} from "../../src/effect.ts";
+} from "../../src/index.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
 
 const requirement = DnsRecord.parse({

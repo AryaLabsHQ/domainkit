@@ -8,19 +8,20 @@ seo:
 `Verification.observe` is the only verification operation. Public DNS is enabled by default and uses concurrent RFC wire-format DNS-over-HTTPS resolvers.
 
 ```ts
-import { Verification } from "domainkit";
+import { Effect } from "effect";
+import { DnsProvider, Verification } from "domainkit";
 
-const result = await Verification.observe({ record });
+const result = await Effect.runPromise(Verification.observe({ record }));
 ```
 
 Provider observation is explicit:
 
 ```ts
 const result = await Verification.observe({
-  provider: Verification.Provider.Enabled({ provider, zone }),
+  provider: Verification.Provider.Enabled({ zone }),
   publicDns: Verification.PublicDns.Disabled(),
   record,
-});
+}).pipe(Effect.provideService(DnsProvider.Service, provider), Effect.runPromise);
 ```
 
 When both sources are enabled, both must match before the result is `Verified`. Results preserve the full tagged evidence instead of collapsing transport failures, negative answers, mismatches, and propagation delay into one boolean.

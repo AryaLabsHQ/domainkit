@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import { DomainName } from "../../src/index.ts";
+import { DomainName } from "../../src/promise.ts";
 
 describe("DomainName", () => {
   it("normalizes case, trailing dots, and Unicode labels through its schema codec", () => {

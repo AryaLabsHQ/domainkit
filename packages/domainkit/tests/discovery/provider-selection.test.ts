@@ -6,7 +6,7 @@ import {
   ProviderAuthorization,
   ProviderDiscovery,
   Zones,
-} from "../../src/index.ts";
+} from "../../src/promise.ts";
 
 const connection: Connection.Connection = {
   authorizationId: "authorization-1",

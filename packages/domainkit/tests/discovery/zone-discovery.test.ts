@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { DomainName, ZoneDiscovery } from "../../src/effect.ts";
+import { DomainName, ZoneDiscovery } from "../../src/index.ts";
 import type * as DnsProvider from "../../src/provider/provider.ts";
 import * as PromiseZoneDiscovery from "../../src/promise/zone-discovery.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";

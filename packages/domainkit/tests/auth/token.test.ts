@@ -5,7 +5,7 @@ import {
   Connection,
   ProviderAuthorization,
   Secret,
-} from "../../src/index.ts";
+} from "../../src/promise.ts";
 import { InMemoryAuthorizationLifecycle } from "../../src/testing.ts";
 
 const authenticate = async (): Promise<Connection.Authentication> => ({

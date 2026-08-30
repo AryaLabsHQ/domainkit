@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { DomainName, Secret } from "../../../src/effect.ts";
+import { DomainName, Secret } from "../../../src/index.ts";
 import * as Cloudflare from "../../../src/providers/cloudflare/index.ts";
 import { ProviderConformance } from "../../../src/testing.ts";
 import { conformanceFetch } from "./fixtures.ts";

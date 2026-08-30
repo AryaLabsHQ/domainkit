@@ -2,8 +2,8 @@ import * as DnsPacket from "@leichtgewicht/dns-packet";
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { DnsResolverPool, DomainName } from "../../src/effect.ts";
-import { DnsResolverPool as AsyncDnsResolverPool } from "../../src/index.ts";
+import { DnsResolverPool, DomainName } from "../../src/index.ts";
+import { DnsResolverPool as AsyncDnsResolverPool } from "../../src/promise.ts";
 import { InMemoryDnsResolver } from "../../src/testing.ts";
 
 const query = { name: DomainName.parse("example.com"), type: "TXT" as const };

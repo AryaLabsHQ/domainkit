@@ -1,5 +1,5 @@
 import type { Fetch } from "../../../src/providers/vercel/client.ts";
-import { DomainName } from "../../../src/effect.ts";
+import { DomainName } from "../../../src/index.ts";
 
 export const domain = {
   id: "domain-1",

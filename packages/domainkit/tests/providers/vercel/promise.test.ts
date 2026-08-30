@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import { Secret } from "../../../src/index.ts";
+import { Secret } from "../../../src/promise.ts";
 import * as Vercel from "../../../src/promise/vercel.ts";
 import { domain, domainPage, portableZone, recordedFetch } from "./fixtures.ts";
 

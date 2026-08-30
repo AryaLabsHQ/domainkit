@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [0006: Effect-first package root](0006-effect-first-package-root.md)
 
 ## Context
 

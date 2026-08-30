@@ -11,6 +11,7 @@ const runtimeExitFiles = new Set([
   `${coreSource}stores/credential.ts`,
   `${coreSource}stores/oauth-state.ts`,
   `${coreSource}stores/receipt.ts`,
+  `${coreSource}transport.ts`,
 ]);
 
 const foreignPromiseFiles = new Set([
@@ -29,6 +30,7 @@ const foreignPromiseFiles = new Set([
   `${coreSource}stores/credential.ts`,
   `${coreSource}stores/oauth-state.ts`,
   `${coreSource}stores/receipt.ts`,
+  `${coreSource}transport.ts`,
   `${coreSource}verification/doh.ts`,
   `${coreSource}verification/resolver.ts`,
 ]);

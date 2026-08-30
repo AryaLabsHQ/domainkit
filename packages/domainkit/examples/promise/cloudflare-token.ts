@@ -1,4 +1,10 @@
-import { type AuthorizationLifecycle, Cloudflare, Connection, DomainName, Secret } from "domainkit";
+import {
+  type AuthorizationLifecycle,
+  Cloudflare,
+  Connection,
+  DomainName,
+  Secret,
+} from "domainkit/promise";
 
 const capabilities = ["dns:read", "dns:write"] as const;
 

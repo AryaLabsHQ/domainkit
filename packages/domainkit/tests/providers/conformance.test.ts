@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { DnsRecord, DomainName } from "../../src/effect.ts";
+import { DnsRecord, DomainName } from "../../src/index.ts";
 import * as DnsProvider from "../../src/provider/provider.ts";
 import { InMemoryDnsProvider, ProviderConformance } from "../../src/testing.ts";
 

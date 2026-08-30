@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { Digest, Secret } from "../../../src/effect.ts";
+import { Digest, Secret } from "../../../src/index.ts";
 import * as Vercel from "../../../src/providers/vercel/index.ts";
 import { recordedFetch } from "./fixtures.ts";
 

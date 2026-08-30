@@ -14,14 +14,14 @@ seo:
 npm install domainkit effect
 ```
 
-`effect` is a peer dependency. Promise consumers still install it because the Promise facade runs the canonical Effect implementation.
+`effect` is a peer dependency and the package root is Effect-native.
 
 ## Requirements
 
 DomainKit parses external DNS input through schemas. Each required record also names its ownership, provenance, purpose, and conflict policy.
 
 ```ts
-import { DnsRecord, DomainName, Provisioning } from "domainkit";
+import { DnsRecord, DomainName } from "domainkit";
 
 const record = DnsRecord.parse({
   _tag: "CNAME",
@@ -40,17 +40,22 @@ const record = DnsRecord.parse({
 ## Plan and apply
 
 ```ts
-const { plan } = await Provisioning.create({
-  provider,
+import { Effect, Layer } from "effect";
+import { Digest, DnsProvider, Provisioning } from "domainkit";
+
+const program = Provisioning.create({
   requirements: [record],
   target: Provisioning.Target.ExactZone({
     zone: DomainName.parse("example.com"),
   }),
-});
-
-// Render plan.operations for review before authorizing the exact digest.
-const authorization = await Provisioning.authorize(plan);
-const receipt = await Provisioning.apply({ authorization, plan, provider });
+}).pipe(
+  Effect.flatMap(({ plan }) =>
+    Provisioning.authorize(plan).pipe(
+      Effect.flatMap((authorization) => Provisioning.apply({ authorization, plan })),
+    ),
+  ),
+  Effect.provide(Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer)),
+);
 ```
 
 ```text
@@ -68,9 +73,9 @@ requirements
   token to `@domainkit/react`.
 </Callout>
 
-## Promise or Effect
+## Promise boundary
 
-The Promise API is appropriate for ordinary request handlers and framework actions. Effect applications import from `domainkit/effect`, provide provider and digest Layers, and retain the complete typed error and service environment.
+Use `domainkit/promise` only where a foreign framework requires Promise-returning callbacks. It delegates to the same Effect programs and does not maintain a second planner or authorization model.
 
 <CardGroup cols={2}>
   <Card title="Plans" href="/docs/core/plans" icon="file">
