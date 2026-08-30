@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Connection, DomainKit, Provider, Testing, Theme } from "../src/index.ts";
@@ -109,7 +109,7 @@ describe("composition and theme", () => {
     first.unmount();
   });
 
-  it("rejects portal containers inside a ShadowRoot", async () => {
+  it("falls back to the document for portal containers inside a ShadowRoot", async () => {
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
     const host = document.createElement("div");
     const shadow = host.attachShadow({ mode: "open" });
@@ -122,13 +122,12 @@ describe("composition and theme", () => {
       </DomainKit.Root>,
     );
 
-    const trigger = await screen.findByRole("button", { name: /^Connect(?: Cloudflare)?$/ });
-    expect(() => fireEvent.click(trigger)).toThrow(
-      "ShadowRoot portals cannot receive the package stylesheet",
-    );
+    fireEvent.click(await screen.findByRole("button", { name: /^Connect(?: Cloudflare)?$/ }));
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    expect(container.querySelector('[data-domainkit-part="connection-dialog"]')).toBeNull();
   });
 
-  it("revalidates a portal container when it moves into a ShadowRoot", async () => {
+  it("moves an open dialog back to the document when its portal enters a ShadowRoot", async () => {
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
     const container = document.createElement("div");
     document.body.append(container);
@@ -137,14 +136,15 @@ describe("composition and theme", () => {
         <Connection.Flow domain="mail.example.com" />
       </DomainKit.Root>,
     );
+    fireEvent.click(await screen.findByRole("button", { name: /^Connect(?: Cloudflare)?$/ }));
+    expect(container.querySelector('[data-domainkit-part="connection-dialog"]')).toBeTruthy();
     const shadowHost = document.createElement("div");
     const shadow = shadowHost.attachShadow({ mode: "open" });
     shadow.append(container);
-    const trigger = await screen.findByRole("button", { name: /^Connect(?: Cloudflare)?$/ });
-
-    expect(() => fireEvent.click(trigger)).toThrow(
-      "ShadowRoot portals cannot receive the package stylesheet",
-    );
+    await waitFor(() => {
+      expect(container.querySelector('[data-domainkit-part="connection-dialog"]')).toBeNull();
+      expect(document.body.querySelector('[data-domainkit-part="connection-dialog"]')).toBeTruthy();
+    });
   });
 
   it("loads known provider marks from integrations.sh and falls back to a letter", () => {

@@ -1,4 +1,12 @@
-import { createContext, useContext, useMemo, type ReactNode, type RefObject } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useSyncExternalStore,
+  type ReactNode,
+  type RefObject,
+} from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
@@ -43,15 +51,23 @@ const navigateInBrowser = (url: string): void => {
   window.location.assign(url);
 };
 
-const validatePortalContainer = (container: HTMLElement | null): HTMLElement | null => {
+const resolvePortalContainer = (container: HTMLElement | null): HTMLElement | null => {
   if (container === null) return null;
-  const root = container.getRootNode();
-  if (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot) {
-    throw new Error(
-      "DomainKit portalContainer must belong to the document tree; ShadowRoot portals cannot receive the package stylesheet",
-    );
-  }
-  return container;
+  return container.getRootNode() === container.ownerDocument ? container : null;
+};
+
+const usePortalContainer = (container: HTMLElement | null): HTMLElement | null => {
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      if (container === null || typeof MutationObserver === "undefined") return () => {};
+      const observer = new MutationObserver(notify);
+      observer.observe(container.ownerDocument, { childList: true, subtree: true });
+      return () => observer.disconnect();
+    },
+    [container],
+  );
+  const getSnapshot = useCallback(() => resolvePortalContainer(container), [container]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 };
 
 export function Root({
@@ -66,13 +82,10 @@ export function Root({
   ...props
 }: RootProps) {
   const themeStyle = toStyle(theme);
+  const resolvedPortalContainer = usePortalContainer(portalContainer);
   const portalContainerRef = useMemo<RefObject<HTMLElement | null>>(
-    () => ({
-      get current() {
-        return validatePortalContainer(portalContainer);
-      },
-    }),
-    [portalContainer],
+    () => ({ current: resolvedPortalContainer }),
+    [resolvedPortalContainer],
   );
   const content = usePart(
     "div",
