@@ -1,6 +1,6 @@
 {
   "name": "domainkit",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Provider-independent DNS provisioning plans and authorization for TypeScript",
   "keywords": [
     "dns",
