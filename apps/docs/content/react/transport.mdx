@@ -7,6 +7,9 @@ seo:
 
 `DomainKit.Root` receives a `Layer<Transport.Service>`. Its controllers run through Effect Atom, which owns request interruption, stale result suppression, and disposal for the React subtree. The service is intentionally application-facing rather than a browser wrapper around provider APIs.
 
+The [host integration guide](/docs/guides/host-integration) shows where the transport belongs in a
+complete browser, application server, and provider architecture.
+
 ```ts
 import { Transport } from "domainkit";
 import * as Layer from "effect/Layer";
@@ -61,7 +64,35 @@ Custom UI can consume `Connection.useModel(domain)` with `useAtomValue(model.sta
 `useAtomSet(model.command)`. Dispatch commands with `Connection.Command.Connect`, `Reuse`, and
 `Retry`; the packaged controller and flow use the same atoms.
 
+## Correlate browser operations with durable attempts
+
+Treat every plan application as a server-side attempt. Persist the plan and its digest before
+returning it to the browser, then require the browser to submit that digest when it asks the server
+to apply the plan.
+
+```text
+browser requests plan
+  -> server plans and persists { attemptId, planDigest, plan }
+  -> browser reviews plan
+  -> browser submits { attemptId, planDigest }
+  -> server authorizes and applies the persisted plan
+  -> server stores the receipt
+```
+
+This keeps retries, authorization decisions, and support investigations attached to one durable
+record instead of trusting a mutable plan sent back by the browser.
+
+## Use product-owned verification when needed
+
+`Transport` exposes provider-backed operations. Public DNS verification is a separate product
+decision: your server can use `Verification.observe` with public resolvers, expose a dedicated
+endpoint, and map its result into your product state without giving the browser resolver or provider
+credentials.
+
 <Callout type="warning" title="No browser credentials">
   A token input may collect a credential, but submit it directly to your authenticated server
   endpoint. Never construct a Cloudflare or Vercel provider client in browser code.
 </Callout>
+
+See the [Transport reference](/docs/reference/transport) for every service method and
+[Observe DNS](/docs/guides/observe-dns) for verification policy choices.

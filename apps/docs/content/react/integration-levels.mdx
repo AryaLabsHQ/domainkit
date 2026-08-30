@@ -1,0 +1,101 @@
+---
+title: Choose an integration level
+description: Choose standalone DNS record primitives, a complete Domain flow, focused lifecycle flows, or direct Effect Atom models for an existing product screen.
+seo:
+  title: Choose a DomainKit React integration level
+---
+
+`@domainkit/react` is not one indivisible widget. Choose the smallest surface that matches the
+lifecycle and structure your product already owns.
+
+## Compare the surfaces
+
+| Surface                                           | Transport required | DomainKit owns                                                                  | Host owns                                                    |
+| ------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `Records.Table`, `Records.Card`, and record parts | No                 | DNS presentation, copy, status, zone-file output                                | Record data and surrounding product state                    |
+| Shadcn registry components                        | No                 | Source-distributed presentation recipes                                         | Copied source, styling, and all behavior                     |
+| `Domain.Flow`                                     | Yes                | Connection, plan review, apply, observation, cleanup entry, disconnect, records | Authenticated transport, persistence, requirements, branding |
+| Focused `Connection.Flow` or `Provisioning.Flow`  | Yes                | One packaged lifecycle recipe                                                   | Surrounding screen and other lifecycles                      |
+| `useModel` plus semantic parts                    | Yes                | Effect Atom state and command semantics                                         | Layout, interaction chrome, composition, product state       |
+
+## Present records without a transport
+
+Choose record primitives when customers still configure DNS manually or your application already
+owns connection and provisioning:
+
+```tsx
+import { Records } from "@domainkit/react";
+import "@domainkit/react/styles.css";
+
+<Records.Table records={records} />;
+```
+
+The transport record is a presentation projection with `id`, `name`, `type`, `value`, and optional
+`priority`. Keep requirement metadata and conflict policy on the server.
+
+## Use the complete domain flow
+
+Choose `Domain.Flow` when one screen should coordinate the complete DomainKit lifecycle:
+
+```tsx
+<DomainKit.Root transport={transport}>
+  <Domain.Flow domain="example.com" records={records} receiptId={receiptId} />
+</DomainKit.Root>
+```
+
+Persist the `receiptId` in the host and supply it after reload so the cleanup entry remains
+available. `Domain.Flow` includes record presentation and DNS observation; use a more focused level
+when your product already owns either surface.
+
+## Compose focused flows
+
+An existing domain screen can use connection, provisioning, verification, and cleanup independently:
+
+```tsx
+<Connection.Flow domain={domain} />
+<Provisioning.Flow connection={connection} records={records} showRecords={false} />
+```
+
+This is the right level when the host has its own DNS table, service-verification lifecycle, or
+cleanup placement. A transport operation may remain intentionally unused by the chosen screen, but
+`DomainKit.Root` still receives the complete transport contract.
+
+## Compose models and parts
+
+Use the model seam when your design system owns the structure and interaction chrome:
+
+```tsx
+const model = Provisioning.useModel(connection, records);
+const state = useAtomValue(model.state);
+const command = useAtomSet(model.command);
+
+if (state._tag === "Review") {
+  return (
+    <Operations.Root lifecycle="provisioning">
+      <Operations.List operations={state.plan.operations} />
+      <HostButton onClick={() => command(Provisioning.Command.Apply())}>
+        Apply approved plan
+      </HostButton>
+    </Operations.Root>
+  );
+}
+```
+
+Packaged flows and controllers consume the same models. Choosing direct models does not create a
+second client state machine.
+
+## Keep these responsibilities in the host
+
+Every integration level leaves these concerns outside the React package:
+
+- authentication and tenant authorization;
+- provider credentials and clients;
+- durable provider authorization, plan, and receipt storage;
+- product-specific DNS requirements and readiness state;
+- callback routes, audit policy, telemetry, and surrounding navigation.
+
+## Next steps
+
+- [Implement the React transport](/docs/react/transport)
+- [Compose and theme parts](/docs/react/composition)
+- [Integrate the complete host lifecycle](/docs/guides/host-integration)

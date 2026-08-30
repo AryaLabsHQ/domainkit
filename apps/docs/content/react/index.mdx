@@ -7,6 +7,11 @@ seo:
   title: React DNS flows on a host-owned transport
 ---
 
+DomainKit React turns the core lifecycle into composable UI recipes. Start with the complete
+`Domain.Flow`, adopt one focused flow at a time, or build entirely from models and parts. The
+[integration levels guide](/docs/react/integration-levels) compares those paths and the host
+responsibilities that remain at each level.
+
 Install the React package with its peer dependencies and opt in to the default stylesheet:
 
 ```sh
@@ -26,7 +31,10 @@ export function DomainSetup() {
 }
 ```
 
-`Domain.Flow` coordinates connection, plan review, apply, verification, receipt-bound cleanup, and removal of the current domain grant. `DomainKit.Root` runs the host transport layer through Effect Atom. The package never receives provider credentials in the browser; every operation goes through your authenticated transport.
+`Domain.Flow` coordinates connection, plan review, apply, verification, receipt-bound cleanup, and
+removal of the current domain grant. `DomainKit.Root` runs the host transport layer through Effect
+Atom. The package never receives provider credentials in the browser; every operation goes through
+your authenticated transport.
 
 React 19 is required.
 
@@ -43,6 +51,9 @@ React 19 is required.
 Server rendering is supported. Clipboard access, downloads, and navigation occur only from browser interactions.
 
 <CardGroup cols={2}>
+  <Card title="Integration levels" href="/docs/react/integration-levels" icon="layers">
+    Compare complete screens, focused flows, model hooks, and low-level parts.
+  </Card>
   <Card title="Workshop" href="/workshop" icon="play">
     Exercise every shipped story, theme, provider, lifecycle state, and record control.
   </Card>
@@ -56,3 +67,10 @@ Server rendering is supported. Clipboard access, downloads, and navigation occur
     Copy model-free DNS presentation components directly into your application.
   </Card>
 </CardGroup>
+
+## Keep the host boundary explicit
+
+The React package owns interaction recipes and client-side orchestration. Your application still
+owns authentication, authorization, durable attempts, secrets, provider credentials, and the
+server-side `Transport` implementation. See
+[Integrate with your host application](/docs/guides/host-integration) for the end-to-end boundary.

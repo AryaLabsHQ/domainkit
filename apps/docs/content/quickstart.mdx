@@ -1,29 +1,43 @@
 ---
-title: Your first DNS plan
-description: Install DomainKit, describe one DNS record, create a reviewable plan, authorize its digest, and apply it through Cloudflare or Vercel.
+title: Your first safe DNS plan
+description: Create, review, authorize, and apply a DNS plan against an in-memory provider, then confirm that a second plan is an exact no-op.
 sidebar:
   label: Quickstart
   order: 2
 seo:
-  title: Create a reviewable DNS plan in TypeScript
+  title: Create your first safe DNS plan with DomainKit
 ---
 
-## Install
+In this tutorial, we will create one DNS requirement, review the resulting plan, authorize its exact
+digest, apply it to an in-memory provider, and plan the same requirement again. The second plan will
+show a no-op because the desired record already exists.
+
+The exercise does not need a provider account, network request, database, or browser.
+
+## Prerequisites
+
+- Node.js 24.10 or newer, or Bun 1.4 or newer.
+- A TypeScript project that uses ESM.
+
+## Install DomainKit
 
 ```sh
 npm install domainkit effect@rc
 ```
 
-`effect` is a peer dependency and the package root is Effect-native.
+`effect` is a peer dependency. The package root is the canonical Effect API; we will use it for the
+whole lifecycle.
 
-## Requirements
+## Create the exercise
 
-DomainKit parses external DNS input through schemas. Each required record also names its ownership, provenance, purpose, and conflict policy.
+Create `quickstart.ts`:
 
 ```ts
-import { DnsRecord, DomainName } from "domainkit";
+import { Effect, Layer } from "effect";
+import { Digest, DnsRecord, DomainName, Provisioning } from "domainkit";
+import { InMemoryDnsProvider } from "domainkit/testing";
 
-const record = DnsRecord.parse({
+const requirement = DnsRecord.parse({
   _tag: "CNAME",
   metadata: {
     ownership: "customer",
@@ -35,56 +49,99 @@ const record = DnsRecord.parse({
   target: "tracking.example.net",
   ttl: 300,
 });
+
+const runtimeLayer = Layer.merge(InMemoryDnsProvider.layer(), Digest.webCryptoLayer);
+
+const program = Effect.gen(function* () {
+  const { plan } = yield* Provisioning.create({
+    requirements: [requirement],
+    target: Provisioning.Target.ExactZone({
+      zone: DomainName.parse("example.com"),
+    }),
+  });
+
+  console.log(
+    "First plan:",
+    plan.operations.map(({ _tag }) => _tag),
+  );
+
+  const authorization = yield* Provisioning.authorize(plan);
+  const receipt = yield* Provisioning.apply({ authorization, plan });
+
+  console.log("Receipt:", receipt.status);
+
+  const { plan: nextPlan } = yield* Provisioning.create({
+    requirements: [requirement],
+    target: Provisioning.Target.ExactZone({
+      zone: DomainName.parse("example.com"),
+    }),
+  });
+
+  console.log(
+    "Second plan:",
+    nextPlan.operations.map(({ _tag }) => _tag),
+  );
+}).pipe(Effect.provide(runtimeLayer));
+
+await Effect.runPromise(program);
 ```
 
-## Plan and apply
+Notice that the provider and Web Crypto capabilities are supplied once around the complete program.
+Every create, authorize, and apply operation participates in the same in-memory provider lifecycle.
 
-```ts
-import { Effect, Layer } from "effect";
-import { Digest, DnsProvider, Provisioning } from "domainkit";
+## Run it
 
-const program = Provisioning.create({
-  requirements: [record],
-  target: Provisioning.Target.ExactZone({
-    zone: DomainName.parse("example.com"),
-  }),
-}).pipe(
-  Effect.flatMap(({ plan }) =>
-    Provisioning.authorize(plan).pipe(
-      Effect.flatMap((authorization) => Provisioning.apply({ authorization, plan })),
-    ),
-  ),
-  Effect.provide(Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer)),
-);
+```sh
+npx tsx quickstart.ts
 ```
+
+The output should have this shape:
 
 ```text
-requirements
-  -> read provider state
-  -> immutable plan + digest
-  -> user review
-  -> digest-bound authorization
-  -> apply
-  -> receipt
+First plan: [ 'create' ]
+Receipt: complete
+Second plan: [ 'noop' ]
 ```
 
-<Callout type="warning" title="Server-side credentials">
-  The `provider` talks to Cloudflare or Vercel. Do not construct it in browser code or pass its
-  token to `@domainkit/react`.
-</Callout>
+The digest and operation identifiers are deterministic but intentionally omitted from this output.
+The important result is the state transition:
 
-## Promise boundary
+```text
+missing record
+  -> create plan
+  -> digest-bound authorization
+  -> apply receipt
+  -> exact record
+  -> noop plan
+```
 
-Use `domainkit/promise` only where a foreign framework requires Promise-returning callbacks. It delegates to the same Effect programs and does not maintain a second planner or authorization model.
+## What happened
+
+- `DnsRecord.parse` validated a complete requirement, including ownership, purpose, conflict policy,
+  and TTL.
+- `Provisioning.create` read the provider and produced an immutable plan containing one `create`.
+- `Provisioning.authorize` approved the exact plan digest and its create operation.
+- `Provisioning.apply` revalidated provider state, created the record, and returned a durable receipt.
+- The second `Provisioning.create` observed the exact record and produced a `noop` instead of writing
+  again.
+
+The in-memory provider follows the same portable contract as a live provider. It proves the
+DomainKit lifecycle without introducing credentials, callback routes, persistence, or provider
+account selection into the first lesson.
+
+## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Plans" href="/docs/core/plans" icon="file">
-    Follow the provisioning and cleanup lifecycle.
+  <Card title="Understand plans and receipts" href="/docs/core/plans" icon="file">
+    Learn why authorization is digest-bound and cleanup is a separate lifecycle.
   </Card>
-  <Card title="Connections" href="/docs/core/connections" icon="link">
-    Add OAuth, integrations, tokens, and reusable account grants.
+  <Card title="Integrate your application" href="/docs/guides/host-integration" icon="server">
+    Map host identity, persistence, endpoints, and credentials around the core lifecycle.
   </Card>
-  <Card title="Verification" href="/docs/core/verification" icon="check">
-    Observe public DNS, provider state, or both through one tagged operation.
+  <ProviderCard title="Connect Cloudflare" href="/docs/providers/cloudflare" provider="cloudflare">
+    Replace the in-memory provider with server-side OAuth or a scoped API token.
+  </ProviderCard>
+  <Card title="Choose a React integration" href="/docs/react/integration-levels" icon="component">
+    Use record primitives, complete flows, or host-composed lifecycle models.
   </Card>
 </CardGroup>

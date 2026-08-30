@@ -1,0 +1,78 @@
+---
+title: Implement a DNS provider
+description: Implement DomainKit's narrow provider contract and prove planning, stale-state, partial-apply, and cleanup semantics with the conformance runner.
+seo:
+  title: Implement a DomainKit DNS provider adapter
+---
+
+Implement a provider when DomainKit does not include the authoritative DNS API your application
+uses. The adapter owns provider HTTP behavior; DomainKit continues to own portable planning,
+authorization, receipts, verification, and cleanup.
+
+## Implement the contract
+
+```ts
+import { DnsProvider } from "domainkit";
+
+export const provider: DnsProvider.Interface = {
+  id: "example-provider",
+  listRecords: (zone) => listAllPortableRecords(zone),
+  getRecord: (zone, providerRecordId) => getPortableRecord(zone, providerRecordId),
+  createRecord: (zone, record) => createPortableRecord(zone, record),
+  deleteRecord: (zone, providerRecordId) => deletePortableRecord(zone, providerRecordId),
+};
+```
+
+The adapter must:
+
+- return complete paginated readback for the authoritative zone;
+- preserve stable provider record IDs for receipt-bound cleanup;
+- decode provider responses before they enter domain logic;
+- normalize portable record values without erasing provider-only records;
+- classify provider failures as `DnsProvider.Error` without including credentials or raw response
+  bodies;
+- honor interruption and avoid hidden retry loops that outlive the caller's Effect lifecycle.
+
+Represent a provider record DomainKit cannot plan as `DnsRecord.Opaque`. Ignoring it completely can
+hide CNAME or name-set conflicts.
+
+## Keep credentials outside the interface
+
+Construct the provider from a host-owned secret and non-secret provider context. The resulting
+`DnsProvider.Interface` exposes DNS capabilities, not credential persistence or tenant identity.
+
+## Run the conformance contract
+
+```ts
+import { Effect } from "effect";
+import { DomainName } from "domainkit";
+import { ProviderConformance } from "domainkit/testing";
+
+const report = await Effect.runPromise(
+  ProviderConformance.run({
+    makeProvider: ProviderConformance.fromAsync(() => makeFreshPromiseProvider()),
+    zone: DomainName.parse("example.com"),
+  }),
+);
+```
+
+Each `makeProvider` call must return a fresh fixture. The contract covers:
+
+- complete create/readback/cleanup;
+- exact no-op;
+- conflict without mutation;
+- stale-plan rejection;
+- partial apply with a resumable receipt;
+- receipt-bound deletion and drift blocking.
+
+## Add live-provider coverage
+
+The deterministic conformance runner proves DomainKit semantics against your adapter. Add a
+credential-gated live profile for provider-specific pagination, authentication, error decoding,
+record normalization, and delete/readback behavior. Use disposable records in a dedicated test zone.
+
+## Related documentation
+
+- [Provider capability reference](/docs/reference/providers)
+- [Plans, authorization, and receipts](/docs/core/plans)
+- [Troubleshooting provider adapters](/docs/guides/troubleshooting#providers)

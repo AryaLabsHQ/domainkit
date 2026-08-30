@@ -1,7 +1,7 @@
 import { defineMeta } from "blume";
 
 export default defineMeta({
-  order: 3,
+  order: 4,
   pages: ["plans", "connections", "verification"],
-  title: "Core",
+  title: "Concepts",
 });

@@ -1,0 +1,139 @@
+---
+title: Troubleshooting
+description: Diagnose installation, provider connection, zone discovery, stale plans, partial applies, cleanup blocks, observation, and React transport failures.
+seo:
+  title: Troubleshoot DomainKit integrations
+---
+
+Start with the tagged failure or outcome. Do not replace distinct authorization, provider, stale,
+conflict, propagation, and transport failures with one generic retry state.
+
+## Installation and exports
+
+### A module subpath cannot be resolved
+
+Only `domainkit`, `domainkit/promise`, `domainkit/testing`, and package metadata are exported. Replace
+historical `domainkit/effect`, provider, adapter, or compatibility subpaths with namespaces from the
+canonical roots.
+
+### Core and React declarations disagree
+
+Install matching `domainkit` and `@domainkit/react` versions. Remove lockfile overrides or packed
+artifacts that resolve the two packages to different public transport contracts, then rebuild the
+consumer from a clean dependency install.
+
+### React or Effect peer errors appear
+
+Check the current package manifests. DomainKit 0.3.1 expects Effect 4 RC; `@domainkit/react` expects
+React and ReactDOM 19 plus `@effect/atom-react` 4 RC.
+
+## Connections
+
+### The provider redirects but callback completion fails
+
+- Confirm the callback uses the same provider flow configuration and redirect URI as the start
+  route.
+- Confirm the continuation exists, has not expired, and has not already been consumed.
+- Check state/PKCE validation before retrying the exchange.
+- Restart consent instead of reconstructing missing continuation state.
+
+### A credential is valid but no account or zone is found
+
+- Verify the known domain and its parent zone are visible to the credential.
+- Check the required DNS read capability and the provider-specific account/team context.
+- Treat multiple candidates as a selection problem; do not choose an account ID arbitrarily.
+
+### Reuse is rejected
+
+The existing authorization must belong to the same host owner, remain active, cover the requested
+provider capability, and prove authority for the new domain. Cross-owner, expired, or revoking
+authorizations fail closed.
+
+## Plans and apply
+
+### The plan contains a conflict
+
+Read the conflicting existing records. DomainKit will not overwrite them. Ask the user to resolve
+the incompatible state, change the product requirement, or continue through a manual path.
+
+### Apply reports a stale plan
+
+Provider state changed after review. Discard the attempt, create a fresh plan, show the new
+operations, and require a new digest authorization.
+
+### Apply completed partially
+
+Persist the receipt carried by `PartialApplyError` before doing anything else. Report the confirmed
+writes separately from the failed operation. Do not describe the provider sequence as rolled back or
+atomic.
+
+## Cleanup
+
+### Cleanup cannot be planned
+
+Confirm that the source plan and receipt belong to the same provider and zone and that every created
+record has a provider record ID. A missing or drifted record intentionally blocks automatic cleanup.
+
+### Cleanup completed partially
+
+Persist the partial deletion receipt. Recreate or reload the same cleanup plan as appropriate for
+your expiry model, authorize the remaining operations, and pass the prior receipt when resuming.
+
+## Observation
+
+### Provider state matches but public DNS is pending
+
+The authoritative write exists, but recursive resolvers have not observed it. Preserve the source
+distinction and continue your host's propagation polling policy.
+
+### Observation is unavailable
+
+Inspect the resolver evidence for timeouts and failures. `Unavailable` is not proof that the record
+is missing and should not be presented as propagation delay.
+
+### Observation is a mismatch
+
+Compare normalized values, record type, name, priority, and provider/public evidence. A mismatch
+means DNS answered with different data; waiting alone may not fix it.
+
+## Providers
+
+### Planning misses records returned by the provider UI
+
+Check pagination and normalization in the adapter. Preserve provider-only record types as opaque
+observations so they can still participate in name conflicts.
+
+### Conformance fails after a successful create
+
+Verify that `createRecord` returns a stable record ID and that a fresh `listRecords` and `getRecord`
+can read the exact normalized record. The conformance contract expects complete readback, not a local
+write-through cache.
+
+## React transport
+
+### The UI stays in a loading or submitting state
+
+Confirm every `Transport.Service` operation resolves or fails through the Effect channel. Do not
+leave an HTTP client Promise pending after navigation or component disposal.
+
+### A stale request replaces newer state
+
+Use the packaged models and one stable `DomainKit.Root` transport Layer for the mounted lifecycle.
+Avoid recreating transport identity during an active session.
+
+### OAuth navigation does not match the host router
+
+Pass a `navigate` function to `DomainKit.Root`. The default browser behavior assigns the returned
+authorization URL directly.
+
+## Collect useful evidence
+
+When reporting a problem, include:
+
+- installed core, React, Effect, and React versions;
+- runtime and bundler;
+- provider and connection method without credentials;
+- operation and tagged failure/outcome;
+- plan/provider/zone identifiers with secrets removed;
+- whether the failure occurred in provider readback, public DNS, host transport, or product state;
+- a minimal reproduction using `domainkit/testing` when possible.
