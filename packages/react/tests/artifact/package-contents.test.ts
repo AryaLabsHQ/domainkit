@@ -47,6 +47,10 @@ describe("packed React package", () => {
   });
 
   it("declares a compatible packed DomainKit runtime", async () => {
+    const sourceRange = packageJson.dependencies.domainkit;
+    expect(sourceRange).toMatch(/^workspace:\^[0-9]+\.[0-9]+\.[0-9]+$/);
+    expect(satisfies(corePackageJson.version, sourceRange.slice("workspace:".length))).toBe(true);
+
     const directory = await mkdtemp(join(tmpdir(), "domainkit-react-package-"));
     try {
       const before = new Set(await readdir(directory));
