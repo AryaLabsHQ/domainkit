@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import * as Cleanup from "./cleanup.tsx";
 import * as Connection from "./connection.tsx";
 import * as Provisioning from "./provisioning.tsx";
+import * as Provider from "./provider.tsx";
 import * as Verification from "./verification.tsx";
 import type { ApplyResult, DnsRecord } from "./transport.ts";
 
@@ -18,7 +19,7 @@ export function Flow({ domain, receiptId, records }: FlowProps) {
   const state = connection.state;
   return (
     <Connection.Root status={state._tag}>
-      <Connection.Status state={state} />
+      {state._tag === "Connected" ? null : <Connection.Status state={state} />}
       {state._tag === "Failure" && (state.retry === "safe" || state.retry === "unknown") ? (
         <Connection.RetryAction controller={connection} />
       ) : null}
@@ -29,11 +30,19 @@ export function Flow({ domain, receiptId, records }: FlowProps) {
         </BaseDialog.Root>
       ) : null}
       {state._tag === "Connected" ? (
-        <ConnectedFlow
-          connection={state}
-          {...(receiptId === undefined ? {} : { initialReceiptId: receiptId })}
-          records={records}
-        />
+        <div data-domainkit-part="connected-shell">
+          <div data-domainkit-part="connected-card">
+            <div data-domainkit-part="connected-identity">
+              <Provider.Mark provider={state.provider} />
+              <Connection.Status state={state} />
+            </div>
+          </div>
+          <ConnectedFlow
+            connection={state}
+            {...(receiptId === undefined ? {} : { initialReceiptId: receiptId })}
+            records={records}
+          />
+        </div>
       ) : null}
     </Connection.Root>
   );
@@ -76,7 +85,9 @@ function ConnectedFlow({
       <Provisioning.Flow connection={connection} onApplied={rememberReceipt} records={records} />
       <Verification.Status config={{ connection, domain: connection.domain, records }} />
       {receiptId === undefined ? null : (
-        <Cleanup.Flow connection={connection} receiptId={receiptId} />
+        <div data-domainkit-part="connected-danger">
+          <Cleanup.Flow connection={connection} receiptId={receiptId} />
+        </div>
       )}
     </>
   );

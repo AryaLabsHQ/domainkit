@@ -129,10 +129,20 @@ export function Flow({ connection, receiptId, ...props }: FlowProps) {
     {
       children: (
         <>
-          {state._tag === "Removed" ? <p>{messages.domainDisconnected}</p> : null}
-          {state._tag === "Cleaned" ? <p>{messages.cleanupComplete}</p> : null}
+          {state._tag === "Removed" ? (
+            <p data-domainkit-part="flow-outcome" data-tone="success">
+              {messages.domainDisconnected}
+            </p>
+          ) : null}
+          {state._tag === "Cleaned" ? (
+            <p data-domainkit-part="flow-outcome" data-tone="success">
+              {messages.cleanupComplete}
+            </p>
+          ) : null}
           {state._tag === "Partial" || state._tag === "Failure" || state._tag === "Stale" ? (
-            <p role="alert">{state._tag === "Partial" ? messages.cleanupPartial : state.message}</p>
+            <p data-domainkit-part="flow-outcome" data-tone="danger" role="alert">
+              {state._tag === "Partial" ? messages.cleanupPartial : state.message}
+            </p>
           ) : null}
           <BaseDialog.Root
             onOpenChange={(open) => {
@@ -156,31 +166,49 @@ export function Flow({ connection, receiptId, ...props }: FlowProps) {
                   data-domainkit-root=""
                   style={themeStyle}
                 >
-                  <BaseDialog.Title>{messages.reviewCleanup}</BaseDialog.Title>
-                  <BaseDialog.Description>{messages.cleanupConsent}</BaseDialog.Description>
-                  <ul data-domainkit-part="cleanup-operations">
-                    {plan.operations.map((operation) => (
-                      <li data-operation={operation._tag} key={operation.id}>
-                        <strong>{operation._tag}</strong> {operation.record.type}{" "}
-                        {operation.record.name}{" "}
-                        {operation._tag === "Blocked" ? `— ${operation.reason}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    data-domainkit-part="cleanup-apply"
-                    disabled={
-                      state._tag === "Cleaning" ||
-                      plan.operations.some((operation) => operation._tag === "Blocked")
-                    }
-                    onClick={() => void controller.apply()}
-                    type="button"
-                  >
-                    {state._tag === "Cleaning" ? messages.cleaningDns : messages.applyCleanup}
-                  </button>
-                  <BaseDialog.Close data-domainkit-part="dialog-cancel">
-                    {messages.cancel}
-                  </BaseDialog.Close>
+                  <div data-domainkit-part="dialog-header">
+                    <div data-domainkit-part="dialog-heading">
+                      <BaseDialog.Title data-domainkit-part="dialog-title">
+                        {messages.reviewCleanup}
+                      </BaseDialog.Title>
+                      <BaseDialog.Description data-domainkit-part="dialog-description">
+                        {messages.cleanupConsent}
+                      </BaseDialog.Description>
+                    </div>
+                    <BaseDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
+                      ×
+                    </BaseDialog.Close>
+                  </div>
+                  <div data-domainkit-part="dialog-body">
+                    <ul data-domainkit-part="cleanup-operations">
+                      {plan.operations.map((operation) => (
+                        <li data-operation={operation._tag} key={operation.id}>
+                          <span data-domainkit-part="operation-kind">{operation._tag}</span>{" "}
+                          <strong>{operation.record.type}</strong>{" "}
+                          <span data-domainkit-part="operation-record">
+                            {operation.record.name}
+                            {operation._tag === "Blocked" ? ` ${operation.reason}` : ""}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div data-domainkit-part="dialog-footer">
+                    <BaseDialog.Close data-domainkit-part="dialog-cancel">
+                      {messages.cancel}
+                    </BaseDialog.Close>
+                    <button
+                      data-domainkit-part="cleanup-apply"
+                      disabled={
+                        state._tag === "Cleaning" ||
+                        plan.operations.some((operation) => operation._tag === "Blocked")
+                      }
+                      onClick={() => void controller.apply()}
+                      type="button"
+                    >
+                      {state._tag === "Cleaning" ? messages.cleaningDns : messages.applyCleanup}
+                    </button>
+                  </div>
                 </BaseDialog.Popup>
               </BaseDialog.Portal>
             )}

@@ -406,14 +406,24 @@
   min-width: 0;
 }
 
-:where([data-domainkit-part="connected-actions"]) {
+:where(
+  [data-domainkit-part="provisioning-flow"],
+  [data-domainkit-part="verification-status"],
+  [data-domainkit-part="cleanup-flow"]
+) {
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  width: 100%;
 }
 
-:where([data-domainkit-part="provisioning-flow"], [data-domainkit-part="verification-status"]) {
-  display: contents;
+:where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="records-panel"]),
+:where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="flow-outcome"]),
+:where([data-domainkit-part="verification-status"] > ul),
+:where([data-domainkit-part="verification-status"] > p),
+:where([data-domainkit-part="cleanup-flow"] > [data-domainkit-part="flow-outcome"]) {
+  flex: 1 1 100%;
 }
 
 :where([data-domainkit-part="records-panel"]) {
@@ -521,6 +531,11 @@
   font-size: 0.75rem;
 }
 
+:where([data-operation="AlreadyAbsent"] [data-domainkit-part="operation-kind"]) {
+  background: var(--domainkit-background);
+  color: var(--domainkit-muted);
+}
+
 :where([data-domainkit-part="connected-danger"]) {
   border-top: 1px solid var(--domainkit-border);
   display: flex;
@@ -528,10 +543,6 @@
   gap: 0.5rem;
   padding-top: 0.75rem;
   width: 100%;
-}
-
-:where([data-domainkit-part="cleanup-flow"]) {
-  display: contents;
 }
 
 :where([data-domainkit-part="flow-outcome"]) {

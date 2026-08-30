@@ -7,36 +7,40 @@ export interface TableProps extends PartProps<"table", { readonly count: number 
 }
 
 export function Table({ records, ...props }: TableProps) {
-  return usePart(
-    "table",
-    props,
-    { count: records.length },
-    {
-      children: (
-        <>
-          <thead>
-            <tr>
-              <th scope="col">Type</th>
-              <th scope="col">Name</th>
-              <th scope="col">Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {records.map((record) => (
-              <tr key={record.id}>
-                <td>{record.type}</td>
-                <td>{record.name}</td>
-                <td>
-                  {record.priority === undefined ? "" : `${record.priority} `}
-                  {record.value}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </>
-      ),
-      "data-domainkit-part": "records-table",
-    },
+  return (
+    <div data-domainkit-part="records-panel">
+      {usePart(
+        "table",
+        props,
+        { count: records.length },
+        {
+          children: (
+            <>
+              <thead>
+                <tr>
+                  <th scope="col">Type</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((record) => (
+                  <tr key={record.id}>
+                    <td>{record.type}</td>
+                    <td>{record.name}</td>
+                    <td>
+                      {record.priority === undefined ? "" : `${record.priority} `}
+                      {record.value}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </>
+          ),
+          "data-domainkit-part": "records-table",
+        },
+      )}
+    </div>
   );
 }
 

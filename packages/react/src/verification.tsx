@@ -82,7 +82,9 @@ export function Status({ config, ...props }: StatusProps) {
               ))}
             </ul>
           ) : state._tag === "Failure" ? (
-            <p role="alert">{state.message}</p>
+            <p data-domainkit-part="flow-outcome" data-tone="danger" role="alert">
+              {state.message}
+            </p>
           ) : null}
           <button
             data-domainkit-part="observe-action"
