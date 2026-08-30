@@ -11,8 +11,7 @@ export default defineConfig({
     output: "static",
     site: "https://domain-kit.dev",
   },
-  description:
-    "Reviewable DNS provisioning for TypeScript, with React flows you host.",
+  description: "Reviewable DNS provisioning for TypeScript, with React flows you host.",
   github: {
     dir: "apps/docs",
     owner: "AryaLabsHQ",
