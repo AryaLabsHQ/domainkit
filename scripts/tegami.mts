@@ -4,7 +4,7 @@ import { tegami, type TegamiPlugin } from "tegami";
 import { runCli } from "tegami/cli";
 import { github } from "tegami/plugins/github";
 
-import rootPackage from "../package.json" with { type: "json" };
+import rootPackage from "../packages/domainkit/package.json" with { type: "json" };
 
 const PACKAGE_ID = "npm:domainkit";
 const REPOSITORY = "AryaLabsHQ/domainkit";
