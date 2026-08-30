@@ -1,0 +1,46 @@
+---
+title: Cloudflare
+description: Connect Cloudflare through OAuth or scoped API tokens, discover the owning account from a visible zone, and provision DNS safely.
+---
+
+Cloudflare supports OAuth and API-token connection methods. Both produce the same durable DomainKit authorization aggregate and provider context.
+
+## OAuth
+
+```ts
+import { Cloudflare, Connection, DomainName, Secret } from "domainkit";
+
+const flow = Cloudflare.Auth.oauthFlow({
+  capabilities: ["dns:read", "dns:write"],
+  client: {
+    clientId,
+    clientSecret: Secret.make(clientSecret),
+  },
+  clientAuth: "client_secret_basic",
+  domain: DomainName.parse("example.com"),
+  redirectUri,
+  scopes: scopeIds,
+});
+
+const result = await Connection.start({
+  authorizedById,
+  grant: { _tag: "account", excludedDomains: [] },
+  method: Connection.Method.Interactive({ continuations, flow }),
+  ownerId,
+  repository,
+});
+```
+
+If the credential can see the requested domain, DomainKit resolves the Cloudflare account from the zone. The customer does not need to find or type an account ID.
+
+## API token
+
+```ts
+const method = Cloudflare.Auth.tokenConnectionMethod({
+  capabilities: ["dns:read", "dns:write"],
+  domain: DomainName.parse("example.com"),
+  token: Secret.make(apiToken),
+});
+```
+
+Ask for the narrowest token that covers the intended zones and DNS permissions. DomainKit records declared, introspected, or exercised capability evidence instead of treating scope strings as proof.

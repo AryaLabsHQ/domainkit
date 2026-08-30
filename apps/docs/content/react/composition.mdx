@@ -1,0 +1,60 @@
+---
+title: Composition and theming
+description: Compose DomainKit React parts with Base UI render props, host-owned icons and provider marks, messages, and CSS design tokens.
+---
+
+Complete flows are conveniences over semantic parts. Every public part accepts Base UI's `render` prop plus state-aware `className` and `style` values.
+
+```tsx
+<Connection.OAuthAction
+  controller={controller}
+  label="Connect"
+  render={<MyButton variant="primary" />}
+/>
+```
+
+## Theme at the root
+
+```tsx
+<DomainKit.Root
+  colorScheme="inherit"
+  icons={{ copy: <Copy />, copied: <Check />, download: <Download /> }}
+  marks={{ cloudflare: <CloudflareMark />, vercel: <VercelMark /> }}
+  messages={{ connectProvider: (name) => `Connect ${name}` }}
+  theme={{ accent: "var(--brand-primary)", radius: "var(--radius-md)" }}
+  transport={transport}
+>
+  {children}
+</DomainKit.Root>
+```
+
+The opt-in stylesheet reads `--domainkit-*` variables. Theme props set those variables without replacing the host font, palette, or icon system.
+
+## Build a records table from parts
+
+```tsx
+<Records.Root>
+  <Records.Header>
+    <Records.Row>
+      <Records.Head scope="col">Type</Records.Head>
+      <Records.Head scope="col">Name</Records.Head>
+      <Records.Head scope="col">Value</Records.Head>
+    </Records.Row>
+  </Records.Header>
+  <Records.Body>
+    {records.map((record) => (
+      <Records.Row key={record.id}>
+        <Records.Cell>{record.type}</Records.Cell>
+        <Records.Cell>
+          <Records.CopyValue value={record.name} />
+        </Records.Cell>
+        <Records.Cell>
+          <Records.CopyValue value={record.value} />
+        </Records.Cell>
+      </Records.Row>
+    ))}
+  </Records.Body>
+</Records.Root>
+```
+
+Presentational record parts accept browser-safe records directly and do not require `DomainKit.Root` or a transport.

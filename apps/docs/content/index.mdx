@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: Build provider-independent domain connection and reviewable, authorized DNS provisioning into your TypeScript product.
+description: Build provider-independent domain connection, reviewable DNS provisioning, and composable React flows into your TypeScript product.
 sidebar:
   order: 1
 ---
@@ -13,4 +13,42 @@ The core package is Effect-native and includes a Promise facade. `@domainkit/rea
 domainkit
 ```
 
-The complete SDK and React guides will live here. Until then, see the [repository](https://github.com/AryaLabsHQ/domainkit) for package documentation and examples.
+<CardGroup cols={2}>
+  <Card title="Quickstart" href="/docs/quickstart" icon="rocket">
+    Install DomainKit and build your first reviewable DNS plan.
+  </Card>
+  <Card title="Plans and receipts" href="/docs/core/plans" icon="file">
+    Understand the immutable plan, authorization, apply, and cleanup lifecycle.
+  </Card>
+  <Card title="Connect providers" href="/docs/core/connections" icon="link">
+    Add OAuth, integration, or API-token authorization without exposing credentials to the browser.
+  </Card>
+  <Card title="React UI" href="/docs/react" icon="component">
+    Use complete flows or compose semantic parts into your own product.
+  </Card>
+  <Card title="Cloudflare" href="/docs/providers/cloudflare" icon="cloud">
+    Connect with OAuth or scoped API tokens and discover the owning account.
+  </Card>
+  <Card title="Vercel" href="/docs/providers/vercel" icon="triangle">
+    Preserve personal or team context from a Vercel Integration installation.
+  </Card>
+</CardGroup>
+
+## Design principles
+
+- **Review before mutation.** A plan lists creates, exact no-ops, and conflicts before any write.
+- **Authorize the digest.** Apply accepts the reviewed plan plus authorization for that exact digest.
+- **Fail closed.** DomainKit never silently overwrites incompatible DNS state.
+- **Keep the host in control.** Your application owns credential storage, consent, callback routes, persistence, and audit history.
+- **One implementation.** The Effect API is canonical; the Promise API delegates to it.
+
+## Packages
+
+| Package                                                   | Use it for                                                                    |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `domainkit`                                               | Promise facade, provider integrations, schemas, and portable web-runtime APIs |
+| `domainkit/effect`                                        | Effect-native services, programs, Layers, and typed failures                  |
+| `domainkit/cloudflare` / `domainkit/vercel`               | Promise provider entry points                                                 |
+| `domainkit/effect/cloudflare` / `domainkit/effect/vercel` | Effect provider entry points                                                  |
+| `domainkit/testing`                                       | In-memory capabilities and provider conformance tests                         |
+| `@domainkit/react`                                        | Browser-safe flows and DNS record primitives over a host-owned transport      |

@@ -1,0 +1,34 @@
+---
+title: Verification
+description: Observe DNS through one tagged operation that can combine public wire-format resolvers with authoritative provider readback.
+---
+
+`Verification.observe` is the only verification operation. Public DNS is enabled by default and uses concurrent RFC wire-format DNS-over-HTTPS resolvers.
+
+```ts
+import { Verification } from "domainkit";
+
+const result = await Verification.observe({ record });
+```
+
+Provider observation is explicit:
+
+```ts
+const result = await Verification.observe({
+  provider: Verification.Provider.Enabled({ provider, zone }),
+  publicDns: Verification.PublicDns.Disabled(),
+  record,
+});
+```
+
+When both sources are enabled, both must match before the result is `Verified`. Results preserve the full tagged evidence instead of collapsing transport failures, negative answers, mismatches, and propagation delay into one boolean.
+
+| `_tag`        | Meaning                                                   |
+| ------------- | --------------------------------------------------------- |
+| `Verified`    | Every requested source matched                            |
+| `Pending`     | A requested source has not observed the desired state yet |
+| `Mismatch`    | DNS exists but differs from the requirement               |
+| `Unavailable` | Observation could not produce trustworthy evidence        |
+| `NotObserved` | That source was deliberately disabled                     |
+
+The default resolver pool uses `AnyMatch`. Supply a custom pool to choose tagged `AllMatch` or `Quorum` policies when your reliability model requires them.
