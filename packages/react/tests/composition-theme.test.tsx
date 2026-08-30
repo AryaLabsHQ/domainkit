@@ -147,6 +147,27 @@ describe("composition and theme", () => {
     });
   });
 
+  it("moves an open dialog back when its portal is adopted by another document", async () => {
+    const transport = Testing.makeFakeTransport({ inspect: disconnected });
+    const container = document.createElement("div");
+    document.body.append(container);
+    render(
+      <DomainKit.Root portalContainer={container} transport={transport}>
+        <Connection.Flow domain="mail.example.com" />
+      </DomainKit.Root>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /^Connect(?: Cloudflare)?$/ }));
+    expect(container.querySelector('[data-domainkit-part="connection-dialog"]')).toBeTruthy();
+
+    const otherDocument = document.implementation.createHTMLDocument("Other");
+    otherDocument.body.append(otherDocument.adoptNode(container));
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-domainkit-part="connection-dialog"]')).toBeNull();
+      expect(document.body.querySelector('[data-domainkit-part="connection-dialog"]')).toBeTruthy();
+    });
+  });
+
   it("loads known provider marks from integrations.sh and falls back to a letter", () => {
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
     const { rerender } = render(

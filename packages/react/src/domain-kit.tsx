@@ -51,22 +51,31 @@ const navigateInBrowser = (url: string): void => {
   window.location.assign(url);
 };
 
-const resolvePortalContainer = (container: HTMLElement | null): HTMLElement | null => {
-  if (container === null) return null;
-  return container.getRootNode() === container.ownerDocument ? container : null;
+const resolvePortalContainer = (
+  container: HTMLElement | null,
+  ownerDocument: Document | null,
+): HTMLElement | null => {
+  if (container === null || ownerDocument === null) return null;
+  return container.ownerDocument === ownerDocument && container.getRootNode() === ownerDocument
+    ? container
+    : null;
 };
 
 const usePortalContainer = (container: HTMLElement | null): HTMLElement | null => {
+  const ownerDocument = useMemo(() => container?.ownerDocument ?? null, [container]);
   const subscribe = useCallback(
     (notify: () => void) => {
-      if (container === null || typeof MutationObserver === "undefined") return () => {};
+      if (ownerDocument === null || typeof MutationObserver === "undefined") return () => {};
       const observer = new MutationObserver(notify);
-      observer.observe(container.ownerDocument, { childList: true, subtree: true });
+      observer.observe(ownerDocument, { childList: true, subtree: true });
       return () => observer.disconnect();
     },
-    [container],
+    [ownerDocument],
   );
-  const getSnapshot = useCallback(() => resolvePortalContainer(container), [container]);
+  const getSnapshot = useCallback(
+    () => resolvePortalContainer(container, ownerDocument),
+    [container, ownerDocument],
+  );
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 };
 
