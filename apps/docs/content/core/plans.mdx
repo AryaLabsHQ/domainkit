@@ -10,7 +10,7 @@ DomainKit treats DNS provisioning as a reviewed transaction, even when the provi
 | Artifact      | Meaning                                                                             |
 | ------------- | ----------------------------------------------------------------------------------- |
 | Requirement   | The DNS state your product needs, including ownership and conflict policy           |
-| Plan          | A snapshot of `Create`, `Noop`, and `Conflict` operations with an expiry and digest |
+| Plan          | A snapshot of `create`, `noop`, and `conflict` operations with an expiry and digest |
 | Authorization | Approval for the exact plan digest and selected operations                          |
 | Receipt       | What an apply attempt actually changed, including partial outcomes                  |
 | Cleanup plan  | A fresh, receipt-bound review of records DomainKit can safely delete                |
@@ -21,9 +21,9 @@ Authorization does not make a stale plan safe. Apply rechecks provider state and
 
 DomainKit is additive and fail-closed:
 
-- an exact record becomes `Noop`;
-- a missing record becomes `Create`;
-- incompatible state becomes `Conflict`;
+- an exact record has a `noop` `_tag`;
+- a missing record has a `create` `_tag`;
+- incompatible state has a `conflict` `_tag`;
 - apply never silently replaces the conflicting value.
 
 Partial authorization is opt-in:
