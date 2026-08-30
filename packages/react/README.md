@@ -1,23 +1,10 @@
 # @domainkit/react
 
-Copy a DNS record. Download a zone file. Then connect the domain if you want DomainKit to do the rest.
+Accessible React flows and composable UI parts for DomainKit.
 
-The presentational record parts take a `DnsRecord[]` and do not need `DomainKit.Root` or a transport.
-
-```tsx
-import { Records } from "@domainkit/react";
-import "@domainkit/react/styles.css";
-
-<Records.Table records={records} />
-<Records.CopyValue value="v=spf1 include:example.net ~all" />
-<Records.ZoneFile domain="mail.example.com" records={records} />
-<Records.Card record={records[0]} />
-<Records.Status evidence={{ _tag: "Found", recordId: "mx" }} />
-```
-
-`Records.Table` copies name and value per row. Pass `evidence` to add Found / Missing / Mismatch / Unavailable chips. `Records.Card` is the stacked layout for the same data. `Records.ZoneFile` copies and downloads BIND text via `Records.toZoneFile`.
-
-`Table` and `Card` are conveniences over public parts. Hosts that already have a table can assemble `Root`, `Header`, `Body`, `Row`, `Head`, `Cell`, `Value`, `Priority`, and `Status` themselves. `Status` children replace the `_tag` label.
+The package can render the complete domain lifecycle, one focused lifecycle, or model-free DNS
+records. Every stateful operation goes through your authenticated server transport; provider
+credentials never belong in the browser.
 
 ## Install
 
@@ -25,15 +12,13 @@ import "@domainkit/react/styles.css";
 npm install @domainkit/react domainkit effect@rc @effect/atom-react@rc react react-dom
 ```
 
-React 19 is required.
+React 19 is required. Install `domainkit` and `@domainkit/react` at the same release version.
 
-## Domain lifecycle
-
-When you do have a host-owned transport layer, `Domain.Flow` connects the provider, reviews an exact plan, observes DNS, removes receipt-bound records, and disconnects the current domain grant.
+## Complete flow
 
 ```tsx
 import { Domain, DomainKit } from "@domainkit/react";
-import { Transport } from "domainkit";
+import "@domainkit/react/styles.css";
 
 export function DomainSetup() {
   return (
@@ -44,23 +29,22 @@ export function DomainSetup() {
 }
 ```
 
-`Provisioning.Flow` accepts `showRecords={false}` when the host already renders the DNS record list with `Records.Table`.
+`Domain.Flow` coordinates connection, plan review, apply, verification, receipt-bound cleanup, and
+removing the domain grant. Your application still owns authentication, authorization, durable
+attempts, provider credentials, and the server-side `Transport` implementation.
 
-Effect applications can compose lifecycle UI directly from `Connection.useModel`,
-`Provisioning.useModel`, `Verification.useModel`, and `Cleanup.useModel`. Each model exposes
-`state` and `command` atoms; dispatch values with the corresponding exported `Command`
-constructors. The packaged controllers and flows consume those same models rather than maintaining
-second state machines.
+## Adopt only the surface you need
 
-`Operations.List` is the shared provisioning and cleanup review recipe. Hosts can instead assemble
-`Operations.Root`, `Item`, `Kind`, `Type`, `Record`, `Name`, `Value`, `Priority`, and `Reason` with
-Base UI render props.
+- `Domain.Flow` — the complete lifecycle;
+- `Connection.Flow`, `Provisioning.Flow`, `Verification.Flow`, and `Cleanup.Flow` — focused flows;
+- `useModel` hooks and semantic parts — host-owned composition and interaction chrome;
+- `Records.Table`, `Records.Card`, and record parts — model-free DNS presentation without a root or
+  transport.
 
-## Transport ownership
+The packaged flows use the same exported models and parts. Components support server rendering;
+clipboard, download, and navigation behavior runs only from browser interactions.
 
-`DomainKit.Root` receives a `Layer<Transport.Service>`. Controllers run the service through Effect Atom, so request interruption, stale result suppression, and subtree disposal follow the Effect lifecycle. Implement the service with authenticated application endpoints. Do not place provider credentials or provider API clients in the browser.
-
-Foreign Promise clients can be adapted once at the boundary:
+## Host transport
 
 ```ts
 import { Transport } from "domainkit";
@@ -73,90 +57,18 @@ export const transport = Transport.layerFromAsync({
 });
 ```
 
-- `connection` detects providers, starts OAuth or token authorization, reuses an existing account, and removes one domain grant while preserving DNS.
-- `provisioning` asks the server for an exact plan and applies only the returned digest.
-- `verification.observe(config)` is the single observation operation. `sources` selects provider evidence, public DNS, or both.
-- `cleanup` creates a fresh receipt-bound deletion plan and applies only its reviewed digest. The server fails closed when records drift or ownership cannot be proven.
+The stylesheet is opt-in. `DomainKit.Root` accepts host messages, provider marks, icons, design
+tokens, color scheme, and portal container, so product branding remains outside the package.
+Cloudflare and Vercel use bundled, theme-aware marks sourced from SVGL; hosts can replace either
+through the `marks` prop.
 
-Successful outcomes use schema-backed tagged models. Failures travel through the Effect error channel.
+## Learn more
 
-## Composition and theming
+- [React source and examples](https://github.com/AryaLabsHQ/domainkit/tree/main/packages/react)
+- [Vite workshop source](https://github.com/AryaLabsHQ/domainkit/tree/main/packages/react/examples/vite)
+- [Application transport contract](https://github.com/AryaLabsHQ/domainkit/blob/main/packages/domainkit/src/Transport.ts)
+- [Issues](https://github.com/AryaLabsHQ/domainkit/issues)
 
-Every semantic component accepts Base UI's `render` prop.
+## License
 
-```tsx
-<Connection.OAuthAction
-  controller={controller}
-  label="Connect"
-  render={<MyButton variant="primary" />}
-/>
-```
-
-`DomainKit.Root` sets theme tokens, messages, provider marks, icons, color scheme, and a portal container. The stylesheet is opt-in and uses `--domainkit-*` CSS custom properties. Record parts pick those tokens up when they sit inside Root; they still function without it.
-
-`Connection.Flow` is a recipe over the same parts a host can assemble. `Connection.Root` fills the host column and stretches children. `Connection.Trigger` is a dialog opener: its required `children` supply the label, `render` replaces the button, and it does not inject a provider mark. `Connection.ConnectTrigger` accepts a provider and is the packaged button with a mark and default chrome.
-
-```tsx
-<Connection.Root status={state._tag}>
-  <HostCard>
-    <Provider.Mark provider={snapshot.provider} />
-    <div>
-      <strong>{snapshot.provider.name}</strong>
-      <p>Manages DNS for this domain.</p>
-    </div>
-    <BaseDialog.Root>
-      <Connection.Trigger render={<HostButton />}>
-        Connect {snapshot.provider.name}
-      </Connection.Trigger>
-      <Connection.Dialog controller={controller} snapshot={snapshot} />
-    </BaseDialog.Root>
-  </HostCard>
-</Connection.Root>
-```
-
-Pass host icons so the package never owns an icon library. `Records.CopyValue` and `Records.ZoneFile` also accept `copyIcon` / `copiedIcon` / `downloadIcon` when you are not wrapping in Root.
-
-```tsx
-<DomainKit.Root
-  icons={{
-    copy: <Copy />,
-    copied: <Check />,
-    download: <Download />,
-  }}
-  transport={transport}
->
-  {children}
-</DomainKit.Root>
-```
-
-```tsx
-<Records.Root>
-  <Records.Header>
-    <Records.Row>
-      <Records.Head scope="col">Type</Records.Head>
-      <Records.Head scope="col">Name</Records.Head>
-      <Records.Head scope="col">Value</Records.Head>
-    </Records.Row>
-  </Records.Header>
-  <Records.Body>
-    {records.map((record) => (
-      <Records.Row key={record.id}>
-        <Records.Cell>{record.type}</Records.Cell>
-        <Records.Cell>
-          <Records.CopyValue value={record.name} />
-        </Records.Cell>
-        <Records.Cell>
-          <Records.Value>
-            <Records.CopyValue value={record.value} />
-            {record.priority === undefined ? null : <Records.Priority priority={record.priority} />}
-          </Records.Value>
-        </Records.Cell>
-      </Records.Row>
-    ))}
-  </Records.Body>
-</Records.Root>
-```
-
-## Server rendering
-
-The package is ESM and safe to import on the server. Clipboard and download run in the browser when the user clicks Copy or Download.
+MIT

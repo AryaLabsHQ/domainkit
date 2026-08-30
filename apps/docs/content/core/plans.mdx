@@ -1,46 +1,99 @@
 ---
-title: Plans
-description: DomainKit plans DNS as creates, no-ops, and conflicts. You authorize an exact digest, apply it, and clean up only from a stored receipt.
+title: Plans, authorization, and receipts
+description: Understand why DomainKit separates DNS requirements, immutable plans, digest-bound authorization, apply receipts, and cleanup plans.
+sidebar:
+  label: Plans and receipts
 seo:
-  title: "Reviewable DNS plans, receipts, and cleanup"
+  title: Why DomainKit uses reviewable DNS plans and receipts
 ---
 
-DomainKit treats DNS provisioning as a reviewed transaction, even when the provider API does not offer transactions.
+DNS provider APIs rarely offer conditional multi-record transactions. A sequence of successful API
+calls can stop halfway, and the provider state can change between review and apply. DomainKit models
+that reality instead of presenting a provider write sequence as atomic.
 
-## Lifecycle
+## The lifecycle artifacts
 
-| Artifact      | Meaning                                                                             |
-| ------------- | ----------------------------------------------------------------------------------- |
-| Requirement   | The DNS state your product needs, including ownership and conflict policy           |
-| Plan          | A snapshot of `create`, `noop`, and `conflict` operations with an expiry and digest |
-| Authorization | Approval for the exact plan digest and selected operations                          |
-| Receipt       | What an apply attempt actually changed, including partial outcomes                  |
-| Cleanup plan  | A fresh, receipt-bound review of records DomainKit can safely delete                |
+```text
+requirements
+  -> plan
+  -> authorization
+  -> apply receipt
+  -> observation
 
-Authorization does not make a stale plan safe. Apply rechecks provider state and returns a stale result rather than writing against changed DNS.
-
-## Conflicts
-
-DomainKit is additive and fail-closed:
-
-- an exact record has a `noop` `_tag`;
-- a missing record has a `create` `_tag`;
-- incompatible state has a `conflict` `_tag`;
-- apply never silently replaces the conflicting value.
-
-Partial authorization is opt-in:
-
-```ts
-const authorization = await Provisioning.authorize(plan, selectedOperationIds, {
-  allowPartial: true,
-});
+source plan + apply receipt
+  -> cleanup plan
+  -> cleanup authorization
+  -> deletion receipt
 ```
 
-## Cleanup
+| Artifact         | Meaning                                                                             | Durable host use                      |
+| ---------------- | ----------------------------------------------------------------------------------- | ------------------------------------- |
+| Requirement      | DNS state the product needs, including ownership, purpose, and conflict policy      | Recreate from canonical product state |
+| Plan             | A provider and zone snapshot containing exact operations and a deterministic digest | Persist through review and apply      |
+| Authorization    | Approval for one plan digest and selected create operations                         | Persist with the plan attempt         |
+| Apply receipt    | Confirmed provider writes, including partial outcomes                               | Persist for recovery and cleanup      |
+| Cleanup plan     | A fresh review of receipt-owned records that remain exact                           | Persist through destructive review    |
+| Deletion receipt | Confirmed deletions, including partial outcomes                                     | Persist for recovery and audit        |
 
-A receipt proves which writes belong to a previous apply. Cleanup creates a new deletion plan from that receipt, then requires authorization for the cleanup digest. If a record drifted, deletion is blocked instead of removing data that DomainKit can no longer prove it owns.
+The artifacts are versioned protocol values. They are not interchangeable UI states.
 
-<Callout type="info" title="Persist receipts">
-  Receipts are durable lifecycle data. Store them in your primary database; do not rely on a cache
-  whose loss would prevent safe cleanup.
-</Callout>
+## Additive planning
+
+Every requirement becomes one operation:
+
+- `create` when the record is missing;
+- `noop` when the exact record already exists;
+- `conflict` when existing DNS is incompatible.
+
+`exclusive` requirements cannot coexist with another value in the same record set. `append`
+requirements can coexist where DNS semantics permit it. CNAME requirements are always exclusive.
+
+Planning never creates an implicit update or delete. The user can resolve a conflict outside the
+plan or continue through a manual path.
+
+## Digest-bound review
+
+The plan digest covers the portable provider, zone, and operation content. Authorization names that
+exact digest and the selected create operations. Changing the plan after review invalidates the
+authorization.
+
+Before writing, apply rebuilds the current provider view. A changed snapshot produces a stale error
+instead of applying the previously reviewed operations.
+
+This narrows the race between review and write, but it cannot make a provider API transactional.
+Each approved create is revalidated before its write.
+
+## Partial apply is explicit
+
+Writes are sequential. If a later write fails after an earlier one succeeds, DomainKit returns a
+`PartialApplyError` carrying a receipt for the confirmed operations. It does not automatically roll
+those records back: rollback could also fail or remove state another actor now depends on.
+
+The host must store that receipt before retrying or offering remediation.
+
+## Cleanup is a separate decision
+
+An apply receipt proves which provider record IDs came from a reviewed create plan. `Deletion.create`
+uses that source plan and receipt, then re-reads every record. Drift, missing identity, or mismatched
+provider state blocks automatic deletion.
+
+The resulting cleanup plan has a new digest and requires a new authorization. Disconnecting a
+domain grant can therefore preserve DNS, while removing records remains a separately reviewed
+destructive action.
+
+## What the host still decides
+
+DomainKit does not choose:
+
+- who may review or authorize a plan;
+- how long the host retains plan attempts and receipts;
+- whether conflicts block the whole product workflow;
+- how partial outcomes are presented or repaired;
+- when a cleanup option is offered;
+- what audit event or product state follows an operation.
+
+## Put the concept to work
+
+- [Create and apply your first plan](/docs/quickstart)
+- [Provision and clean up records](/docs/guides/provision-and-clean-up)
+- [Plan and receipt API reference](/docs/reference/core#planning-and-cleanup)

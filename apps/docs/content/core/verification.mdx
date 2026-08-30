@@ -1,37 +1,68 @@
 ---
-title: Verification
-description: Observe DNS through one tagged operation. Public resolvers run by default. Add provider readback when you need both sources to match.
+title: Provider evidence and public DNS
+description: Understand why authoritative-provider state, recursive public DNS, and product readiness are separate forms of evidence.
+sidebar:
+  label: DNS verification
 seo:
-  title: Observe public DNS and provider readback
+  title: Provider readback, public DNS, and product readiness
 ---
 
-`Verification.observe` is the only verification operation. Public DNS is enabled by default and uses concurrent RFC wire-format DNS-over-HTTPS resolvers.
+DNS can be present in a provider account before recursive resolvers return it. Resolvers can also
+disagree because of caching, propagation, outages, or provider behavior. DomainKit preserves those
+distinctions instead of reducing verification to one Boolean.
 
-```ts
-import { Effect } from "effect";
-import { DnsProvider, Verification } from "domainkit";
+## Three different questions
 
-const result = await Effect.runPromise(Verification.observe({ record }));
-```
+| Layer                  | Question                                                            | Owner                       |
+| ---------------------- | ------------------------------------------------------------------- | --------------------------- |
+| Provider observation   | Does the authoritative provider account contain the desired record? | DomainKit provider readback |
+| Public-DNS observation | What do named recursive resolvers currently answer?                 | DomainKit resolver pool     |
+| Product readiness      | Is the domain ready for this application's complete feature?        | Host application            |
 
-Provider observation is explicit:
+Product readiness can include certificate issuance, email-provider verification, routing state,
+background polling, or business policy that is outside DNS observation.
 
-```ts
-const result = await Verification.observe({
-  provider: Verification.Provider.Enabled({ zone }),
-  publicDns: Verification.PublicDns.Disabled(),
-  record,
-}).pipe(Effect.provideService(DnsProvider.Service, provider), Effect.runPromise);
-```
+## One observation operation
 
-When both sources are enabled, both must match before the result is `Verified`. Results preserve the full tagged evidence instead of collapsing transport failures, negative answers, mismatches, and propagation delay into one boolean.
+`Verification.observe` accepts an explicit source configuration and returns one exhaustive tagged
+result. Public DNS is enabled by default; provider readback is opt-in and requires a provider and
+authoritative zone.
 
-| `_tag`        | Meaning                                                   |
-| ------------- | --------------------------------------------------------- |
-| `Verified`    | Every requested source matched                            |
-| `Pending`     | A requested source has not observed the desired state yet |
-| `Mismatch`    | DNS exists but differs from the requirement               |
-| `Unavailable` | Observation could not produce trustworthy evidence        |
-| `NotObserved` | That source was deliberately disabled                     |
+When both sources are requested, both must match before the aggregate is `Verified`.
 
-The default resolver pool uses `AnyMatch`. Supply a custom pool to choose tagged `AllMatch` or `Quorum` policies when your reliability model requires them.
+## Aggregate outcomes
+
+| `_tag`        | Meaning                                                           |
+| ------------- | ----------------------------------------------------------------- |
+| `Verified`    | Every requested source matched the requirement                    |
+| `Pending`     | A requested source has not observed the desired state yet         |
+| `Mismatch`    | A requested source observed DNS that differs from the requirement |
+| `Unavailable` | A requested source could not produce trustworthy evidence         |
+| `NotObserved` | No evidence source was requested                                  |
+
+The result retains the source evidence. A host can say “the provider contains the record, but public
+DNS is still pending” without inventing that distinction after the fact.
+
+## Resolver disagreement
+
+The default pool queries named Cloudflare and Google DNS-over-HTTPS resolvers concurrently with
+`AnyMatch`. Alternative tagged policies are:
+
+- `AllMatch` when every configured resolver must match;
+- `Quorum` when a selected minimum must match.
+
+Every answer, no-data result, timeout, and failure remains available to the caller. Under a quorum
+policy, unavailable resolvers are not silently counted as mismatches.
+
+## Why public DNS is the default
+
+Provider readback proves authoritative account state, not public visibility. Public resolvers are
+the closest portable evidence that another system can discover the record. The default therefore
+works without a provider credential and avoids making one provider account an accidental
+verification dependency.
+
+## Put the concept to work
+
+- [Observe DNS](/docs/guides/observe-dns)
+- [Integrate product readiness](/docs/guides/host-integration#7-keep-product-readiness-separate)
+- [Verification API reference](/docs/reference/core#verification)

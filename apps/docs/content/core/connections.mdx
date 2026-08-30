@@ -1,51 +1,111 @@
 ---
-title: Connections
-description: Connect Cloudflare or Vercel with OAuth, an integration, or a token. Secrets stay on your server. Reuse an account grant when the same owner adds a domain.
+title: Provider authorization and domain grants
+description: Understand how provider credentials, account context, host owners, domain grants, reusable connections, continuations, and revocation fit together.
+sidebar:
+  label: Connections and grants
 seo:
-  title: Connect DNS providers with host-owned secrets
+  title: Provider authorization and domain grants in DomainKit
 ---
 
-`Connection.start` accepts either an interactive provider flow or a token method. Interactive starts return `Redirect`; token methods normally return `Connected`. `Connection.complete` consumes a short-lived continuation exactly once.
+Connecting a DNS provider crosses two authority systems: the provider's account and scopes, and the
+host application's users, tenants, and domains. DomainKit keeps those systems explicit instead of
+equating one provider token with one product domain.
+
+## The authorization aggregate
+
+A durable provider authorization contains:
+
+- the provider and account identity;
+- non-secret provider context needed to reconstruct the correct client;
+- a reference to the host-stored credential;
+- required capabilities and their evidence;
+- expiry and revocation state;
+- one or more host-owner bindings and grants.
+
+The credential is part of one logical aggregate, but DomainKit does not choose how the host encrypts
+or persists it.
+
+## Owner bindings and grants
+
+A provider authorization can be bound to a host owner with:
+
+- an account-wide grant, optionally excluding domains; or
+- an explicit set of domain grants.
+
+The grant is enforced in addition to provider scopes. A broad Cloudflare or Vercel credential does
+not automatically authorize every host tenant or every visible zone.
+
+This separation allows one valid provider authorization to serve another domain for the same owner
+without repeating provider consent.
+
+## Starting and completing a connection
+
+`Connection.start` accepts a token method or an interactive provider flow:
 
 ```text
-host session
-  -> Connection.start
-  -> provider consent or token validation
-  -> host-owned lifecycle repository
-  -> authorization aggregate + encrypted credential reference + owner grant
+token
+  -> validate provider authority
+  -> commit authorization aggregate
+
+interactive
+  -> create one-time continuation
+  -> redirect to provider
+  -> consume callback continuation
+  -> exchange code
+  -> commit authorization aggregate
 ```
 
-## Host ownership
+Cloudflare implements standards-based OAuth and scoped API tokens. Vercel implements its
+provider-specific Integration installation flow and tokens. DomainKit does not label every
+redirect/code exchange as generic OAuth.
 
-DomainKit defines the lifecycle contract but does not choose your infrastructure. Your application supplies:
+## Reusing provider authority
 
-- callback routes and authenticated sessions;
-- a durable `AuthorizationLifecycle.Repository`;
-- secret storage or encryption at rest;
-- a short-lived, one-time `ContinuationStore`;
-- consent and audit records tied to your own user and organization IDs.
+`Connection.extend` adds a new domain grant only after the host:
 
-The repository boundary is intentionally aggregate-shaped so SQL applications can use one transaction and split database/vault applications can implement a recoverable saga.
+1. loads an authorization owned by the same host owner;
+2. proves the provider authorization can serve the requested domain;
+3. obtains the owner's consent for the new grant.
 
-## Reuse an account
+Reuse preserves earlier grants. It rejects cross-owner, expired, insufficient, or revoking
+authorizations.
 
-After proving that the same provider authorization owns another domain and obtaining the owner's consent, extend the existing grant without another provider round trip:
+## Removing a domain
 
-```ts
-const aggregate = await Connection.extend({
-  connectionId,
-  grant: {
-    _tag: "domains",
-    domains: [DomainName.parse("mail.example.com")],
-  },
-  ownerId,
-  repository,
-});
-```
+Removing one domain binding preserves the other bindings and normally preserves DNS. If the removed
+binding was the last one, the authorization lifecycle attempts provider revocation before deleting
+the durable authorization and credential state.
 
-`Connection.removeDomain` removes one domain binding while preserving DNS. Provider revocation happens only when the last binding is removed, and durable state remains retryable until the provider confirms revocation.
+Revocation is fail-closed. Durable retry state remains until the provider confirms the outcome.
 
-<Callout type="warning" title="Continuation storage">
-  Losing an OAuth continuation may require the user to restart consent. Losing a durable
-  authorization aggregate or receipt must not be possible through cache eviction.
-</Callout>
+## Host-owned boundaries
+
+The host supplies:
+
+- authenticated start, callback, token, reuse, and disconnect routes;
+- user and tenant authorization policy;
+- one durable `AuthorizationLifecycle.Repository`;
+- credential encryption or vault storage;
+- a short-lived, one-time continuation store;
+- consent records and audit history.
+
+A SQL application can implement the aggregate commit as one transaction. A split database/vault
+application must implement a recoverable saga behind the same repository boundary.
+
+## Capability evidence
+
+Provider scope strings are not treated as complete proof. Required capabilities record one of three
+evidence levels:
+
+- `Declared` — the host or provider flow claims the capability;
+- `Introspected` — a provider response reported it;
+- `Exercised` — a successful provider operation demonstrated it.
+
+The host can promote evidence after successful use without changing the underlying grant model.
+
+## Put the concept to work
+
+- [Integrate a host application](/docs/guides/host-integration)
+- [Connect Cloudflare](/docs/providers/cloudflare)
+- [Connect Vercel](/docs/providers/vercel)
+- [Authorization API reference](/docs/reference/core#authorization-and-connections)
