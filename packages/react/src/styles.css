@@ -85,10 +85,7 @@
   padding: 0.45rem 0.85rem;
 }
 
-:where(
-  [data-domainkit-part="connection-trigger"],
-  [data-domainkit-part="oauth-connect"]
-) {
+:where([data-domainkit-part="connection-trigger"], [data-domainkit-part="oauth-connect"]) {
   background: var(--domainkit-accent);
   border-color: var(--domainkit-accent);
   color: var(--domainkit-accent-contrast);
@@ -112,19 +109,13 @@
   background: var(--domainkit-fill);
 }
 
-:where(
-  [data-domainkit-part="dialog-cancel"],
-  [data-domainkit-part="dialog-close"]
-) {
+:where([data-domainkit-part="dialog-cancel"], [data-domainkit-part="dialog-close"]) {
   background: transparent;
   border-color: transparent;
   color: var(--domainkit-muted);
 }
 
-:where(
-  [data-domainkit-part="dialog-cancel"]:hover,
-  [data-domainkit-part="dialog-close"]:hover
-) {
+:where([data-domainkit-part="dialog-cancel"]:hover, [data-domainkit-part="dialog-close"]:hover) {
   background: var(--domainkit-fill);
   color: var(--domainkit-text);
 }
