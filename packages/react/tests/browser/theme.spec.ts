@@ -44,3 +44,15 @@ test("provisioning and cleanup dialogs preserve review focus", async ({ page }) 
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Remove records" })).toBeFocused();
 });
+
+test("workshop switches presentational stories from the sidebar", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("navigation", { name: "Stories" })).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Stories" })
+    .getByRole("button", { name: "Records" })
+    .click();
+  await expect(page.getByRole("columnheader", { name: "Type" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "MX" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy zone" })).toBeVisible();
+});

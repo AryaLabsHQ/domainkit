@@ -84,6 +84,9 @@
   [data-domainkit-part="cleanup-apply"],
   [data-domainkit-part="disconnect-action"],
   [data-domainkit-part="token-connect"] button,
+  [data-domainkit-part="copy-action"],
+  [data-domainkit-part="zone-copy"],
+  [data-domainkit-part="zone-download"],
   [data-domainkit-part="dialog-cancel"],
   [data-domainkit-part="dialog-close"]
 ) {
@@ -156,6 +159,8 @@
   [data-domainkit-part="connection-retry"],
   [data-domainkit-part="provisioning-retry"],
   [data-domainkit-part="observe-action"],
+  [data-domainkit-part="zone-copy"],
+  [data-domainkit-part="zone-download"],
   [data-domainkit-part="token-connect"] button
 ) {
   background-color: var(--domainkit-background);
@@ -172,6 +177,8 @@
   [data-domainkit-part="connection-retry"]:hover:not(:disabled),
   [data-domainkit-part="provisioning-retry"]:hover:not(:disabled),
   [data-domainkit-part="observe-action"]:hover:not(:disabled),
+  [data-domainkit-part="zone-copy"]:hover:not(:disabled),
+  [data-domainkit-part="zone-download"]:hover:not(:disabled),
   [data-domainkit-part="token-connect"] button:hover:not(:disabled)
 ) {
   background-color: var(--domainkit-fill);
@@ -222,15 +229,29 @@
   box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.28);
 }
 
-:where([data-domainkit-part="dialog-cancel"], [data-domainkit-part="dialog-close"]) {
+:where(
+  [data-domainkit-part="dialog-cancel"],
+  [data-domainkit-part="dialog-close"],
+  [data-domainkit-part="copy-action"]
+) {
   background: transparent;
   border-color: transparent;
   color: var(--domainkit-muted);
 }
 
-:where([data-domainkit-part="dialog-cancel"]:hover, [data-domainkit-part="dialog-close"]:hover) {
+:where(
+  [data-domainkit-part="dialog-cancel"]:hover,
+  [data-domainkit-part="dialog-close"]:hover,
+  [data-domainkit-part="copy-action"]:hover
+) {
   background: var(--domainkit-fill);
   color: var(--domainkit-text);
+}
+
+:where([data-domainkit-part="copy-action"]) {
+  font-size: 0.6875rem;
+  min-height: 1.5rem;
+  padding: 0.15rem 0.4rem;
 }
 
 :where([data-domainkit-part="dialog-close"]) {
@@ -501,6 +522,92 @@
   font-weight: 600;
   white-space: nowrap;
   width: 4.5rem;
+}
+
+:where([data-domainkit-part="copy-value"]) {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+:where([data-domainkit-part="copy-value"] code) {
+  flex: 1 1 auto;
+  font: inherit;
+  min-width: 0;
+}
+
+:where([data-domainkit-part="zone-file"]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+:where([data-domainkit-part="record-card"]) {
+  background: var(--domainkit-fill);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-control-radius);
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+}
+
+:where([data-domainkit-part="record-card-head"]) {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+:where([data-domainkit-part="record-card"] dl) {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+:where([data-domainkit-part="record-card"] dt) {
+  color: var(--domainkit-muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+:where([data-domainkit-part="record-card"] dd) {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.25rem 0 0;
+}
+
+:where([data-domainkit-part="record-priority"]) {
+  color: var(--domainkit-muted);
+  display: inline-block;
+  font-size: 0.6875rem;
+  margin-right: 0.35rem;
+}
+
+:where([data-domainkit-part="record-status"]) {
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.15rem 0.45rem;
+}
+
+:where([data-domainkit-part="record-status"][data-status="Found"]) {
+  background: color-mix(in srgb, var(--domainkit-success) 16%, transparent);
+  color: var(--domainkit-success);
+}
+
+:where([data-domainkit-part="record-status"][data-status="Missing"]),
+:where([data-domainkit-part="record-status"][data-status="Mismatch"]) {
+  background: color-mix(in srgb, var(--domainkit-danger) 14%, transparent);
+  color: var(--domainkit-danger);
+}
+
+:where([data-domainkit-part="record-status"][data-status="Unavailable"]) {
+  background: var(--domainkit-background);
+  color: var(--domainkit-muted);
 }
 
 :where([data-domainkit-part="plan-operations"], [data-domainkit-part="cleanup-operations"]) {

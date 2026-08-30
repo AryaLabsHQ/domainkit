@@ -31,7 +31,8 @@
     "test": "vitest run --exclude tests/artifact/**/*.test.ts",
     "test:artifact": "vitest run tests/artifact",
     "test:browser": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "workshop": "vite examples/vite --host 127.0.0.1 --port 4178"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
