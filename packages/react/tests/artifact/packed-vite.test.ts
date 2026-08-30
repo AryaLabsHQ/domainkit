@@ -33,7 +33,9 @@ describe("packed Vite consumer on React 19", () => {
           type: "module",
           dependencies: {
             "@domainkit/react": `file:${reactTarball}`,
+            "@effect/atom-react": "4.0.0-rc.112",
             domainkit: `file:${coreTarball}`,
+            effect: "4.0.0-rc.112",
             react: "19.2.4",
             "react-dom": "19.2.4",
             vite: "7.1.12",
@@ -48,9 +50,10 @@ describe("packed Vite consumer on React 19", () => {
       );
       const consumer = `
 import React from "react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { createRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
-import { Domain, DomainKit, Testing } from "@domainkit/react";
+import { Connection, Domain, DomainKit, Testing } from "@domainkit/react";
 
 const transport = Testing.makeFakeTransport({
   inspect: {
@@ -60,13 +63,32 @@ const transport = Testing.makeFakeTransport({
     reusableConnection: { connectionId: "connection-1", label: "existing account" },
   },
 });
+function CustomConnection() {
+  const model = Connection.useModel("mail.example.com");
+  const state = useAtomValue(model.state);
+  const execute = useAtomSet(model.command);
+  return React.createElement(
+    "button",
+    {
+      "data-custom-atom": state._tag,
+      onClick: () => execute(Connection.Command.Retry()),
+      type: "button",
+    },
+    "Custom Atom state: " + state._tag,
+  );
+}
 const app = React.createElement(
   DomainKit.Root,
   { transport },
-  React.createElement(Domain.Flow, {
-    domain: "mail.example.com",
-    records: [{ id: "mx", type: "MX", name: "mail.example.com", value: "mx.example.net" }],
-  }),
+  React.createElement(
+    React.Fragment,
+    null,
+    React.createElement(Domain.Flow, {
+      domain: "mail.example.com",
+      records: [{ id: "mx", type: "MX", name: "mail.example.com", value: "mx.example.net" }],
+    }),
+    React.createElement(CustomConnection),
+  ),
 );
 export const html = renderToString(app);
 if (typeof document !== "undefined") createRoot(document.getElementById("root")).render(app);
@@ -74,7 +96,7 @@ if (typeof document !== "undefined") createRoot(document.getElementById("root"))
       await writeFile(join(directory, "main.jsx"), consumer);
       await writeFile(
         join(directory, "ssr.mjs"),
-        `${consumer}\nif (!html.includes("Detecting DNS provider")) throw new Error("SSR tracer did not render");`,
+        `${consumer}\nif (!html.includes("Detecting DNS provider") || !html.includes("Custom Atom state: Loading")) throw new Error("SSR Atom and recipe tracer did not render");`,
       );
 
       await run("bun", ["run", "vite", "build"], directory);
@@ -102,7 +124,9 @@ describe("packed Next.js consumer", () => {
           scripts: { build: "next build" },
           dependencies: {
             "@domainkit/react": `file:${reactTarball}`,
+            "@effect/atom-react": "4.0.0-rc.112",
             domainkit: `file:${coreTarball}`,
+            effect: "4.0.0-rc.112",
             next: "15.5.7",
             react: "19.2.4",
             "react-dom": "19.2.4",

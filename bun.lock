@@ -43,19 +43,19 @@
         "vitest": "4.1.11",
       },
       "peerDependencies": {
-        "effect": ">=4.0.0-rc.111 <5",
+        "effect": ">=4.0.0-rc.112 <5.0.0",
       },
     },
     "packages/react": {
       "name": "@domainkit/react",
-      "version": "0.1.1",
+      "version": "0.2.2",
       "dependencies": {
         "@base-ui/react": "^1.7.0",
-        "@effect/atom-react": "4.0.0-rc.112",
-        "domainkit": "workspace:*",
+        "domainkit": "workspace:^",
         "scheduler": "0.27.0",
       },
       "devDependencies": {
+        "@effect/atom-react": "4.0.0-rc.112",
         "@hugeicons/core-free-icons": "^4.3.0",
         "@hugeicons/react": "^1.1.10",
         "@playwright/test": "1.57.0",
@@ -77,6 +77,7 @@
         "vitest": "4.1.11",
       },
       "peerDependencies": {
+        "@effect/atom-react": ">=4.0.0-rc.112 <5.0.0",
         "effect": ">=4.0.0-rc.112 <5.0.0",
         "react": ">=19.0.0 <20.0.0",
         "react-dom": ">=19.0.0 <20.0.0",
