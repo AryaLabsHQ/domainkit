@@ -5,9 +5,9 @@ import data from "blume:data";
 import DomainKitWorkshop from "../islands/DomainKitWorkshop.tsx";
 
 const { config } = data;
-const pageTitle = "React workshop — DomainKit";
+const pageTitle = "Try DomainKit React DNS components in one workshop";
 const pageDescription =
-  "Explore DomainKit's connection, lifecycle, DNS record, provider, and verification components across themes and editable states.";
+  "Open DomainKit's shipped React flows, switch themes and lifecycle states, and inspect DNS records without provider credentials or live writes.";
 ---
 
 <PageLayout
@@ -32,13 +32,13 @@ const pageDescription =
 >
   <main class="workshop-page">
     <header>
-      <p>React components</p>
+      <p>React</p>
       <h1>Workshop</h1>
       <span>Switch stories, themes, providers, records, and lifecycle states.</span>
     </header>
     <DomainKitWorkshop client:only="react" />
     <section class="about">
-      <h2>One workshop, the shipped components</h2>
+      <h2>Shipped components</h2>
       <p>
         This route mounts the same workshop source used by the package's Vite
         example and browser tests. Choose a story in the left rail, then use

@@ -3,9 +3,9 @@ import PageLayout from "blume/components/layout/PageLayout.astro";
 import data from "blume:data";
 
 const { config } = data;
-const pageTitle = "DomainKit — DNS provisioning without provider lock-in";
+const pageTitle = "Reviewable DNS provisioning for TypeScript | DomainKit";
 const pageDescription =
-  "An Effect-native TypeScript SDK and composable React UI for provider-independent, reviewable, and authorized DNS provisioning.";
+  "Turn DNS requirements into reviewable plans. Authorize an exact digest, apply through Cloudflare or Vercel, and keep provider credentials on your server.";
 ---
 
 <PageLayout
@@ -25,12 +25,11 @@ const pageDescription =
 >
   <main class="landing">
     <section class="hero">
-      <p class="eyebrow">Provider-independent DNS provisioning</p>
-      <h1>Connect domains without making a registrar your architecture.</h1>
+      <p class="eyebrow">DNS provisioning</p>
+      <h1>Review DNS, then write</h1>
       <p class="lede">
-        DomainKit turns DNS requirements into reviewable plans, applies only what
-        the user approved, and keeps provider credentials on infrastructure you
-        control.
+        DomainKit turns DNS requirements into reviewable plans and applies only
+        the digest you approved. Credentials stay on your server.
       </p>
       <div class="actions">
         <a class="primary" href="/docs">Read the docs</a>

@@ -11,8 +11,7 @@ export default defineConfig({
     output: "static",
     site: "https://domain-kit.dev",
   },
-  description:
-    "Provider-independent DNS provisioning plans, authorization, and React flows for TypeScript.",
+  description: "Reviewable DNS provisioning for TypeScript, with React flows you host.",
   github: {
     dir: "apps/docs",
     owner: "AryaLabsHQ",
@@ -30,6 +29,14 @@ export default defineConfig({
   },
   search: {
     provider: "orama",
+  },
+  seo: {
+    og: {
+      titles: {
+        "/": "Reviewable DNS plans for TypeScript",
+        "/workshop": "Try DomainKit React DNS components",
+      },
+    },
   },
   theme: {
     accent: "green",

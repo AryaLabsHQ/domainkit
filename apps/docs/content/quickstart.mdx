@@ -1,8 +1,11 @@
 ---
-title: Quickstart
-description: Install DomainKit, describe one DNS requirement, create a reviewable plan, authorize its digest, and apply it through a provider.
+title: Your first DNS plan
+description: Install DomainKit, describe one DNS record, create a reviewable plan, authorize its digest, and apply it through Cloudflare or Vercel.
 sidebar:
+  label: Quickstart
   order: 2
+seo:
+  title: Create a reviewable DNS plan in TypeScript
 ---
 
 ## Install
@@ -13,7 +16,7 @@ npm install domainkit effect
 
 `effect` is a peer dependency. Promise consumers still install it because the Promise facade runs the canonical Effect implementation.
 
-## Create a requirement
+## Requirements
 
 DomainKit parses external DNS input through schemas. Each required record also names its ownership, provenance, purpose, and conflict policy.
 
@@ -34,7 +37,7 @@ const record = DnsRecord.parse({
 });
 ```
 
-## Plan, review, and apply
+## Plan and apply
 
 ```ts
 const { plan } = await Provisioning.create({
@@ -60,20 +63,20 @@ requirements
   -> receipt
 ```
 
-<Callout type="warning" title="Keep provider credentials on the server">
+<Callout type="warning" title="Server-side credentials">
   The `provider` talks to Cloudflare or Vercel. Do not construct it in browser code or pass its
   token to `@domainkit/react`.
 </Callout>
 
-## Choose an API surface
+## Promise or Effect
 
 The Promise API is appropriate for ordinary request handlers and framework actions. Effect applications import from `domainkit/effect`, provide provider and digest Layers, and retain the complete typed error and service environment.
 
 <CardGroup cols={2}>
-  <Card title="Plans and receipts" href="/docs/core/plans" icon="file">
+  <Card title="Plans" href="/docs/core/plans" icon="file">
     Follow the provisioning and cleanup lifecycle.
   </Card>
-  <Card title="Provider connections" href="/docs/core/connections" icon="link">
+  <Card title="Connections" href="/docs/core/connections" icon="link">
     Add OAuth, integrations, tokens, and reusable account grants.
   </Card>
   <Card title="Verification" href="/docs/core/verification" icon="check">

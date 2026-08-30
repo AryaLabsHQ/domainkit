@@ -1,8 +1,10 @@
 ---
 title: React
-description: Add browser-safe connection and DNS lifecycle flows with complete components, composable parts, and an application-owned transport.
+description: Add DomainKit React flows for connection, provisioning, verification, and cleanup. The browser talks to your authenticated transport, never the provider.
 sidebar:
   label: Overview
+seo:
+  title: React DNS flows on a host-owned transport
 ---
 
 Install the React package with its peer dependencies and opt in to the default stylesheet:
@@ -26,7 +28,7 @@ export function DomainSetup() {
 
 `Domain.Flow` coordinates connection, plan review, apply, verification, receipt-bound cleanup, and removal of the current domain grant. The package never receives provider credentials in the browser; every operation goes through your authenticated transport.
 
-## Adopt only what you need
+## Surfaces
 
 | Surface                          | Use it when                                              |
 | -------------------------------- | -------------------------------------------------------- |
@@ -39,13 +41,13 @@ export function DomainSetup() {
 Server rendering is supported. Clipboard access, downloads, and navigation occur only from browser interactions.
 
 <CardGroup cols={2}>
-  <Card title="Interactive workshop" href="/workshop" icon="play">
+  <Card title="Workshop" href="/workshop" icon="play">
     Exercise every shipped story, theme, provider, lifecycle state, and record control.
   </Card>
-  <Card title="Host transport" href="/docs/react/transport" icon="arrow-right-left">
+  <Card title="Transport" href="/docs/react/transport" icon="arrow-right-left">
     Map authenticated endpoints into the browser-safe transport contract.
   </Card>
-  <Card title="Composition and theming" href="/docs/react/composition" icon="palette">
+  <Card title="Composition" href="/docs/react/composition" icon="palette">
     Bring your own components, icons, messages, provider marks, and design tokens.
   </Card>
 </CardGroup>

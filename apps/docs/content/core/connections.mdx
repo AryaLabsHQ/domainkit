@@ -1,6 +1,8 @@
 ---
-title: Provider connections
-description: Model provider OAuth, installation, and token authorization as durable account grants with host-owned secrets and domain bindings.
+title: Connections
+description: Connect Cloudflare or Vercel with OAuth, an integration, or a token. Secrets stay on your server. Reuse an account grant when the same owner adds a domain.
+seo:
+  title: Connect DNS providers with host-owned secrets
 ---
 
 `Connection.start` accepts either an interactive provider flow or a token method. Interactive starts return `Redirect`; token methods normally return `Connected`. `Connection.complete` consumes a short-lived continuation exactly once.
@@ -13,7 +15,7 @@ host session
   -> authorization aggregate + encrypted credential reference + owner grant
 ```
 
-## What the host owns
+## Host ownership
 
 DomainKit defines the lifecycle contract but does not choose your infrastructure. Your application supplies:
 
@@ -25,7 +27,7 @@ DomainKit defines the lifecycle contract but does not choose your infrastructure
 
 The repository boundary is intentionally aggregate-shaped so SQL applications can use one transaction and split database/vault applications can implement a recoverable saga.
 
-## Reuse an authorized account
+## Reuse an account
 
 After proving that the same provider authorization owns another domain and obtaining the owner's consent, extend the existing grant without another provider round trip:
 
@@ -43,7 +45,7 @@ const aggregate = await Connection.extend({
 
 `Connection.removeDomain` removes one domain binding while preserving DNS. Provider revocation happens only when the last binding is removed, and durable state remains retryable until the provider confirms revocation.
 
-<Callout type="warning" title="Redis is continuation storage, not authority">
+<Callout type="warning" title="Continuation storage">
   Losing an OAuth continuation may require the user to restart consent. Losing a durable
   authorization aggregate or receipt must not be possible through cache eviction.
 </Callout>
