@@ -303,19 +303,6 @@ export function TokenAction({ controller, method, ...props }: TokenActionProps) 
   );
 }
 
-interface MethodProps {
-  readonly controller: Controller;
-  readonly method: AuthenticationMethod;
-}
-
-function Method({ controller, method }: MethodProps) {
-  return method._tag === "OAuth" ? (
-    <OAuthAction controller={controller} label={method.label} />
-  ) : (
-    <TokenAction controller={controller} method={method} />
-  );
-}
-
 export interface DialogProps {
   readonly controller: Controller;
   readonly snapshot: Disconnected;
@@ -332,21 +319,41 @@ export function Dialog({ controller, snapshot }: DialogProps) {
         data-color-scheme={colorScheme}
         style={themeStyle}
       >
-        <Provider.Mark provider={snapshot.provider} />
-        <BaseDialog.Title>{messages.dialogTitle(snapshot.provider.name)}</BaseDialog.Title>
-        <BaseDialog.Description>
-          {messages.dialogDescription(snapshot.domain)}
-        </BaseDialog.Description>
-        {snapshot.reusableConnection === undefined ? null : (
-          <ReuseAction
-            controller={controller}
-            label={messages.reuseConnection(snapshot.reusableConnection.label)}
-          />
-        )}
-        {snapshot.provider.authentication.map((method) => (
-          <Method controller={controller} key={method._tag} method={method} />
-        ))}
-        <BaseDialog.Close data-domainkit-part="dialog-cancel">{messages.cancel}</BaseDialog.Close>
+        <div data-domainkit-part="dialog-header">
+          <Provider.Mark provider={snapshot.provider} />
+          <div data-domainkit-part="dialog-heading">
+            <BaseDialog.Title data-domainkit-part="dialog-title">
+              {messages.dialogTitle(snapshot.provider.name)}
+            </BaseDialog.Title>
+            <BaseDialog.Description data-domainkit-part="dialog-description">
+              {messages.dialogDescription(snapshot.domain)}
+            </BaseDialog.Description>
+          </div>
+          <BaseDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
+            ×
+          </BaseDialog.Close>
+        </div>
+        <div data-domainkit-part="dialog-body">
+          {snapshot.provider.authentication.map((method) =>
+            method._tag === "OAuth" ? (
+              <OAuthAction controller={controller} key={method._tag} label={method.label} />
+            ) : null,
+          )}
+          {snapshot.reusableConnection === undefined ? null : (
+            <ReuseAction
+              controller={controller}
+              label={messages.reuseConnection(snapshot.reusableConnection.label)}
+            />
+          )}
+          {snapshot.provider.authentication.map((method) =>
+            method._tag === "Token" ? (
+              <TokenAction controller={controller} key={method._tag} method={method} />
+            ) : null,
+          )}
+        </div>
+        <div data-domainkit-part="dialog-footer">
+          <BaseDialog.Close data-domainkit-part="dialog-cancel">{messages.cancel}</BaseDialog.Close>
+        </div>
       </BaseDialog.Popup>
     </BaseDialog.Portal>
   );

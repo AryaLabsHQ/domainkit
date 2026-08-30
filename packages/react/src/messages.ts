@@ -5,6 +5,7 @@ export interface Catalog {
   readonly connectProvider: (provider: string) => string;
   readonly connected: (provider: string) => string;
   readonly connecting: string;
+  readonly close: string;
   readonly detectingProvider: string;
   readonly dialogDescription: (domain: string) => string;
   readonly dialogTitle: (provider: string) => string;
@@ -21,6 +22,7 @@ export const english: Catalog = {
   connectProvider: (provider) => `Connect ${provider}`,
   connected: (provider) => `${provider} connected`,
   connecting: "Connecting…",
+  close: "Close",
   detectingProvider: "Detecting DNS provider…",
   dialogDescription: (domain) => `Authorize DNS changes for ${domain}.`,
   dialogTitle: (provider) => `Connect ${provider}`,

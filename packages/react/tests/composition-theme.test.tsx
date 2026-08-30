@@ -109,13 +109,22 @@ describe("composition and theme", () => {
     first.unmount();
   });
 
-  it("provides accessible referential marks without requiring provider logo rights", () => {
+  it("loads known provider marks from integrations.sh and falls back to a letter", () => {
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
-    render(
+    const { rerender } = render(
       <DomainKit.Root transport={transport}>
         <Provider.Mark provider={Testing.provider({ id: "vercel", name: "Vercel" })} />
       </DomainKit.Root>,
     );
-    expect(screen.getByRole("img", { name: "Vercel" }).textContent).toBe("▲");
+    const vercel = screen.getByRole("img", { name: "Vercel" });
+    expect(vercel.querySelector("img")?.getAttribute("src")).toBe(
+      "https://integrations.sh/logo/vercel.com?sz=64",
+    );
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Provider.Mark provider={Testing.provider({ id: "other", name: "Other" })} />
+      </DomainKit.Root>,
+    );
+    expect(screen.getByRole("img", { name: "Other" }).textContent).toBe("O");
   });
 });

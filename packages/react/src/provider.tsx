@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
 
 import { useDomainKit } from "./domain-kit.tsx";
 import type { PartProps } from "./composition.tsx";
@@ -17,11 +17,30 @@ export interface MarkProps extends PartProps<"span", MarkState> {
   readonly provider: ProviderDescriptor;
 }
 
-const defaultContent = (provider: ProviderDescriptor): ReactNode => {
-  if (provider.id === "vercel") return "▲";
-  if (provider.id === "cloudflare") return "Cloudflare";
-  return provider.name.slice(0, 1).toUpperCase();
+const logoHost = (providerId: string): string | undefined => {
+  if (providerId === "cloudflare") return "cloudflare.com";
+  if (providerId === "vercel") return "vercel.com";
+  return undefined;
 };
+
+const letterMark = (provider: ProviderDescriptor): string =>
+  provider.name.trim().charAt(0).toUpperCase() || "?";
+
+function DefaultMark({ provider }: { readonly provider: ProviderDescriptor }) {
+  const host = logoHost(provider.id);
+  const [failed, setFailed] = useState(false);
+  if (host === undefined || failed) return letterMark(provider);
+  return (
+    <img
+      alt=""
+      height={32}
+      onError={() => setFailed(true)}
+      referrerPolicy="no-referrer"
+      src={`https://integrations.sh/logo/${host}?sz=64`}
+      width={32}
+    />
+  );
+}
 
 export function Mark({ provider, ...props }: MarkProps) {
   const { marks } = useDomainKit();
@@ -29,7 +48,7 @@ export function Mark({ provider, ...props }: MarkProps) {
   const content =
     typeof replacement === "function"
       ? replacement(provider)
-      : (replacement ?? defaultContent(provider));
+      : (replacement ?? <DefaultMark provider={provider} />);
   return usePart(
     "span",
     props,

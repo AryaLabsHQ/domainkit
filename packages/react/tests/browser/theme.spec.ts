@@ -10,6 +10,15 @@ for (const mode of ["light", "dark"] as const) {
     const dialog = page.getByRole("dialog", { name: "Connect Cloudflare" });
     await expect(dialog).toBeVisible();
     await expect(dialog).toHaveCSS("border-radius", "16px");
+    await expect(dialog.getByRole("button", { name: "Continue with OAuth" })).toHaveCSS(
+      "background-color",
+      "rgb(124, 58, 237)",
+    );
+    await expect(dialog.getByRole("button", { name: "Use Arya Labs account" })).not.toHaveCSS(
+      "background-color",
+      "rgb(124, 58, 237)",
+    );
+    await expect(dialog.getByRole("img", { name: "Cloudflare" })).toBeVisible();
     await expect
       .poll(() => dialog.evaluate((element) => element.contains(document.activeElement)))
       .toBe(true);
