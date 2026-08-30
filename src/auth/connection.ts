@@ -7,10 +7,63 @@ import type { OAuthMethod } from "./manifest.ts";
 import * as ProviderAuthorization from "./authorization.ts";
 
 export const Grant = S.TaggedUnion({
-  account: {},
+  account: { excludedDomains: S.Array(DomainName.Schema) },
   domains: { domains: S.Array(DomainName.Schema) },
 });
 export type Grant = typeof Grant.Type;
+
+/** Returns whether a grant includes one parsed domain. */
+export const coversDomain = (grant: Grant, domain: DomainName.DomainName): boolean =>
+  grant._tag === "account"
+    ? !grant.excludedDomains.includes(domain)
+    : grant.domains.includes(domain);
+
+/** Expands a grant to include the requested domains. */
+export const includeDomains = (current: Grant | undefined, requested: Grant): Grant => {
+  if (current === undefined) return requested;
+  if (current._tag === "account" && requested._tag === "account") {
+    return {
+      _tag: "account",
+      excludedDomains: current.excludedDomains.filter((domain) =>
+        requested.excludedDomains.includes(domain),
+      ),
+    };
+  }
+  if (current._tag === "account" && requested._tag === "domains") {
+    return {
+      _tag: "account",
+      excludedDomains: current.excludedDomains.filter(
+        (domain) => !requested.domains.includes(domain),
+      ),
+    };
+  }
+  if (requested._tag === "account") {
+    const includedDomains = current._tag === "domains" ? current.domains : [];
+    return {
+      _tag: "account",
+      excludedDomains: requested.excludedDomains.filter(
+        (domain) => !includedDomains.includes(domain),
+      ),
+    };
+  }
+  if (current._tag === "account") return current;
+  return {
+    _tag: "domains",
+    domains: [...new Set([...current.domains, ...requested.domains])],
+  };
+};
+
+/** Contracts a grant so it no longer includes one parsed domain. */
+export const removeDomain = (grant: Grant, domain: DomainName.DomainName): Grant =>
+  grant._tag === "account"
+    ? {
+        _tag: "account",
+        excludedDomains: [...new Set([...grant.excludedDomains, domain])],
+      }
+    : {
+        _tag: "domains",
+        domains: grant.domains.filter((candidate) => candidate !== domain),
+      };
 
 /** An owner-scoped grant bound to one provider authorization. */
 export const Schema = S.Struct({
@@ -118,7 +171,7 @@ export function assertGrant(
       message: cause instanceof Error ? cause.message : String(cause),
     });
   }
-  if (connection.grant._tag === "domains" && !connection.grant.domains.includes(domain)) {
+  if (!coversDomain(connection.grant, domain)) {
     throw authorizationError("Connection does not grant this domain", "Connection.assertGrant");
   }
   return domain;

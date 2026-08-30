@@ -32,7 +32,7 @@ export function beginCloudflareOAuth(input: CloudflareOAuthInput) {
   const oauth = flow(input);
   return Connection.start({
     authorizedById: input.authorizedById,
-    grant: { _tag: "account" },
+    grant: { _tag: "account", excludedDomains: [] },
     method: Connection.Method.Interactive({
       continuations: input.continuations,
       flow: oauth,

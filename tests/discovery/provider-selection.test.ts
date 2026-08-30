@@ -11,7 +11,7 @@ import {
 const connection: Connection.Connection = {
   authorizationId: "authorization-1",
   createdAt: new Date("2026-08-27T00:00:00.000Z"),
-  grant: { _tag: "account" },
+  grant: { _tag: "account", excludedDomains: [] },
   id: "connection-1",
   ownerId: "organization-1",
 };

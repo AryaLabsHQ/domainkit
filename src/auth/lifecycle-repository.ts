@@ -15,6 +15,11 @@ export interface DetachResult {
   readonly revokedAuthorization: boolean;
 }
 
+export interface BindingModification<A> {
+  readonly aggregate: Aggregate;
+  readonly value: A;
+}
+
 export class Error extends Schema.TaggedError<Error>()("LifecycleRepositoryError", {
   category: Schema.Literal("storage"),
   message: Schema.String,
@@ -38,6 +43,13 @@ export interface Interface {
   ) => Effect.Effect<Aggregate | null, Error>;
   readonly get: (authorizationId: string) => Effect.Effect<Aggregate | null, Error>;
   readonly getByConnectionId: (connectionId: string) => Effect.Effect<Aggregate | null, Error>;
+  readonly modifyBinding: <A>(
+    connectionId: string,
+    modify: (binding: Connection.Connection) => {
+      readonly binding: Connection.Connection;
+      readonly value: A;
+    },
+  ) => Effect.Effect<BindingModification<A>, Error>;
   readonly promoteEvidence: (
     authorizationId: string,
     evidence: ReadonlyArray<ProviderAuthorization.CapabilityEvidence>,
