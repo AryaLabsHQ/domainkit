@@ -1,11 +1,17 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Reuse an existing provider connection for another domain\n\nAdd `Connection.extend` to the Effect-native and Promise APIs. Hosts can extend an owner's stored\ndomain grant after proving provider ownership and obtaining consent, without repeating provider\nauthentication. Extension preserves existing grants and rejects cross-owner, expired, or revoking\nconnections.\n"
-    filename: provider-authorization-extension.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Publish the DomainKit React 0.1 contract\n\nShip accessible React flows for connecting DNS providers, reviewing and applying record plans,\nverifying DNS, removing managed records, and disconnecting domains. Applications can compose the\nsemantic parts, provide their own theme and icons, or use the complete default flows.\n\nThe package also includes host-free DNS record tables, cards, copy controls, status presentation,\nand zone-file export, with a workshop for testing the components and theme contract.\n"
+    filename: react-0-1.md
     v: 0.0.0
 core:packages:
+  - id: npm:domainkit-workspace
+    updated: false
+  - id: npm:domainkit
+    updated: false
   - changelogIds:
-      - provider-authorization-extension.md
-    id: npm:domainkit
+      - react-0-1.md
+    id: npm:@domainkit/react
     updated: true
 npm:packages:
+  - id: npm:domainkit-workspace
   - id: npm:domainkit
+  - id: npm:@domainkit/react
