@@ -1,29 +1,20 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: patch\n---\n\n## Compose connection rows with host controls\n\nSeparate the unstyled connection trigger from the packaged provider-marked recipe so applications\ncan use their own buttons, labels, and row layout without rebuilding the connection dialog.\n"
-    filename: react-host-connection-composition.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Run React lifecycle controllers through Effect Atom\n\nUse the canonical `domainkit` transport service and an Effect layer at `DomainKit.Root`, replace\nduplicated Promise transport models and manual request tracking with Effect Atom, and require React\n19 for the 0.3 release.\n"
-    filename: react-effect-atom.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Make Effect the canonical DomainKit API\n\nExport Effect services, programs, providers, and schema-backed application transport contracts\nfrom `domainkit`. Move the secondary Promise facade to `domainkit/promise` and remove duplicate\nEffect and provider subpaths before the 0.3 release.\n"
-    filename: effect-first-public-api.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: patch\n---\n\n## Keep the React package aligned with DomainKit core\n\nValidate the packed React artifact against the current core version so releases cannot publish an\nincompatible stale dependency range.\n"
+    filename: 2026-08-30-a1f3-react-core-release-alignment.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
-  - changelogIds:
-      - react-host-connection-composition.md
-      - react-effect-atom.md
-    id: npm:@domainkit/react
-    updated: true
-  - changelogIds:
-      - effect-first-public-api.md
-    id: npm:domainkit
-    updated: true
   - id: npm:@domainkit/docs
     updated: false
+  - id: npm:domainkit
+    updated: true
+  - changelogIds:
+      - 2026-08-30-a1f3-react-core-release-alignment.md
+    id: npm:@domainkit/react
+    updated: true
 npm:packages:
   - id: npm:domainkit-workspace
-  - id: npm:@domainkit/react
-  - id: npm:domainkit
   - id: npm:@domainkit/docs
+  - id: npm:domainkit
+  - id: npm:@domainkit/react
