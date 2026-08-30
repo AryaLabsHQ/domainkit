@@ -1,6 +1,11 @@
 import { execFile } from "node:child_process";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { promisify } from "node:util";
+import { satisfies } from "semver";
 
+import corePackageJson from "../../../domainkit/package.json" with { type: "json" };
 import packageJson from "../../package.json" with { type: "json" };
 
 const execFileAsync = promisify(execFile);
@@ -39,5 +44,31 @@ describe("packed React package", () => {
       ),
     ).toEqual([]);
     expect(files).toContain("dist/styles.css");
+  });
+
+  it("declares a compatible packed DomainKit runtime", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "domainkit-react-package-"));
+    try {
+      const before = new Set(await readdir(directory));
+      await execFileAsync("bun", ["pm", "pack", "--destination", directory], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+      });
+      const filename = (await readdir(directory)).find((candidate) => !before.has(candidate));
+      if (filename === undefined) throw new Error("Bun pack returned no React package");
+      const { stdout: manifest } = await execFileAsync(
+        "tar",
+        ["-xOf", join(directory, filename), "package/package.json"],
+        { encoding: "utf8" },
+      );
+      const packedPackage = JSON.parse(manifest) as {
+        readonly dependencies?: Readonly<Record<string, string>>;
+      };
+      const range = packedPackage.dependencies?.domainkit;
+      expect(range).toBeDefined();
+      expect(satisfies(corePackageJson.version, range ?? "")).toBe(true);
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
   });
 });
