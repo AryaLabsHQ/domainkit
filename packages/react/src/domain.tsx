@@ -6,7 +6,6 @@ import * as Connection from "./connection.tsx";
 import * as Provisioning from "./provisioning.tsx";
 import * as Provider from "./provider.tsx";
 import * as Records from "./records.tsx";
-import * as RequestState from "./request-state.ts";
 import * as Verification from "./verification.tsx";
 import type { ApplyResult, DnsRecord } from "./transport.ts";
 
@@ -57,10 +56,7 @@ function ConnectedFlow({
     readonly epoch: number;
     readonly receiptId: string;
   }>();
-  const receiptSource = JSON.stringify([
-    initialReceiptId ?? null,
-    RequestState.recordsIdentity(records),
-  ]);
+  const receiptSource = initialReceiptId ?? null;
   const receiptEpoch = useRef({ source: receiptSource, value: 0 });
   const epoch =
     receiptEpoch.current.source === receiptSource

@@ -202,7 +202,7 @@ describe("observation and cleanup", () => {
     expect(transport.calls.cleanupPlan[0]?.receiptId).toBe("receipt-a");
   });
 
-  it("drops an applied receipt when the requested records change", async () => {
+  it("keeps the applied receipt available for cleanup when requested records change", async () => {
     const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });
     const { rerender } = render(
@@ -221,7 +221,29 @@ describe("observation and cleanup", () => {
 
     await user.click(screen.getByRole("button", { name: "Remove records" }));
     await waitFor(() => expect(transport.calls.cleanupPlan).toHaveLength(1));
-    expect(transport.calls.cleanupPlan[0]?.receiptId).toBe("host-receipt");
+    expect(transport.calls.cleanupPlan[0]?.receiptId).toBe("receipt-1");
+  });
+
+  it("keeps a locally applied receipt when no host receipt exists", async () => {
+    const user = userEvent.setup();
+    const transport = Testing.makeFakeTransport({ inspect: connection });
+    const { rerender } = render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain="example.com" records={[record]} />
+      </DomainKit.Root>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Review changes" }));
+    await user.click(await screen.findByRole("button", { name: "Add records" }));
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain="example.com" records={[replacementRecord]} />
+      </DomainKit.Root>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Remove records" }));
+    await waitFor(() => expect(transport.calls.cleanupPlan).toHaveLength(1));
+    expect(transport.calls.cleanupPlan[0]?.receiptId).toBe("receipt-1");
   });
 
   it("uses one observe operation with explicit provider and public DNS sources", async () => {
