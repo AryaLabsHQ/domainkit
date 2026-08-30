@@ -1,0 +1,19 @@
+{
+  "name": "@domainkit/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "audit": "blume audit",
+    "build": "blume build",
+    "deploy": "bun run build && wrangler deploy",
+    "dev": "blume dev",
+    "preview": "blume preview",
+    "typecheck": "blume check"
+  },
+  "dependencies": {
+    "blume": "1.5.3"
+  },
+  "devDependencies": {
+    "wrangler": "4.127.1"
+  }
+}

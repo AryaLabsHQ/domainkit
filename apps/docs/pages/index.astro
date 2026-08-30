@@ -1,0 +1,154 @@
+---
+import PageLayout from "blume/components/layout/PageLayout.astro";
+import data from "blume:data";
+
+const { config } = data;
+const pageTitle = "DomainKit — DNS provisioning without provider lock-in";
+const pageDescription =
+  "An Effect-native TypeScript SDK and composable React UI for provider-independent, reviewable, and authorized DNS provisioning.";
+---
+
+<PageLayout
+  analytics={config.analytics}
+  banner={config.banner}
+  favicon={config.favicon}
+  fontCssVars={data.fontCssVars}
+  logo={config.logo}
+  navigation={data.navigation}
+  ogEnabled={config.og.enabled}
+  page={{ description: pageDescription, route: "/", title: pageTitle }}
+  searchEnabled={config.search.enabled}
+  site={{ description: config.description, title: config.title }}
+  siteUrl={config.site}
+  themeMode={config.theme.mode}
+  x={config.x}
+>
+  <main class="landing">
+    <section class="hero">
+      <p class="eyebrow">Provider-independent DNS provisioning</p>
+      <h1>Connect domains without making a registrar your architecture.</h1>
+      <p class="lede">
+        DomainKit turns DNS requirements into reviewable plans, applies only what
+        the user approved, and keeps provider credentials on infrastructure you
+        control.
+      </p>
+      <div class="actions">
+        <a class="primary" href="/docs">Read the docs</a>
+        <a href="https://github.com/AryaLabsHQ/domainkit">View on GitHub</a>
+      </div>
+    </section>
+
+    <section class="features" aria-label="DomainKit capabilities">
+      <article>
+        <span>01</span>
+        <h2>Plan before writing</h2>
+        <p>Show exact creates, no-ops, and conflicts before authorization.</p>
+      </article>
+      <article>
+        <span>02</span>
+        <h2>Own the authorization</h2>
+        <p>Use Cloudflare or Vercel while your application owns consent and storage.</p>
+      </article>
+      <article>
+        <span>03</span>
+        <h2>Compose the interface</h2>
+        <p>Adopt complete React flows or assemble semantic parts into your design system.</p>
+      </article>
+    </section>
+  </main>
+</PageLayout>
+
+<style>
+  .landing {
+    margin: 0 auto;
+    max-width: 76rem;
+    padding: clamp(5rem, 11vw, 9rem) 1.5rem 5rem;
+  }
+
+  .hero {
+    max-width: 60rem;
+  }
+
+  .eyebrow {
+    color: var(--blume-accent);
+    font-family: var(--blume-font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin: 0 0 1.5rem;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    font-family: var(--blume-font-display);
+    font-size: clamp(3rem, 7vw, 6.5rem);
+    font-weight: 600;
+    letter-spacing: -0.055em;
+    line-height: 0.96;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .lede {
+    color: var(--blume-muted-foreground);
+    font-size: clamp(1.1rem, 2vw, 1.35rem);
+    line-height: 1.6;
+    margin: 2rem 0 0;
+    max-width: 48rem;
+  }
+
+  .actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 2.25rem;
+  }
+
+  .actions a {
+    border: 1px solid var(--blume-border);
+    border-radius: var(--blume-radius);
+    color: inherit;
+    font-weight: 600;
+    padding: 0.7rem 1rem;
+    text-decoration: none;
+  }
+
+  .actions .primary {
+    background: var(--blume-action);
+    border-color: transparent;
+    color: var(--blume-action-foreground);
+  }
+
+  .features {
+    border-top: 1px solid var(--blume-border);
+    display: grid;
+    gap: 2.5rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: clamp(5rem, 10vw, 9rem);
+    padding-top: 2.5rem;
+  }
+
+  article span {
+    color: var(--blume-muted-foreground);
+    font-family: var(--blume-font-mono);
+    font-size: 0.75rem;
+  }
+
+  h2 {
+    font-size: 1.1rem;
+    margin: 1rem 0 0.55rem;
+  }
+
+  article p {
+    color: var(--blume-muted-foreground);
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  @media (max-width: 48rem) {
+    .features {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
