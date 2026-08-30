@@ -4,6 +4,7 @@ import { Transport } from "domainkit";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Atom from "effect/unstable/reactivity/Atom";
+import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import {
   useMemo,
   useState,
@@ -16,14 +17,15 @@ import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import * as Provider from "./provider.tsx";
-import { failureFromCause, type Failure } from "./atom.ts";
+import { failureFromDefect, failureFromError, type Failure } from "./atom.ts";
 
-export type State =
-  | { readonly _tag: "Loading" }
-  | Transport.ConnectionSnapshot
-  | Failure
-  | { readonly _tag: "Submitting"; readonly snapshot: Disconnected }
-  | { readonly _tag: "Redirecting"; readonly snapshot: Disconnected };
+type LocalState = Data.TaggedEnum<{
+  Loading: {};
+  Redirecting: { readonly snapshot: Disconnected };
+  Submitting: { readonly snapshot: Disconnected };
+}>;
+export const State = Data.taggedEnum<LocalState>();
+export type State = LocalState | Transport.ConnectionSnapshot | Failure;
 
 type Disconnected = Extract<Transport.ConnectionSnapshot, { readonly _tag: "Disconnected" }>;
 
@@ -57,11 +59,12 @@ export function useModel(domain: string): Model {
       const action = get(actionState);
       if (action !== undefined) return action;
       const inspection = get(inspect);
-      return inspection._tag === "Success"
-        ? inspection.value
-        : inspection._tag === "Failure"
-          ? failureFromCause(inspection.cause, "connection.inspect", "Provider detection failed")
-          : { _tag: "Loading" };
+      return AsyncResult.matchWithError(inspection, {
+        onDefect: () => failureFromDefect("connection.inspect", "Provider detection failed"),
+        onError: failureFromError,
+        onInitial: () => State.Loading(),
+        onSuccess: ({ value }) => value,
+      });
     });
     const command = runtime.fn<Command>()((input, get) => {
       if (input._tag === "Retry") {
@@ -73,30 +76,22 @@ export function useModel(domain: string): Model {
       if (snapshot._tag !== "Disconnected") return Effect.void;
       const reusableConnection = snapshot.reusableConnection;
       if (input._tag === "Reuse" && reusableConnection === undefined) return Effect.void;
-      get.set(actionState, { _tag: "Submitting", snapshot });
+      get.set(actionState, State.Submitting({ snapshot }));
       const complete = (
         request: Effect.Effect<Transport.ConnectionResult, Transport.Failure, Transport.Service>,
-        operation: string,
       ) =>
         request.pipe(
           Effect.tap((result) =>
             Effect.sync(() => {
               if (result._tag === "Redirect") {
-                get.set(actionState, { _tag: "Redirecting", snapshot });
+                get.set(actionState, State.Redirecting({ snapshot }));
                 navigate(result.authorizationUrl);
               } else {
                 get.set(actionState, result);
               }
             }),
           ),
-          Effect.catchCause((cause) =>
-            Effect.sync(() =>
-              get.set(
-                actionState,
-                failureFromCause(cause, operation, "The connection request failed"),
-              ),
-            ),
-          ),
+          Effect.catch((error) => Effect.sync(() => get.set(actionState, failureFromError(error)))),
           Effect.asVoid,
         );
       if (input._tag === "Connect") {
@@ -108,7 +103,6 @@ export function useModel(domain: string): Model {
               providerId: snapshot.provider.id,
             }),
           ),
-          "connection.connect",
         );
       }
       if (reusableConnection === undefined) return Effect.void;
@@ -116,7 +110,6 @@ export function useModel(domain: string): Model {
         Effect.flatMap(Transport.Service, (transport) =>
           transport.connection.reuse({ connectionId: reusableConnection.connectionId, domain }),
         ),
-        "connection.reuse",
       );
     });
     return { command, state };
@@ -451,18 +444,19 @@ export function RetryAction({ controller, kind = "retry", ...props }: RetryActio
   );
 }
 
-export type DisconnectState =
-  | { readonly _tag: "Idle" }
-  | { readonly _tag: "Disconnecting" }
-  | Transport.RemoveDomainResult
-  | Failure;
+type LocalDisconnectState = Data.TaggedEnum<{
+  Disconnecting: {};
+  Idle: {};
+}>;
+export const DisconnectState = Data.taggedEnum<LocalDisconnectState>();
+export type DisconnectState = LocalDisconnectState | Transport.RemoveDomainResult | Failure;
 
 export function useDisconnect(connection: Transport.Connected) {
   const { runtime } = useDomainKit();
   const controller = useMemo(() => {
-    const state = Atom.make<DisconnectState>({ _tag: "Idle" });
+    const state = Atom.make<DisconnectState>(DisconnectState.Idle());
     const disconnect = runtime.fn<void>()((_, get) => {
-      get.set(state, { _tag: "Disconnecting" });
+      get.set(state, DisconnectState.Disconnecting());
       return Effect.flatMap(Transport.Service, (transport) =>
         transport.connection.removeDomain({
           connectionId: connection.connectionId,
@@ -471,14 +465,7 @@ export function useDisconnect(connection: Transport.Connected) {
         }),
       ).pipe(
         Effect.tap((result) => Effect.sync(() => get.set(state, result))),
-        Effect.catchCause((cause) =>
-          Effect.sync(() =>
-            get.set(
-              state,
-              failureFromCause(cause, "connection.removeDomain", "Disconnecting failed"),
-            ),
-          ),
-        ),
+        Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
         Effect.asVoid,
       );
     });

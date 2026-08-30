@@ -6,25 +6,23 @@ import * as Effect from "effect/Effect";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import { useMemo } from "react";
 
-import { failureFromCause, type Failure } from "./atom.ts";
+import { failureFromError, type Failure } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 
+type LocalState = Data.TaggedEnum<{
+  Cleaned: { readonly result: Extract<Transport.CleanupResult, { readonly _tag: "Cleaned" }> };
+  Cleaning: { readonly plan: Transport.CleanupPlan };
+  Idle: {};
+  Partial: { readonly result: Extract<Transport.CleanupResult, { readonly _tag: "Partial" }> };
+  Planning: {};
+  Review: { readonly plan: Transport.CleanupPlan };
+}>;
+export const State = Data.taggedEnum<LocalState>();
 export type State =
-  | { readonly _tag: "Idle" }
-  | { readonly _tag: "Planning" }
-  | { readonly _tag: "Review"; readonly plan: Transport.CleanupPlan }
-  | { readonly _tag: "Cleaning"; readonly plan: Transport.CleanupPlan }
-  | {
-      readonly _tag: "Cleaned";
-      readonly result: Extract<Transport.CleanupResult, { readonly _tag: "Cleaned" }>;
-    }
-  | {
-      readonly _tag: "Partial";
-      readonly result: Extract<Transport.CleanupResult, { readonly _tag: "Partial" }>;
-    }
-  | { readonly _tag: "Stale"; readonly message: string }
+  | LocalState
+  | Extract<Transport.CleanupResult, { readonly _tag: "Stale" }>
   | Failure;
 
 type Command = Data.TaggedEnum<{
@@ -36,10 +34,10 @@ const Command = Data.taggedEnum<Command>();
 export function useController(connection: Transport.Connected, receiptId: string) {
   const { runtime } = useDomainKit();
   const controller = useMemo(() => {
-    const state = Atom.make<State>({ _tag: "Idle" });
+    const state = Atom.make<State>(State.Idle());
     const execute = runtime.fn<Command>()((command, get) => {
       if (command._tag === "Plan") {
-        get.set(state, { _tag: "Planning" });
+        get.set(state, State.Planning());
         return Effect.flatMap(Transport.Service, (transport) =>
           transport.cleanup.plan({
             connectionId: connection.connectionId,
@@ -47,16 +45,12 @@ export function useController(connection: Transport.Connected, receiptId: string
             receiptId,
           }),
         ).pipe(
-          Effect.tap((plan) => Effect.sync(() => get.set(state, { _tag: "Review", plan }))),
-          Effect.catchCause((cause) =>
-            Effect.sync(() =>
-              get.set(state, failureFromCause(cause, "cleanup.plan", "Domain cleanup failed")),
-            ),
-          ),
+          Effect.tap((plan) => Effect.sync(() => get.set(state, State.Review({ plan })))),
+          Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
           Effect.asVoid,
         );
       }
-      get.set(state, { _tag: "Cleaning", plan: command.plan });
+      get.set(state, State.Cleaning({ plan: command.plan }));
       return Effect.flatMap(Transport.Service, (transport) =>
         transport.cleanup.apply({
           connectionId: connection.connectionId,
@@ -70,18 +64,14 @@ export function useController(connection: Transport.Connected, receiptId: string
             get.set(
               state,
               result._tag === "Cleaned"
-                ? { _tag: "Cleaned", result }
+                ? State.Cleaned({ result })
                 : result._tag === "Partial"
-                  ? { _tag: "Partial", result }
+                  ? State.Partial({ result })
                   : result,
             ),
           ),
         ),
-        Effect.catchCause((cause) =>
-          Effect.sync(() =>
-            get.set(state, failureFromCause(cause, "cleanup.apply", "Domain cleanup failed")),
-          ),
-        ),
+        Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
         Effect.asVoid,
       );
     });
@@ -99,7 +89,7 @@ export function useController(connection: Transport.Connected, receiptId: string
       )
         execute(Command.Apply({ plan: state.plan }));
     },
-    dismiss: () => setState({ _tag: "Idle" }),
+    dismiss: () => setState(State.Idle()),
     plan: () => execute(Command.Plan()),
     state,
   } as const;

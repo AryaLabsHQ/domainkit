@@ -6,26 +6,24 @@ import * as Effect from "effect/Effect";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import { useMemo, useRef } from "react";
 
-import { failureFromCause, recordsIdentity, type Failure } from "./atom.ts";
+import { failureFromError, recordsIdentity, type Failure } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import * as Records from "./records.tsx";
 
+type LocalState = Data.TaggedEnum<{
+  Applying: { readonly plan: Transport.ProvisioningPlan };
+  Complete: { readonly result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" }> };
+  Idle: {};
+  Partial: { readonly result: Extract<Transport.ApplyResult, { readonly _tag: "Partial" }> };
+  Planning: {};
+  Review: { readonly plan: Transport.ProvisioningPlan };
+}>;
+export const State = Data.taggedEnum<LocalState>();
 export type State =
-  | { readonly _tag: "Idle" }
-  | { readonly _tag: "Planning" }
-  | { readonly _tag: "Review"; readonly plan: Transport.ProvisioningPlan }
-  | { readonly _tag: "Applying"; readonly plan: Transport.ProvisioningPlan }
-  | {
-      readonly _tag: "Complete";
-      readonly result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" }>;
-    }
-  | {
-      readonly _tag: "Partial";
-      readonly result: Extract<Transport.ApplyResult, { readonly _tag: "Partial" }>;
-    }
-  | { readonly _tag: "Stale"; readonly message: string }
+  | LocalState
+  | Extract<Transport.ApplyResult, { readonly _tag: "Stale" }>
   | Failure;
 
 export interface Controller {
@@ -54,10 +52,10 @@ export function useController(
   const onAppliedRef = useRef(onApplied);
   onAppliedRef.current = onApplied;
   const controller = useMemo(() => {
-    const state = Atom.make<State>({ _tag: "Idle" });
+    const state = Atom.make<State>(State.Idle());
     const execute = runtime.fn<Command>()((command, get) => {
       if (command._tag === "Plan") {
-        get.set(state, { _tag: "Planning" });
+        get.set(state, State.Planning());
         return Effect.flatMap(Transport.Service, (transport) =>
           transport.provisioning.plan({
             connectionId: connection.connectionId,
@@ -65,19 +63,12 @@ export function useController(
             records,
           }),
         ).pipe(
-          Effect.tap((plan) => Effect.sync(() => get.set(state, { _tag: "Review", plan }))),
-          Effect.catchCause((cause) =>
-            Effect.sync(() =>
-              get.set(
-                state,
-                failureFromCause(cause, "provisioning.plan", "DNS provisioning failed"),
-              ),
-            ),
-          ),
+          Effect.tap((plan) => Effect.sync(() => get.set(state, State.Review({ plan })))),
+          Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
           Effect.asVoid,
         );
       }
-      get.set(state, { _tag: "Applying", plan: command.plan });
+      get.set(state, State.Applying({ plan: command.plan }));
       return Effect.flatMap(Transport.Service, (transport) =>
         transport.provisioning.apply({
           connectionId: connection.connectionId,
@@ -88,24 +79,17 @@ export function useController(
         Effect.tap((result) =>
           Effect.sync(() => {
             if (result._tag === "Applied") {
-              get.set(state, { _tag: "Complete", result });
+              get.set(state, State.Complete({ result }));
               onAppliedRef.current?.(result);
             } else if (result._tag === "Partial") {
-              get.set(state, { _tag: "Partial", result });
+              get.set(state, State.Partial({ result }));
               onAppliedRef.current?.(result);
             } else {
               get.set(state, result);
             }
           }),
         ),
-        Effect.catchCause((cause) =>
-          Effect.sync(() =>
-            get.set(
-              state,
-              failureFromCause(cause, "provisioning.apply", "DNS provisioning failed"),
-            ),
-          ),
-        ),
+        Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
         Effect.asVoid,
       );
     });
@@ -123,7 +107,7 @@ export function useController(
       )
         execute(Command.Apply({ plan: state.plan }));
     },
-    dismiss: () => setState({ _tag: "Idle" }),
+    dismiss: () => setState(State.Idle()),
     plan: () => execute(Command.Plan()),
     retry: () => execute(Command.Plan()),
     state,

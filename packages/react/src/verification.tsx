@@ -1,20 +1,22 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Transport } from "domainkit";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import { useMemo } from "react";
 
-import { failureFromCause, recordsIdentity, type Failure } from "./atom.ts";
+import { failureFromError, recordsIdentity, type Failure } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import { Status as RecordStatus } from "./records.tsx";
 
-export type State =
-  | { readonly _tag: "Idle" }
-  | { readonly _tag: "Observing" }
-  | Transport.Observation
-  | Failure;
+type LocalState = Data.TaggedEnum<{
+  Idle: {};
+  Observing: {};
+}>;
+export const State = Data.taggedEnum<LocalState>();
+export type State = LocalState | Transport.Observation | Failure;
 
 export interface ObserveConfig {
   readonly connection?: Transport.Connected;
@@ -32,9 +34,9 @@ export function useController(config: ObserveConfig) {
   const publicDns = config.sources?.publicDns ?? true;
   const recordKey = recordsIdentity(config.records);
   const controller = useMemo(() => {
-    const state = Atom.make<State>({ _tag: "Idle" });
+    const state = Atom.make<State>(State.Idle());
     const observe = runtime.fn<void>()((_, get) => {
-      get.set(state, { _tag: "Observing" });
+      get.set(state, State.Observing());
       return Effect.flatMap(Transport.Service, (transport) =>
         transport.verification.observe({
           ...(config.connection === undefined
@@ -46,14 +48,7 @@ export function useController(config: ObserveConfig) {
         }),
       ).pipe(
         Effect.tap((observation) => Effect.sync(() => get.set(state, observation))),
-        Effect.catchCause((cause) =>
-          Effect.sync(() =>
-            get.set(
-              state,
-              failureFromCause(cause, "verification.observe", "DNS observation failed"),
-            ),
-          ),
-        ),
+        Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
         Effect.asVoid,
       );
     });
