@@ -7,6 +7,7 @@ export default defineConfig({
     perf: "warn",
   },
   jsPlugins: [{ name: "domainkit", specifier: "./tools/oxlint/index.js" }],
+  ignorePatterns: ["**/.blume/**", "**/dist/**"],
   plugins: ["typescript", "import", "node"],
   rules: {
     "domainkit/no-foreign-promise-outside-boundary": "error",

@@ -2,11 +2,15 @@
   "name": "domainkit-workspace",
   "private": true,
   "workspaces": [
+    "apps/*",
     "packages/*"
   ],
   "type": "module",
   "scripts": {
     "build": "bun run --filter './packages/*' build",
+    "docs:audit": "bun run --filter @domainkit/docs audit",
+    "docs:build": "bun run --filter @domainkit/docs build",
+    "docs:dev": "bun run --filter @domainkit/docs dev",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --deny-warnings .",
