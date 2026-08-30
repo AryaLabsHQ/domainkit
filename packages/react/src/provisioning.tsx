@@ -10,6 +10,7 @@ import { failureFromError, recordsIdentity, type Failure } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
+import * as Operations from "./operations.tsx";
 import * as Records from "./records.tsx";
 
 type LocalState = Data.TaggedEnum<{
@@ -34,26 +35,36 @@ export interface Controller {
   readonly state: State;
 }
 
-type Command = Data.TaggedEnum<{
-  Apply: { readonly plan: Transport.ProvisioningPlan };
+export type Command = Data.TaggedEnum<{
+  Apply: {};
+  Dismiss: {};
   Plan: {};
 }>;
-const Command = Data.taggedEnum<Command>();
+export const Command = Data.taggedEnum<Command>();
 
-export function useController(
+export interface Model {
+  readonly command: Atom.AtomResultFn<Command, void>;
+  readonly state: Atom.Atom<State>;
+}
+
+export function useModel(
   connection: Transport.Connected,
   records: ReadonlyArray<Transport.DnsRecord>,
   onApplied?: (
     result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
   ) => void,
-): Controller {
+): Model {
   const { runtime } = useDomainKit();
   const recordKey = recordsIdentity(records);
   const onAppliedRef = useRef(onApplied);
   onAppliedRef.current = onApplied;
-  const controller = useMemo(() => {
+  return useMemo(() => {
     const state = Atom.make<State>(State.Idle());
     const execute = runtime.fn<Command>()((command, get) => {
+      if (command._tag === "Dismiss") {
+        get.set(state, State.Idle());
+        return Effect.void;
+      }
       if (command._tag === "Plan") {
         get.set(state, State.Planning());
         return Effect.flatMap(Transport.Service, (transport) =>
@@ -68,12 +79,19 @@ export function useController(
           Effect.asVoid,
         );
       }
-      get.set(state, State.Applying({ plan: command.plan }));
+      const current = get(state);
+      if (
+        current._tag !== "Review" ||
+        current.plan.operations.some((operation) => operation._tag === "Conflict")
+      )
+        return Effect.void;
+      const plan = current.plan;
+      get.set(state, State.Applying({ plan }));
       return Effect.flatMap(Transport.Service, (transport) =>
         transport.provisioning.apply({
           connectionId: connection.connectionId,
           domain: connection.domain,
-          planDigest: command.plan.digest,
+          planDigest: plan.digest,
         }),
       ).pipe(
         Effect.tap((result) =>
@@ -93,28 +111,144 @@ export function useController(
         Effect.asVoid,
       );
     });
-    return { execute, state };
+    return { command: execute, state };
   }, [connection.connectionId, connection.domain, recordKey, runtime]);
-  const state = useAtomValue(controller.state);
-  const setState = useAtomSet(controller.state);
-  const execute = useAtomSet(controller.execute);
+}
+
+export function useController(
+  connection: Transport.Connected,
+  records: ReadonlyArray<Transport.DnsRecord>,
+  onApplied?: (
+    result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
+  ) => void,
+): Controller {
+  const model = useModel(connection, records, onApplied);
+  const state = useAtomValue(model.state);
+  const execute = useAtomSet(model.command);
 
   return {
-    apply: () => {
-      if (
-        state._tag === "Review" &&
-        !state.plan.operations.some((operation) => operation._tag === "Conflict")
-      )
-        execute(Command.Apply({ plan: state.plan }));
-    },
-    dismiss: () => setState(State.Idle()),
+    apply: () => execute(Command.Apply()),
+    dismiss: () => execute(Command.Dismiss()),
     plan: () => execute(Command.Plan()),
     retry: () => execute(Command.Plan()),
     state,
   };
 }
 
-export interface FlowProps extends PartProps<"div", { readonly status: State["_tag"] }> {
+export interface RootProps extends PartProps<"div", { readonly status: State["_tag"] }> {
+  readonly status: State["_tag"];
+}
+
+export function Root({ status, ...props }: RootProps) {
+  return usePart(
+    "div",
+    props,
+    { status },
+    { "data-domainkit-part": "provisioning-flow", "data-state": status },
+  );
+}
+
+export function Outcome({ state }: { readonly state: State }) {
+  const { messages } = useDomainKit();
+  if (state._tag === "Complete") {
+    return (
+      <p data-domainkit-part="flow-outcome" data-tone="success">
+        {messages.recordsApplied}
+      </p>
+    );
+  }
+  if (state._tag === "Partial" || state._tag === "Failure" || state._tag === "Stale") {
+    return (
+      <p data-domainkit-part="flow-outcome" data-tone="danger" role="alert">
+        {state._tag === "Partial" ? messages.recordsPartiallyApplied : state.message}
+      </p>
+    );
+  }
+  return null;
+}
+
+export function Dialog({ controller }: { readonly controller: Controller }) {
+  const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
+  const state = controller.state;
+  const plan = state._tag === "Review" || state._tag === "Applying" ? state.plan : undefined;
+  return (
+    <BaseDialog.Root
+      onOpenChange={(open) => {
+        if (!open) controller.dismiss();
+      }}
+      open={plan !== undefined}
+    >
+      <BaseDialog.Trigger
+        data-domainkit-part="plan-trigger"
+        disabled={state._tag === "Planning" || state._tag === "Applying"}
+        onClick={() => controller.plan()}
+      >
+        {state._tag === "Planning" ? messages.planningDns : messages.reviewDns}
+      </BaseDialog.Trigger>
+      {plan === undefined ? null : (
+        <BaseDialog.Portal container={portalContainer ?? undefined}>
+          <BaseDialog.Backdrop data-domainkit-part="dialog-backdrop" />
+          <BaseDialog.Popup
+            data-color-scheme={colorScheme}
+            data-domainkit-part="plan-dialog"
+            data-domainkit-root=""
+            style={themeStyle}
+          >
+            <div data-domainkit-part="dialog-header">
+              <div data-domainkit-part="dialog-heading">
+                <BaseDialog.Title data-domainkit-part="dialog-title">
+                  {messages.reviewDns}
+                </BaseDialog.Title>
+                <BaseDialog.Description data-domainkit-part="dialog-description">
+                  {messages.planConsent}
+                </BaseDialog.Description>
+              </div>
+              <BaseDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
+                ×
+              </BaseDialog.Close>
+            </div>
+            <div data-domainkit-part="dialog-body">
+              <Operations.List lifecycle="provisioning" operations={plan.operations} />
+            </div>
+            <div data-domainkit-part="dialog-footer">
+              <BaseDialog.Close data-domainkit-part="dialog-cancel">
+                {messages.cancel}
+              </BaseDialog.Close>
+              <button
+                data-domainkit-part="plan-apply"
+                disabled={
+                  state._tag === "Applying" ||
+                  plan.operations.some((operation) => operation._tag === "Conflict")
+                }
+                onClick={() => controller.apply()}
+                type="button"
+              >
+                {state._tag === "Applying" ? messages.applyingDns : messages.applyDns}
+              </button>
+            </div>
+          </BaseDialog.Popup>
+        </BaseDialog.Portal>
+      )}
+    </BaseDialog.Root>
+  );
+}
+
+export function RetryAction({ controller }: { readonly controller: Controller }) {
+  const { messages } = useDomainKit();
+  const state = controller.state;
+  if (state._tag !== "Failure" && state._tag !== "Stale" && state._tag !== "Partial") return null;
+  return (
+    <button
+      data-domainkit-part="provisioning-retry"
+      onClick={() => controller.retry()}
+      type="button"
+    >
+      {messages.retry}
+    </button>
+  );
+}
+
+export interface FlowProps extends Omit<RootProps, "status"> {
   readonly connection: Transport.Connected;
   readonly onApplied?: (
     result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
@@ -125,131 +259,13 @@ export interface FlowProps extends PartProps<"div", { readonly status: State["_t
 
 export function Flow({ connection, onApplied, records, showRecords = true, ...props }: FlowProps) {
   const controller = useController(connection, records, onApplied);
-  const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   const state = controller.state;
-  const plan = state._tag === "Review" || state._tag === "Applying" ? state.plan : undefined;
-  return usePart(
-    "div",
-    props,
-    { status: state._tag },
-    {
-      children: (
-        <>
-          {showRecords ? <Records.Table records={records} /> : null}
-          {state._tag === "Complete" ? (
-            <p data-domainkit-part="flow-outcome" data-tone="success">
-              {messages.recordsApplied}
-            </p>
-          ) : null}
-          {state._tag === "Partial" ? (
-            <p data-domainkit-part="flow-outcome" data-tone="danger" role="alert">
-              {messages.recordsPartiallyApplied}
-            </p>
-          ) : null}
-          {state._tag === "Failure" || state._tag === "Stale" ? (
-            <p data-domainkit-part="flow-outcome" data-tone="danger" role="alert">
-              {state.message}
-            </p>
-          ) : null}
-          <BaseDialog.Root
-            onOpenChange={(open) => {
-              if (!open) controller.dismiss();
-            }}
-            open={plan !== undefined}
-          >
-            <BaseDialog.Trigger
-              data-domainkit-part="plan-trigger"
-              disabled={state._tag === "Planning" || state._tag === "Applying"}
-              onClick={() => void controller.plan()}
-            >
-              {state._tag === "Planning" ? messages.planningDns : messages.reviewDns}
-            </BaseDialog.Trigger>
-            {plan === undefined ? null : (
-              <BaseDialog.Portal container={portalContainer ?? undefined}>
-                <BaseDialog.Backdrop data-domainkit-part="dialog-backdrop" />
-                <BaseDialog.Popup
-                  data-color-scheme={colorScheme}
-                  data-domainkit-part="plan-dialog"
-                  data-domainkit-root=""
-                  style={themeStyle}
-                >
-                  <div data-domainkit-part="dialog-header">
-                    <div data-domainkit-part="dialog-heading">
-                      <BaseDialog.Title data-domainkit-part="dialog-title">
-                        {messages.reviewDns}
-                      </BaseDialog.Title>
-                      <BaseDialog.Description data-domainkit-part="dialog-description">
-                        {messages.planConsent}
-                      </BaseDialog.Description>
-                    </div>
-                    <BaseDialog.Close
-                      aria-label={messages.close}
-                      data-domainkit-part="dialog-close"
-                    >
-                      ×
-                    </BaseDialog.Close>
-                  </div>
-                  <div data-domainkit-part="dialog-body">
-                    <OperationList plan={plan} />
-                  </div>
-                  <div data-domainkit-part="dialog-footer">
-                    <BaseDialog.Close data-domainkit-part="dialog-cancel">
-                      {messages.cancel}
-                    </BaseDialog.Close>
-                    <button
-                      data-domainkit-part="plan-apply"
-                      disabled={
-                        state._tag === "Applying" ||
-                        plan.operations.some((operation) => operation._tag === "Conflict")
-                      }
-                      onClick={() => void controller.apply()}
-                      type="button"
-                    >
-                      {state._tag === "Applying" ? messages.applyingDns : messages.applyDns}
-                    </button>
-                  </div>
-                </BaseDialog.Popup>
-              </BaseDialog.Portal>
-            )}
-          </BaseDialog.Root>
-          {state._tag === "Failure" || state._tag === "Stale" || state._tag === "Partial" ? (
-            <button
-              data-domainkit-part="provisioning-retry"
-              onClick={() => void controller.retry()}
-              type="button"
-            >
-              {messages.retry}
-            </button>
-          ) : null}
-        </>
-      ),
-      "data-domainkit-part": "provisioning-flow",
-      "data-state": state._tag,
-    },
-  );
-}
-
-export function OperationList({ plan }: { readonly plan: Transport.ProvisioningPlan }) {
   return (
-    <ul data-domainkit-part="plan-operations">
-      {plan.operations.map((operation) => (
-        <li data-operation={operation._tag} key={operation.id}>
-          <span data-domainkit-part="operation-kind">{operation._tag}</span>{" "}
-          <strong data-domainkit-part="operation-type">{operation.record.type}</strong>{" "}
-          <span data-domainkit-part="operation-record">
-            <span data-domainkit-part="operation-name">{operation.record.name}</span>
-            <code data-domainkit-part="operation-value">{operation.record.value}</code>
-            {operation.record.priority === undefined ? null : (
-              <span data-domainkit-part="operation-priority">
-                Priority {operation.record.priority}
-              </span>
-            )}
-            {operation._tag === "Conflict" ? (
-              <span data-domainkit-part="operation-reason">{operation.reason}</span>
-            ) : null}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <Root status={state._tag} {...props}>
+      {showRecords ? <Records.Table records={records} /> : null}
+      <Outcome state={state} />
+      <Dialog controller={controller} />
+      <RetryAction controller={controller} />
+    </Root>
   );
 }

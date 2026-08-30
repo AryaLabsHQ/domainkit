@@ -22,6 +22,22 @@ const records: ReadonlyArray<Records.DnsRecord> = [
 ];
 
 describe("Records primitives", () => {
+  it("exposes copy state to custom host UI", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async () => undefined },
+    });
+    const CustomCopy = () => {
+      const controller = Records.useCopy("custom-value");
+      return (
+        <button onClick={controller.copy}>{controller.copied ? "Copied" : "Copy custom"}</button>
+      );
+    };
+    render(<CustomCopy />);
+    await userEvent.click(screen.getByRole("button", { name: "Copy custom" }));
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy();
+  });
+
   it("renders a table without DomainKit.Root", () => {
     render(<Records.Table records={records} />);
     expect(screen.getByRole("columnheader", { name: "Type" })).toBeTruthy();

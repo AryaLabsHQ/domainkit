@@ -5,7 +5,7 @@ import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useIcons } from "./icons.tsx";
 
-const copyText = (value: string): Promise<boolean> => {
+export const copyText = (value: string): Promise<boolean> => {
   if (typeof navigator === "undefined" || navigator.clipboard === undefined) {
     return Promise.resolve(false);
   }
@@ -96,6 +96,28 @@ function leafPart<Tag extends keyof React.JSX.IntrinsicElements>(
   };
 }
 
+export interface CopyController {
+  readonly copied: boolean;
+  readonly copy: () => void;
+}
+
+export function useCopy(value: string, resetAfter = 2000): CopyController {
+  const [copied, setCopied] = useState(false);
+  const reset = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(reset.current), []);
+  return {
+    copied,
+    copy: () => {
+      void copyText(value).then((ok) => {
+        if (!ok) return;
+        setCopied(true);
+        clearTimeout(reset.current);
+        reset.current = setTimeout(() => setCopied(false), resetAfter);
+      });
+    },
+  };
+}
+
 export interface CopyValueProps extends PartProps<"span", { readonly copied: boolean }> {
   readonly copiedIcon?: ReactNode;
   readonly copiedLabel?: string;
@@ -113,9 +135,8 @@ export function CopyValue({
   ...props
 }: CopyValueProps) {
   const icons = useIcons();
-  const [copied, setCopied] = useState(false);
-  const reset = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(reset.current), []);
+  const controller = useCopy(value);
+  const copied = controller.copied;
   return usePart(
     "span",
     props,
@@ -127,14 +148,7 @@ export function CopyValue({
           <button
             aria-label={`${copied ? copiedLabel : copyLabel} ${value}`}
             data-domainkit-part="copy-action"
-            onClick={() => {
-              void copyText(value).then((ok) => {
-                if (!ok) return;
-                setCopied(true);
-                clearTimeout(reset.current);
-                reset.current = setTimeout(() => setCopied(false), 2000);
-              });
-            }}
+            onClick={controller.copy}
             type="button"
           >
             <span
@@ -185,10 +199,9 @@ export function ZoneFile({
   ...props
 }: ZoneFileProps) {
   const icons = useIcons();
-  const [copied, setCopied] = useState(false);
-  const reset = useRef<ReturnType<typeof setTimeout>>(undefined);
   const zone = toZoneFile(records);
-  useEffect(() => () => clearTimeout(reset.current), []);
+  const controller = useCopy(zone);
+  const copied = controller.copied;
   return usePart(
     "div",
     props,
@@ -199,14 +212,7 @@ export function ZoneFile({
           <button
             aria-label={copied ? copiedLabel : copyLabel}
             data-domainkit-part="zone-copy"
-            onClick={() => {
-              void copyText(zone).then((ok) => {
-                if (!ok) return;
-                setCopied(true);
-                clearTimeout(reset.current);
-                reset.current = setTimeout(() => setCopied(false), 2000);
-              });
-            }}
+            onClick={controller.copy}
             type="button"
           >
             <span aria-hidden="true" data-icon="inline-start">
@@ -216,7 +222,7 @@ export function ZoneFile({
           </button>
           <button
             data-domainkit-part="zone-download"
-            onClick={() => downloadText(`${domain}.txt`, zone)}
+            onClick={() => downloadZoneFile(domain, records)}
             type="button"
           >
             <span aria-hidden="true" data-icon="inline-start">
@@ -395,6 +401,11 @@ export const toZoneFile = (records: ReadonlyArray<Transport.DnsRecord>): string 
         `${absoluteDomainName(record.name)} IN ${record.type} ${record.priority === undefined ? "" : `${record.priority} `}${zoneValue(record)}`,
     )
     .join("\n")}\n`;
+
+export const downloadZoneFile = (
+  domain: string,
+  records: ReadonlyArray<Transport.DnsRecord>,
+): void => downloadText(`${domain}.txt`, toZoneFile(records));
 
 export type DnsRecord = Transport.DnsRecord;
 export type ObservationEvidence = Transport.ObservationEvidence;

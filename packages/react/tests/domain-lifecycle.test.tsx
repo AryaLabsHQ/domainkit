@@ -1,5 +1,6 @@
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Transport } from "domainkit";
 
 import {
@@ -36,6 +37,36 @@ const connection = {
 };
 
 describe("provisioning lifecycle", () => {
+  it("exposes a shared Atom model to custom provisioning UI", async () => {
+    const transport = Testing.makeFakeTransport({ inspect: connection });
+    const CustomProvisioning = () => {
+      const model = Provisioning.useModel(connection, [record]);
+      const state = useAtomValue(model.state);
+      const command = useAtomSet(model.command);
+      return (
+        <>
+          <span>{state._tag}</span>
+          {state._tag === "Idle" ? (
+            <button onClick={() => command(Provisioning.Command.Plan())}>Plan records</button>
+          ) : null}
+          {state._tag === "Review" ? (
+            <button onClick={() => command(Provisioning.Command.Apply())}>Apply plan</button>
+          ) : null}
+        </>
+      );
+    };
+    render(
+      <DomainKit.Root transport={transport}>
+        <CustomProvisioning />
+      </DomainKit.Root>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Plan records" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Apply plan" }));
+    expect(await screen.findByText("Complete")).toBeTruthy();
+    expect(transport.calls.apply).toHaveLength(1);
+  });
+
   it("reviews exact operations and applies only the approved server digest", async () => {
     const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });
@@ -81,6 +112,41 @@ describe("provisioning lifecycle", () => {
     expect(
       (within(dialog).getByRole("button", { name: "Add records" }) as HTMLButtonElement).disabled,
     ).toBe(true);
+    expect(transport.calls.apply).toEqual([]);
+  });
+
+  it("fails closed when custom UI dispatches Apply for a conflicting plan", async () => {
+    const transport = Testing.makeFakeTransport({
+      inspect: connection,
+      plan: {
+        _tag: "Plan",
+        digest: "conflicting-plan",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        operations: [{ _tag: "Conflict", id: "conflict-1", reason: "TXT differs", record }],
+      },
+    });
+    const CustomProvisioning = () => {
+      const model = Provisioning.useModel(connection, [record]);
+      const state = useAtomValue(model.state);
+      const command = useAtomSet(model.command);
+      return (
+        <>
+          <span>{state._tag}</span>
+          <button onClick={() => command(Provisioning.Command.Plan())}>Plan records</button>
+          <button onClick={() => command(Provisioning.Command.Apply())}>Apply plan</button>
+        </>
+      );
+    };
+    render(
+      <DomainKit.Root transport={transport}>
+        <CustomProvisioning />
+      </DomainKit.Root>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Plan records" }));
+    expect(await screen.findByText("Review")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Apply plan" }));
+    expect(screen.getByText("Review")).toBeTruthy();
     expect(transport.calls.apply).toEqual([]);
   });
 
@@ -177,6 +243,46 @@ describe("provisioning lifecycle", () => {
 });
 
 describe("observation and cleanup", () => {
+  it("exposes cleanup and verification Atom models to custom host UI", async () => {
+    const transport = Testing.makeFakeTransport({ inspect: connection });
+    const CustomLifecycle = () => {
+      const cleanupModel = Cleanup.useModel(connection, "receipt-1");
+      const cleanupState = useAtomValue(cleanupModel.state);
+      const cleanupCommand = useAtomSet(cleanupModel.command);
+      const verificationModel = Verification.useModel({
+        connection,
+        domain: connection.domain,
+        records: [record],
+      });
+      const verificationState = useAtomValue(verificationModel.state);
+      const verificationCommand = useAtomSet(verificationModel.command);
+      return (
+        <>
+          <span>Cleanup {cleanupState._tag}</span>
+          {cleanupState._tag === "Idle" ? (
+            <button onClick={() => cleanupCommand(Cleanup.Command.Plan())}>Plan cleanup</button>
+          ) : null}
+          <span>Verification {verificationState._tag}</span>
+          <button onClick={() => verificationCommand(Verification.Command.Observe())}>
+            Observe records
+          </button>
+        </>
+      );
+    };
+    render(
+      <DomainKit.Root transport={transport}>
+        <CustomLifecycle />
+      </DomainKit.Root>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Plan cleanup" }));
+    expect(await screen.findByText("Cleanup Review")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Observe records" }));
+    expect(await screen.findByText("Verification Observation")).toBeTruthy();
+    expect(transport.calls.cleanupPlan).toHaveLength(1);
+    expect(transport.calls.observe).toHaveLength(1);
+  });
+
   it("does not revive an applied receipt after the host receipt cycles", async () => {
     const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });
@@ -369,5 +475,40 @@ describe("observation and cleanup", () => {
 
     expect(await screen.findByRole("button", { name: "Disconnect" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Remove records" })).toBeNull();
+  });
+
+  it("fails closed when custom UI dispatches Apply for a blocked cleanup plan", async () => {
+    const transport = Testing.makeFakeTransport({
+      cleanupPlan: {
+        _tag: "CleanupPlan",
+        digest: "cleanup-digest",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        operations: [{ _tag: "Blocked", id: "blocked-1", reason: "record drifted", record }],
+      },
+      inspect: connection,
+    });
+    const CustomCleanup = () => {
+      const model = Cleanup.useModel(connection, "receipt-1");
+      const state = useAtomValue(model.state);
+      const command = useAtomSet(model.command);
+      return (
+        <>
+          <span>{state._tag}</span>
+          <button onClick={() => command(Cleanup.Command.Plan())}>Plan cleanup</button>
+          <button onClick={() => command(Cleanup.Command.Apply())}>Apply cleanup</button>
+        </>
+      );
+    };
+    render(
+      <DomainKit.Root transport={transport}>
+        <CustomCleanup />
+      </DomainKit.Root>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Plan cleanup" }));
+    expect(await screen.findByText("Review")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Apply cleanup" }));
+    expect(screen.getByText("Review")).toBeTruthy();
+    expect(transport.calls.cleanupApply).toEqual([]);
   });
 });

@@ -28,14 +28,35 @@ export interface ObserveConfig {
   };
 }
 
-export function useController(config: ObserveConfig) {
+export type Command = Data.TaggedEnum<{
+  Observe: {};
+  Reset: {};
+}>;
+export const Command = Data.taggedEnum<Command>();
+
+export interface Model {
+  readonly command: Atom.AtomResultFn<Command, void>;
+  readonly state: Atom.Atom<State>;
+}
+
+export interface Controller {
+  readonly observe: () => void;
+  readonly reset: () => void;
+  readonly state: State;
+}
+
+export function useModel(config: ObserveConfig): Model {
   const { runtime } = useDomainKit();
   const provider = config.sources?.provider ?? config.connection !== undefined;
   const publicDns = config.sources?.publicDns ?? true;
   const recordKey = recordsIdentity(config.records);
-  const controller = useMemo(() => {
+  return useMemo(() => {
     const state = Atom.make<State>(State.Idle());
-    const observe = runtime.fn<void>()((_, get) => {
+    const observe = runtime.fn<Command>()((command, get) => {
+      if (command._tag === "Reset") {
+        get.set(state, State.Idle());
+        return Effect.void;
+      }
       get.set(state, State.Observing());
       return Effect.flatMap(Transport.Service, (transport) =>
         transport.verification.observe({
@@ -52,12 +73,17 @@ export function useController(config: ObserveConfig) {
         Effect.asVoid,
       );
     });
-    return { observe, state };
+    return { command: observe, state };
   }, [config.connection?.connectionId, config.domain, provider, publicDns, recordKey, runtime]);
-  const state = useAtomValue(controller.state);
-  const dispatch = useAtomSet(controller.observe);
-  const observe = () => dispatch();
-  return { observe, state } as const;
+}
+
+export function useController(config: ObserveConfig): Controller {
+  const model = useModel(config);
+  const state = useAtomValue(model.state);
+  const dispatch = useAtomSet(model.command);
+  const observe = () => dispatch(Command.Observe());
+  const reset = () => dispatch(Command.Reset());
+  return { observe, reset, state };
 }
 
 const evidenceNote = (evidence: Transport.ObservationEvidence): string | undefined => {
@@ -86,65 +112,81 @@ const observationGroups = (
     { evidence: observation.publicDns, label: "Public DNS" },
   ].filter((group) => group.evidence.length > 0);
 
-export interface StatusProps extends PartProps<"div", { readonly status: State["_tag"] }> {
+export interface RootProps extends PartProps<"div", { readonly status: State["_tag"] }> {
+  readonly status: State["_tag"];
+}
+
+export function Root({ status, ...props }: RootProps) {
+  return usePart(
+    "div",
+    props,
+    { status },
+    { "data-domainkit-part": "verification-status", "data-state": status },
+  );
+}
+
+export function Evidence({ observation }: { readonly observation: Transport.Observation }) {
+  return (
+    <div data-domainkit-part="observation-list">
+      {observationGroups(observation).map((group) => (
+        <section data-domainkit-part="observation-group" key={group.label}>
+          <p data-domainkit-part="observation-source">{group.label}</p>
+          <ul>
+            {group.evidence.map((evidence, index) => {
+              const note = evidenceNote(evidence);
+              return (
+                <li key={`${evidence._tag}-${evidence.recordId}-${index}`}>
+                  <div data-domainkit-part="observation-row">
+                    <span data-domainkit-part="observation-record">{evidence.recordId}</span>
+                    <RecordStatus evidence={evidence} />
+                  </div>
+                  {note === undefined ? null : <p data-domainkit-part="observation-note">{note}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+export function Outcome({ state }: { readonly state: State }) {
+  if (state._tag !== "Failure") return null;
+  return (
+    <p data-domainkit-part="flow-outcome" data-tone="danger" role="alert">
+      {state.message}
+    </p>
+  );
+}
+
+export function ObserveAction({ controller }: { readonly controller: Controller }) {
+  const { messages } = useDomainKit();
+  return (
+    <button
+      data-domainkit-part="observe-action"
+      disabled={controller.state._tag === "Observing"}
+      onClick={() => controller.observe()}
+      type="button"
+    >
+      {controller.state._tag === "Observing" ? messages.checkingDns : messages.checkDns}
+    </button>
+  );
+}
+
+export interface StatusProps extends Omit<RootProps, "status"> {
   readonly config: ObserveConfig;
 }
 
 export function Status({ config, ...props }: StatusProps) {
   const controller = useController(config);
-  const { messages } = useDomainKit();
   const state = controller.state;
-  return usePart(
-    "div",
-    props,
-    { status: state._tag },
-    {
-      children: (
-        <>
-          {state._tag === "Observation" ? (
-            <div data-domainkit-part="observation-list">
-              {observationGroups(state).map((group) => (
-                <section data-domainkit-part="observation-group" key={group.label}>
-                  <p data-domainkit-part="observation-source">{group.label}</p>
-                  <ul>
-                    {group.evidence.map((evidence, index) => {
-                      const note = evidenceNote(evidence);
-                      return (
-                        <li key={`${evidence._tag}-${evidence.recordId}-${index}`}>
-                          <div data-domainkit-part="observation-row">
-                            <span data-domainkit-part="observation-record">
-                              {evidence.recordId}
-                            </span>
-                            <RecordStatus evidence={evidence} />
-                          </div>
-                          {note === undefined ? null : (
-                            <p data-domainkit-part="observation-note">{note}</p>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              ))}
-            </div>
-          ) : state._tag === "Failure" ? (
-            <p data-domainkit-part="flow-outcome" data-tone="danger" role="alert">
-              {state.message}
-            </p>
-          ) : null}
-          <button
-            data-domainkit-part="observe-action"
-            disabled={state._tag === "Observing"}
-            onClick={() => void controller.observe()}
-            type="button"
-          >
-            {state._tag === "Observing" ? messages.checkingDns : messages.checkDns}
-          </button>
-        </>
-      ),
-      "data-domainkit-part": "verification-status",
-      "data-state": state._tag,
-    },
+  return (
+    <Root status={state._tag} {...props}>
+      {state._tag === "Observation" ? <Evidence observation={state} /> : null}
+      <Outcome state={state} />
+      <ObserveAction controller={controller} />
+    </Root>
   );
 }
 
