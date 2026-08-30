@@ -18,7 +18,7 @@
     "release:check": "bun run lint && bun run lint:rules && bun run format:check && bun run --filter domainkit release:check && bun run --filter @domainkit/react release:check",
     "tegami": "bun scripts/tegami.mts",
     "test": "bun run --filter './packages/*' test",
-    "typecheck": "bun run --filter './packages/*' typecheck"
+    "typecheck": "bun run --filter domainkit build && bun run --filter './packages/*' typecheck"
   },
   "devDependencies": {
     "oxfmt": "0.65.0",
