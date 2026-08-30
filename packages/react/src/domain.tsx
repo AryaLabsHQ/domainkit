@@ -6,6 +6,7 @@ import * as Connection from "./connection.tsx";
 import * as Provisioning from "./provisioning.tsx";
 import * as Provider from "./provider.tsx";
 import * as Records from "./records.tsx";
+import * as RequestState from "./request-state.ts";
 import * as Verification from "./verification.tsx";
 import type { ApplyResult, DnsRecord } from "./transport.ts";
 
@@ -56,16 +57,20 @@ function ConnectedFlow({
     readonly epoch: number;
     readonly receiptId: string;
   }>();
-  const receiptEpoch = useRef({ initialReceiptId, value: 0 });
+  const receiptSource = JSON.stringify([
+    initialReceiptId ?? null,
+    RequestState.recordsIdentity(records),
+  ]);
+  const receiptEpoch = useRef({ source: receiptSource, value: 0 });
   const epoch =
-    receiptEpoch.current.initialReceiptId === initialReceiptId
+    receiptEpoch.current.source === receiptSource
       ? receiptEpoch.current.value
       : receiptEpoch.current.value + 1;
   useEffect(() => {
-    if (receiptEpoch.current.initialReceiptId === initialReceiptId) return;
-    receiptEpoch.current = { initialReceiptId, value: receiptEpoch.current.value + 1 };
+    if (receiptEpoch.current.source === receiptSource) return;
+    receiptEpoch.current = { source: receiptSource, value: receiptEpoch.current.value + 1 };
     setAppliedReceipt(undefined);
-  }, [initialReceiptId]);
+  }, [receiptSource]);
   const receiptId =
     appliedReceipt !== undefined && appliedReceipt.epoch === epoch
       ? appliedReceipt.receiptId

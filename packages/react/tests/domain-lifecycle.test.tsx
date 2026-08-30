@@ -202,6 +202,28 @@ describe("observation and cleanup", () => {
     expect(transport.calls.cleanupPlan[0]?.receiptId).toBe("receipt-a");
   });
 
+  it("drops an applied receipt when the requested records change", async () => {
+    const user = userEvent.setup();
+    const transport = Testing.makeFakeTransport({ inspect: connection });
+    const { rerender } = render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain="example.com" receiptId="host-receipt" records={[record]} />
+      </DomainKit.Root>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Review changes" }));
+    await user.click(await screen.findByRole("button", { name: "Add records" }));
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain="example.com" receiptId="host-receipt" records={[replacementRecord]} />
+      </DomainKit.Root>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Remove records" }));
+    await waitFor(() => expect(transport.calls.cleanupPlan).toHaveLength(1));
+    expect(transport.calls.cleanupPlan[0]?.receiptId).toBe("host-receipt");
+  });
+
   it("uses one observe operation with explicit provider and public DNS sources", async () => {
     const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });
