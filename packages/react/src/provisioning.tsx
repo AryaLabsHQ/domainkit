@@ -165,7 +165,10 @@ export function Flow({ connection, onApplied, records, showRecords = true, ...pr
                         {messages.planConsent}
                       </BaseDialog.Description>
                     </div>
-                    <BaseDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
+                    <BaseDialog.Close
+                      aria-label={messages.close}
+                      data-domainkit-part="dialog-close"
+                    >
                       ×
                     </BaseDialog.Close>
                   </div>

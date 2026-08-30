@@ -176,10 +176,7 @@
   background-color: var(--domainkit-fill);
 }
 
-:where(
-  [data-domainkit-part="cleanup-trigger"],
-  [data-domainkit-part="disconnect-action"]
-) {
+:where([data-domainkit-part="cleanup-trigger"], [data-domainkit-part="disconnect-action"]) {
   background: var(--domainkit-background);
   border-color: var(--domainkit-border);
   color: var(--domainkit-danger);
@@ -255,10 +252,7 @@
   z-index: 1001;
 }
 
-:where(
-  [data-domainkit-part="plan-dialog"],
-  [data-domainkit-part="cleanup-dialog"]
-) {
+:where([data-domainkit-part="plan-dialog"], [data-domainkit-part="cleanup-dialog"]) {
   width: 36rem;
 }
 

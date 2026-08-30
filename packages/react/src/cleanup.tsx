@@ -175,7 +175,10 @@ export function Flow({ connection, receiptId, ...props }: FlowProps) {
                         {messages.cleanupConsent}
                       </BaseDialog.Description>
                     </div>
-                    <BaseDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
+                    <BaseDialog.Close
+                      aria-label={messages.close}
+                      data-domainkit-part="dialog-close"
+                    >
                       ×
                     </BaseDialog.Close>
                   </div>
