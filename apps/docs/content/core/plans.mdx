@@ -1,0 +1,44 @@
+---
+title: Plans and receipts
+description: Learn how DomainKit separates DNS discovery, immutable planning, digest-bound approval, provider writes, receipts, and safe cleanup.
+---
+
+DomainKit treats DNS provisioning as a reviewed transaction, even when the provider API does not offer transactions.
+
+## The lifecycle
+
+| Artifact      | Meaning                                                                             |
+| ------------- | ----------------------------------------------------------------------------------- |
+| Requirement   | The DNS state your product needs, including ownership and conflict policy           |
+| Plan          | A snapshot of `Create`, `Noop`, and `Conflict` operations with an expiry and digest |
+| Authorization | Approval for the exact plan digest and selected operations                          |
+| Receipt       | What an apply attempt actually changed, including partial outcomes                  |
+| Cleanup plan  | A fresh, receipt-bound review of records DomainKit can safely delete                |
+
+Authorization does not make a stale plan safe. Apply rechecks provider state and returns a stale result rather than writing against changed DNS.
+
+## Conflict behavior
+
+DomainKit is additive and fail-closed:
+
+- an exact record becomes `Noop`;
+- a missing record becomes `Create`;
+- incompatible state becomes `Conflict`;
+- apply never silently replaces the conflicting value.
+
+Partial authorization is opt-in:
+
+```ts
+const authorization = await Provisioning.authorize(plan, selectedOperationIds, {
+  allowPartial: true,
+});
+```
+
+## Cleanup is a separate review
+
+A receipt proves which writes belong to a previous apply. Cleanup creates a new deletion plan from that receipt, then requires authorization for the cleanup digest. If a record drifted, deletion is blocked instead of removing data that DomainKit can no longer prove it owns.
+
+<Callout type="info" title="Persist receipts">
+  Receipts are durable lifecycle data. Store them in your primary database; do not rely on a cache
+  whose loss would prevent safe cleanup.
+</Callout>

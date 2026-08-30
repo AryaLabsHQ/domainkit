@@ -1,0 +1,82 @@
+---
+title: Quickstart
+description: Install DomainKit, describe one DNS requirement, create a reviewable plan, authorize its digest, and apply it through a provider.
+sidebar:
+  order: 2
+---
+
+## Install
+
+```sh
+npm install domainkit effect
+```
+
+`effect` is a peer dependency. Promise consumers still install it because the Promise facade runs the canonical Effect implementation.
+
+## Create a requirement
+
+DomainKit parses external DNS input through schemas. Each required record also names its ownership, provenance, purpose, and conflict policy.
+
+```ts
+import { DnsRecord, DomainName, Provisioning } from "domainkit";
+
+const record = DnsRecord.parse({
+  _tag: "CNAME",
+  metadata: {
+    ownership: "customer",
+    provenance: "product-onboarding",
+    purpose: "tracking",
+  },
+  name: "track.example.com",
+  policy: "exclusive",
+  target: "tracking.example.net",
+  ttl: 300,
+});
+```
+
+## Plan, review, and apply
+
+```ts
+const { plan } = await Provisioning.create({
+  provider,
+  requirements: [record],
+  target: Provisioning.Target.ExactZone({
+    zone: DomainName.parse("example.com"),
+  }),
+});
+
+// Render plan.operations for review before authorizing the exact digest.
+const authorization = await Provisioning.authorize(plan);
+const receipt = await Provisioning.apply({ authorization, plan, provider });
+```
+
+```text
+requirements
+  -> read provider state
+  -> immutable plan + digest
+  -> user review
+  -> digest-bound authorization
+  -> apply
+  -> receipt
+```
+
+<Callout type="warning" title="Keep provider credentials on the server">
+  The `provider` talks to Cloudflare or Vercel. Do not construct it in browser code or pass its
+  token to `@domainkit/react`.
+</Callout>
+
+## Choose an API surface
+
+The Promise API is appropriate for ordinary request handlers and framework actions. Effect applications import from `domainkit/effect`, provide provider and digest Layers, and retain the complete typed error and service environment.
+
+<CardGroup cols={2}>
+  <Card title="Plans and receipts" href="/docs/core/plans" icon="file">
+    Follow the provisioning and cleanup lifecycle.
+  </Card>
+  <Card title="Provider connections" href="/docs/core/connections" icon="link">
+    Add OAuth, integrations, tokens, and reusable account grants.
+  </Card>
+  <Card title="Verification" href="/docs/core/verification" icon="check">
+    Observe public DNS, provider state, or both through one tagged operation.
+  </Card>
+</CardGroup>

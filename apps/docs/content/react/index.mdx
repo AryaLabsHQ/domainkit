@@ -1,0 +1,48 @@
+---
+title: React
+description: Add browser-safe connection and DNS lifecycle flows with complete components, composable parts, and an application-owned transport.
+sidebar:
+  label: Overview
+---
+
+Install the React package with its peer dependencies and opt in to the default stylesheet:
+
+```sh
+npm install @domainkit/react domainkit react react-dom
+```
+
+```tsx
+import { Domain, DomainKit } from "@domainkit/react";
+import "@domainkit/react/styles.css";
+
+export function DomainSetup() {
+  return (
+    <DomainKit.Root transport={transport}>
+      <Domain.Flow domain="example.com" records={records} />
+    </DomainKit.Root>
+  );
+}
+```
+
+`Domain.Flow` coordinates connection, plan review, apply, verification, receipt-bound cleanup, and removal of the current domain grant. The package never receives provider credentials in the browser; every operation goes through your authenticated transport.
+
+## Adopt only what you need
+
+| Surface                          | Use it when                                              |
+| -------------------------------- | -------------------------------------------------------- |
+| `Domain.Flow`                    | You want the complete lifecycle in one component         |
+| `Connection.Flow`                | You only need provider connection and reuse              |
+| `Provisioning.Flow`              | Your product already owns the surrounding domain screen  |
+| `Records.Table` / `Records.Card` | You want presentational DNS records without a transport  |
+| Hooks and semantic parts         | Your design system owns structure and interaction chrome |
+
+Server rendering is supported. Clipboard access, downloads, and navigation occur only from browser interactions.
+
+<CardGroup cols={2}>
+  <Card title="Host transport" href="/docs/react/transport" icon="arrow-right-left">
+    Map authenticated endpoints into the browser-safe transport contract.
+  </Card>
+  <Card title="Composition and theming" href="/docs/react/composition" icon="palette">
+    Bring your own components, icons, messages, provider marks, and design tokens.
+  </Card>
+</CardGroup>

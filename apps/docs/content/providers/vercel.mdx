@@ -1,0 +1,30 @@
+---
+title: Vercel
+description: Connect Vercel accounts and teams through the Integration installation flow or a token while preserving the returned account context.
+---
+
+Vercel's interactive method is an Integration installation-code flow. DomainKit models it as an integration rather than calling every redirect-based exchange OAuth.
+
+```ts
+import { Connection, Secret, Vercel } from "domainkit";
+
+const flow = Vercel.Auth.integrationFlow({
+  capabilities: ["dns:read", "dns:write"],
+  clientId,
+  clientSecret: Secret.make(clientSecret),
+  redirectUri,
+  slug: "your-integration-slug",
+});
+
+const result = await Connection.start({
+  authorizedById,
+  grant: { _tag: "account", excludedDomains: [] },
+  method: Connection.Method.Interactive({ continuations, flow }),
+  ownerId,
+  repository,
+});
+```
+
+The completed credential carries the personal-account or team context returned by Vercel. Persist that non-secret, versioned context with the authorization so later requests reconstruct the correct provider client without asking the customer for a team ID.
+
+Vercel tokens are also supported through `Vercel.Auth.tokenConnectionMethod`. Keep the token server-side and expose only the connection result through your application transport.
