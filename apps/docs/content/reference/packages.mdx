@@ -1,0 +1,49 @@
+---
+title: Packages and entry points
+description: Choose the DomainKit package and entry point that matches your runtime and integration layer.
+sidebar:
+  label: Packages
+seo:
+  title: DomainKit packages and public entry points
+---
+
+DomainKit publishes one provider-independent core package and one optional React package. All public
+imports come from the entry points below; internal source paths are not part of the supported API.
+
+## Install
+
+```sh
+npm install domainkit effect@rc
+```
+
+Add the React package only when your product needs the packaged UI flows:
+
+```sh
+npm install @domainkit/react @effect/atom-react@rc react react-dom
+```
+
+## Entry points
+
+| Import                        | Purpose                                                       |
+| ----------------------------- | ------------------------------------------------------------- |
+| `domainkit`                   | Canonical Effect services, schemas, plans, providers, and DNS |
+| `domainkit/promise`           | Promise adapters for hosts that do not expose Effect directly |
+| `domainkit/testing`           | In-memory services and provider conformance helpers           |
+| `@domainkit/react`            | React flows, models, semantic parts, messages, and theme      |
+| `@domainkit/react/styles.css` | Optional default styles for the React package                 |
+
+The Promise entry point is an adapter over the same domain model. It is not a second lifecycle or
+wire protocol. Prefer the canonical Effect API inside Effect applications and adapt only at a
+foreign-runtime boundary.
+
+## Runtime requirements
+
+- `domainkit` requires Node.js 24.10 or newer and Effect 4.
+- `@domainkit/react` requires React 19, React DOM 19, Effect 4, and Effect Atom React 4.
+- Provider credentials, OAuth state, connection state, plans, and receipts belong on the server.
+
+## Version alignment
+
+Install `domainkit` and `@domainkit/react` at the same release version. The React transport imports
+wire models from the core package, so mixed versions can disagree about schemas and lifecycle
+outcomes.

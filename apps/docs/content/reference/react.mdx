@@ -1,0 +1,57 @@
+---
+title: React API
+description: Reference for the namespaces exported by @domainkit/react.
+sidebar:
+  label: React API
+seo:
+  title: DomainKit React API reference
+---
+
+Import React surfaces from `@domainkit/react` and opt in to the default stylesheet separately.
+
+```tsx
+import { Domain, DomainKit } from "@domainkit/react";
+import "@domainkit/react/styles.css";
+```
+
+## Runtime and complete flow
+
+| Namespace   | Purpose                                                                        |
+| ----------- | ------------------------------------------------------------------------------ |
+| `DomainKit` | Root runtime, transport, messages, provider registry, and theme boundary.      |
+| `Domain`    | Complete connection, provisioning, verification, cleanup, and disconnect flow. |
+| `Lifecycle` | Structured host events emitted after successful user-triggered mutations.      |
+
+## Focused lifecycles
+
+| Namespace      | Purpose                                                          |
+| -------------- | ---------------------------------------------------------------- |
+| `Connection`   | Provider connection, reuse, retry, and model hook.               |
+| `Provisioning` | Plan review, authorization request, application, and model hook. |
+| `Verification` | Evidence refresh, result presentation, and model hook.           |
+| `Cleanup`      | Receipt-bound cleanup review, application, and model hook.       |
+
+Each focused namespace exposes its packaged `Flow`, a `Controller`, `useModel`, state and command
+constructors, and semantic parts where the lifecycle needs custom composition.
+
+## Presentation and customization
+
+| Namespace    | Purpose                                                                 |
+| ------------ | ----------------------------------------------------------------------- |
+| `Records`    | Model-free record table, card, rows, cells, and copy controls.          |
+| `Operations` | Neutral plan and cleanup operation list with semantic parts.            |
+| `Provider`   | Provider marks, labels, authentication controls, and composition parts. |
+| `Messages`   | Default copy and host-owned message overrides.                          |
+| `Theme`      | Typed tokens and theme recipes applied at `DomainKit.Root`.             |
+| `Testing`    | React fixtures and helpers for package consumers.                       |
+
+All interactive parts forward refs and expose state-aware attributes or classes for host styling.
+Complete flows use the same models and parts exported for custom composition.
+
+## Server rendering
+
+Components can render on the server. Browser-only behaviors such as clipboard writes, file
+downloads, and navigation run from user interactions. Provider credentials are never part of the
+React API; all stateful operations cross the host-owned `Transport`.
+
+See [Composition](/docs/react/composition) before selecting the lowest-level surface.

@@ -13,3 +13,5 @@ apps/docs/public/r/
 
 *.tgz
 .DS_Store
+.wrangler/
+.blume-verify/
