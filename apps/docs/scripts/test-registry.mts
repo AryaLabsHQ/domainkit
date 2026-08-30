@@ -96,7 +96,25 @@ try {
   await Bun.write(join(fixture, "src/index.css"), "");
   await Bun.write(
     join(fixture, "src/main.tsx"),
-    'import { createRoot } from "react-dom/client";\ncreateRoot(document.getElementById("root")!).render(<main>Registry fixture</main>);\n',
+    `import { createRoot } from "react-dom/client";
+import { ErrorState } from "@/components/ui/async-state";
+import { CopyValue } from "@/components/ui/copy-value";
+import { DnsOperation } from "@/components/ui/dns-operation";
+import { DnsStatus } from "@/components/ui/dns-status";
+import { DnsTable } from "@/components/ui/dns-table";
+import { ProviderMark } from "@/components/ui/provider-mark";
+
+const record = { id: "mx", name: "mail.example.com", type: "MX", value: "mx.example.net" };
+createRoot(document.getElementById("root")!).render(
+  <main>
+    <ProviderMark label="Example DNS"><span>E</span></ProviderMark>
+    <DnsTable records={[{ ...record, status: <DnsStatus tone="success">Found</DnsStatus> }]} />
+    <DnsOperation action="Create" {...record} />
+    <CopyValue value={record.value} />
+    <ErrorState>Provider unavailable</ErrorState>
+  </main>,
+);
+`,
   );
   await run("bun", "install");
   await run(

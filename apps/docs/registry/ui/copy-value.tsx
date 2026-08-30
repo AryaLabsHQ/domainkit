@@ -14,11 +14,14 @@ export function CopyValue({
   useEffect(() => () => clearTimeout(reset.current), []);
   const copy = () => {
     if (navigator.clipboard === undefined) return;
-    void navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      clearTimeout(reset.current);
-      reset.current = setTimeout(() => setCopied(false), 2000);
-    });
+    void navigator.clipboard
+      .writeText(value)
+      .then(() => {
+        setCopied(true);
+        clearTimeout(reset.current);
+        reset.current = setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => undefined);
   };
   return (
     <span
