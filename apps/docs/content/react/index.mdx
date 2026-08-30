@@ -10,7 +10,7 @@ seo:
 Install the React package with its peer dependencies and opt in to the default stylesheet:
 
 ```sh
-npm install @domainkit/react domainkit react react-dom
+npm install @domainkit/react domainkit effect@rc react react-dom
 ```
 
 ```tsx
@@ -26,7 +26,9 @@ export function DomainSetup() {
 }
 ```
 
-`Domain.Flow` coordinates connection, plan review, apply, verification, receipt-bound cleanup, and removal of the current domain grant. The package never receives provider credentials in the browser; every operation goes through your authenticated transport.
+`Domain.Flow` coordinates connection, plan review, apply, verification, receipt-bound cleanup, and removal of the current domain grant. `DomainKit.Root` runs the host transport layer through Effect Atom. The package never receives provider credentials in the browser; every operation goes through your authenticated transport.
+
+React 19 is required.
 
 ## Surfaces
 

@@ -1,8 +1,12 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { Transport } from "domainkit";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import * as Atom from "effect/unstable/reactivity/Atom";
+import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import {
-  useCallback,
-  useEffect,
-  useRef,
+  useMemo,
   useState,
   type ComponentPropsWithoutRef,
   type FormEvent,
@@ -13,115 +17,114 @@ import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import * as Provider from "./provider.tsx";
-import * as RequestState from "./request-state.ts";
-import type {
-  AuthenticationMethod,
-  Connected,
-  ConnectionSnapshot,
-  Failure,
-  RemoveDomainResult,
-} from "./transport.ts";
+import { failureFromDefect, failureFromError, type Failure } from "./atom.ts";
 
-export type State =
-  | { readonly _tag: "Loading" }
-  | ConnectionSnapshot
-  | { readonly _tag: "Submitting"; readonly snapshot: Disconnected }
-  | { readonly _tag: "Redirecting"; readonly snapshot: Disconnected };
+type LocalState = Data.TaggedEnum<{
+  Loading: {};
+  Redirecting: { readonly snapshot: Disconnected };
+  Submitting: { readonly snapshot: Disconnected };
+}>;
+export const State = Data.taggedEnum<LocalState>();
+export type State = LocalState | Transport.ConnectionSnapshot | Failure;
 
-type Disconnected = Extract<ConnectionSnapshot, { readonly _tag: "Disconnected" }>;
+type Disconnected = Extract<Transport.ConnectionSnapshot, { readonly _tag: "Disconnected" }>;
 
 export interface Controller {
-  readonly connect: (
-    method: "oauth" | "token",
-    token?: string,
-    parameters?: Readonly<Record<string, string>>,
-  ) => Promise<void>;
+  readonly connect: (method: Transport.Method) => void;
   readonly retry: () => void;
-  readonly reuse: () => Promise<void>;
+  readonly reuse: () => void;
   readonly state: State;
 }
 
-const failure = (cause: unknown): Failure => ({
-  _tag: "Failure",
-  message: cause instanceof Error ? cause.message : "The connection request failed",
-  retry: "safe",
-});
+export type Command = Data.TaggedEnum<{
+  Connect: { readonly method: Transport.Method };
+  Retry: {};
+  Reuse: {};
+}>;
+export const Command = Data.taggedEnum<Command>();
+
+export interface Model {
+  readonly command: Atom.AtomResultFn<Command, void>;
+  readonly state: Atom.Atom<State>;
+}
+
+export function useModel(domain: string): Model {
+  const { navigate, runtime } = useDomainKit();
+  return useMemo(() => {
+    const actionState = Atom.make<State | undefined>(undefined);
+    const inspect = runtime.atom(
+      Effect.flatMap(Transport.Service, (transport) => transport.connection.inspect({ domain })),
+    );
+    const state = Atom.make((get): State => {
+      const action = get(actionState);
+      if (action !== undefined) return action;
+      const inspection = get(inspect);
+      return AsyncResult.matchWithError(inspection, {
+        onDefect: () => failureFromDefect("connection.inspect", "Provider detection failed"),
+        onError: failureFromError,
+        onInitial: () => State.Loading(),
+        onSuccess: ({ value }) => value,
+      });
+    });
+    const command = runtime.fn<Command>()((input, get) => {
+      if (input._tag === "Retry") {
+        get.set(actionState, undefined);
+        get.refresh(inspect);
+        return Effect.void;
+      }
+      const snapshot = get(state);
+      if (snapshot._tag !== "Disconnected") return Effect.void;
+      const reusableConnection = snapshot.reusableConnection;
+      if (input._tag === "Reuse" && reusableConnection === undefined) return Effect.void;
+      get.set(actionState, State.Submitting({ snapshot }));
+      const complete = (
+        request: Effect.Effect<Transport.ConnectionResult, Transport.Failure, Transport.Service>,
+      ) =>
+        request.pipe(
+          Effect.tap((result) =>
+            Effect.sync(() => {
+              if (result._tag === "Redirect") {
+                get.set(actionState, State.Redirecting({ snapshot }));
+                navigate(result.authorizationUrl);
+              } else {
+                get.set(actionState, result);
+              }
+            }),
+          ),
+          Effect.catch((error) => Effect.sync(() => get.set(actionState, failureFromError(error)))),
+          Effect.asVoid,
+        );
+      if (input._tag === "Connect") {
+        return complete(
+          Effect.flatMap(Transport.Service, (transport) =>
+            transport.connection.connect({
+              domain,
+              method: input.method,
+              providerId: snapshot.provider.id,
+            }),
+          ),
+        );
+      }
+      if (reusableConnection === undefined) return Effect.void;
+      return complete(
+        Effect.flatMap(Transport.Service, (transport) =>
+          transport.connection.reuse({ connectionId: reusableConnection.connectionId, domain }),
+        ),
+      );
+    });
+    return { command, state };
+  }, [domain, navigate, runtime]);
+}
 
 export function useController(domain: string): Controller {
-  const { navigate, transport } = useDomainKit();
-  const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<State>({ _tag: "Loading" });
-  const activeRequest = useRef(0);
-
-  useEffect(() => {
-    const request = ++activeRequest.current;
-    setState({ _tag: "Loading" });
-    void transport.connection.inspect({ domain }).then(
-      (snapshot) => {
-        if (activeRequest.current === request) setState(snapshot);
-      },
-      (cause: unknown) => {
-        if (activeRequest.current === request) setState(failure(cause));
-      },
-    );
-    return () => {
-      if (activeRequest.current === request) activeRequest.current += 1;
-    };
-  }, [attempt, domain, transport]);
-
-  const connect = useCallback(
-    async (
-      method: "oauth" | "token",
-      token?: string,
-      parameters?: Readonly<Record<string, string>>,
-    ) => {
-      if (state._tag !== "Disconnected") return;
-      const request = ++activeRequest.current;
-      const snapshot = state;
-      setState({ _tag: "Submitting", snapshot });
-      try {
-        const result = await transport.connection.connect({
-          domain,
-          method,
-          ...(parameters === undefined ? {} : { parameters }),
-          providerId: snapshot.provider.id,
-          ...(token === undefined ? {} : { token }),
-        });
-        if (activeRequest.current !== request) return;
-        if (result._tag === "Redirect") {
-          setState({ _tag: "Redirecting", snapshot });
-          navigate(result.authorizationUrl);
-          return;
-        }
-        setState(result);
-      } catch (cause) {
-        if (activeRequest.current === request) setState(failure(cause));
-      }
-    },
-    [domain, navigate, state, transport],
-  );
-
-  const reuse = useCallback(async () => {
-    if (state._tag !== "Disconnected" || state.reusableConnection === undefined) return;
-    const request = ++activeRequest.current;
-    const snapshot = state;
-    const reusableConnection = state.reusableConnection;
-    setState({ _tag: "Submitting", snapshot });
-    try {
-      const result = await transport.connection.reuse({
-        connectionId: reusableConnection.connectionId,
-        domain,
-      });
-      if (activeRequest.current === request) setState(result);
-    } catch (cause) {
-      if (activeRequest.current === request) setState(failure(cause));
-    }
-  }, [domain, state, transport]);
+  const model = useModel(domain);
+  const state = useAtomValue(model.state);
+  const execute = useAtomSet(model.command);
 
   return {
-    connect,
-    retry: () => setAttempt((current) => current + 1),
-    reuse,
+    connect: (method) => execute(Command.Connect({ method })),
+    retry: () => execute(Command.Retry()),
+    reuse: () => execute(Command.Reuse()),
     state,
   };
 }
@@ -233,7 +236,7 @@ export function OAuthAction({ controller, label, ...props }: OAuthActionProps) {
     {
       children: label,
       "data-domainkit-part": "oauth-connect",
-      onClick: () => void controller.connect("oauth"),
+      onClick: () => controller.connect(Transport.Method.OAuth()),
       type: "button",
     },
   );
@@ -260,7 +263,7 @@ export function ReuseAction({ controller, label, ...props }: ReuseActionProps) {
 
 export interface TokenActionProps extends Omit<PartProps<"form", ActionState>, "method"> {
   readonly controller: Controller;
-  readonly method: Extract<AuthenticationMethod, { readonly _tag: "Token" }>;
+  readonly method: Extract<Transport.AuthenticationMethod, { readonly _tag: "Token" }>;
 }
 
 export function TokenAction({ controller, method, ...props }: TokenActionProps) {
@@ -273,10 +276,11 @@ export function TokenAction({ controller, method, ...props }: TokenActionProps) 
       const populated = Object.fromEntries(
         Object.entries(parameters).filter(([, value]) => value.length > 0),
       );
-      void controller.connect(
-        "token",
-        token,
-        Object.keys(populated).length === 0 ? undefined : populated,
+      controller.connect(
+        Transport.Method.Token({
+          token,
+          ...(Object.keys(populated).length === 0 ? {} : { parameters: populated }),
+        }),
       );
     }
   };
@@ -440,41 +444,43 @@ export function RetryAction({ controller, kind = "retry", ...props }: RetryActio
   );
 }
 
-export type DisconnectState =
-  | { readonly _tag: "Idle" }
-  | { readonly _tag: "Disconnecting" }
-  | RemoveDomainResult
-  | Failure;
+type LocalDisconnectState = Data.TaggedEnum<{
+  Disconnecting: {};
+  Idle: {};
+}>;
+export const DisconnectState = Data.taggedEnum<LocalDisconnectState>();
+export type DisconnectState = LocalDisconnectState | Transport.RemoveDomainResult | Failure;
 
-export function useDisconnect(connection: Connected) {
-  const { transport } = useDomainKit();
-  const requestState = RequestState.useController<DisconnectState>(
-    `${connection.connectionId}:${connection.domain}:disconnect`,
-    { _tag: "Idle" },
-  );
-  const disconnect = useCallback(async () => {
-    const request = requestState.begin({ _tag: "Disconnecting" });
-    try {
-      requestState.commit(
-        request,
-        await transport.connection.removeDomain({
+export function useDisconnect(connection: Transport.Connected) {
+  const { runtime } = useDomainKit();
+  const controller = useMemo(() => {
+    const state = Atom.make<DisconnectState>(DisconnectState.Idle());
+    const disconnect = runtime.fn<void>()((_, get) => {
+      get.set(state, DisconnectState.Disconnecting());
+      return Effect.flatMap(Transport.Service, (transport) =>
+        transport.connection.removeDomain({
           connectionId: connection.connectionId,
           domain: connection.domain,
           preserveDns: true,
         }),
+      ).pipe(
+        Effect.tap((result) => Effect.sync(() => get.set(state, result))),
+        Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
+        Effect.asVoid,
       );
-    } catch (cause) {
-      requestState.commit(request, failure(cause));
-    }
-  }, [connection.connectionId, connection.domain, requestState, transport]);
-  return { disconnect, state: requestState.state } as const;
+    });
+    return { disconnect, state };
+  }, [connection.connectionId, connection.domain, runtime]);
+  const state = useAtomValue(controller.state);
+  const disconnect = useAtomSet(controller.disconnect);
+  return { disconnect: () => disconnect(), state } as const;
 }
 
 export interface DisconnectActionProps extends PartProps<
   "div",
   { readonly status: DisconnectState["_tag"] }
 > {
-  readonly connection: Connected;
+  readonly connection: Transport.Connected;
 }
 
 export function DisconnectAction({ connection, ...props }: DisconnectActionProps) {
@@ -515,4 +521,4 @@ export function DisconnectAction({ connection, ...props }: DisconnectActionProps
   );
 }
 
-export type { Connected };
+export type Connected = Transport.Connected;

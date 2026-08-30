@@ -1,94 +1,102 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { useCallback } from "react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { Transport } from "domainkit";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import * as Atom from "effect/unstable/reactivity/Atom";
+import { useMemo } from "react";
 
+import { failureFromError, type Failure } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
-import * as RequestState from "./request-state.ts";
-import type { CleanupPlan, CleanupResult, Connected, Failure } from "./transport.ts";
 
+type LocalState = Data.TaggedEnum<{
+  Cleaned: { readonly result: Extract<Transport.CleanupResult, { readonly _tag: "Cleaned" }> };
+  Cleaning: { readonly plan: Transport.CleanupPlan };
+  Idle: {};
+  Partial: { readonly result: Extract<Transport.CleanupResult, { readonly _tag: "Partial" }> };
+  Planning: {};
+  Review: { readonly plan: Transport.CleanupPlan };
+}>;
+export const State = Data.taggedEnum<LocalState>();
 export type State =
-  | { readonly _tag: "Idle" }
-  | { readonly _tag: "Planning" }
-  | { readonly _tag: "Review"; readonly plan: CleanupPlan }
-  | { readonly _tag: "Cleaning"; readonly plan: CleanupPlan }
-  | {
-      readonly _tag: "Cleaned";
-      readonly result: Extract<CleanupResult, { readonly _tag: "Cleaned" }>;
-    }
-  | {
-      readonly _tag: "Partial";
-      readonly result: Extract<CleanupResult, { readonly _tag: "Partial" }>;
-    }
-  | { readonly _tag: "Stale"; readonly message: string }
+  | LocalState
+  | Extract<Transport.CleanupResult, { readonly _tag: "Stale" }>
   | Failure;
 
-export function useController(connection: Connected, receiptId: string) {
-  const { transport } = useDomainKit();
-  const requestState = RequestState.useController<State>(
-    `${connection.connectionId}:${connection.domain}:${receiptId}`,
-    { _tag: "Idle" },
-  );
-  const state = requestState.state;
+type Command = Data.TaggedEnum<{
+  Apply: { readonly plan: Transport.CleanupPlan };
+  Plan: {};
+}>;
+const Command = Data.taggedEnum<Command>();
 
-  const plan = useCallback(async () => {
-    const request = requestState.begin({ _tag: "Planning" });
-    try {
-      const result = await transport.cleanup.plan({
-        connectionId: connection.connectionId,
-        domain: connection.domain,
-        receiptId,
-      });
-      requestState.commit(
-        request,
-        result._tag === "CleanupPlan" ? { _tag: "Review", plan: result } : result,
+export function useController(connection: Transport.Connected, receiptId: string) {
+  const { runtime } = useDomainKit();
+  const controller = useMemo(() => {
+    const state = Atom.make<State>(State.Idle());
+    const execute = runtime.fn<Command>()((command, get) => {
+      if (command._tag === "Plan") {
+        get.set(state, State.Planning());
+        return Effect.flatMap(Transport.Service, (transport) =>
+          transport.cleanup.plan({
+            connectionId: connection.connectionId,
+            domain: connection.domain,
+            receiptId,
+          }),
+        ).pipe(
+          Effect.tap((plan) => Effect.sync(() => get.set(state, State.Review({ plan })))),
+          Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
+          Effect.asVoid,
+        );
+      }
+      get.set(state, State.Cleaning({ plan: command.plan }));
+      return Effect.flatMap(Transport.Service, (transport) =>
+        transport.cleanup.apply({
+          connectionId: connection.connectionId,
+          domain: connection.domain,
+          planDigest: command.plan.digest,
+          receiptId,
+        }),
+      ).pipe(
+        Effect.tap((result) =>
+          Effect.sync(() =>
+            get.set(
+              state,
+              result._tag === "Cleaned"
+                ? State.Cleaned({ result })
+                : result._tag === "Partial"
+                  ? State.Partial({ result })
+                  : result,
+            ),
+          ),
+        ),
+        Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
+        Effect.asVoid,
       );
-    } catch (cause) {
-      requestState.commit(request, toFailure(cause));
-    }
-  }, [connection.connectionId, connection.domain, receiptId, requestState, transport]);
-
-  const apply = useCallback(async () => {
-    if (state._tag !== "Review") return;
-    const reviewedPlan = state.plan;
-    if (reviewedPlan.operations.some((operation) => operation._tag === "Blocked")) return;
-    const request = requestState.begin({ _tag: "Cleaning", plan: reviewedPlan });
-    try {
-      const result = await transport.cleanup.apply({
-        connectionId: connection.connectionId,
-        domain: connection.domain,
-        planDigest: reviewedPlan.digest,
-        receiptId,
-      });
-      requestState.commit(
-        request,
-        result._tag === "Cleaned"
-          ? { _tag: "Cleaned", result }
-          : result._tag === "Partial"
-            ? { _tag: "Partial", result }
-            : result,
-      );
-    } catch (cause) {
-      requestState.commit(request, toFailure(cause));
-    }
-  }, [connection.connectionId, connection.domain, receiptId, requestState, state, transport]);
+    });
+    return { execute, state };
+  }, [connection.connectionId, connection.domain, receiptId, runtime]);
+  const state = useAtomValue(controller.state);
+  const setState = useAtomSet(controller.state);
+  const execute = useAtomSet(controller.execute);
 
   return {
-    apply,
-    dismiss: () => requestState.reset({ _tag: "Idle" }),
-    plan,
+    apply: () => {
+      if (
+        state._tag === "Review" &&
+        !state.plan.operations.some((operation) => operation._tag === "Blocked")
+      )
+        execute(Command.Apply({ plan: state.plan }));
+    },
+    dismiss: () => setState(State.Idle()),
+    plan: () => execute(Command.Plan()),
     state,
   } as const;
 }
 
-const toFailure = (cause: unknown): Failure => ({
-  _tag: "Failure",
-  message: cause instanceof Error ? cause.message : "Domain cleanup failed",
-  retry: "safe",
-});
-
 export interface FlowProps extends PartProps<"div", { readonly status: State["_tag"] }> {
-  readonly connection: Connected;
+  readonly connection: Transport.Connected;
   readonly receiptId: string;
 }
 

@@ -8,8 +8,9 @@ const execFileAsync = promisify(execFile);
 describe("packed React package", () => {
   it("keeps the public artifact and peer contract explicit", async () => {
     expect(packageJson.type).toBe("module");
-    expect(packageJson.peerDependencies.react).toBe("^18.0.0 || ^19.0.0");
-    expect(packageJson.peerDependencies["react-dom"]).toBe("^18.0.0 || ^19.0.0");
+    expect(packageJson.peerDependencies.react).toBe(">=19.0.0 <20.0.0");
+    expect(packageJson.peerDependencies["react-dom"]).toBe(">=19.0.0 <20.0.0");
+    expect(packageJson.peerDependencies.effect).toBe(">=4.0.0-rc.112 <5.0.0");
     expect(packageJson.exports["./styles.css"]).toBe("./dist/styles.css");
 
     const { stdout } = await execFileAsync("npm", ["pack", "--dry-run", "--json"], {

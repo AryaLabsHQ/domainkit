@@ -1,7 +1,7 @@
-import type { DnsRecord } from "../../../src/transport.ts";
+import type { Transport } from "domainkit";
 
 export const nextRecordId = (
-  records: Readonly<Record<string, DnsRecord>>,
+  records: Readonly<Record<string, Transport.DnsRecord>>,
   start: number,
 ): { readonly id: string; readonly next: number } => {
   let sequence = start;

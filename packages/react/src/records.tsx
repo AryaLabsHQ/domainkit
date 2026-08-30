@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import type { Transport } from "domainkit";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useIcons } from "./icons.tsx";
-import type { DnsRecord, ObservationEvidence } from "./transport.ts";
 
 const copyText = (value: string): Promise<boolean> => {
   if (typeof navigator === "undefined" || navigator.clipboard === undefined) {
@@ -69,7 +69,7 @@ const srvValue = (value: string): string => {
   return `${weight} ${port} ${absoluteDomainName(target)}`;
 };
 
-const zoneValue = (record: DnsRecord): string => {
+const zoneValue = (record: Transport.DnsRecord): string => {
   switch (record.type.toUpperCase()) {
     case "CNAME":
     case "MX":
@@ -170,7 +170,7 @@ export interface ZoneFileProps extends PartProps<"div", { readonly count: number
   readonly domain: string;
   readonly downloadIcon?: ReactNode;
   readonly downloadLabel?: string;
-  readonly records: ReadonlyArray<DnsRecord>;
+  readonly records: ReadonlyArray<Transport.DnsRecord>;
 }
 
 export function ZoneFile({
@@ -233,9 +233,9 @@ export function ZoneFile({
 
 export interface StatusProps extends PartProps<
   "span",
-  { readonly status: ObservationEvidence["_tag"] }
+  { readonly status: Transport.ObservationEvidence["_tag"] }
 > {
-  readonly evidence: ObservationEvidence;
+  readonly evidence: Transport.ObservationEvidence;
 }
 
 export function Status({ evidence, ...props }: StatusProps) {
@@ -294,8 +294,8 @@ export function Root({ count = 0, ...props }: RootProps) {
 export interface CardProps extends PartProps<"section", { readonly recordId: string }> {
   readonly copiedIcon?: ReactNode;
   readonly copyIcon?: ReactNode;
-  readonly evidence?: ReadonlyArray<ObservationEvidence>;
-  readonly record: DnsRecord;
+  readonly evidence?: ReadonlyArray<Transport.ObservationEvidence>;
+  readonly record: Transport.DnsRecord;
 }
 
 export function Card({ copiedIcon, copyIcon, evidence, record, ...props }: CardProps) {
@@ -339,8 +339,8 @@ export function Card({ copiedIcon, copyIcon, evidence, record, ...props }: CardP
 export interface TableProps extends PartProps<"table", { readonly count: number }> {
   readonly copiedIcon?: ReactNode;
   readonly copyIcon?: ReactNode;
-  readonly evidence?: ReadonlyArray<ObservationEvidence>;
-  readonly records: ReadonlyArray<DnsRecord>;
+  readonly evidence?: ReadonlyArray<Transport.ObservationEvidence>;
+  readonly records: ReadonlyArray<Transport.DnsRecord>;
 }
 
 export function Table({ copiedIcon, copyIcon, evidence, records, ...props }: TableProps) {
@@ -388,7 +388,7 @@ export function Table({ copiedIcon, copyIcon, evidence, records, ...props }: Tab
   );
 }
 
-export const toZoneFile = (records: ReadonlyArray<DnsRecord>): string =>
+export const toZoneFile = (records: ReadonlyArray<Transport.DnsRecord>): string =>
   `${records
     .map(
       (record) =>
@@ -396,4 +396,5 @@ export const toZoneFile = (records: ReadonlyArray<DnsRecord>): string =>
     )
     .join("\n")}\n`;
 
-export type { DnsRecord, ObservationEvidence };
+export type DnsRecord = Transport.DnsRecord;
+export type ObservationEvidence = Transport.ObservationEvidence;
