@@ -3,9 +3,9 @@ import PageLayout from "blume/components/layout/PageLayout.astro";
 import data from "blume:data";
 
 const { config } = data;
-const pageTitle = "Reviewable DNS provisioning for TypeScript | DomainKit";
+const pageTitle = "Frictionless domain setup for SaaS | DomainKit";
 const pageDescription =
-  "Turn DNS requirements into reviewable plans. Authorize an exact digest, apply through Cloudflare or Vercel, and keep provider credentials on your server.";
+  "Make domain setup frictionless for your SaaS. Connect providers, review exact DNS changes, and apply them safely while credentials stay on your server.";
 ---
 
 <PageLayout
@@ -25,11 +25,11 @@ const pageDescription =
 >
   <main class="landing">
     <section class="hero">
-      <p class="eyebrow">DNS provisioning</p>
-      <h1>Review DNS, then write</h1>
+      <h1>Make domain setup frictionless</h1>
       <p class="lede">
-        DomainKit turns DNS requirements into reviewable plans and applies only
-        the digest you approved. Credentials stay on your server.
+        Turn DNS setup into a product flow that customers can finish. DomainKit
+        connects providers, shows the exact changes, and applies only what was
+        approved. Credentials stay on your server.
       </p>
       <div class="actions">
         <a class="primary" href="/docs">Read the docs</a>
@@ -66,16 +66,6 @@ const pageDescription =
 
   .hero {
     max-width: 60rem;
-  }
-
-  .eyebrow {
-    color: var(--blume-accent);
-    font-family: var(--blume-font-mono);
-    font-size: 0.78rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    margin: 0 0 1.5rem;
-    text-transform: uppercase;
   }
 
   h1 {
