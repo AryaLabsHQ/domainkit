@@ -3,9 +3,11 @@ import type { CSSProperties } from "react";
 export interface Theme {
   readonly accent?: string;
   readonly accentContrast?: string;
+  readonly backdrop?: string;
   readonly background?: string;
   readonly border?: string;
   readonly danger?: string;
+  readonly dangerContrast?: string;
   readonly fill?: string;
   readonly fontFamily?: string;
   readonly muted?: string;
@@ -18,9 +20,11 @@ export interface Theme {
 const variables = {
   accent: "--domainkit-accent",
   accentContrast: "--domainkit-accent-contrast",
+  backdrop: "--domainkit-backdrop",
   background: "--domainkit-background",
   border: "--domainkit-border",
   danger: "--domainkit-danger",
+  dangerContrast: "--domainkit-danger-contrast",
   fill: "--domainkit-fill",
   fontFamily: "--domainkit-font-family",
   muted: "--domainkit-muted",

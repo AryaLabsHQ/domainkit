@@ -1,3 +1,4 @@
+import { Popover as BasePopover } from "@base-ui/react/popover";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Transport } from "domainkit";
 import * as Data from "effect/Data";
@@ -12,11 +13,12 @@ import { useDomainKit } from "./domain-kit.tsx";
 import { Status as RecordStatus } from "./records.tsx";
 
 type LocalState = Data.TaggedEnum<{
+  Failed: { readonly failure: Failure; readonly previous?: Transport.Observation };
   Idle: {};
-  Observing: {};
+  Observing: { readonly previous?: Transport.Observation };
 }>;
 export const State = Data.taggedEnum<LocalState>();
-export type State = LocalState | Transport.Observation | Failure;
+export type State = LocalState | Transport.Observation;
 
 export interface ObserveConfig {
   readonly connection?: Transport.Connected;
@@ -57,7 +59,15 @@ export function useModel(config: ObserveConfig): Model {
         get.set(state, State.Idle());
         return Effect.void;
       }
-      get.set(state, State.Observing());
+      const current = get(state);
+      if (current._tag === "Observing") return Effect.void;
+      const previous =
+        current._tag === "Observation"
+          ? current
+          : current._tag === "Failed"
+            ? current.previous
+            : undefined;
+      get.set(state, State.Observing({ ...(previous === undefined ? {} : { previous }) }));
       return Effect.flatMap(Transport.Service, (transport) =>
         transport.verification.observe({
           ...(config.connection === undefined
@@ -69,7 +79,17 @@ export function useModel(config: ObserveConfig): Model {
         }),
       ).pipe(
         Effect.tap((observation) => Effect.sync(() => get.set(state, observation))),
-        Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
+        Effect.catch((error) =>
+          Effect.sync(() =>
+            get.set(
+              state,
+              State.Failed({
+                failure: failureFromError(error),
+                ...(previous === undefined ? {} : { previous }),
+              }),
+            ),
+          ),
+        ),
         Effect.asVoid,
       );
     });
@@ -130,7 +150,7 @@ export function Evidence({ observation }: { readonly observation: Transport.Obse
     <div data-domainkit-part="observation-list">
       {observationGroups(observation).map((group) => (
         <section data-domainkit-part="observation-group" key={group.label}>
-          <p data-domainkit-part="observation-source">{group.label}</p>
+          <h3 data-domainkit-part="observation-source">{group.label}</h3>
           <ul>
             {group.evidence.map((evidence, index) => {
               const note = evidenceNote(evidence);
@@ -152,25 +172,37 @@ export function Evidence({ observation }: { readonly observation: Transport.Obse
 }
 
 export function Outcome({ state }: { readonly state: State }) {
-  if (state._tag !== "Failure") return null;
+  if (state._tag !== "Failed") return null;
   return (
     <p data-domainkit-part="flow-outcome" data-tone="danger" role="alert">
-      {state.message}
+      {state.failure.message}
     </p>
   );
 }
 
-export function ObserveAction({ controller }: { readonly controller: Controller }) {
+export interface ObserveActionProps extends PartProps<
+  "button",
+  { readonly status: State["_tag"] }
+> {
+  readonly controller: Controller;
+}
+
+export function ObserveAction({ controller, ...props }: ObserveActionProps) {
   const { messages } = useDomainKit();
-  return (
-    <button
-      data-domainkit-part="observe-action"
-      disabled={controller.state._tag === "Observing"}
-      onClick={() => controller.observe()}
-      type="button"
-    >
-      {controller.state._tag === "Observing" ? messages.checkingDns : messages.checkDns}
-    </button>
+  const observing = controller.state._tag === "Observing";
+  return usePart(
+    "button",
+    props,
+    { status: controller.state._tag },
+    {
+      "aria-busy": observing,
+      children: messages.checkDns,
+      "data-domainkit-part": "observe-action",
+      "data-loading": observing ? "" : undefined,
+      disabled: observing,
+      onClick: () => controller.observe(),
+      type: "button",
+    },
   );
 }
 
@@ -179,13 +211,45 @@ export interface StatusProps extends Omit<RootProps, "status"> {
 }
 
 export function Status({ config, ...props }: StatusProps) {
+  const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   const controller = useController(config);
   const state = controller.state;
+  const observation =
+    state._tag === "Observation"
+      ? state
+      : state._tag === "Observing" || state._tag === "Failed"
+        ? state.previous
+        : undefined;
   return (
     <Root status={state._tag} {...props}>
-      {state._tag === "Observation" ? <Evidence observation={state} /> : null}
-      <Outcome state={state} />
-      <ObserveAction controller={controller} />
+      <BasePopover.Root>
+        <BasePopover.Trigger render={<ObserveAction controller={controller} />} />
+        <BasePopover.Portal container={portalContainer}>
+          <BasePopover.Positioner
+            align="end"
+            data-domainkit-part="verification-positioner"
+            sideOffset={6}
+          >
+            <BasePopover.Popup
+              aria-label={messages.checkDns}
+              aria-busy={state._tag === "Observing"}
+              data-color-scheme={colorScheme}
+              data-domainkit-part="verification-popover"
+              data-domainkit-root=""
+              style={themeStyle}
+            >
+              <BasePopover.Arrow data-domainkit-part="verification-arrow" />
+              {state._tag === "Observing" ? (
+                <p data-domainkit-part="verification-progress" role="status">
+                  {messages.checkingDns}
+                </p>
+              ) : null}
+              {observation === undefined ? null : <Evidence observation={observation} />}
+              <Outcome state={state} />
+            </BasePopover.Popup>
+          </BasePopover.Positioner>
+        </BasePopover.Portal>
+      </BasePopover.Root>
     </Root>
   );
 }

@@ -43,13 +43,25 @@ describe("host lifecycle events", () => {
     );
 
     await user.click(within(dialog).getByRole("button", { name: "Add records" }));
-    expect(await screen.findByText("DNS changes applied")).toBeTruthy();
-    expect(events.map((event) => event._tag)).toEqual(["RecordsApplied"]);
+    await waitFor(() => expect(events.map((event) => event._tag)).toEqual(["RecordsApplied"]));
   });
 
   it("commits disconnect state before notifying a throwing listener", async () => {
     const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });
+    const DisconnectHarness = () => {
+      const controller = Connection.useController(connection.domain);
+      return (
+        <>
+          <span>{controller.state._tag}</span>
+          {controller.state._tag === "Connected" ? (
+            <button onClick={controller.disconnect} type="button">
+              Disconnect
+            </button>
+          ) : null}
+        </>
+      );
+    };
     render(
       <DomainKit.Root
         onEvent={() => {
@@ -57,13 +69,13 @@ describe("host lifecycle events", () => {
         }}
         transport={transport}
       >
-        <Connection.DisconnectAction connection={connection} />
+        <DisconnectHarness />
       </DomainKit.Root>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Disconnect" }));
+    await user.click(await screen.findByRole("button", { name: "Disconnect" }));
 
-    await waitFor(() => expect(screen.getByText(/Domain disconnected/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Disconnected")).toBeTruthy());
     expect(transport.calls.removeDomain).toEqual([
       {
         connectionId: connection.connectionId,

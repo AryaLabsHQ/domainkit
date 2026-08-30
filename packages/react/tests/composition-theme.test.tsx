@@ -14,16 +14,28 @@ const disconnected = {
 
 describe("composition and theme", () => {
   it("maps the typed theme to the canonical CSS variables", () => {
-    const style = Theme.toStyle({ accent: "#7c3aed", radius: "1rem" });
+    const style = Theme.toStyle({
+      accent: "#7c3aed",
+      backdrop: "rgb(12 10 9 / 0.6)",
+      dangerContrast: "#111111",
+      radius: "1rem",
+    });
     expect(style).toEqual({
       "--domainkit-accent": "#7c3aed",
+      "--domainkit-backdrop": "rgb(12 10 9 / 0.6)",
+      "--domainkit-danger-contrast": "#111111",
       "--domainkit-radius": "1rem",
     });
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
     const { container } = render(
       <DomainKit.Root
         colorScheme="dark"
-        theme={{ accent: "#7c3aed", radius: "1rem" }}
+        theme={{
+          accent: "#7c3aed",
+          backdrop: "rgb(12 10 9 / 0.6)",
+          dangerContrast: "#111111",
+          radius: "1rem",
+        }}
         transport={transport}
       >
         <div>Child</div>
@@ -32,6 +44,8 @@ describe("composition and theme", () => {
     const root = container.querySelector<HTMLElement>("[data-domainkit-root]");
     expect(root?.dataset.colorScheme).toBe("dark");
     expect(root?.style.getPropertyValue("--domainkit-accent")).toBe("#7c3aed");
+    expect(root?.style.getPropertyValue("--domainkit-backdrop")).toBe("rgb(12 10 9 / 0.6)");
+    expect(root?.style.getPropertyValue("--domainkit-danger-contrast")).toBe("#111111");
     expect(root?.style.getPropertyValue("--domainkit-radius")).toBe("1rem");
   });
 
@@ -52,6 +66,7 @@ describe("composition and theme", () => {
       connect: async () => {
         calls += 1;
       },
+      disconnect: () => undefined,
       retry: () => undefined,
       reuse: async () => undefined,
       state: disconnected,
@@ -75,6 +90,7 @@ describe("composition and theme", () => {
   it("lets host props override component defaults", () => {
     const controller: Connection.Controller = {
       connect: async () => undefined,
+      disconnect: () => undefined,
       retry: () => undefined,
       reuse: async () => undefined,
       state: disconnected,
@@ -113,12 +129,18 @@ describe("composition and theme", () => {
     const host = document.createElement("div");
     document.body.append(host);
     const first = render(
-      <DomainKit.Root portalContainer={host} transport={transport}>
+      <DomainKit.Root
+        portalContainer={host}
+        theme={{ backdrop: "rgb(12 10 9 / 0.6)" }}
+        transport={transport}
+      >
         <Connection.Flow domain="mail.example.com" />
       </DomainKit.Root>,
     );
     fireEvent.click(await first.findByRole("button", { name: "Connect" }));
     expect(host.querySelector('[data-domainkit-part="connection-dialog"]')).toBeTruthy();
+    const backdrop = host.querySelector<HTMLElement>('[data-domainkit-part="dialog-backdrop"]');
+    expect(backdrop?.style.getPropertyValue("--domainkit-backdrop")).toBe("rgb(12 10 9 / 0.6)");
     first.unmount();
   });
 
@@ -181,7 +203,7 @@ describe("composition and theme", () => {
     });
   });
 
-  it("loads known provider marks from integrations.sh and falls back to a letter", () => {
+  it("uses bundled marks before the local letter fallback", () => {
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
     const { rerender } = render(
       <DomainKit.Root transport={transport}>
@@ -189,40 +211,16 @@ describe("composition and theme", () => {
       </DomainKit.Root>,
     );
     const vercel = screen.getByRole("img", { name: "Vercel" });
-    expect(vercel.querySelector("img")?.getAttribute("src")).toBe(
-      "https://integrations.sh/logo/vercel.com?sz=64",
-    );
+    expect(vercel.querySelector("svg")).toBeTruthy();
+    expect(vercel.querySelector("img")).toBeNull();
     rerender(
       <DomainKit.Root transport={transport}>
-        <Provider.Mark provider={Testing.provider({ id: "namecheap", name: "Namecheap" })} />
+        <Provider.Mark provider={Testing.provider({ id: "cloudflare", name: "Cloudflare" })} />
       </DomainKit.Root>,
     );
-    expect(
-      screen.getByRole("img", { name: "Namecheap" }).querySelector("img")?.getAttribute("src"),
-    ).toBe("https://integrations.sh/logo/namecheap.com?sz=64");
-    rerender(
-      <DomainKit.Root transport={transport}>
-        <Provider.Mark provider={Testing.provider({ id: "GoDaddy", name: "GoDaddy" })} />
-      </DomainKit.Root>,
-    );
-    expect(
-      screen.getByRole("img", { name: "GoDaddy" }).querySelector("img")?.getAttribute("src"),
-    ).toBe("https://integrations.sh/logo/godaddy.com?sz=64");
-    rerender(
-      <DomainKit.Root transport={transport}>
-        <Provider.Mark provider={Testing.provider({ id: "amazon-route-53", name: "Route 53" })} />
-      </DomainKit.Root>,
-    );
-    expect(screen.getByRole("img", { name: "Route 53" }).querySelector("svg")).toBeTruthy();
-    expect(screen.getByRole("img", { name: "Route 53" }).querySelector("img")).toBeNull();
-    rerender(
-      <DomainKit.Root transport={transport}>
-        <Provider.Mark provider={Testing.provider({ id: "aws", name: "AWS" })} />
-      </DomainKit.Root>,
-    );
-    expect(screen.getByRole("img", { name: "AWS" }).querySelector("img")?.getAttribute("src")).toBe(
-      "https://integrations.sh/logo/amazonaws.com?sz=64",
-    );
+    const cloudflare = screen.getByRole("img", { name: "Cloudflare" });
+    expect(cloudflare.querySelector("svg")).toBeTruthy();
+    expect(cloudflare.querySelector("img")).toBeNull();
     rerender(
       <DomainKit.Root transport={transport}>
         <Provider.Mark provider={Testing.provider({ id: "other", name: "Other" })} />
