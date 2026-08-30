@@ -4,10 +4,13 @@
   "type": "module",
   "scripts": {
     "audit": "blume audit",
-    "build": "blume build",
+    "build": "bun run registry:build && blume build",
     "deploy": "bun run build && wrangler deploy",
     "dev": "blume dev",
     "preview": "blume preview",
+    "registry:build": "shadcn build registry.json --output public/r",
+    "registry:check": "bun run registry:build && bun scripts/test-registry.mts",
+    "registry:validate": "shadcn registry validate registry.json",
     "typecheck": "blume check"
   },
   "dependencies": {
@@ -19,6 +22,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "shadcn": "4.17.0",
     "wrangler": "4.127.1"
   }
 }

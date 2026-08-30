@@ -1,0 +1,21 @@
+---
+title: Shadcn registry
+description: Copy model-free DNS presentation components into your application through the DomainKit Shadcn registry without installing its managed runtime.
+---
+
+The registry is a source-distribution channel for presentation-only DNS components. These copied
+files use plain props and Tailwind tokens; they do not import `domainkit`, Effect, Atom, transports,
+or provider clients.
+
+```sh
+npx shadcn@latest add https://domain-kit.dev/r/dns-table.json
+npx shadcn@latest add https://domain-kit.dev/r/dns-operation.json
+npx shadcn@latest add https://domain-kit.dev/r/dns-status.json
+npx shadcn@latest add https://domain-kit.dev/r/provider-mark.json
+npx shadcn@latest add https://domain-kit.dev/r/copy-value.json
+npx shadcn@latest add https://domain-kit.dev/r/async-state.json
+```
+
+Use `@domainkit/react` for connection, OAuth, provisioning, verification, cleanup, and shared Effect
+Atom state. The registry deliberately contains no lifecycle behavior and is not an alternative
+transport implementation.
