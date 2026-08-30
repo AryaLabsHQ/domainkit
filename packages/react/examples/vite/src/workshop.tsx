@@ -1,3 +1,4 @@
+import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { Copy01Icon, Download01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
@@ -46,6 +47,7 @@ const defaultRecords: ReadonlyArray<Transport.DnsRecord> = [
 
 const stories = [
   { id: "connection", group: "Flows", title: "Connection" },
+  { id: "host-connection", group: "Flows", title: "Host connection" },
   { id: "lifecycle", group: "Flows", title: "Domain" },
   { id: "records", group: "Presentational", title: "Records" },
   { id: "card", group: "Presentational", title: "Record Card" },
@@ -70,6 +72,7 @@ function isStoryId(value: string): value is StoryId {
   switch (value) {
     case "card":
     case "connection":
+    case "host-connection":
     case "lifecycle":
     case "provider":
     case "records":
@@ -321,6 +324,40 @@ function makeTransport(
   };
 }
 
+function HostConnectionRow({ domain }: { readonly domain: string }) {
+  const controller = Connection.useController(domain);
+  const state = controller.state;
+  const snapshot =
+    state._tag === "Disconnected"
+      ? state
+      : state._tag === "Submitting" || state._tag === "Redirecting"
+        ? state.snapshot
+        : undefined;
+  return (
+    <Connection.Root status={state._tag}>
+      {snapshot === undefined ? (
+        <Connection.Status state={state} />
+      ) : (
+        <div data-workshop-host-row="">
+          <div data-workshop-host-identity="">
+            <Provider.Mark provider={snapshot.provider} />
+            <div>
+              <strong>{snapshot.provider.name}</strong>
+              <p>Manages DNS for this domain.</p>
+            </div>
+          </div>
+          <BaseDialog.Root>
+            <Connection.Trigger render={<button data-workshop-host-button="" type="button" />}>
+              Connect {snapshot.provider.name}
+            </Connection.Trigger>
+            <Connection.Dialog controller={controller} snapshot={snapshot} />
+          </BaseDialog.Root>
+        </div>
+      )}
+    </Connection.Root>
+  );
+}
+
 function Preview({ state }: { readonly state: WorkshopState }) {
   const { domain, providerId, providerName, story } = state;
   const records = useRef(state.records);
@@ -335,6 +372,16 @@ function Preview({ state }: { readonly state: WorkshopState }) {
     case "connection":
       children = <Connection.Flow domain={state.domain} />;
       break;
+    case "host-connection":
+      children = (
+        <div data-workshop-stack="">
+          <HostConnectionRow domain={state.domain} />
+          <div data-workshop-narrow="">
+            <HostConnectionRow domain={state.domain} />
+          </div>
+        </div>
+      );
+      break;
     case "lifecycle":
       children = (
         <Domain.Flow
@@ -345,7 +392,11 @@ function Preview({ state }: { readonly state: WorkshopState }) {
       );
       break;
     case "provider":
-      children = <Provider.Mark provider={provider} />;
+      children = (
+        <div data-workshop-spot="">
+          <Provider.Mark provider={provider} />
+        </div>
+      );
       break;
     case "records":
       children = (

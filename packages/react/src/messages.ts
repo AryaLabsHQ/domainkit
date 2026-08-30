@@ -13,6 +13,7 @@ export interface Catalog {
   readonly cleaningDns: string;
   readonly connectProvider: (provider: string) => string;
   readonly connected: (provider: string) => string;
+  readonly providerAvailable: (provider: string) => string;
   readonly connecting: string;
   readonly close: string;
   readonly detectingProvider: string;
@@ -49,6 +50,7 @@ export const english: Catalog = {
   cleaningDns: "Removing records…",
   connectProvider: () => "Connect",
   connected: (provider) => `${provider} connected`,
+  providerAvailable: (provider) => `${provider} manages DNS for this domain`,
   connecting: "Connecting…",
   close: "Close",
   detectingProvider: "Detecting DNS provider…",
@@ -70,4 +72,7 @@ export const english: Catalog = {
   tokenLabel: "API token",
 };
 
-export const merge = (overrides: Partial<Catalog> = {}): Catalog => ({ ...english, ...overrides });
+export const merge = (overrides: Partial<Catalog> = {}): Catalog => ({
+  ...english,
+  ...overrides,
+});

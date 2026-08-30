@@ -1,3 +1,4 @@
+import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -228,5 +229,59 @@ describe("composition and theme", () => {
       </DomainKit.Root>,
     );
     expect(screen.getByRole("img", { name: "Other" }).textContent).toBe("O");
+  });
+
+  it("lets Trigger children replace the default label without injecting a mark", () => {
+    const transport = Testing.makeFakeTransport({ inspect: disconnected });
+    render(
+      <DomainKit.Root transport={transport}>
+        <BaseDialog.Root>
+          <Connection.Trigger>Host connect</Connection.Trigger>
+        </BaseDialog.Root>
+      </DomainKit.Root>,
+    );
+    const trigger = screen.getByRole("button", { name: "Host connect" });
+    expect(trigger.querySelector('[data-domainkit-part="provider-mark"]')).toBeNull();
+    expect(trigger.hasAttribute("data-domainkit-recipe")).toBe(false);
+  });
+
+  it("keeps host trigger chrome off a render button", () => {
+    const transport = Testing.makeFakeTransport({ inspect: disconnected });
+    render(
+      <DomainKit.Root transport={transport}>
+        <BaseDialog.Root>
+          <Connection.Trigger render={<button data-host-button="" />}>
+            Connect Cloudflare
+          </Connection.Trigger>
+        </BaseDialog.Root>
+      </DomainKit.Root>,
+    );
+    const trigger = screen.getByRole("button", { name: "Connect Cloudflare" });
+    expect(trigger.hasAttribute("data-host-button")).toBe(true);
+    expect(trigger.hasAttribute("data-domainkit-recipe")).toBe(false);
+    expect(trigger.querySelector('[data-domainkit-part="provider-mark"]')).toBeNull();
+  });
+
+  it("keeps the Flow recipe trigger as a marked, styled control", async () => {
+    const transport = Testing.makeFakeTransport({ inspect: disconnected });
+    render(
+      <DomainKit.Root transport={transport}>
+        <Connection.Flow domain="mail.example.com" />
+      </DomainKit.Root>,
+    );
+    const trigger = await screen.findByRole("button", { name: "Connect" });
+    expect(trigger.getAttribute("data-domainkit-recipe")).toBe("connect");
+    expect(trigger.querySelector('[data-domainkit-part="provider-mark"]')).toBeTruthy();
+  });
+
+  it("lets Status children replace the disconnected copy", () => {
+    const transport = Testing.makeFakeTransport({ inspect: disconnected });
+    render(
+      <DomainKit.Root transport={transport}>
+        <Connection.Status state={disconnected}>Owns DNS for this domain.</Connection.Status>
+      </DomainKit.Root>,
+    );
+    expect(screen.getByText("Owns DNS for this domain.")).toBeTruthy();
+    expect(screen.queryByText("Cloudflare manages DNS for this domain")).toBeNull();
   });
 });
