@@ -72,4 +72,27 @@ describe("host lifecycle events", () => {
       },
     ]);
   });
+
+  it("publishes a completed apply before invoking the flow callback", async () => {
+    const user = userEvent.setup();
+    const events: Array<Lifecycle.Event> = [];
+    const transport = Testing.makeFakeTransport({ inspect: connection });
+    render(
+      <DomainKit.Root onEvent={(event) => events.push(event)} transport={transport}>
+        <Provisioning.Flow
+          connection={connection}
+          onApplied={() => {
+            throw new Error("flow callback failed");
+          }}
+          records={[record]}
+        />
+      </DomainKit.Root>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Review changes" }));
+    const dialog = await screen.findByRole("dialog", { name: "Review changes" });
+    await user.click(within(dialog).getByRole("button", { name: "Add records" }));
+
+    await waitFor(() => expect(events.map((event) => event._tag)).toEqual(["RecordsApplied"]));
+  });
 });

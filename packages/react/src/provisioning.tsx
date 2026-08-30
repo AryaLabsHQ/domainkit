@@ -103,12 +103,12 @@ export function useModel(
           Effect.sync(() => {
             if (result._tag === "Applied") {
               get.set(state, State.Complete({ result }));
-              onAppliedRef.current?.(result);
               emit(LifecycleEvent.RecordsApplied({ connection, result }));
+              onAppliedRef.current?.(result);
             } else if (result._tag === "Partial") {
               get.set(state, State.Partial({ result }));
-              onAppliedRef.current?.(result);
               emit(LifecycleEvent.RecordsPartiallyApplied({ connection, result }));
+              onAppliedRef.current?.(result);
             } else {
               get.set(state, result);
             }
