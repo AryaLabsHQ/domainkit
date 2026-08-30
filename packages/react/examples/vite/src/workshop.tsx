@@ -1,5 +1,11 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { Copy01Icon, Download01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { Select as BaseSelect } from "@base-ui/react/select";
+import {
+  ArrowDown01Icon,
+  Copy01Icon,
+  Download01Icon,
+  Tick02Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
 import { Transport } from "domainkit";
@@ -9,6 +15,7 @@ import {
   Connection,
   Domain,
   DomainKit,
+  Lifecycle,
   Provisioning,
   Provider,
   Records,
@@ -17,19 +24,70 @@ import {
 } from "../../../src/index.ts";
 
 import { nextRecordId } from "./workshop-records.ts";
-
-const brandTheme = {
-  accent: "#7c3aed",
-  accentContrast: "#ffffff",
-  fontFamily: "Inter, ui-sans-serif, system-ui",
-  radius: "1rem",
-} as const;
+import {
+  isWorkshopThemeId,
+  workshopTheme,
+  workshopThemePresets,
+  type WorkshopThemeId,
+} from "./workshop-themes.ts";
 
 const workshopIcons = {
   copied: <HugeiconsIcon icon={Tick02Icon} />,
   copy: <HugeiconsIcon icon={Copy01Icon} />,
   download: <HugeiconsIcon icon={Download01Icon} />,
 };
+
+function ToolbarSelect({
+  label,
+  onValueChange,
+  options,
+  value,
+}: {
+  readonly label: string;
+  readonly onValueChange: (value: string) => void;
+  readonly options: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+  readonly value: string;
+}) {
+  return (
+    <label data-workshop-global-control="">
+      <span>{label}</span>
+      <BaseSelect.Root
+        items={options}
+        onValueChange={(nextValue) => {
+          if (nextValue !== null) onValueChange(nextValue);
+        }}
+        value={value}
+      >
+        <BaseSelect.Trigger aria-label={label} data-workshop-select-trigger="">
+          <BaseSelect.Value />
+          <BaseSelect.Icon data-workshop-select-icon="">
+            <HugeiconsIcon icon={ArrowDown01Icon} />
+          </BaseSelect.Icon>
+        </BaseSelect.Trigger>
+        <BaseSelect.Portal>
+          <BaseSelect.Positioner align="end" data-workshop-select-positioner="" sideOffset={5}>
+            <BaseSelect.Popup data-workshop-select-popup="">
+              <BaseSelect.List>
+                {options.map((option) => (
+                  <BaseSelect.Item
+                    data-workshop-select-item=""
+                    key={option.value}
+                    value={option.value}
+                  >
+                    <BaseSelect.ItemText>{option.label}</BaseSelect.ItemText>
+                    <BaseSelect.ItemIndicator data-workshop-select-indicator="">
+                      <HugeiconsIcon icon={Tick02Icon} />
+                    </BaseSelect.ItemIndicator>
+                  </BaseSelect.Item>
+                ))}
+              </BaseSelect.List>
+            </BaseSelect.Popup>
+          </BaseSelect.Positioner>
+        </BaseSelect.Portal>
+      </BaseSelect.Root>
+    </label>
+  );
+}
 
 const defaultRecords: ReadonlyArray<Transport.DnsRecord> = [
   {
@@ -61,7 +119,6 @@ const stories = [
 type StoryId = (typeof stories)[number]["id"];
 
 export interface WorkshopState {
-  readonly branded: boolean;
   readonly colorScheme: "dark" | "light";
   readonly domain: string;
   readonly providerId: string;
@@ -69,6 +126,7 @@ export interface WorkshopState {
   readonly receipt: boolean;
   readonly records: ReadonlyArray<Transport.DnsRecord>;
   readonly story: StoryId;
+  readonly theme: WorkshopThemeId;
 }
 
 function isStoryId(value: string): value is StoryId {
@@ -90,8 +148,8 @@ function isStoryId(value: string): value is StoryId {
 export function stateFromSearch(search: string): WorkshopState {
   const parameters = new URLSearchParams(search);
   const storyParameter = parameters.get("story");
+  const themeParameter = parameters.get("theme");
   return {
-    branded: parameters.get("theme") === "brand",
     colorScheme: parameters.get("mode") === "dark" ? "dark" : "light",
     domain: "mail.example.com",
     providerId: "cloudflare",
@@ -104,19 +162,21 @@ export function stateFromSearch(search: string): WorkshopState {
         : parameters.get("flow") === "lifecycle"
           ? "lifecycle"
           : "connection",
+    theme:
+      themeParameter !== null && isWorkshopThemeId(themeParameter) ? themeParameter : "neutral",
   };
 }
 
-function searchFromState(state: Pick<WorkshopState, "branded" | "colorScheme" | "story">): string {
+function searchFromState(state: Pick<WorkshopState, "colorScheme" | "story" | "theme">): string {
   const parameters = new URLSearchParams();
   parameters.set("story", state.story);
   if (state.story === "lifecycle") parameters.set("flow", "lifecycle");
   parameters.set("mode", state.colorScheme);
-  if (state.branded) parameters.set("theme", "brand");
+  if (state.theme !== "neutral") parameters.set("theme", state.theme);
   return `?${parameters}`;
 }
 
-function writeSearch(state: Pick<WorkshopState, "branded" | "colorScheme" | "story">): void {
+function writeSearch(state: Pick<WorkshopState, "colorScheme" | "story" | "theme">): void {
   const next = `${window.location.pathname}${searchFromState(state)}`;
   window.history.replaceState(null, "", next);
 }
@@ -223,7 +283,7 @@ const recordFolder = (record: Transport.DnsRecord): DialConfig => ({
   remove: { type: "action", label: "Remove" },
 });
 
-const controlsConfig = ({
+const storyConfig = ({
   initial,
   recordIds,
   seeds,
@@ -234,24 +294,7 @@ const controlsConfig = ({
   readonly seeds: Readonly<Record<string, Transport.DnsRecord>>;
   readonly story: StoryId;
 }): DialConfig => {
-  const config: DialConfig = {
-    colorScheme: {
-      type: "select",
-      options: [
-        { label: "Light", value: "light" },
-        { label: "Dark", value: "dark" },
-      ],
-      default: initial.colorScheme,
-    },
-    theme: {
-      type: "select",
-      options: [
-        { label: "Default", value: "default" },
-        { label: "Brand", value: "brand" },
-      ],
-      default: initial.branded ? "brand" : "default",
-    },
-  };
+  const config: DialConfig = {};
   if (usesDomain(story)) {
     config.domain = { type: "text", default: initial.domain };
   }
@@ -375,7 +418,8 @@ function HostLifecycleRow({
   readonly initialReceiptId?: string;
   readonly records: ReadonlyArray<Transport.DnsRecord>;
 }) {
-  const connection = Connection.useController(domain).state;
+  const controller = Connection.useController(domain);
+  const connection = controller.state;
   const [appliedReceiptId, setAppliedReceiptId] = useState<string>();
   if (connection._tag !== "Connected") {
     return <Connection.Status state={connection} />;
@@ -399,7 +443,7 @@ function HostLifecycleRow({
               style={{ display: "contents" }}
             />
           )}
-          <Connection.DisconnectAction connection={connection} style={{ display: "contents" }} />
+          <Connection.DisconnectDialog connection={connection} controller={controller} />
           <Provisioning.Flow
             connection={connection}
             onApplied={(result) => setAppliedReceiptId(result.receiptId)}
@@ -414,6 +458,12 @@ function HostLifecycleRow({
 }
 
 function Preview({ state }: { readonly state: WorkshopState }) {
+  const [event, setEvent] = useState<Lifecycle.Event>();
+  useEffect(() => {
+    if (event === undefined) return;
+    const timeout = window.setTimeout(() => setEvent(undefined), 4_000);
+    return () => window.clearTimeout(timeout);
+  }, [event]);
   const { domain, providerId, providerName, story } = state;
   const records = useRef(state.records);
   records.current = state.records;
@@ -501,37 +551,41 @@ function Preview({ state }: { readonly state: WorkshopState }) {
     <DomainKit.Root
       colorScheme={state.colorScheme}
       icons={workshopIcons}
-      {...(state.branded ? { theme: brandTheme } : {})}
+      onEvent={setEvent}
+      theme={workshopTheme(state.theme, state.colorScheme)}
       transport={transport}
     >
       {children}
+      {event === undefined ? null : (
+        <div data-workshop-notification="" role="status">
+          {workshopEventMessage(event)}
+        </div>
+      )}
     </DomainKit.Root>
   );
 }
 
-const constrainSelectDropdown = (root: HTMLElement, dropdown: HTMLElement): void => {
-  const gap = 4;
-  const trigger = root.querySelector<HTMLElement>(".dialkit-select-trigger[data-open='true']");
-  if (trigger === null) return;
-  const rootBox = root.getBoundingClientRect();
-  const triggerBox = trigger.getBoundingClientRect();
-  const spaceBelow = Math.max(0, rootBox.bottom - triggerBox.bottom - gap);
-  const spaceAbove = Math.max(0, triggerBox.top - rootBox.top - gap);
-  const above = spaceBelow < 160 && spaceAbove > spaceBelow;
-  const maxHeight = Math.min(280, Math.max(120, above ? spaceAbove : spaceBelow));
-  dropdown.style.maxHeight = `${maxHeight}px`;
-  dropdown.style.overflowY = "auto";
-  dropdown.style.overscrollBehavior = "contain";
-  const height = Math.min(maxHeight, dropdown.scrollHeight);
-  const top = above
-    ? triggerBox.top - rootBox.top - height - gap
-    : triggerBox.bottom - rootBox.top + gap;
-  dropdown.style.top = `${Math.max(8, top)}px`;
-};
+function workshopEventMessage(event: Lifecycle.Event): string {
+  switch (event._tag) {
+    case "ConnectionEstablished":
+      return `${event.connection.provider.name} connected`;
+    case "DomainDisconnected":
+      return "Domain disconnected";
+    case "RecordsApplied":
+      return "DNS records added";
+    case "RecordsCleaned":
+      return "DNS records removed";
+    case "RecordsPartiallyApplied":
+      return "Some DNS records could not be added";
+    case "RecordsPartiallyCleaned":
+      return "Some DNS records could not be removed";
+  }
+}
 
 export function Workshop({ initial }: { readonly initial: WorkshopState }) {
-  const addons = useRef<HTMLElement>(null);
   const [story, setStory] = useState(initial.story);
+  const [colorScheme, setColorScheme] = useState(initial.colorScheme);
+  const [theme, setTheme] = useState(initial.theme);
   const [recordIds, setRecordIds] = useState(() => initial.records.map((record) => record.id));
   const nextRecord = useRef(initial.records.length + 1);
   const seeds = useRef<Record<string, Transport.DnsRecord>>(
@@ -542,7 +596,7 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
   if (current === undefined) throw new Error("DomainKit workshop story is missing");
   const config = useMemo(
     () =>
-      controlsConfig({
+      storyConfig({
         initial,
         recordIds,
         seeds: seeds.current,
@@ -550,8 +604,8 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
       }),
     [initial, recordIds, story],
   );
-  const dial = useDialKitController("Controls", config, {
-    id: "workshop",
+  const dial = useDialKitController("Story", config, {
+    id: "workshop-story",
     onAction: (path) => {
       if (path === "records.add") {
         const allocated = nextRecordId(seeds.current, nextRecord.current);
@@ -574,12 +628,8 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
     },
   });
   const values = dial.values as Record<string, unknown>;
-  const colorScheme =
-    asString(values.colorScheme, initial.colorScheme) === "dark" ? "dark" : "light";
-  const branded = asString(values.theme, initial.branded ? "brand" : "default") === "brand";
   const providerId = asString(values.providerId, initial.providerId);
   const state: WorkshopState = {
-    branded,
     colorScheme,
     domain: asString(values.domain, initial.domain),
     providerId,
@@ -587,11 +637,12 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
     receipt: asString(values.receipt, initial.receipt ? "on" : "off") === "on",
     records: recordsFromDial(recordIds, values.records, seeds.current),
     story,
+    theme,
   };
 
   useEffect(() => {
-    writeSearch({ branded: state.branded, colorScheme: state.colorScheme, story: state.story });
-  }, [state.branded, state.colorScheme, state.story]);
+    writeSearch({ colorScheme: state.colorScheme, story: state.story, theme: state.theme });
+  }, [state.colorScheme, state.story, state.theme]);
 
   useEffect(() => {
     if (story !== "provider" || providerId === lastProviderId.current) return;
@@ -599,26 +650,6 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
     const name = providerNames[providerId];
     if (name !== undefined) dial.setValue("providerName", name);
   }, [dial, providerId, story]);
-
-  useEffect(() => {
-    const host = addons.current;
-    if (host === null) return;
-    const attach = (dropdown: HTMLElement) => {
-      const root = dropdown.closest(".dialkit-root");
-      if (root instanceof HTMLElement) constrainSelectDropdown(root, dropdown);
-    };
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node instanceof HTMLElement && node.classList.contains("dialkit-select-dropdown")) {
-            requestAnimationFrame(() => attach(node));
-          }
-        }
-      }
-    });
-    observer.observe(host, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, []);
 
   return (
     <div data-scheme={state.colorScheme} data-workshop="">
@@ -645,7 +676,31 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
       </nav>
       <div data-workshop-stage="">
         <div data-react-grab-ignore="" data-workshop-toolbar="">
-          {current.group} / {current.title}
+          <span>
+            {current.group} / {current.title}
+          </span>
+          <div data-workshop-appearance="">
+            <ToolbarSelect
+              label="Color scheme"
+              onValueChange={(selected) => setColorScheme(selected === "dark" ? "dark" : "light")}
+              options={[
+                { label: "Light", value: "light" },
+                { label: "Dark", value: "dark" },
+              ]}
+              value={colorScheme}
+            />
+            <ToolbarSelect
+              label="Theme"
+              onValueChange={(selected) => {
+                if (isWorkshopThemeId(selected)) setTheme(selected);
+              }}
+              options={workshopThemePresets.map((preset) => ({
+                label: preset.label,
+                value: preset.id,
+              }))}
+              value={theme}
+            />
+          </div>
         </div>
         <div data-workshop-canvas="">
           <div data-workshop-frame="">
@@ -656,7 +711,7 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
           </div>
         </div>
       </div>
-      <section aria-label="Controls" data-react-grab-ignore="" data-workshop-addons="" ref={addons}>
+      <section aria-label="Workshop controls" data-workshop-addons="">
         <DialRoot mode="inline" productionEnabled theme={state.colorScheme} />
       </section>
     </div>
