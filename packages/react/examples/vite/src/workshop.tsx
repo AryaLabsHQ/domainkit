@@ -108,11 +108,35 @@ function writeSearch(state: Pick<WorkshopState, "branded" | "colorScheme" | "sto
 
 const groups = [...new Set(stories.map((story) => story.group))];
 
-const providerNames: Record<string, string> = {
-  cloudflare: "Cloudflare",
-  namecheap: "Namecheap",
-  vercel: "Vercel",
-};
+const providers = [
+  { id: "route53", name: "Amazon Route 53" },
+  { id: "bluehost", name: "Bluehost" },
+  { id: "cloudflare", name: "Cloudflare" },
+  { id: "digitalocean", name: "DigitalOcean" },
+  { id: "dnsimple", name: "DNSimple" },
+  { id: "dreamhost", name: "DreamHost" },
+  { id: "dynadot", name: "Dynadot" },
+  { id: "gandi", name: "Gandi" },
+  { id: "godaddy", name: "GoDaddy" },
+  { id: "google", name: "Google Cloud DNS" },
+  { id: "hostgator", name: "HostGator" },
+  { id: "hostinger", name: "Hostinger" },
+  { id: "hover", name: "Hover" },
+  { id: "ionos", name: "IONOS" },
+  { id: "namecom", name: "Name.com" },
+  { id: "namecheap", name: "Namecheap" },
+  { id: "netlify", name: "Netlify" },
+  { id: "ns1", name: "NS1" },
+  { id: "ovh", name: "OVHcloud" },
+  { id: "porkbun", name: "Porkbun" },
+  { id: "spaceship", name: "Spaceship" },
+  { id: "squarespace", name: "Squarespace" },
+  { id: "vercel", name: "Vercel" },
+] as const;
+
+const providerNames: Record<string, string> = Object.fromEntries(
+  providers.map((provider) => [provider.id, provider.name]),
+);
 
 const usesDomain = (story: StoryId): boolean => story !== "provider";
 const usesRecords = (story: StoryId): boolean =>
@@ -225,7 +249,7 @@ const controlsConfig = ({
   if (story === "provider") {
     config.providerId = {
       type: "select",
-      options: ["cloudflare", "vercel", "namecheap"],
+      options: providers.map((provider) => ({ label: provider.name, value: provider.id })),
       default: initial.providerId,
     };
     config.providerName = { type: "text", default: initial.providerName };

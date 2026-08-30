@@ -17,12 +17,40 @@ export interface MarkProps extends PartProps<"span", MarkState> {
   readonly provider: ProviderDescriptor;
 }
 
-const logoHost = (providerId: string): string | undefined => {
-  if (providerId === "cloudflare") return "cloudflare.com";
-  if (providerId === "namecheap") return "namecheap.com";
-  if (providerId === "vercel") return "vercel.com";
-  return undefined;
+const logoHosts: Readonly<Record<string, string>> = {
+  amazonroute53: "aws.amazon.com",
+  aws: "aws.amazon.com",
+  bluehost: "bluehost.com",
+  cloudflare: "cloudflare.com",
+  digitalocean: "digitalocean.com",
+  dnsimple: "dnsimple.com",
+  dreamhost: "dreamhost.com",
+  dynadot: "dynadot.com",
+  gandi: "gandi.net",
+  godaddy: "godaddy.com",
+  google: "cloud.google.com",
+  googlecloud: "cloud.google.com",
+  googleclouddns: "cloud.google.com",
+  hostgator: "hostgator.com",
+  hostinger: "hostinger.com",
+  hover: "hover.com",
+  ionos: "ionos.com",
+  namecheap: "namecheap.com",
+  namecom: "name.com",
+  netlify: "netlify.com",
+  ns1: "ns1.com",
+  ovh: "ovh.com",
+  porkbun: "porkbun.com",
+  route53: "aws.amazon.com",
+  spaceship: "spaceship.com",
+  squarespace: "squarespace.com",
+  vercel: "vercel.com",
 };
+
+const logoKey = (providerId: string): string =>
+  providerId.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+const logoHost = (providerId: string): string | undefined => logoHosts[logoKey(providerId)];
 
 const letterMark = (provider: ProviderDescriptor): string =>
   provider.name.trim().charAt(0).toUpperCase() || "?";

@@ -189,6 +189,22 @@ describe("composition and theme", () => {
     ).toBe("https://integrations.sh/logo/namecheap.com?sz=64");
     rerender(
       <DomainKit.Root transport={transport}>
+        <Provider.Mark provider={Testing.provider({ id: "GoDaddy", name: "GoDaddy" })} />
+      </DomainKit.Root>,
+    );
+    expect(
+      screen.getByRole("img", { name: "GoDaddy" }).querySelector("img")?.getAttribute("src"),
+    ).toBe("https://integrations.sh/logo/godaddy.com?sz=64");
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Provider.Mark provider={Testing.provider({ id: "amazon-route-53", name: "Route 53" })} />
+      </DomainKit.Root>,
+    );
+    expect(
+      screen.getByRole("img", { name: "Route 53" }).querySelector("img")?.getAttribute("src"),
+    ).toBe("https://integrations.sh/logo/aws.amazon.com?sz=64");
+    rerender(
+      <DomainKit.Root transport={transport}>
         <Provider.Mark provider={Testing.provider({ id: "other", name: "Other" })} />
       </DomainKit.Root>,
     );
