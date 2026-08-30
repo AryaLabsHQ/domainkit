@@ -43,6 +43,7 @@ try {
     join(fixture, "package.json"),
     JSON.stringify({
       private: true,
+      type: "module",
       scripts: { build: "vite build", typecheck: "tsc --noEmit" },
       dependencies: {
         "@vitejs/plugin-react": "6.1.1",
@@ -88,6 +89,18 @@ try {
       },
       include: ["src"],
     }),
+  );
+  await Bun.write(
+    join(fixture, "vite.config.ts"),
+    `import { resolve } from "node:path";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  plugins: [react()],
+  resolve: { alias: { "@": resolve(import.meta.dirname, "src") } },
+});
+`,
   );
   await Bun.write(
     join(fixture, "index.html"),
