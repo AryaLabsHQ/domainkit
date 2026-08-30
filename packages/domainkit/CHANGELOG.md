@@ -1,3 +1,11 @@
+## domainkit@0.3.0
+
+### Make Effect the canonical DomainKit API
+
+Export Effect services, programs, providers, and schema-backed application transport contracts
+from `domainkit`. Move the secondary Promise facade to `domainkit/promise` and remove duplicate
+Effect and provider subpaths before the 0.3 release.
+
 ## domainkit@0.2.2
 
 ### Reuse an existing provider connection for another domain

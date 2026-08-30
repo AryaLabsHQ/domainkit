@@ -1,3 +1,16 @@
+## @domainkit/react@0.3.0
+
+### Compose connection rows with host controls
+
+Separate the unstyled connection trigger from the packaged provider-marked recipe so applications
+can use their own buttons, labels, and row layout without rebuilding the connection dialog.
+
+### Run React lifecycle controllers through Effect Atom
+
+Use the canonical `domainkit` transport service and an Effect layer at `DomainKit.Root`, replace
+duplicated Promise transport models and manual request tracking with Effect Atom, and require React
+19 for the 0.3 release.
+
 ## @domainkit/react@0.1.1
 
 ### Show exact DNS operation values

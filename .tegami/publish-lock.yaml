@@ -1,20 +1,29 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: patch\n---\n\n## Show exact DNS operation values\n\nDisplay record values and optional priority in provisioning and cleanup reviews so users can inspect\nthe complete DNS mutation before authorizing it.\n"
-    filename: react-operation-values.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: patch\n---\n\n## Compose connection rows with host controls\n\nSeparate the unstyled connection trigger from the packaged provider-marked recipe so applications\ncan use their own buttons, labels, and row layout without rebuilding the connection dialog.\n"
+    filename: react-host-connection-composition.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Run React lifecycle controllers through Effect Atom\n\nUse the canonical `domainkit` transport service and an Effect layer at `DomainKit.Root`, replace\nduplicated Promise transport models and manual request tracking with Effect Atom, and require React\n19 for the 0.3 release.\n"
+    filename: react-effect-atom.md
+    v: 0.0.0
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Make Effect the canonical DomainKit API\n\nExport Effect services, programs, providers, and schema-backed application transport contracts\nfrom `domainkit`. Move the secondary Promise facade to `domainkit/promise` and remove duplicate\nEffect and provider subpaths before the 0.3 release.\n"
+    filename: effect-first-public-api.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
-  - id: npm:domainkit
-    updated: false
   - changelogIds:
-      - react-operation-values.md
+      - react-host-connection-composition.md
+      - react-effect-atom.md
     id: npm:@domainkit/react
+    updated: true
+  - changelogIds:
+      - effect-first-public-api.md
+    id: npm:domainkit
     updated: true
   - id: npm:@domainkit/docs
     updated: false
 npm:packages:
   - id: npm:domainkit-workspace
-  - id: npm:domainkit
   - id: npm:@domainkit/react
+  - id: npm:domainkit
   - id: npm:@domainkit/docs
