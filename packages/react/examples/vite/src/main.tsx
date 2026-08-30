@@ -5,6 +5,8 @@ import { stateFromSearch, Workshop } from "./workshop.tsx";
 import "@domainkit/react/styles.css";
 // oxlint-disable-next-line import/no-unassigned-import -- Workshop chrome is example-only.
 import "./workshop.css";
+// oxlint-disable-next-line import/no-unassigned-import -- Dialkit panel styles are workshop-only.
+import "dialkit/styles.css";
 
 const root = document.getElementById("root");
 if (root === null) throw new Error("DomainKit workshop root is missing");

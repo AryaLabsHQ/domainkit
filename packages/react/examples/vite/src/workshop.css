@@ -149,78 +149,15 @@ body,
   display: grid;
   grid-column: 2;
   grid-row: 2;
-  grid-template-rows: 2.25rem minmax(0, 1fr);
-  height: 14rem;
-}
-
-[data-workshop-addons] > p {
-  align-items: center;
-  border-bottom: 1px solid var(--workshop-border);
-  display: flex;
-  font-weight: 600;
-  margin: 0;
-  padding: 0 1rem;
-}
-
-[data-workshop-controls] {
-  display: grid;
-  gap: 0.85rem 1.25rem;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  height: 22rem;
   min-height: 0;
-  overflow: auto;
-  padding: 0.85rem 1rem 1rem;
+  overflow: hidden;
 }
 
-[data-workshop-field] {
-  display: grid;
-  gap: 0.3rem;
-}
-
-[data-workshop-field] > span {
-  color: var(--workshop-muted);
-  font-size: 0.6875rem;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-[data-workshop-field] input,
-[data-workshop-field] select,
-[data-workshop-records] input {
-  background: var(--workshop-bg);
-  border: 1px solid var(--workshop-border);
-  border-radius: 0.375rem;
-  color: inherit;
-  font: inherit;
-  min-height: 1.85rem;
-  min-width: 0;
-  padding: 0.2rem 0.5rem;
-}
-
-[data-workshop-field][data-span="wide"] {
-  grid-column: 1 / -1;
-}
-
-[data-workshop-records] {
-  display: grid;
-  gap: 0.4rem;
-}
-
-[data-workshop-records] > div {
-  align-items: center;
-  display: grid;
-  gap: 0.4rem;
-  grid-template-columns: 5.5rem minmax(8rem, 1fr) minmax(8rem, 1.4fr) 4.5rem auto;
-}
-
-[data-workshop-records] button {
-  appearance: none;
-  background: transparent;
-  border: 1px solid var(--workshop-border);
-  border-radius: 0.375rem;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  min-height: 1.85rem;
-  padding: 0 0.55rem;
+[data-workshop-addons] .dialkit-root,
+[data-workshop-addons] .dialkit-panel,
+[data-workshop-addons] .dialkit-panel[data-mode="inline"] {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
 }

@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Connection,
   Domain,
@@ -104,6 +105,140 @@ function writeSearch(state: Pick<WorkshopState, "branded" | "colorScheme" | "sto
 }
 
 const groups = [...new Set(stories.map((story) => story.group))];
+
+const providerNames: Record<string, string> = {
+  cloudflare: "Cloudflare",
+  namecheap: "Namecheap",
+  vercel: "Vercel",
+};
+
+const usesDomain = (story: StoryId): boolean => story !== "provider";
+const usesRecords = (story: StoryId): boolean =>
+  story === "card" || story === "lifecycle" || story === "records" || story === "verification";
+
+const asString = (value: unknown, fallback: string): string =>
+  typeof value === "string" ? value : fallback;
+
+const recordLeaf = (
+  value: unknown,
+): { name: string; priority: string; type: string; value: string } | undefined => {
+  if (typeof value !== "object" || value === null) return undefined;
+  const leaf = value as Record<string, unknown>;
+  if (
+    typeof leaf.name !== "string" ||
+    typeof leaf.type !== "string" ||
+    typeof leaf.value !== "string"
+  ) {
+    return undefined;
+  }
+  return {
+    name: leaf.name,
+    priority: typeof leaf.priority === "string" ? leaf.priority : "",
+    type: leaf.type,
+    value: leaf.value,
+  };
+};
+
+const toDnsRecord = (
+  id: string,
+  leaf: { name: string; priority: string; type: string; value: string },
+): Transport.DnsRecord => {
+  const priority = Number.parseInt(leaf.priority, 10);
+  if (leaf.priority.trim() === "" || !Number.isFinite(priority)) {
+    return { id, name: leaf.name, type: leaf.type, value: leaf.value };
+  }
+  return { id, name: leaf.name, priority, type: leaf.type, value: leaf.value };
+};
+
+const recordsFromDial = (
+  ids: ReadonlyArray<string>,
+  folder: unknown,
+  seeds: Readonly<Record<string, Transport.DnsRecord>>,
+): ReadonlyArray<Transport.DnsRecord> => {
+  const values =
+    typeof folder === "object" && folder !== null ? (folder as Record<string, unknown>) : {};
+  return ids.map((id) => {
+    const leaf = recordLeaf(values[id]);
+    if (leaf !== undefined) return toDnsRecord(id, leaf);
+    const seed = seeds[id];
+    return seed ?? { id, name: "example.com", type: "TXT", value: "v=spf1 -all" };
+  });
+};
+
+const recordFolder = (record: Transport.DnsRecord): DialConfig => ({
+  _collapsed: true,
+  type: { type: "text", default: record.type },
+  name: { type: "text", default: record.name },
+  value: { type: "text", default: record.value },
+  priority: {
+    type: "text",
+    default: record.priority === undefined ? "" : String(record.priority),
+    placeholder: "optional",
+  },
+  remove: { type: "action", label: "Remove" },
+});
+
+const controlsConfig = ({
+  initial,
+  recordIds,
+  seeds,
+  story,
+}: {
+  readonly initial: WorkshopState;
+  readonly recordIds: ReadonlyArray<string>;
+  readonly seeds: Readonly<Record<string, Transport.DnsRecord>>;
+  readonly story: StoryId;
+}): DialConfig => {
+  const config: DialConfig = {
+    colorScheme: {
+      type: "select",
+      options: [
+        { label: "Light", value: "light" },
+        { label: "Dark", value: "dark" },
+      ],
+      default: initial.colorScheme,
+    },
+    theme: {
+      type: "select",
+      options: [
+        { label: "Default", value: "default" },
+        { label: "Brand", value: "brand" },
+      ],
+      default: initial.branded ? "brand" : "default",
+    },
+  };
+  if (usesDomain(story)) {
+    config.domain = { type: "text", default: initial.domain };
+  }
+  if (story === "lifecycle") {
+    config.receipt = {
+      type: "select",
+      options: [
+        { label: "Present", value: "on" },
+        { label: "None", value: "off" },
+      ],
+      default: initial.receipt ? "on" : "off",
+    };
+  }
+  if (story === "provider") {
+    config.providerId = {
+      type: "select",
+      options: ["cloudflare", "vercel", "namecheap"],
+      default: initial.providerId,
+    };
+    config.providerName = { type: "text", default: initial.providerName };
+  }
+  if (usesRecords(story)) {
+    const records: DialConfig = {};
+    for (const id of recordIds) {
+      const seed = seeds[id] ?? { id, name: "example.com", type: "TXT", value: "v=spf1 -all" };
+      records[id] = recordFolder(seed);
+    }
+    records.add = { type: "action", label: "Add record" };
+    config.records = records;
+  }
+  return config;
+};
 
 function makeTransport(
   state: Pick<WorkshopState, "domain" | "providerId" | "providerName" | "story">,
@@ -224,160 +359,100 @@ function Preview({ state }: { readonly state: WorkshopState }) {
   );
 }
 
-function RecordFields({
-  onChange,
-  records,
-}: {
-  readonly onChange: (records: ReadonlyArray<Transport.DnsRecord>) => void;
-  readonly records: ReadonlyArray<Transport.DnsRecord>;
-}) {
-  return (
-    <div data-workshop-records="">
-      {records.map((record) => (
-        <div key={record.id}>
-          <input
-            aria-label={`${record.id} type`}
-            onChange={(event) =>
-              onChange(
-                records.map((candidate) =>
-                  candidate.id === record.id
-                    ? { ...candidate, type: event.target.value }
-                    : candidate,
-                ),
-              )
-            }
-            value={record.type}
-          />
-          <input
-            aria-label={`${record.id} name`}
-            onChange={(event) =>
-              onChange(
-                records.map((candidate) =>
-                  candidate.id === record.id
-                    ? { ...candidate, name: event.target.value }
-                    : candidate,
-                ),
-              )
-            }
-            value={record.name}
-          />
-          <input
-            aria-label={`${record.id} value`}
-            onChange={(event) =>
-              onChange(
-                records.map((candidate) =>
-                  candidate.id === record.id
-                    ? { ...candidate, value: event.target.value }
-                    : candidate,
-                ),
-              )
-            }
-            value={record.value}
-          />
-          <input
-            aria-label={`${record.id} priority`}
-            inputMode="numeric"
-            onChange={(event) => {
-              const priority = Number.parseInt(event.target.value, 10);
-              onChange(
-                records.map((candidate) => {
-                  if (candidate.id !== record.id) return candidate;
-                  if (event.target.value.trim() === "" || !Number.isFinite(priority)) {
-                    return {
-                      id: candidate.id,
-                      name: candidate.name,
-                      type: candidate.type,
-                      value: candidate.value,
-                    };
-                  }
-                  return { ...candidate, priority };
-                }),
-              );
-            }}
-            placeholder="prio"
-            value={record.priority ?? ""}
-          />
-          <button
-            onClick={() => onChange(records.filter((candidate) => candidate.id !== record.id))}
-            type="button"
-          >
-            Remove
-          </button>
-        </div>
-      ))}
-      <button
-        onClick={() =>
-          onChange([
-            ...records,
-            {
-              id: `record-${records.length + 1}`,
-              name: "example.com",
-              type: "TXT",
-              value: "v=spf1 -all",
-            },
-          ])
-        }
-        type="button"
-      >
-        Add record
-      </button>
-    </div>
-  );
-}
-
 export function Workshop({ initial }: { readonly initial: WorkshopState }) {
-  const [state, setState] = useState(initial);
-  const current = stories.find((story) => story.id === state.story) ?? stories[0];
-  const showDomain =
-    state.story === "card" ||
-    state.story === "connection" ||
-    state.story === "lifecycle" ||
-    state.story === "records" ||
-    state.story === "verification";
-  const showRecords =
-    state.story === "card" ||
-    state.story === "lifecycle" ||
-    state.story === "records" ||
-    state.story === "verification";
-  const update = (patch: Partial<WorkshopState>) => {
-    setState((currentState) => {
-      const next = { ...currentState, ...patch };
-      if (
-        patch.story !== undefined ||
-        patch.colorScheme !== undefined ||
-        patch.branded !== undefined
-      ) {
-        writeSearch(next);
+  const [story, setStory] = useState(initial.story);
+  const [recordIds, setRecordIds] = useState(() => initial.records.map((record) => record.id));
+  const nextRecord = useRef(initial.records.length + 1);
+  const seeds = useRef<Record<string, Transport.DnsRecord>>(
+    Object.fromEntries(initial.records.map((record) => [record.id, record])),
+  );
+  const lastProviderId = useRef(initial.providerId);
+  const current = stories.find((item) => item.id === story) ?? stories[0];
+  if (current === undefined) throw new Error("DomainKit workshop story is missing");
+  const config = useMemo(
+    () =>
+      controlsConfig({
+        initial,
+        recordIds,
+        seeds: seeds.current,
+        story,
+      }),
+    [initial, recordIds, story],
+  );
+  const dial = useDialKitController("Controls", config, {
+    id: "workshop",
+    onAction: (path) => {
+      if (path === "records.add") {
+        const id = `record-${nextRecord.current}`;
+        nextRecord.current += 1;
+        seeds.current[id] = {
+          id,
+          name: "example.com",
+          type: "TXT",
+          value: "v=spf1 -all",
+        };
+        setRecordIds((ids) => [...ids, id]);
+        return;
       }
-      return next;
-    });
+      const removed = /^records\.([^.]+)\.remove$/.exec(path);
+      if (removed === null) return;
+      const id = removed[1];
+      if (id === undefined) return;
+      setRecordIds((ids) => ids.filter((candidate) => candidate !== id));
+    },
+  });
+  const values = dial.values as Record<string, unknown>;
+  const colorScheme =
+    asString(values.colorScheme, initial.colorScheme) === "dark" ? "dark" : "light";
+  const branded = asString(values.theme, initial.branded ? "brand" : "default") === "brand";
+  const providerId = asString(values.providerId, initial.providerId);
+  const state: WorkshopState = {
+    branded,
+    colorScheme,
+    domain: asString(values.domain, initial.domain),
+    providerId,
+    providerName: asString(values.providerName, initial.providerName),
+    receipt: asString(values.receipt, initial.receipt ? "on" : "off") === "on",
+    records: recordsFromDial(recordIds, values.records, seeds.current),
+    story,
   };
+
+  useEffect(() => {
+    writeSearch({ branded: state.branded, colorScheme: state.colorScheme, story: state.story });
+  }, [state.branded, state.colorScheme, state.story]);
+
+  useEffect(() => {
+    if (story !== "provider" || providerId === lastProviderId.current) return;
+    lastProviderId.current = providerId;
+    const name = providerNames[providerId];
+    if (name !== undefined) dial.setValue("providerName", name);
+  }, [dial, providerId, story]);
 
   return (
     <div data-scheme={state.colorScheme} data-workshop="">
-      <nav aria-label="Stories" data-workshop-sidebar="">
+      <nav aria-label="Stories" data-react-grab-ignore="" data-workshop-sidebar="">
         <div data-workshop-brand="">DomainKit</div>
         {groups.map((group) => (
           <div data-workshop-group="" key={group}>
             <p>{group}</p>
             {stories
-              .filter((story) => story.group === group)
-              .map((story) => (
+              .filter((item) => item.group === group)
+              .map((item) => (
                 <button
-                  aria-current={story.id === state.story ? "page" : undefined}
+                  aria-current={item.id === story ? "page" : undefined}
                   data-workshop-story=""
-                  key={story.id}
-                  onClick={() => update({ story: story.id })}
+                  key={item.id}
+                  onClick={() => setStory(item.id)}
                   type="button"
                 >
-                  {story.title}
+                  {item.title}
                 </button>
               ))}
           </div>
         ))}
       </nav>
       <div data-workshop-stage="">
-        <div data-workshop-toolbar="">
+        <div data-react-grab-ignore="" data-workshop-toolbar="">
           {current.group} / {current.title}
         </div>
         <div data-workshop-canvas="">
@@ -389,92 +464,8 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
           </div>
         </div>
       </div>
-      <section aria-label="Controls" data-workshop-addons="">
-        <p>Controls</p>
-        <div data-workshop-controls="">
-          <label data-workshop-field="">
-            <span>Color scheme</span>
-            <select
-              onChange={(event) =>
-                update({ colorScheme: event.target.value === "dark" ? "dark" : "light" })
-              }
-              value={state.colorScheme}
-            >
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </label>
-          <label data-workshop-field="">
-            <span>Theme</span>
-            <select
-              onChange={(event) => update({ branded: event.target.value === "brand" })}
-              value={state.branded ? "brand" : "default"}
-            >
-              <option value="default">Default</option>
-              <option value="brand">Brand</option>
-            </select>
-          </label>
-          {showDomain ? (
-            <label data-workshop-field="">
-              <span>Domain</span>
-              <input
-                onChange={(event) => update({ domain: event.target.value })}
-                value={state.domain}
-              />
-            </label>
-          ) : null}
-          {state.story === "lifecycle" ? (
-            <label data-workshop-field="">
-              <span>Receipt</span>
-              <select
-                onChange={(event) => update({ receipt: event.target.value === "on" })}
-                value={state.receipt ? "on" : "off"}
-              >
-                <option value="on">Present</option>
-                <option value="off">None</option>
-              </select>
-            </label>
-          ) : null}
-          {state.story === "provider" ? (
-            <>
-              <label data-workshop-field="">
-                <span>Provider id</span>
-                <select
-                  onChange={(event) => {
-                    const providerId = event.target.value;
-                    update({
-                      providerId,
-                      providerName:
-                        providerId === "cloudflare"
-                          ? "Cloudflare"
-                          : providerId === "vercel"
-                            ? "Vercel"
-                            : "Namecheap",
-                    });
-                  }}
-                  value={state.providerId}
-                >
-                  <option value="cloudflare">cloudflare</option>
-                  <option value="vercel">vercel</option>
-                  <option value="namecheap">namecheap</option>
-                </select>
-              </label>
-              <label data-workshop-field="">
-                <span>Provider name</span>
-                <input
-                  onChange={(event) => update({ providerName: event.target.value })}
-                  value={state.providerName}
-                />
-              </label>
-            </>
-          ) : null}
-          {showRecords ? (
-            <div data-span="wide" data-workshop-field="">
-              <span>Records</span>
-              <RecordFields onChange={(records) => update({ records })} records={state.records} />
-            </div>
-          ) : null}
-        </div>
+      <section aria-label="Controls" data-react-grab-ignore="" data-workshop-addons="">
+        <DialRoot mode="inline" theme={state.colorScheme} />
       </section>
     </div>
   );
