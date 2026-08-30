@@ -1,17 +1,34 @@
 ---
-title: Vercel
-description: Connect Vercel through an Integration install or a token. DomainKit keeps the personal or team context Vercel returns for later requests.
+title: Connect Vercel
+description: Connect Vercel through an Integration installation or personal access token and preserve the personal or team context required for later DNS requests.
 seo:
-  title: Connect Vercel DNS via Integration or token
+  title: Connect Vercel DNS through an Integration or token
 ---
 
-Vercel's interactive method is an Integration installation-code flow. DomainKit models it as an integration rather than calling every redirect-based exchange OAuth.
+<ProviderLogo provider="vercel" size={48} />
+
+Vercel's interactive method is an Integration installation-code flow. DomainKit models it as an
+integration rather than treating every redirect-based code exchange as generic OAuth.
+
+Run provider exchanges and token validation on a trusted server. The browser receives only your
+application's connection outcome.
+
+## Prerequisites
+
+- A Vercel Integration with a slug, client ID, client secret, and registered redirect URI.
+- A durable `AuthorizationLifecycle.Repository`.
+- A short-lived, one-time continuation store.
+- Authenticated start and callback routes tied to the current host owner.
+
+## Start an Integration installation
 
 ```ts
 import { Connection, Secret, Vercel } from "domainkit/promise";
 
+const capabilities = ["dns:read", "dns:write"] as const;
+
 const flow = Vercel.Auth.integrationFlow({
-  capabilities: ["dns:read", "dns:write"],
+  capabilities,
   clientId,
   clientSecret: Secret.make(clientSecret),
   redirectUri,
@@ -27,6 +44,79 @@ const result = await Connection.start({
 });
 ```
 
-The completed credential carries the personal-account or team context returned by Vercel. Persist that non-secret, versioned context with the authorization so later requests reconstruct the correct provider client without asking the customer for a team ID.
+Send the returned `Redirect.authorizationUrl` to the browser. Vercel lets the user choose a personal
+or team installation during this flow.
 
-Vercel tokens are also supported through `Vercel.Auth.tokenConnectionMethod`. Keep the token server-side and expose only the connection result through your application transport.
+## Complete the callback
+
+Use the same flow configuration on the callback route:
+
+```ts
+const connected = await Connection.complete({
+  callbackUrl: new URL(request.url),
+  continuationId,
+  continuations,
+  flow,
+  repository,
+});
+```
+
+The code exchange returns the personal account or team context and installation identity. DomainKit
+encodes that non-secret, versioned provider context with the authorization so later requests
+reconstruct the correct Vercel client without asking the customer to type a team ID.
+
+## Connect a personal access token
+
+For a personal account:
+
+```ts
+const method = Vercel.Auth.tokenConnectionMethod({
+  capabilities,
+  context: { _tag: "personal" },
+  token: Secret.make(personalAccessToken),
+});
+```
+
+For a team, provide the team context selected by the host:
+
+```ts
+const method = Vercel.Auth.tokenConnectionMethod({
+  capabilities,
+  context: { _tag: "team", teamId },
+  token: Secret.make(personalAccessToken),
+});
+```
+
+Then pass the method to `Connection.start` with the owner grant and durable repository. Keep the
+token behind the host's secret-storage boundary.
+
+## Reconstruct the provider
+
+Decode the stored context and construct the correct server-side client:
+
+```ts
+const provider = Vercel.make({
+  capabilities: authorization.requiredCapabilities,
+  context:
+    context._tag === "team" ? { _tag: "team", teamId: context.teamId } : { _tag: "personal" },
+  token: credential.accessToken,
+});
+```
+
+Personal clients omit team context. Team clients attach `teamId` to Vercel resource requests.
+
+## Zone discovery
+
+DomainKit treats a Vercel domain as DNS storage when Vercel reports its DNS service type, zone flag,
+or intended nameservers. Current or intended Vercel nameservers are provider evidence; they are not
+substituted for independent public-DNS observation.
+
+When more than one authorized context can serve a requested domain, surface a recognizable
+personal/team choice instead of silently selecting a team ID.
+
+## Next steps
+
+- [Integrate the host lifecycle](/docs/guides/host-integration)
+- [Provision and clean up records](/docs/guides/provision-and-clean-up)
+- [Vercel capability reference](/docs/reference/providers#vercel)
+- [Troubleshoot provider connections](/docs/guides/troubleshooting#connections)
