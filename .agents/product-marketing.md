@@ -33,9 +33,8 @@ provider writes transactional.
 
 ## Claim guardrails
 
-- **Ease claims:** Describe reduced integration work or a guided product flow. Avoid absolute terms
-  such as "frictionless," "one click," or "automatic" unless a named end-to-end path has current
-  usability evidence.
+- **Ease claims:** "Frictionless domain setup" and "one-click provider connection" are approved
+  public language. Use "automatic" only for steps that require no host or user action.
 - **Safety claims:** Say additive, reviewable, digest-bound, receipt-bound, and fail-closed. Do not
   say atomic, race-free, rollback-safe, or incapable of partial failure.
 - **Provider claims:** Name only capabilities exercised by current source and tests. A supported API
@@ -125,6 +124,8 @@ primary-source review before publication.
 ### Prefer
 
 - domain setup
+- frictionless domain setup
+- one-click provider connection
 - connect a DNS provider
 - review exact DNS changes
 - apply the approved plan
@@ -139,7 +140,6 @@ primary-source review before publication.
 
 - magic DNS
 - fully automatic
-- one click
 - zero risk
 - atomic DNS transaction
 - rollback
