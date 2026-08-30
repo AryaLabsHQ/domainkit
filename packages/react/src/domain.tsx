@@ -26,7 +26,7 @@ export function Flow({ domain, receiptId, records }: FlowProps) {
       ) : null}
       {state._tag === "Disconnected" ? (
         <BaseDialog.Root>
-          <Connection.Trigger provider={state.provider} />
+          <Connection.ConnectTrigger provider={state.provider} />
           <Connection.Dialog controller={connection} snapshot={state} />
         </BaseDialog.Root>
       ) : null}

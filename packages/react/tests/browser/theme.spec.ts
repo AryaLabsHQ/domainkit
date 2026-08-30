@@ -46,6 +46,57 @@ test("provisioning and cleanup dialogs preserve review focus", async ({ page }) 
   await expect(page.getByRole("button", { name: "Remove records" })).toBeFocused();
 });
 
+test("connection recipe fills the workshop column", async ({ page }) => {
+  await page.goto("/");
+  const root = page.locator('[data-domainkit-part="connection-root"]');
+  await expect(root).toBeVisible();
+  const trigger = page.getByRole("button", { name: "Connect", exact: true });
+  await expect(trigger).toHaveAttribute("data-domainkit-recipe", "connect");
+  await expect(page.getByText("Cloudflare manages DNS for this domain")).toBeVisible();
+  const delta = await page.evaluate(() => {
+    const frameBox = document.querySelector("[data-workshop-frame]")?.getBoundingClientRect();
+    const rootBox = document
+      .querySelector('[data-domainkit-part="connection-root"]')
+      ?.getBoundingClientRect();
+    if (frameBox === undefined || rootBox === undefined) return Number.POSITIVE_INFINITY;
+    return Math.abs(frameBox.width - rootBox.width);
+  });
+  expect(delta).toBeLessThan(1);
+});
+
+test("host-composed connection rows fill wide and narrow columns", async ({ page }) => {
+  await page.goto("/?story=host-connection&theme=brand");
+  const triggers = page.getByRole("button", { name: "Connect Cloudflare" });
+  await expect(triggers).toHaveCount(2);
+  const wide = triggers.nth(0);
+  await expect(wide).toHaveAttribute("data-workshop-host-button");
+  await expect(wide).not.toHaveAttribute("data-domainkit-recipe");
+  await expect(wide.locator('[data-domainkit-part="provider-mark"]')).toHaveCount(0);
+  await expect(wide).toHaveCSS("background-color", "rgb(24, 24, 27)");
+  await wide.click();
+  await expect(page.getByRole("dialog", { name: "Connect Cloudflare" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  const widths = await page.evaluate(() => {
+    const frame = document.querySelector("[data-workshop-frame]")?.getBoundingClientRect();
+    const rows = [...document.querySelectorAll("[data-workshop-host-row]")].map((row) =>
+      row.getBoundingClientRect(),
+    );
+    const narrow = document.querySelector("[data-workshop-narrow]")?.getBoundingClientRect();
+    return {
+      frame: frame?.width,
+      wide: rows[0]?.width,
+      narrowRow: rows[1]?.width,
+      narrow: narrow?.width,
+    };
+  });
+  expect(widths.frame).toBeDefined();
+  expect(widths.wide).toBeDefined();
+  expect(Math.abs((widths.frame ?? 0) - (widths.wide ?? 0))).toBeLessThan(1);
+  expect(Math.abs((widths.narrow ?? 0) - (widths.narrowRow ?? 0))).toBeLessThan(1);
+  expect(widths.narrow).toBeLessThan(widths.frame ?? 0);
+});
+
 test("workshop switches presentational stories from the sidebar", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Stories" })).toBeVisible();

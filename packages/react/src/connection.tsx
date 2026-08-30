@@ -153,7 +153,7 @@ export interface StatusProps extends PartProps<"div", StatusState> {
   readonly state: State;
 }
 
-export function Status({ state, ...props }: StatusProps) {
+export function Status({ children, state, ...props }: StatusProps) {
   const { messages } = useDomainKit();
   const text =
     state._tag === "Loading"
@@ -168,13 +168,13 @@ export function Status({ state, ...props }: StatusProps) {
               ? messages.openingAuthorization
               : state._tag === "Submitting"
                 ? messages.connecting
-                : `${state.provider.name} is available`;
+                : messages.providerAvailable(state.provider.name);
   return usePart(
     "div",
     props,
     { status: state._tag },
     {
-      children: text,
+      children: children ?? text,
       "data-domainkit-part": "connection-status",
       "data-state": state._tag,
     },
@@ -185,13 +185,26 @@ export interface TriggerProps extends ComponentPropsWithoutRef<typeof BaseDialog
   readonly provider: Provider.Provider;
 }
 
-export function Trigger({ provider, ...props }: TriggerProps) {
+export function Trigger({ children, provider, ...props }: TriggerProps) {
   const { messages } = useDomainKit();
   return (
     <BaseDialog.Trigger data-domainkit-part="connection-trigger" {...props}>
-      <Provider.Mark aria-hidden="true" provider={provider} />
-      {messages.connectProvider(provider.name)}
+      {children ?? messages.connectProvider(provider.name)}
     </BaseDialog.Trigger>
+  );
+}
+
+export function ConnectTrigger({ children, provider, ...props }: TriggerProps) {
+  const { messages } = useDomainKit();
+  return (
+    <Trigger provider={provider} {...props} data-domainkit-recipe="connect">
+      {children ?? (
+        <>
+          <Provider.Mark aria-hidden="true" provider={provider} />
+          {messages.connectProvider(provider.name)}
+        </>
+      )}
+    </Trigger>
   );
 }
 
@@ -391,7 +404,7 @@ export function Flow({ domain, ...props }: FlowProps) {
       ) : null}
       {snapshot === undefined ? null : (
         <BaseDialog.Root>
-          <Trigger provider={snapshot.provider} />
+          <ConnectTrigger provider={snapshot.provider} />
           <Dialog controller={controller} snapshot={snapshot} />
         </BaseDialog.Root>
       )}

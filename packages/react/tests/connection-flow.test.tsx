@@ -160,7 +160,7 @@ describe("Connection.Flow", () => {
 
     expect(await screen.findByText("Connection status is unavailable")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("Cloudflare is available")).toBeTruthy();
+    expect(await screen.findByText("Cloudflare manages DNS for this domain")).toBeTruthy();
     expect(transport.calls.inspect).toHaveLength(2);
   });
 
@@ -185,7 +185,7 @@ describe("Connection.Flow", () => {
     expect(await screen.findByText("Update provider permissions before continuing")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Check again" }));
-    expect(await screen.findByText("Cloudflare is available")).toBeTruthy();
+    expect(await screen.findByText("Cloudflare manages DNS for this domain")).toBeTruthy();
     expect(transport.calls.inspect).toHaveLength(2);
   });
 
@@ -225,7 +225,7 @@ describe("Connection.Flow", () => {
       provider: Testing.provider(),
     });
 
-    expect(await screen.findByText("Cloudflare is available")).toBeTruthy();
+    expect(await screen.findByText("Cloudflare manages DNS for this domain")).toBeTruthy();
     expect(transport.calls.inspect.at(-1)).toEqual({ domain: "other.example.com" });
   });
 

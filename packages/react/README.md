@@ -68,6 +68,26 @@ Every semantic component accepts Base UI's `render` prop.
 
 `DomainKit.Root` sets theme tokens, messages, provider marks, icons, color scheme, and a portal container. The stylesheet is opt-in and uses `--domainkit-*` CSS custom properties. Record parts pick those tokens up when they sit inside Root; they still function without it.
 
+`Connection.Flow` is a recipe over the same parts a host can assemble. `Connection.Root` fills the host column and stretches children. `Connection.Trigger` is a dialog opener: `children` replace its label, `render` replaces the button, and it does not inject a provider mark. `Connection.ConnectTrigger` is the packaged button with a mark and default chrome.
+
+```tsx
+<Connection.Root status={state._tag}>
+  <HostCard>
+    <Provider.Mark provider={snapshot.provider} />
+    <div>
+      <strong>{snapshot.provider.name}</strong>
+      <p>Manages DNS for this domain.</p>
+    </div>
+    <BaseDialog.Root>
+      <Connection.Trigger provider={snapshot.provider} render={<HostButton />}>
+        Connect {snapshot.provider.name}
+      </Connection.Trigger>
+      <Connection.Dialog controller={controller} snapshot={snapshot} />
+    </BaseDialog.Root>
+  </HostCard>
+</Connection.Root>
+```
+
 Pass host icons so the package never owns an icon library. `Records.CopyValue` and `Records.ZoneFile` also accept `copyIcon` / `copiedIcon` / `downloadIcon` when you are not wrapping in Root.
 
 ```tsx
