@@ -22,7 +22,7 @@ import "@domainkit/react/styles.css";
 ## Install
 
 ```sh
-npm install @domainkit/react domainkit effect react react-dom
+npm install @domainkit/react domainkit effect@rc @effect/atom-react@rc react react-dom
 ```
 
 React 19 is required.

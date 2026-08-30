@@ -49,6 +49,15 @@ const versionTag = (): TegamiPlugin => ({
 });
 
 const paper = tegami({
+  groups: {
+    public: {
+      syncBump: true,
+    },
+  },
+  packages: {
+    "@domainkit/react": { group: "public" },
+    domainkit: { group: "public" },
+  },
   npm: {
     client: "bun",
     onBreakPeerDep: "error",
