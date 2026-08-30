@@ -30,6 +30,18 @@ const releaseChecks = (): TegamiPlugin => ({
   },
 });
 
+const refreshBunWorkspaceLock = (): TegamiPlugin => ({
+  name: "domainkit-refresh-bun-workspace-lock",
+  async applyCliDraft() {
+    const child = Bun.spawn(["bun", "install"], {
+      cwd: this.cwd,
+      stderr: "inherit",
+      stdout: "inherit",
+    });
+    if ((await child.exited) !== 0) throw new Error("DomainKit workspace lock refresh failed");
+  },
+});
+
 const versionTag = (): TegamiPlugin => ({
   name: "domainkit-version-tag",
   enforce: "post",
@@ -68,6 +80,7 @@ const paper = tegami({
     updateLockFile: true,
   },
   plugins: [
+    refreshBunWorkspaceLock(),
     github({
       repo: REPOSITORY,
       pushTags: true,
