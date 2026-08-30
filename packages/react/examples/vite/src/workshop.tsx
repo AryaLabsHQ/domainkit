@@ -11,6 +11,8 @@ import {
   Verification,
 } from "@domainkit/react";
 
+import { nextRecordId } from "./workshop-records.ts";
+
 const brandTheme = {
   accent: "#7c3aed",
   accentContrast: "#ffffff",
@@ -55,15 +57,6 @@ export interface WorkshopState {
   readonly records: ReadonlyArray<Transport.DnsRecord>;
   readonly story: StoryId;
 }
-
-export const nextRecordId = (
-  records: Readonly<Record<string, Transport.DnsRecord>>,
-  start: number,
-): { readonly id: string; readonly next: number } => {
-  let sequence = start;
-  while (Object.hasOwn(records, `record-${sequence}`)) sequence += 1;
-  return { id: `record-${sequence}`, next: sequence + 1 };
-};
 
 function isStoryId(value: string): value is StoryId {
   switch (value) {

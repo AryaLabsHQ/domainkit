@@ -1,4 +1,4 @@
-import { nextRecordId } from "../examples/vite/src/workshop.tsx";
+import { nextRecordId } from "../examples/vite/src/workshop-records.ts";
 
 describe("workshop record controls", () => {
   it("skips IDs already present in the initial records", () => {
