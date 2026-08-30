@@ -10,7 +10,7 @@ seo:
 
 DomainKit is a TypeScript SDK for connecting domains and turning DNS requirements into reviewable, authorized plans.
 
-The core package is Effect-native and includes a Promise facade. `@domainkit/react` provides browser-safe connection, provisioning, verification, cleanup, and DNS record interfaces over a transport owned by the host application.
+The package root is Effect-native. A secondary Promise facade is available for foreign runtime boundaries. `@domainkit/react` provides browser-safe connection, provisioning, verification, cleanup, and DNS record interfaces over a transport owned by the host application.
 
 ```package-install
 domainkit
@@ -47,11 +47,9 @@ domainkit
 
 ## Packages
 
-| Package                                                   | Use it for                                                                    |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `domainkit`                                               | Promise facade, provider integrations, schemas, and portable web-runtime APIs |
-| `domainkit/effect`                                        | Effect-native services, programs, Layers, and typed failures                  |
-| `domainkit/cloudflare` / `domainkit/vercel`               | Promise provider entry points                                                 |
-| `domainkit/effect/cloudflare` / `domainkit/effect/vercel` | Effect provider entry points                                                  |
-| `domainkit/testing`                                       | In-memory capabilities and provider conformance tests                         |
-| `@domainkit/react`                                        | Browser-safe flows and DNS record primitives over a host-owned transport      |
+| Package             | Use it for                                                               |
+| ------------------- | ------------------------------------------------------------------------ |
+| `domainkit`         | Effect services, programs, schemas, typed failures, and provider modules |
+| `domainkit/promise` | Promise facade for foreign runtime boundaries                            |
+| `domainkit/testing` | In-memory capabilities and provider conformance tests                    |
+| `@domainkit/react`  | Browser-safe flows and DNS record primitives over a host-owned transport |

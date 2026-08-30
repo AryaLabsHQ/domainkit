@@ -10,7 +10,7 @@ Cloudflare supports OAuth and API-token connection methods. Both produce the sam
 ## OAuth
 
 ```ts
-import { Cloudflare, Connection, DomainName, Secret } from "domainkit";
+import { Cloudflare, Connection, DomainName, Secret } from "domainkit/promise";
 
 const flow = Cloudflare.Auth.oauthFlow({
   capabilities: ["dns:read", "dns:write"],

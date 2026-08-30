@@ -47,25 +47,26 @@ describe("packed consumers", () => {
         join(directory, "consumer.mjs"),
         `
 import {
+  Cloudflare,
+  Digest,
+  DnsProvider,
+  Provisioning as EffectProvisioning,
+  Vercel,
+  VERSION,
+} from "domainkit";
+import {
   AuthorizationLifecycle,
+  Cloudflare as PromiseCloudflare,
   Connection,
   ProviderAuthorization,
   Provisioning,
   Secret,
+  Vercel as PromiseVercel,
   Verification,
-  VERSION,
-} from "domainkit";
-import { make as makeCloudflare } from "domainkit/cloudflare";
-import { make as makeVercel } from "domainkit/vercel";
+  VERSION as PROMISE_VERSION,
+} from "domainkit/promise";
 import { InMemoryAuthorizationLifecycle } from "domainkit/testing";
 import { Effect, Layer } from "effect";
-import {
-  Digest,
-  DnsProvider,
-  Provisioning as EffectProvisioning,
-} from "domainkit/effect";
-import { make as makeEffectCloudflare } from "domainkit/effect/cloudflare";
-import { make as makeEffectVercel } from "domainkit/effect/vercel";
 
 const provider = {
   id: "packed-consumer",
@@ -152,16 +153,16 @@ const cloudflareOptions = {
   fetch: async () => { throw new Error("not called"); },
   token: Secret.make("packed-token"),
 };
-const cloudflare = makeCloudflare(cloudflareOptions);
-const effectCloudflare = makeEffectCloudflare(cloudflareOptions);
+const cloudflare = PromiseCloudflare.make(cloudflareOptions);
+const effectCloudflare = Cloudflare.make(cloudflareOptions);
 const vercelOptions = {
   capabilities: ["dns:read", "dns:write"],
   context: { _tag: "personal" },
   fetch: async () => { throw new Error("not called"); },
   token: Secret.make("packed-token"),
 };
-const vercel = makeVercel(vercelOptions);
-const effectVercel = makeEffectVercel(vercelOptions);
+const vercel = PromiseVercel.make(vercelOptions);
+const effectVercel = Vercel.make(vercelOptions);
 const { plan: effectPlan } = await Effect.runPromise(
   EffectProvisioning.create(input).pipe(
     Effect.provide(
@@ -171,6 +172,7 @@ const { plan: effectPlan } = await Effect.runPromise(
 );
 if (
   VERSION.length === 0 ||
+  VERSION !== PROMISE_VERSION ||
   connected._tag !== "Connected" ||
   removed._tag !== "Removed" ||
   discovered.plan.digest !== promisePlan.digest ||
@@ -189,14 +191,18 @@ if (
       await writeFile(
         join(directory, "types.ts"),
         `
-import type { DnsProvider } from "domainkit";
-import type { Interface as Cloudflare } from "domainkit/cloudflare";
-import type { Interface as EffectCloudflare } from "domainkit/effect/cloudflare";
-import type { Interface as Vercel } from "domainkit/vercel";
-import type { Interface as EffectVercel } from "domainkit/effect/vercel";
+import type { Cloudflare, DnsProvider, Vercel } from "domainkit";
+import type {
+  Cloudflare as PromiseCloudflare,
+  Vercel as PromiseVercel,
+} from "domainkit/promise";
 
 export type PublicProvider = DnsProvider.Interface;
-export type PublicAdapters = Cloudflare | EffectCloudflare | Vercel | EffectVercel;
+export type PublicProviders =
+  | Cloudflare.Interface
+  | PromiseCloudflare.Interface
+  | Vercel.Interface
+  | PromiseVercel.Interface;
 `,
       );
       await writeFile(

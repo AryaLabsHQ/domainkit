@@ -10,7 +10,7 @@ import {
   Provisioning,
   ProviderAuthorization,
   type Connection,
-} from "../../src/effect.ts";
+} from "../../src/index.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
 
 const authorization: ProviderAuthorization.ProviderAuthorization = {

@@ -8,7 +8,7 @@ seo:
 Vercel's interactive method is an Integration installation-code flow. DomainKit models it as an integration rather than calling every redirect-based exchange OAuth.
 
 ```ts
-import { Connection, Secret, Vercel } from "domainkit";
+import { Connection, Secret, Vercel } from "domainkit/promise";
 
 const flow = Vercel.Auth.integrationFlow({
   capabilities: ["dns:read", "dns:write"],

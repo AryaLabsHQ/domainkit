@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import { DomainName, Secret } from "../../../src/index.ts";
+import { DomainName, Secret } from "../../../src/promise.ts";
 import * as Cloudflare from "../../../src/promise/cloudflare.ts";
 import { page, portableZone, recordedFetch, zone } from "./fixtures.ts";
 

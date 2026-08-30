@@ -6,8 +6,8 @@ import {
   DnsResolverPool,
   DomainName,
   Verification as EffectVerification,
-} from "../../src/effect.ts";
-import { Verification } from "../../src/index.ts";
+} from "../../src/index.ts";
+import { Verification } from "../../src/promise.ts";
 import { InMemoryDnsProvider, InMemoryDnsResolver } from "../../src/testing.ts";
 import * as DnsResolver from "../../src/verification/resolver.ts";
 

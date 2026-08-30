@@ -2,8 +2,8 @@ import * as DnsPacket from "@leichtgewicht/dns-packet";
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { CloudflareDnsOverHttps, DnsOverHttps, DomainName } from "../../src/effect.ts";
-import { DnsOverHttps as AsyncDnsOverHttps } from "../../src/index.ts";
+import { CloudflareDnsOverHttps, DnsOverHttps, DomainName } from "../../src/index.ts";
+import { DnsOverHttps as AsyncDnsOverHttps } from "../../src/promise.ts";
 
 const endpoint = "https://resolver.example/dns-query";
 

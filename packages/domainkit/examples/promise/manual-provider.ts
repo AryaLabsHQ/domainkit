@@ -6,7 +6,7 @@ import {
   type DnsResolver,
   Provisioning,
   Verification,
-} from "domainkit";
+} from "domainkit/promise";
 
 export async function provisionWithManualApproval(
   provider: DnsProvider.Interface,

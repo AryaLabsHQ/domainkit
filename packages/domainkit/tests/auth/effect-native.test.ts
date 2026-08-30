@@ -8,7 +8,7 @@ import {
   DomainName,
   ProviderAuthorization,
   Secret,
-} from "../../src/effect.ts";
+} from "../../src/index.ts";
 import {
   InMemoryAuthorizationLifecycle,
   InMemoryConnectionContinuations,

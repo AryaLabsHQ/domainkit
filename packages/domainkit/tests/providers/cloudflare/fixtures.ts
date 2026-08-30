@@ -1,5 +1,5 @@
 import type { Fetch } from "../../../src/providers/cloudflare/client.ts";
-import { DomainName } from "../../../src/effect.ts";
+import { DomainName } from "../../../src/index.ts";
 
 export const zone = {
   account: { id: "account-1", name: "Example Account" },

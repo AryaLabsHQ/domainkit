@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 import type * as oauth from "oauth4webapi";
 
-import { Digest, DomainName, Secret } from "../../../src/effect.ts";
+import { Digest, DomainName, Secret } from "../../../src/index.ts";
 import * as Cloudflare from "../../../src/providers/cloudflare/index.ts";
 import { page, recordedFetch, single, zone } from "./fixtures.ts";
 

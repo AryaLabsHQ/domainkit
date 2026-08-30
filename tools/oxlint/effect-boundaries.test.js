@@ -25,6 +25,10 @@ tester.run("domainkit/no-runtime-exit", noRuntimeExit, {
       filename: path.join(process.cwd(), "packages/domainkit/src/provider/provider.ts"),
       code: "Effect.runPromise(program);",
     },
+    {
+      filename: path.join(process.cwd(), "packages/domainkit/src/transport.ts"),
+      code: "Effect.runPromise(program);",
+    },
   ],
   invalid: [
     {
@@ -47,6 +51,10 @@ tester.run("domainkit/no-foreign-promise-outside-boundary", noForeignPromiseOuts
     },
     {
       filename: path.join(process.cwd(), "packages/domainkit/src/promise/connection.ts"),
+      code: "Effect.tryPromise(() => callback());",
+    },
+    {
+      filename: path.join(process.cwd(), "packages/domainkit/src/transport.ts"),
       code: "Effect.tryPromise(() => callback());",
     },
   ],

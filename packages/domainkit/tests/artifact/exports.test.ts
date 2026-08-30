@@ -1,12 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
 
 import packageJson from "../../package.json" with { type: "json" };
-import * as effectApi from "../../src/effect.ts";
-import * as effectCloudflareApi from "../../src/effect-cloudflare.ts";
-import * as effectVercelApi from "../../src/effect-vercel.ts";
-import * as promiseApi from "../../src/index.ts";
-import * as promiseCloudflareApi from "../../src/cloudflare.ts";
-import * as promiseVercelApi from "../../src/vercel.ts";
+import * as effectApi from "../../src/index.ts";
+import * as promiseApi from "../../src/promise.ts";
 import * as testingApi from "../../src/testing.ts";
 
 describe("public namespaces", () => {
@@ -15,12 +11,17 @@ describe("public namespaces", () => {
     assert.strictEqual(effectApi.VERSION, packageJson.version);
   });
 
-  it("keeps generic provider contracts on the canonical roots", () => {
+  it("keeps Effect native at the root without compatibility subpaths", () => {
+    assert.strictEqual("./effect" in packageJson.exports, false);
+    assert.strictEqual("./cloudflare" in packageJson.exports, false);
+    assert.strictEqual("./vercel" in packageJson.exports, false);
+    assert.strictEqual("./effect/cloudflare" in packageJson.exports, false);
+    assert.strictEqual("./effect/vercel" in packageJson.exports, false);
     assert.strictEqual("./adapter" in packageJson.exports, false);
     assert.strictEqual("./effect/adapter" in packageJson.exports, false);
   });
 
-  it("exposes cohesive Promise, Effect, and testing namespace surfaces", () => {
+  it("exposes cohesive Effect, Promise, and testing namespace surfaces", () => {
     assert.strictEqual(typeof promiseApi.Provisioning.create, "function");
     assert.strictEqual(typeof promiseApi.ZoneDiscovery.discover, "function");
     assert.strictEqual(typeof promiseApi.Connection.start, "function");
@@ -29,6 +30,8 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof effectApi.Connection.extend, "function");
     assert.strictEqual(typeof effectApi.AuthorizationLifecycle.Service, "function");
     assert.strictEqual(typeof effectApi.DnsProvider.Service, "function");
+    assert.strictEqual(typeof effectApi.Transport.Service, "function");
+    assert.strictEqual(typeof effectApi.Transport.Method.OAuth, "function");
     assert.strictEqual(typeof effectApi.ZoneDiscovery.Service, "function");
     assert.strictEqual(typeof effectApi.Provisioning.create, "function");
     assert.strictEqual(typeof effectApi.CloudflareDnsOverHttps.layer, "function");
@@ -44,17 +47,9 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof testingApi.ProviderConformance.run, "function");
     assert.strictEqual(typeof testingApi.ProviderConformance.fromAsync, "function");
     assert.strictEqual(typeof effectApi.Cloudflare.make, "function");
-    assert.strictEqual(typeof effectCloudflareApi.make, "function");
-    assert.strictEqual(typeof effectCloudflareApi.discovery, "function");
     assert.strictEqual(typeof promiseApi.Cloudflare.make, "function");
-    assert.strictEqual(typeof promiseCloudflareApi.make, "function");
-    assert.strictEqual(typeof promiseCloudflareApi.discovery, "function");
     assert.strictEqual(typeof effectApi.Vercel.make, "function");
-    assert.strictEqual(typeof effectVercelApi.make, "function");
-    assert.strictEqual(typeof effectVercelApi.discovery, "function");
     assert.strictEqual(typeof promiseApi.Vercel.make, "function");
-    assert.strictEqual(typeof promiseVercelApi.make, "function");
-    assert.strictEqual(typeof promiseVercelApi.discovery, "function");
   });
 
   it("does not flatten service tags or operations onto either entry point", () => {

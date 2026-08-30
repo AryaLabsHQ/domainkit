@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 
-import { ProviderContext, Secret } from "../../src/effect.ts";
+import { ProviderContext, Secret } from "../../src/index.ts";
 
 describe("provider-owned context", () => {
   const Context = Schema.Struct({

@@ -10,45 +10,44 @@ bound to an approved plan digest and recorded in a receipt that can authorize a 
 
 ## Package shape
 
-- `domainkit` — Promise API for application code;
-- `domainkit/effect` — canonical Effect-native services and programs;
-- `domainkit/cloudflare` and `domainkit/vercel` — Promise provider integrations;
-- `domainkit/effect/cloudflare` and `domainkit/effect/vercel` — Effect provider integrations;
+- `domainkit` — canonical Effect services, programs, schemas, and first-party providers;
+- `domainkit/promise` — secondary Promise facade for foreign runtime boundaries;
 - `domainkit/testing` — in-memory lifecycle capabilities and the provider conformance runner.
 
 The package is portable ESM built on Fetch, Web Crypto, and Web APIs. Effect is a peer dependency.
 Promise namespaces delegate to the Effect implementation rather than maintaining another planner,
-authorization engine, or verifier.
+authorization engine, or verifier. There are no provider-specific subpaths: `Cloudflare` and
+`Vercel` are cohesive namespaces on each root.
 
 ## Plan, approve, and apply
 
 ```ts
-import { Provisioning } from "domainkit";
+import { Effect, Layer } from "effect";
+import { Digest, DnsProvider, Provisioning } from "domainkit";
+
+const program = Provisioning.create({
+  requirements,
+  target: Provisioning.Target.ExactZone({ zone: "example.com" }),
+}).pipe(
+  Effect.flatMap(({ plan }) =>
+    Provisioning.authorize(plan).pipe(
+      Effect.flatMap((authorization) => Provisioning.apply({ authorization, plan })),
+    ),
+  ),
+  Effect.provide(Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer)),
+);
+```
+
+Promise consumers use the explicit secondary entry point at a JavaScript boundary:
+
+```ts
+import { Provisioning } from "domainkit/promise";
 
 const { plan } = await Provisioning.create({
   provider,
   requirements,
   target: Provisioning.Target.ExactZone({ zone: "example.com" }),
 });
-
-// Present plan.operations to the user before authorizing the exact digest.
-const authorization = await Provisioning.authorize(plan);
-const receipt = await Provisioning.apply({ authorization, plan, provider });
-```
-
-Effect applications provide the same capabilities as Layers and run the canonical program
-directly:
-
-```ts
-import { Effect, Layer } from "effect";
-import { Digest, DnsProvider, Provisioning } from "domainkit/effect";
-
-const program = Provisioning.create({
-  requirements,
-  target: Provisioning.Target.ExactZone({ zone: "example.com" }),
-}).pipe(
-  Effect.provide(Layer.merge(Layer.succeed(DnsProvider.Service, provider), Digest.webCryptoLayer)),
-);
 ```
 
 Use `DiscoverFromDomain` when the host has several authorized provider accounts. `ZoneDiscovery`
@@ -87,9 +86,10 @@ remains retryable until the provider confirms revocation.
 `Verification.observe` is the only verification operation. Public DNS is the default:
 
 ```ts
-import { Verification } from "domainkit";
+import { Effect } from "effect";
+import { DnsProvider, Verification } from "domainkit";
 
-const result = await Verification.observe({ record });
+const result = await Effect.runPromise(Verification.observe({ record }));
 ```
 
 The default resolver pool queries Cloudflare and Google concurrently using RFC wire-format DNS over
@@ -100,10 +100,10 @@ Authoritative-provider observation is opt-in:
 
 ```ts
 const result = await Verification.observe({
-  provider: Verification.Provider.Enabled({ provider, zone }),
+  provider: Verification.Provider.Enabled({ zone }),
   publicDns: Verification.PublicDns.Disabled(),
   record,
-});
+}).pipe(Effect.provideService(DnsProvider.Service, provider), Effect.runPromise);
 ```
 
 When both sources are requested, both must match for `Verified`. Every result is exhaustive and
@@ -111,7 +111,7 @@ tagged as `NotObserved`, `Pending`, `Mismatch`, `Unavailable`, or `Verified`.
 
 ## Implement a DNS provider
 
-Implement the narrow `DnsProvider` contract exported from `domainkit` or `domainkit/effect`. Then
+Implement the narrow `DnsProvider` contract exported from `domainkit`. Then
 run the deterministic offline contract exported from `domainkit/testing`:
 
 ```ts

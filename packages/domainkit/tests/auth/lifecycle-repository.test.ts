@@ -7,7 +7,7 @@ import {
   Digest,
   ProviderAuthorization,
   Secret,
-} from "../../src/effect.ts";
+} from "../../src/index.ts";
 import { InMemoryAuthorizationLifecycle } from "../../src/testing.ts";
 
 const authentication = (token: string): Connection.Authentication => ({

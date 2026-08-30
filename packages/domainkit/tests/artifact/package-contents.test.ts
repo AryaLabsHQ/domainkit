@@ -14,20 +14,12 @@ const PackResult = Schema.Array(
 const requiredFiles = new Set([
   "LICENSE",
   "README.md",
-  "dist/cloudflare.d.mts",
-  "dist/cloudflare.mjs",
-  "dist/effect.d.mts",
-  "dist/effect-cloudflare.d.mts",
-  "dist/effect-cloudflare.mjs",
-  "dist/effect-vercel.d.mts",
-  "dist/effect-vercel.mjs",
-  "dist/effect.mjs",
   "dist/index.d.mts",
   "dist/index.mjs",
+  "dist/promise.d.mts",
+  "dist/promise.mjs",
   "dist/testing.d.mts",
   "dist/testing.mjs",
-  "dist/vercel.d.mts",
-  "dist/vercel.mjs",
   "package.json",
 ]);
 

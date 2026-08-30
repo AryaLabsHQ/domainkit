@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { DnsRecord, DomainName, Secret } from "../../../src/effect.ts";
+import { DnsRecord, DomainName, Secret } from "../../../src/index.ts";
 import * as Vercel from "../../../src/providers/vercel/index.ts";
 import * as Records from "../../../src/providers/vercel/records.ts";
 import {

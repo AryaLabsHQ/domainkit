@@ -7,8 +7,8 @@ import {
   DnsRecord,
   Digest,
   Provisioning as EffectProvisioning,
-} from "../../src/effect.ts";
-import { Deletion, Provisioning } from "../../src/index.ts";
+} from "../../src/index.ts";
+import { Deletion, Provisioning } from "../../src/promise.ts";
 import { InMemoryDnsProvider } from "../../src/testing.ts";
 
 const metadata = {
