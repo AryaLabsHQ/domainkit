@@ -1,3 +1,10 @@
+## @domainkit/react@0.1.1
+
+### Show exact DNS operation values
+
+Display record values and optional priority in provisioning and cleanup reviews so users can inspect
+the complete DNS mutation before authorizing it.
+
 ## @domainkit/react@0.1.0
 
 ### Publish the DomainKit React 0.1 contract
