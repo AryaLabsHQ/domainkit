@@ -49,6 +49,9 @@ test("provisioning and cleanup dialogs preserve review focus", async ({ page }) 
 test("workshop switches presentational stories from the sidebar", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Stories" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Controls" }).locator(".dialkit-root"),
+  ).toBeVisible();
   await page
     .getByRole("navigation", { name: "Stories" })
     .getByRole("button", { name: "Records" })

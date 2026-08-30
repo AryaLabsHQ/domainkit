@@ -11,7 +11,7 @@ import {
   Testing,
   Transport,
   Verification,
-} from "@domainkit/react";
+} from "../../../src/index.ts";
 
 import { nextRecordId } from "./workshop-records.ts";
 
@@ -542,7 +542,7 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
         </div>
       </div>
       <section aria-label="Controls" data-react-grab-ignore="" data-workshop-addons="" ref={addons}>
-        <DialRoot mode="inline" theme={state.colorScheme} />
+        <DialRoot mode="inline" productionEnabled theme={state.colorScheme} />
       </section>
     </div>
   );
