@@ -841,8 +841,25 @@
 
 :where([data-domainkit-part="operation-record"]) {
   color: var(--domainkit-muted);
+  display: grid;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.75rem;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+:where([data-domainkit-part="operation-value"]) {
+  color: var(--domainkit-foreground);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+:where([data-domainkit-part="operation-priority"]) {
+  font-size: 0.6875rem;
+}
+
+:where([data-domainkit-part="operation-reason"]) {
+  color: var(--domainkit-danger);
 }
 
 :where([data-operation="AlreadyAbsent"] [data-domainkit-part="operation-kind"]) {
