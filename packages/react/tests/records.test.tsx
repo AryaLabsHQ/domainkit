@@ -96,6 +96,26 @@ describe("Records primitives", () => {
     expect(
       Records.toZoneFile([
         {
+          id: "control-txt",
+          name: "example.com",
+          type: "TXT",
+          value: "line one\nline two\tend",
+        },
+      ]),
+    ).toBe('example.com. IN TXT "line one\\010line two\\009end"\n');
+    expect(
+      Records.toZoneFile([
+        {
+          id: "long-txt",
+          name: "example.com",
+          type: "TXT",
+          value: "a".repeat(256),
+        },
+      ]),
+    ).toBe(`example.com. IN TXT "${"a".repeat(255)}" "a"\n`);
+    expect(
+      Records.toZoneFile([
+        {
           id: "srv",
           name: "_service._tcp.example.com",
           priority: 10,

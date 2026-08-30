@@ -29,6 +29,35 @@ const downloadText = (filename: string, contents: string): void => {
 
 const absoluteDomainName = (value: string): string => (value.endsWith(".") ? value : `${value}.`);
 
+const textEncoder = new TextEncoder();
+
+const escapeTxtCharacter = (character: string): string => {
+  if (character === '"' || character === "\\") return `\\${character}`;
+  const codePoint = character.codePointAt(0);
+  if (codePoint !== undefined && (codePoint < 32 || codePoint === 127)) {
+    return `\\${codePoint.toString().padStart(3, "0")}`;
+  }
+  return character;
+};
+
+const txtValue = (value: string): string => {
+  const chunks: Array<string> = [];
+  let chunk = "";
+  let byteLength = 0;
+  for (const character of value) {
+    const characterByteLength = textEncoder.encode(character).byteLength;
+    if (byteLength + characterByteLength > 255) {
+      chunks.push(chunk);
+      chunk = "";
+      byteLength = 0;
+    }
+    chunk += escapeTxtCharacter(character);
+    byteLength += characterByteLength;
+  }
+  chunks.push(chunk);
+  return chunks.map((part) => `"${part}"`).join(" ");
+};
+
 const srvValue = (value: string): string => {
   const fields = value.trim().split(/\s+/);
   if (fields.length !== 3) throw new Error(`Invalid SRV value: ${value}`);
@@ -49,7 +78,7 @@ const zoneValue = (record: DnsRecord): string => {
     case "SRV":
       return srvValue(record.value);
     case "TXT":
-      return JSON.stringify(record.value);
+      return txtValue(record.value);
     default:
       return record.value;
   }
