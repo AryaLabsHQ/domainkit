@@ -347,10 +347,7 @@ function HostConnectionRow({ domain }: { readonly domain: string }) {
             </div>
           </div>
           <BaseDialog.Root>
-            <Connection.Trigger
-              provider={snapshot.provider}
-              render={<button data-workshop-host-button="" type="button" />}
-            >
+            <Connection.Trigger render={<button data-workshop-host-button="" type="button" />}>
               Connect {snapshot.provider.name}
             </Connection.Trigger>
             <Connection.Dialog controller={controller} snapshot={snapshot} />

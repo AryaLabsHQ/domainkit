@@ -5,7 +5,7 @@ seo:
   title: Theme DomainKit React parts in your product
 ---
 
-Complete flows are conveniences over semantic parts. Every public part accepts Base UI's `render` prop plus state-aware `className` and `style` values. `Connection.Flow` and `Connection.ConnectTrigger` are the styled recipes. `Connection.Trigger` only opens the dialog; pass `children` to replace its label and `render` to use a host button.
+Complete flows are conveniences over semantic parts. Every public part accepts Base UI's `render` prop plus state-aware `className` and `style` values. `Connection.Flow` and `Connection.ConnectTrigger` are the styled recipes. `Connection.Trigger` only opens the dialog; its required `children` supply the label and `render` uses a host button.
 
 ```tsx
 <Connection.OAuthAction
@@ -21,7 +21,7 @@ Complete flows are conveniences over semantic parts. Every public part accepts B
     <Provider.Mark provider={snapshot.provider} />
     <p>Manages DNS for this domain.</p>
     <BaseDialog.Root>
-      <Connection.Trigger provider={snapshot.provider} render={<HostButton />}>
+      <Connection.Trigger render={<HostButton />}>
         Connect {snapshot.provider.name}
       </Connection.Trigger>
       <Connection.Dialog controller={controller} snapshot={snapshot} />

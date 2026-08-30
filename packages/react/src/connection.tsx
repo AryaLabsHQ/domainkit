@@ -6,6 +6,7 @@ import {
   useState,
   type ComponentPropsWithoutRef,
   type FormEvent,
+  type ReactNode,
 } from "react";
 
 import type { PartProps } from "./composition.tsx";
@@ -181,23 +182,30 @@ export function Status({ children, state, ...props }: StatusProps) {
   );
 }
 
-export interface TriggerProps extends ComponentPropsWithoutRef<typeof BaseDialog.Trigger> {
+export interface TriggerProps extends Omit<
+  ComponentPropsWithoutRef<typeof BaseDialog.Trigger>,
+  "children"
+> {
+  readonly children: ReactNode;
+}
+
+export interface ConnectTriggerProps extends Omit<TriggerProps, "children"> {
+  readonly children?: ReactNode;
   readonly provider: Provider.Provider;
 }
 
-export function Trigger({ children, provider, ...props }: TriggerProps) {
-  const { messages } = useDomainKit();
+export function Trigger({ children, ...props }: TriggerProps) {
   return (
     <BaseDialog.Trigger data-domainkit-part="connection-trigger" {...props}>
-      {children ?? messages.connectProvider(provider.name)}
+      {children}
     </BaseDialog.Trigger>
   );
 }
 
-export function ConnectTrigger({ children, provider, ...props }: TriggerProps) {
+export function ConnectTrigger({ children, provider, ...props }: ConnectTriggerProps) {
   const { messages } = useDomainKit();
   return (
-    <Trigger provider={provider} {...props} data-domainkit-recipe="connect">
+    <Trigger {...props} data-domainkit-recipe="connect">
       {children ?? (
         <>
           <Provider.Mark aria-hidden="true" provider={provider} />

@@ -236,7 +236,7 @@ describe("composition and theme", () => {
     render(
       <DomainKit.Root transport={transport}>
         <BaseDialog.Root>
-          <Connection.Trigger provider={Testing.provider()}>Host connect</Connection.Trigger>
+          <Connection.Trigger>Host connect</Connection.Trigger>
         </BaseDialog.Root>
       </DomainKit.Root>,
     );
@@ -250,7 +250,7 @@ describe("composition and theme", () => {
     render(
       <DomainKit.Root transport={transport}>
         <BaseDialog.Root>
-          <Connection.Trigger provider={Testing.provider()} render={<button data-host-button="" />}>
+          <Connection.Trigger render={<button data-host-button="" />}>
             Connect Cloudflare
           </Connection.Trigger>
         </BaseDialog.Root>
