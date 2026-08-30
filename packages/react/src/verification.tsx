@@ -1,28 +1,25 @@
-import { useCallback } from "react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { Transport } from "domainkit";
+import * as Effect from "effect/Effect";
+import * as Atom from "effect/unstable/reactivity/Atom";
+import { useMemo } from "react";
 
+import { failureFromCause, recordsIdentity } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import { Status as RecordStatus } from "./records.tsx";
-import * as RequestState from "./request-state.ts";
-import type {
-  Connected,
-  DnsRecord,
-  Failure,
-  Observation,
-  ObservationEvidence,
-} from "./transport.ts";
 
 export type State =
   | { readonly _tag: "Idle" }
   | { readonly _tag: "Observing" }
-  | Observation
-  | Failure;
+  | Transport.Observation
+  | Transport.Failure;
 
 export interface ObserveConfig {
-  readonly connection?: Connected;
+  readonly connection?: Transport.Connected;
   readonly domain: string;
-  readonly records: ReadonlyArray<DnsRecord>;
+  readonly records: ReadonlyArray<Transport.DnsRecord>;
   readonly sources?: {
     readonly provider?: boolean;
     readonly publicDns?: boolean;
@@ -30,42 +27,45 @@ export interface ObserveConfig {
 }
 
 export function useController(config: ObserveConfig) {
-  const { transport } = useDomainKit();
-  const sources = {
-    provider: config.sources?.provider ?? config.connection !== undefined,
-    publicDns: config.sources?.publicDns ?? true,
-  };
-  const requestState = RequestState.useController<State>(
-    `${config.connection?.connectionId ?? "public"}:${config.domain}:${sources.provider}:${sources.publicDns}:${RequestState.recordsIdentity(config.records)}`,
-    { _tag: "Idle" },
-  );
-  const state = requestState.state;
-  const observe = useCallback(async () => {
-    const request = requestState.begin({ _tag: "Observing" });
-    try {
-      requestState.commit(
-        request,
-        await transport.verification.observe({
+  const { runtime } = useDomainKit();
+  const provider = config.sources?.provider ?? config.connection !== undefined;
+  const publicDns = config.sources?.publicDns ?? true;
+  const recordKey = recordsIdentity(config.records);
+  const controller = useMemo(() => {
+    const state = Atom.make<State>({ _tag: "Idle" });
+    const observe = runtime.fn<void>()((_, get) => {
+      get.set(state, { _tag: "Observing" });
+      return Effect.flatMap(Transport.Service, (transport) =>
+        transport.verification.observe({
           ...(config.connection === undefined
             ? {}
             : { connectionId: config.connection.connectionId }),
           domain: config.domain,
           records: config.records,
-          sources,
+          sources: { provider, publicDns },
         }),
+      ).pipe(
+        Effect.tap((observation) => Effect.sync(() => get.set(state, observation))),
+        Effect.catchCause((cause) =>
+          Effect.sync(() =>
+            get.set(
+              state,
+              failureFromCause(cause, "verification.observe", "DNS observation failed"),
+            ),
+          ),
+        ),
+        Effect.asVoid,
       );
-    } catch (cause) {
-      requestState.commit(request, {
-        _tag: "Failure",
-        message: cause instanceof Error ? cause.message : "DNS observation failed",
-        retry: "safe",
-      });
-    }
-  }, [config, requestState, sources, transport]);
+    });
+    return { observe, state };
+  }, [config.connection?.connectionId, config.domain, provider, publicDns, recordKey, runtime]);
+  const state = useAtomValue(controller.state);
+  const dispatch = useAtomSet(controller.observe);
+  const observe = () => dispatch();
   return { observe, state } as const;
 }
 
-const evidenceNote = (evidence: ObservationEvidence): string | undefined => {
+const evidenceNote = (evidence: Transport.ObservationEvidence): string | undefined => {
   switch (evidence._tag) {
     case "Mismatch":
     case "Unavailable":
@@ -81,9 +81,9 @@ const evidenceNote = (evidence: ObservationEvidence): string | undefined => {
 };
 
 const observationGroups = (
-  observation: Observation,
+  observation: Transport.Observation,
 ): ReadonlyArray<{
-  readonly evidence: ReadonlyArray<ObservationEvidence>;
+  readonly evidence: ReadonlyArray<Transport.ObservationEvidence>;
   readonly label: string;
 }> =>
   [
@@ -153,4 +153,4 @@ export function Status({ config, ...props }: StatusProps) {
   );
 }
 
-export type { Observation };
+export type Observation = Transport.Observation;

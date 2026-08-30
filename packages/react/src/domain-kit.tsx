@@ -1,3 +1,7 @@
+import { RegistryProvider } from "@effect/atom-react";
+import { Transport } from "domainkit";
+import type * as Layer from "effect/Layer";
+import * as Atom from "effect/unstable/reactivity/Atom";
 import {
   createContext,
   useCallback,
@@ -17,7 +21,7 @@ import { merge as mergeMessages } from "./messages.ts";
 import type { Marks } from "./provider.tsx";
 import type { Theme } from "./theme.ts";
 import { toStyle } from "./theme.ts";
-import type { DomainKitTransport } from "./transport.ts";
+import type { Runtime } from "./atom.ts";
 
 export interface RootState extends Record<string, unknown> {
   readonly colorScheme: "dark" | "inherit" | "light";
@@ -32,7 +36,7 @@ export interface RootProps extends Omit<PartProps<"div", RootState>, "children">
   readonly navigate?: (url: string) => void;
   readonly portalContainer?: HTMLElement | null;
   readonly theme?: Theme;
-  readonly transport: DomainKitTransport;
+  readonly transport: Layer.Layer<Transport.Service>;
 }
 
 interface ContextValue {
@@ -42,7 +46,7 @@ interface ContextValue {
   readonly messages: Catalog;
   readonly portalContainer: RefObject<HTMLElement | null>;
   readonly themeStyle: ReturnType<typeof toStyle>;
-  readonly transport: DomainKitTransport;
+  readonly runtime: Runtime;
 }
 
 const Context = createContext<ContextValue | null>(null);
@@ -94,6 +98,7 @@ export function Root({
   transport,
   ...props
 }: RootProps) {
+  const runtime = useMemo(() => Atom.runtime(transport), [transport]);
   const themeStyle = toStyle(theme);
   const resolvedPortalContainer = usePortalContainer(portalContainer);
   const portalContainerRef = useMemo<RefObject<HTMLElement | null>>(
@@ -112,19 +117,21 @@ export function Root({
     },
   );
   return (
-    <Context.Provider
-      value={{
-        colorScheme,
-        marks,
-        messages: mergeMessages(messages),
-        navigate,
-        portalContainer: portalContainerRef,
-        themeStyle,
-        transport,
-      }}
-    >
-      <IconsProvider {...(icons === undefined ? {} : { icons })}>{content}</IconsProvider>
-    </Context.Provider>
+    <RegistryProvider>
+      <Context.Provider
+        value={{
+          colorScheme,
+          marks,
+          messages: mergeMessages(messages),
+          navigate,
+          portalContainer: portalContainerRef,
+          runtime,
+          themeStyle,
+        }}
+      >
+        <IconsProvider {...(icons === undefined ? {} : { icons })}>{content}</IconsProvider>
+      </Context.Provider>
+    </RegistryProvider>
   );
 }
 

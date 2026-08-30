@@ -1,5 +1,6 @@
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Transport } from "domainkit";
 
 import {
   Cleanup,
@@ -9,7 +10,6 @@ import {
   Provisioning,
   Testing,
   Verification,
-  type Transport,
 } from "../src/index.ts";
 
 afterEach(cleanup);
@@ -111,9 +111,9 @@ describe("provisioning lifecycle", () => {
   });
 
   it("ignores a pending plan after the requested records change", async () => {
-    const pending = Promise.withResolvers<Transport.ProvisioningPlan | Transport.Failure>();
+    const pending = Promise.withResolvers<Transport.ProvisioningPlan>();
     const fake = Testing.makeFakeTransport({ inspect: connection });
-    const transport: Transport.DomainKitTransport = {
+    const transport = Transport.layerFromAsync({
       ...fake,
       provisioning: {
         ...fake.provisioning,
@@ -122,7 +122,7 @@ describe("provisioning lifecycle", () => {
           return pending.promise;
         },
       },
-    };
+    });
     const { rerender } = render(
       <DomainKit.Root transport={transport}>
         <Provisioning.Flow connection={connection} records={[record]} />
@@ -321,9 +321,9 @@ describe("observation and cleanup", () => {
   });
 
   it("ignores a pending cleanup plan after the receipt changes", async () => {
-    const pending = Promise.withResolvers<Transport.CleanupPlan | Transport.Failure>();
+    const pending = Promise.withResolvers<Transport.CleanupPlan>();
     const fake = Testing.makeFakeTransport({ inspect: connection });
-    const transport: Transport.DomainKitTransport = {
+    const transport = Transport.layerFromAsync({
       ...fake,
       cleanup: {
         ...fake.cleanup,
@@ -332,7 +332,7 @@ describe("observation and cleanup", () => {
           return pending.promise;
         },
       },
-    };
+    });
     const { rerender } = render(
       <DomainKit.Root transport={transport}>
         <Cleanup.Flow connection={connection} receiptId="receipt-1" />

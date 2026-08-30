@@ -5,12 +5,13 @@ seo:
   title: Keep provider credentials off the React client
 ---
 
-`DomainKit.Root` receives a Promise-based `DomainKitTransport`. The shape is intentionally application-facing rather than a browser wrapper around provider APIs.
+`DomainKit.Root` receives a `Layer<Transport.Service>`. Its controllers run through Effect Atom, which owns request interruption, stale result suppression, and disposal for the React subtree. The service is intentionally application-facing rather than a browser wrapper around provider APIs.
 
 ```ts
-import type { Transport } from "@domainkit/react";
+import { Transport } from "domainkit";
+import * as Layer from "effect/Layer";
 
-export const transport: Transport.DomainKitTransport = {
+const service = Transport.Service.of({
   connection: {
     inspect: (input) => api.connections.inspect(input),
     connect: (input) => api.connections.connect(input),
@@ -28,7 +29,22 @@ export const transport: Transport.DomainKitTransport = {
     plan: (input) => api.cleanup.plan(input),
     apply: (input) => api.cleanup.apply(input),
   },
-};
+});
+
+export const transport = Layer.succeed(Transport.Service, service);
+```
+
+When an authenticated client already returns Promises, adapt it at that foreign-runtime boundary rather than recreating a second React transport contract:
+
+```ts
+import { Transport } from "domainkit";
+
+export const transport = Transport.layerFromAsync({
+  connection: api.connections,
+  provisioning: api.provisioning,
+  verification: api.verification,
+  cleanup: api.cleanup,
+});
 ```
 
 ```text
@@ -39,7 +55,7 @@ export const transport: Transport.DomainKitTransport = {
   -> Cloudflare / Vercel
 ```
 
-Every outcome uses `_tag`, including failures and retry guidance. Decode untrusted request, database, and provider data at your server boundary before mapping it into these browser-safe wire types.
+Successful outcomes use schema-backed tagged models. Failures use `Transport.Failure` in the Effect error channel. Decode untrusted request, database, and provider data at your server boundary before mapping it into these browser-safe wire types.
 
 <Callout type="warning" title="No browser credentials">
   A token input may collect a credential, but submit it directly to your authenticated server

@@ -1,44 +1,43 @@
-import type {
-  Connected,
-  ConnectionResult,
-  ConnectionSnapshot,
-  DomainKitTransport,
-  ApplyResult,
-  CleanupPlan,
-  CleanupResult,
-  Observation,
-  Provider,
-  ProvisioningPlan,
-  RemoveDomainResult,
-} from "./transport.ts";
+import { Transport } from "domainkit";
+import type * as Layer from "effect/Layer";
 
 export interface FakeOptions {
-  readonly connect?: ConnectionResult;
-  readonly inspect: ConnectionSnapshot | ReadonlyArray<ConnectionSnapshot>;
-  readonly reuse?: Connected;
-  readonly removeDomain?: RemoveDomainResult;
-  readonly plan?: ProvisioningPlan;
-  readonly apply?: ApplyResult;
-  readonly observe?: Observation;
-  readonly cleanupPlan?: CleanupPlan;
-  readonly cleanupApply?: CleanupResult;
+  readonly connect?: Transport.ConnectionResult;
+  readonly inspect:
+    | Transport.ConnectionSnapshot
+    | FakeFailure
+    | ReadonlyArray<Transport.ConnectionSnapshot | FakeFailure>;
+  readonly reuse?: Transport.Connected;
+  readonly removeDomain?: Transport.RemoveDomainResult;
+  readonly plan?: Transport.ProvisioningPlan;
+  readonly apply?: Transport.ApplyResult;
+  readonly observe?: Transport.Observation;
+  readonly cleanupPlan?: Transport.CleanupPlan;
+  readonly cleanupApply?: Transport.CleanupResult;
 }
 
-export interface FakeTransport extends DomainKitTransport {
+interface FakeFailure {
+  readonly _tag: "Failure";
+  readonly message: string;
+  readonly operation?: string;
+  readonly retry: Transport.Failure["retry"];
+}
+
+export interface FakeTransport extends Transport.AsyncInterface, Layer.Layer<Transport.Service> {
   readonly calls: {
-    readonly connect: Array<Parameters<DomainKitTransport["connection"]["connect"]>[0]>;
-    readonly inspect: Array<Parameters<DomainKitTransport["connection"]["inspect"]>[0]>;
-    readonly reuse: Array<Parameters<DomainKitTransport["connection"]["reuse"]>[0]>;
-    readonly removeDomain: Array<Parameters<DomainKitTransport["connection"]["removeDomain"]>[0]>;
-    readonly plan: Array<Parameters<DomainKitTransport["provisioning"]["plan"]>[0]>;
-    readonly apply: Array<Parameters<DomainKitTransport["provisioning"]["apply"]>[0]>;
-    readonly observe: Array<Parameters<DomainKitTransport["verification"]["observe"]>[0]>;
-    readonly cleanupPlan: Array<Parameters<DomainKitTransport["cleanup"]["plan"]>[0]>;
-    readonly cleanupApply: Array<Parameters<DomainKitTransport["cleanup"]["apply"]>[0]>;
+    readonly connect: Array<Transport.ConnectInput>;
+    readonly inspect: Array<Transport.InspectInput>;
+    readonly reuse: Array<Transport.ReuseInput>;
+    readonly removeDomain: Array<Transport.RemoveDomainInput>;
+    readonly plan: Array<Transport.ProvisioningPlanInput>;
+    readonly apply: Array<Transport.ProvisioningApplyInput>;
+    readonly observe: Array<Transport.ObserveInput>;
+    readonly cleanupPlan: Array<Transport.CleanupPlanInput>;
+    readonly cleanupApply: Array<Transport.CleanupApplyInput>;
   };
 }
 
-export const provider = (overrides: Partial<Provider> = {}): Provider => ({
+export const provider = (overrides: Partial<Transport.Provider> = {}): Transport.Provider => ({
   authentication: [
     { _tag: "OAuth", label: "Continue with OAuth" },
     { _tag: "Token", label: "Connect with token", placeholder: "Paste API token" },
@@ -61,8 +60,7 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
     reuse: [],
   };
   const inspections = Array.isArray(options.inspect) ? [...options.inspect] : [options.inspect];
-  return {
-    calls,
+  const transport: Transport.AsyncInterface = {
     cleanup: {
       apply: async (input) => {
         calls.cleanupApply.push(input);
@@ -100,7 +98,15 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
       },
       inspect: async (input) => {
         calls.inspect.push(input);
-        return inspections.shift() ?? inspections.at(-1) ?? options.inspect;
+        const snapshot = inspections.shift() ?? inspections.at(-1) ?? options.inspect;
+        if (Array.isArray(snapshot)) throw new Error("Fake inspection sequence is empty");
+        if (snapshot._tag === "Failure")
+          throw new Transport.Failure({
+            message: snapshot.message,
+            operation: snapshot.operation ?? "connection.inspect",
+            retry: snapshot.retry,
+          });
+        return snapshot;
       },
       reuse: async (input) => {
         calls.reuse.push(input);
@@ -170,4 +176,5 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
       },
     },
   };
+  return Object.assign(Transport.layerFromAsync(transport), transport, { calls });
 }

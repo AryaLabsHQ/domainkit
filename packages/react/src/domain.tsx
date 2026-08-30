@@ -1,4 +1,5 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
+import type { Transport } from "domainkit";
 import { useEffect, useRef, useState } from "react";
 
 import * as Cleanup from "./cleanup.tsx";
@@ -7,12 +8,11 @@ import * as Provisioning from "./provisioning.tsx";
 import * as Provider from "./provider.tsx";
 import * as Records from "./records.tsx";
 import * as Verification from "./verification.tsx";
-import type { ApplyResult, DnsRecord } from "./transport.ts";
 
 export interface FlowProps {
   readonly domain: string;
   readonly receiptId?: string;
-  readonly records: ReadonlyArray<DnsRecord>;
+  readonly records: ReadonlyArray<Transport.DnsRecord>;
 }
 
 export function Flow({ domain, receiptId, records }: FlowProps) {
@@ -50,7 +50,7 @@ function ConnectedFlow({
 }: {
   readonly connection: Extract<Connection.State, { readonly _tag: "Connected" }>;
   readonly initialReceiptId?: string;
-  readonly records: ReadonlyArray<DnsRecord>;
+  readonly records: ReadonlyArray<Transport.DnsRecord>;
 }) {
   const [appliedReceipt, setAppliedReceipt] = useState<{
     readonly epoch: number;
@@ -72,7 +72,7 @@ function ConnectedFlow({
       ? appliedReceipt.receiptId
       : initialReceiptId;
   const rememberReceipt = (
-    result: Extract<ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
+    result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
   ) => {
     setAppliedReceipt({ epoch, receiptId: result.receiptId });
   };

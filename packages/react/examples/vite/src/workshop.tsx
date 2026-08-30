@@ -2,6 +2,7 @@ import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { Copy01Icon, Download01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
+import { Transport } from "domainkit";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Connection,
@@ -10,7 +11,6 @@ import {
   Provider,
   Records,
   Testing,
-  Transport,
   Verification,
 } from "../../../src/index.ts";
 
@@ -304,7 +304,7 @@ function makeTransport(
             reusableConnection: { connectionId: "connection-1", label: "Arya Labs account" },
           },
   });
-  return {
+  return Transport.layerFromAsync({
     ...transport,
     cleanup: {
       apply: transport.cleanup.apply,
@@ -321,7 +321,7 @@ function makeTransport(
         };
       },
     },
-  };
+  });
 }
 
 function HostConnectionRow({ domain }: { readonly domain: string }) {

@@ -1,9 +1,10 @@
 import { useId, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import type { Transport } from "domainkit";
 
 import { useDomainKit } from "./domain-kit.tsx";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
-import type { Provider as ProviderDescriptor } from "./transport.ts";
+type ProviderDescriptor = Transport.Provider;
 
 export type Marks = Readonly<
   Record<string, ReactNode | ((provider: ProviderDescriptor) => ReactNode)>

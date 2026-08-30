@@ -18,7 +18,7 @@ const pack = async (packageDirectory: string, destination: string): Promise<stri
   return join(destination, filename);
 };
 
-describe.each(["18.3.1", "19.2.4"])("packed Vite consumer on React %s", (reactVersion) => {
+describe("packed Vite consumer on React 19", () => {
   it("installs, bundles, and server-renders the public lifecycle", async () => {
     const directory = await mkdtemp(join(tmpdir(), "domainkit-react-consumer-"));
     try {
@@ -34,10 +34,11 @@ describe.each(["18.3.1", "19.2.4"])("packed Vite consumer on React %s", (reactVe
           dependencies: {
             "@domainkit/react": `file:${reactTarball}`,
             domainkit: `file:${coreTarball}`,
-            react: reactVersion,
-            "react-dom": reactVersion,
+            react: "19.2.4",
+            "react-dom": "19.2.4",
             vite: "7.1.12",
           },
+          overrides: { domainkit: `file:${coreTarball}` },
         }),
       );
       await run("bun", ["install"], directory);
@@ -106,6 +107,7 @@ describe("packed Next.js consumer", () => {
             react: "19.2.4",
             "react-dom": "19.2.4",
           },
+          overrides: { domainkit: `file:${coreTarball}` },
         }),
       );
       await run("bun", ["install"], directory);

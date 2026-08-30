@@ -1,5 +1,8 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Transport } from "domainkit";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import { renderToString } from "react-dom/server";
 
 import { Connection, DomainKit, Testing } from "../src/index.ts";
@@ -16,6 +19,35 @@ const disconnected = (reusable = false) => ({
 });
 
 describe("Connection.Flow", () => {
+  it("runs a canonical Effect transport layer", async () => {
+    const service = Transport.Service.of({
+      cleanup: {
+        apply: () => Effect.die("not used"),
+        plan: () => Effect.die("not used"),
+      },
+      connection: {
+        connect: () => Effect.die("not used"),
+        inspect: ({ domain }) => Effect.succeed({ _tag: "Unsupported", domain }),
+        removeDomain: () => Effect.die("not used"),
+        reuse: () => Effect.die("not used"),
+      },
+      provisioning: {
+        apply: () => Effect.die("not used"),
+        plan: () => Effect.die("not used"),
+      },
+      verification: { observe: () => Effect.die("not used") },
+    });
+    render(
+      <DomainKit.Root transport={Layer.succeed(Transport.Service, service)}>
+        <Connection.Flow domain="mail.example.com" />
+      </DomainKit.Root>,
+    );
+
+    expect(
+      await screen.findByText("Automatic connection is not available for this domain"),
+    ).toBeTruthy();
+  });
+
   it("starts OAuth and delegates navigation to the host", async () => {
     const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({
@@ -39,7 +71,7 @@ describe("Connection.Flow", () => {
     expect(transport.calls.connect).toEqual([
       {
         domain: "mail.example.com",
-        method: "oauth",
+        method: Transport.Method.OAuth(),
         providerId: "cloudflare",
       },
     ]);
@@ -62,9 +94,8 @@ describe("Connection.Flow", () => {
     expect(transport.calls.connect).toEqual([
       {
         domain: "mail.example.com",
-        method: "token",
+        method: Transport.Method.Token({ token: "secret-token" }),
         providerId: "cloudflare",
-        token: "secret-token",
       },
     ]);
   });
@@ -103,7 +134,9 @@ describe("Connection.Flow", () => {
     await user.type(screen.getByLabelText("API token"), "secret-token");
     await user.click(screen.getByRole("button", { name: "Connect with token" }));
 
-    expect(transport.calls.connect[0]?.parameters).toEqual({ accountId: "team_arya" });
+    expect(transport.calls.connect[0]?.method).toEqual(
+      Transport.Method.Token({ token: "secret-token", parameters: { accountId: "team_arya" } }),
+    );
   });
 
   it("reuses a provider authorization without another OAuth round trip", async () => {
@@ -194,7 +227,7 @@ describe("Connection.Flow", () => {
     const fake = Testing.makeFakeTransport({
       inspect: [disconnected(), { ...disconnected(), domain: "other.example.com" }],
     });
-    const transport = {
+    const transport = Transport.layerFromAsync({
       ...fake,
       connection: {
         ...fake.connection,
@@ -203,7 +236,7 @@ describe("Connection.Flow", () => {
           return pending.promise;
         },
       },
-    };
+    });
     const { rerender } = render(
       <DomainKit.Root transport={transport}>
         <Connection.Flow domain="mail.example.com" />
@@ -226,7 +259,7 @@ describe("Connection.Flow", () => {
     });
 
     expect(await screen.findByText("Cloudflare manages DNS for this domain")).toBeTruthy();
-    expect(transport.calls.inspect.at(-1)).toEqual({ domain: "other.example.com" });
+    expect(fake.calls.inspect.at(-1)).toEqual({ domain: "other.example.com" });
   });
 
   it("imports and renders on the server without browser access", () => {

@@ -8,5 +8,4 @@ export * as Provisioning from "./provisioning.tsx";
 export * as Records from "./records.tsx";
 export * as Testing from "./testing.ts";
 export * as Theme from "./theme.ts";
-export * as Transport from "./transport.ts";
 export * as Verification from "./verification.tsx";

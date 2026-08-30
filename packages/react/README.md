@@ -22,15 +22,18 @@ import "@domainkit/react/styles.css";
 ## Install
 
 ```sh
-npm install @domainkit/react domainkit react react-dom
+npm install @domainkit/react domainkit effect react react-dom
 ```
+
+React 19 is required.
 
 ## Domain lifecycle
 
-When you do have a host-owned transport, `Domain.Flow` connects the provider, reviews an exact plan, observes DNS, removes receipt-bound records, and disconnects the current domain grant.
+When you do have a host-owned transport layer, `Domain.Flow` connects the provider, reviews an exact plan, observes DNS, removes receipt-bound records, and disconnects the current domain grant.
 
 ```tsx
-import { Domain, DomainKit, type Transport } from "@domainkit/react";
+import { Domain, DomainKit } from "@domainkit/react";
+import { Transport } from "domainkit";
 
 export function DomainSetup() {
   return (
@@ -45,14 +48,27 @@ export function DomainSetup() {
 
 ## Transport ownership
 
-The browser transport is Promise-based. Implement it with authenticated application endpoints. Do not place provider credentials or provider API clients in the browser.
+`DomainKit.Root` receives a `Layer<Transport.Service>`. Controllers run the service through Effect Atom, so request interruption, stale result suppression, and subtree disposal follow the Effect lifecycle. Implement the service with authenticated application endpoints. Do not place provider credentials or provider API clients in the browser.
+
+Foreign Promise clients can be adapted once at the boundary:
+
+```ts
+import { Transport } from "domainkit";
+
+export const transport = Transport.layerFromAsync({
+  connection: api.connections,
+  provisioning: api.provisioning,
+  verification: api.verification,
+  cleanup: api.cleanup,
+});
+```
 
 - `connection` detects providers, starts OAuth or token authorization, reuses an existing account, and removes one domain grant while preserving DNS.
 - `provisioning` asks the server for an exact plan and applies only the returned digest.
 - `verification.observe(config)` is the single observation operation. `sources` selects provider evidence, public DNS, or both.
 - `cleanup` creates a fresh receipt-bound deletion plan and applies only its reviewed digest. The server fails closed when records drift or ownership cannot be proven.
 
-All outcomes are discriminated with `_tag`.
+Successful outcomes use schema-backed tagged models. Failures travel through the Effect error channel.
 
 ## Composition and theming
 

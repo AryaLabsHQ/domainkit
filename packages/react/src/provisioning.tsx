@@ -1,108 +1,141 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { useCallback } from "react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { Transport } from "domainkit";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import * as Atom from "effect/unstable/reactivity/Atom";
+import { useMemo, useRef } from "react";
 
+import { failureFromCause, recordsIdentity } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import * as Records from "./records.tsx";
-import * as RequestState from "./request-state.ts";
-import type { ApplyResult, Connected, DnsRecord, Failure, ProvisioningPlan } from "./transport.ts";
 
 export type State =
   | { readonly _tag: "Idle" }
   | { readonly _tag: "Planning" }
-  | { readonly _tag: "Review"; readonly plan: ProvisioningPlan }
-  | { readonly _tag: "Applying"; readonly plan: ProvisioningPlan }
+  | { readonly _tag: "Review"; readonly plan: Transport.ProvisioningPlan }
+  | { readonly _tag: "Applying"; readonly plan: Transport.ProvisioningPlan }
   | {
       readonly _tag: "Complete";
-      readonly result: Extract<ApplyResult, { readonly _tag: "Applied" }>;
+      readonly result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" }>;
     }
   | {
       readonly _tag: "Partial";
-      readonly result: Extract<ApplyResult, { readonly _tag: "Partial" }>;
+      readonly result: Extract<Transport.ApplyResult, { readonly _tag: "Partial" }>;
     }
   | { readonly _tag: "Stale"; readonly message: string }
-  | Failure;
+  | Transport.Failure;
 
 export interface Controller {
-  readonly apply: () => Promise<void>;
+  readonly apply: () => void;
   readonly dismiss: () => void;
-  readonly plan: () => Promise<void>;
-  readonly retry: () => Promise<void>;
+  readonly plan: () => void;
+  readonly retry: () => void;
   readonly state: State;
 }
 
-const failure = (cause: unknown): Failure => ({
-  _tag: "Failure",
-  message: cause instanceof Error ? cause.message : "DNS provisioning failed",
-  retry: "safe",
-});
+type Command = Data.TaggedEnum<{
+  Apply: { readonly plan: Transport.ProvisioningPlan };
+  Plan: {};
+}>;
+const Command = Data.taggedEnum<Command>();
 
 export function useController(
-  connection: Connected,
-  records: ReadonlyArray<DnsRecord>,
-  onApplied?: (result: Extract<ApplyResult, { readonly _tag: "Applied" | "Partial" }>) => void,
+  connection: Transport.Connected,
+  records: ReadonlyArray<Transport.DnsRecord>,
+  onApplied?: (
+    result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
+  ) => void,
 ): Controller {
-  const { transport } = useDomainKit();
-  const identity = `${connection.connectionId}:${connection.domain}:${RequestState.recordsIdentity(records)}`;
-  const requestState = RequestState.useController<State>(identity, { _tag: "Idle" });
-  const state = requestState.state;
-
-  const plan = useCallback(async () => {
-    const request = requestState.begin({ _tag: "Planning" });
-    try {
-      const result = await transport.provisioning.plan({
-        connectionId: connection.connectionId,
-        domain: connection.domain,
-        records,
-      });
-      requestState.commit(
-        request,
-        result._tag === "Plan" ? { _tag: "Review", plan: result } : result,
-      );
-    } catch (cause) {
-      requestState.commit(request, failure(cause));
-    }
-  }, [connection.connectionId, connection.domain, records, requestState, transport]);
-
-  const apply = useCallback(async () => {
-    if (state._tag !== "Review") return;
-    const reviewedPlan = state.plan;
-    if (reviewedPlan.operations.some((operation) => operation._tag === "Conflict")) return;
-    const request = requestState.begin({ _tag: "Applying", plan: reviewedPlan });
-    try {
-      const result = await transport.provisioning.apply({
-        connectionId: connection.connectionId,
-        domain: connection.domain,
-        planDigest: reviewedPlan.digest,
-      });
-      if (result._tag === "Applied") {
-        if (requestState.commit(request, { _tag: "Complete", result })) onApplied?.(result);
-      } else if (result._tag === "Partial") {
-        if (requestState.commit(request, { _tag: "Partial", result })) onApplied?.(result);
-      } else {
-        requestState.commit(request, result);
+  const { runtime } = useDomainKit();
+  const recordKey = recordsIdentity(records);
+  const onAppliedRef = useRef(onApplied);
+  onAppliedRef.current = onApplied;
+  const controller = useMemo(() => {
+    const state = Atom.make<State>({ _tag: "Idle" });
+    const execute = runtime.fn<Command>()((command, get) => {
+      if (command._tag === "Plan") {
+        get.set(state, { _tag: "Planning" });
+        return Effect.flatMap(Transport.Service, (transport) =>
+          transport.provisioning.plan({
+            connectionId: connection.connectionId,
+            domain: connection.domain,
+            records,
+          }),
+        ).pipe(
+          Effect.tap((plan) => Effect.sync(() => get.set(state, { _tag: "Review", plan }))),
+          Effect.catchCause((cause) =>
+            Effect.sync(() =>
+              get.set(
+                state,
+                failureFromCause(cause, "provisioning.plan", "DNS provisioning failed"),
+              ),
+            ),
+          ),
+          Effect.asVoid,
+        );
       }
-    } catch (cause) {
-      requestState.commit(request, failure(cause));
-    }
-  }, [connection.connectionId, connection.domain, onApplied, requestState, state, transport]);
+      get.set(state, { _tag: "Applying", plan: command.plan });
+      return Effect.flatMap(Transport.Service, (transport) =>
+        transport.provisioning.apply({
+          connectionId: connection.connectionId,
+          domain: connection.domain,
+          planDigest: command.plan.digest,
+        }),
+      ).pipe(
+        Effect.tap((result) =>
+          Effect.sync(() => {
+            if (result._tag === "Applied") {
+              get.set(state, { _tag: "Complete", result });
+              onAppliedRef.current?.(result);
+            } else if (result._tag === "Partial") {
+              get.set(state, { _tag: "Partial", result });
+              onAppliedRef.current?.(result);
+            } else {
+              get.set(state, result);
+            }
+          }),
+        ),
+        Effect.catchCause((cause) =>
+          Effect.sync(() =>
+            get.set(
+              state,
+              failureFromCause(cause, "provisioning.apply", "DNS provisioning failed"),
+            ),
+          ),
+        ),
+        Effect.asVoid,
+      );
+    });
+    return { execute, state };
+  }, [connection.connectionId, connection.domain, recordKey, runtime]);
+  const state = useAtomValue(controller.state);
+  const setState = useAtomSet(controller.state);
+  const execute = useAtomSet(controller.execute);
 
   return {
-    apply,
-    dismiss: () => requestState.reset({ _tag: "Idle" }),
-    plan,
-    retry: plan,
+    apply: () => {
+      if (
+        state._tag === "Review" &&
+        !state.plan.operations.some((operation) => operation._tag === "Conflict")
+      )
+        execute(Command.Apply({ plan: state.plan }));
+    },
+    dismiss: () => setState({ _tag: "Idle" }),
+    plan: () => execute(Command.Plan()),
+    retry: () => execute(Command.Plan()),
     state,
   };
 }
 
 export interface FlowProps extends PartProps<"div", { readonly status: State["_tag"] }> {
-  readonly connection: Connected;
+  readonly connection: Transport.Connected;
   readonly onApplied?: (
-    result: Extract<ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
+    result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
   ) => void;
-  readonly records: ReadonlyArray<DnsRecord>;
+  readonly records: ReadonlyArray<Transport.DnsRecord>;
   readonly showRecords?: boolean;
 }
 
@@ -212,7 +245,7 @@ export function Flow({ connection, onApplied, records, showRecords = true, ...pr
   );
 }
 
-export function OperationList({ plan }: { readonly plan: ProvisioningPlan }) {
+export function OperationList({ plan }: { readonly plan: Transport.ProvisioningPlan }) {
   return (
     <ul data-domainkit-part="plan-operations">
       {plan.operations.map((operation) => (
