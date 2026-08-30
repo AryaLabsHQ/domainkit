@@ -6,7 +6,7 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useSyncExternalStore,
@@ -106,7 +106,7 @@ export function Root({
 }: RootProps) {
   const runtime = useMemo(() => Atom.runtime(transport), [transport]);
   const onEventRef = useRef(onEvent);
-  useEffect(() => {
+  useLayoutEffect(() => {
     onEventRef.current = onEvent;
   }, [onEvent]);
   const emit = useCallback<Lifecycle.Listener>((event) => {
