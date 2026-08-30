@@ -541,12 +541,7 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
           </div>
         </div>
       </div>
-      <section
-        aria-label="Controls"
-        data-react-grab-ignore=""
-        data-workshop-addons=""
-        ref={addons}
-      >
+      <section aria-label="Controls" data-react-grab-ignore="" data-workshop-addons="" ref={addons}>
         <DialRoot mode="inline" theme={state.colorScheme} />
       </section>
     </div>

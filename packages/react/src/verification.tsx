@@ -117,7 +117,9 @@ export function Status({ config, ...props }: StatusProps) {
                       return (
                         <li key={`${evidence._tag}-${evidence.recordId}-${index}`}>
                           <div data-domainkit-part="observation-row">
-                            <span data-domainkit-part="observation-record">{evidence.recordId}</span>
+                            <span data-domainkit-part="observation-record">
+                              {evidence.recordId}
+                            </span>
                             <RecordStatus evidence={evidence} />
                           </div>
                           {note === undefined ? null : (

@@ -137,10 +137,20 @@ export function CopyValue({
             }}
             type="button"
           >
-            <span aria-hidden="true" data-domainkit-part="copy-glyph" data-icon="" data-state="idle">
+            <span
+              aria-hidden="true"
+              data-domainkit-part="copy-glyph"
+              data-icon=""
+              data-state="idle"
+            >
               {copyIcon ?? icons.copy}
             </span>
-            <span aria-hidden="true" data-domainkit-part="copy-glyph" data-icon="" data-state="done">
+            <span
+              aria-hidden="true"
+              data-domainkit-part="copy-glyph"
+              data-icon=""
+              data-state="done"
+            >
               {copiedIcon ?? icons.copied}
             </span>
           </button>

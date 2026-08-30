@@ -27,7 +27,9 @@ describe("Records primitives", () => {
     expect(screen.getByRole("columnheader", { name: "Type" })).toBeTruthy();
     expect(screen.getByRole("cell", { name: "MX" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Copy mail.example.com" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Copy mail.example.com" })[0]?.querySelector("svg")).toBeTruthy();
+    expect(
+      screen.getAllByRole("button", { name: "Copy mail.example.com" })[0]?.querySelector("svg"),
+    ).toBeTruthy();
   });
 
   it("copies a value through the clipboard", async () => {

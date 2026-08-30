@@ -102,9 +102,7 @@ Pass host icons so the package never owns an icon library. `Records.CopyValue` a
         <Records.Cell>
           <Records.Value>
             <Records.CopyValue value={record.value} />
-            {record.priority === undefined ? null : (
-              <Records.Priority priority={record.priority} />
-            )}
+            {record.priority === undefined ? null : <Records.Priority priority={record.priority} />}
           </Records.Value>
         </Records.Cell>
       </Records.Row>
