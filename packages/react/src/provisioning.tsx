@@ -218,10 +218,18 @@ export function OperationList({ plan }: { readonly plan: ProvisioningPlan }) {
       {plan.operations.map((operation) => (
         <li data-operation={operation._tag} key={operation.id}>
           <span data-domainkit-part="operation-kind">{operation._tag}</span>{" "}
-          <strong>{operation.record.type}</strong>{" "}
+          <strong data-domainkit-part="operation-type">{operation.record.type}</strong>{" "}
           <span data-domainkit-part="operation-record">
-            {operation.record.name}
-            {operation._tag === "Conflict" ? ` ${operation.reason}` : ""}
+            <span data-domainkit-part="operation-name">{operation.record.name}</span>
+            <code data-domainkit-part="operation-value">{operation.record.value}</code>
+            {operation.record.priority === undefined ? null : (
+              <span data-domainkit-part="operation-priority">
+                Priority {operation.record.priority}
+              </span>
+            )}
+            {operation._tag === "Conflict" ? (
+              <span data-domainkit-part="operation-reason">{operation.reason}</span>
+            ) : null}
           </span>
         </li>
       ))}

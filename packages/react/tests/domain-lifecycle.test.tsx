@@ -48,6 +48,8 @@ describe("provisioning lifecycle", () => {
     await user.click(screen.getByRole("button", { name: "Review changes" }));
     const dialog = await screen.findByRole("dialog", { name: "Review changes" });
     expect(within(dialog).getByText(/Create/)).toBeTruthy();
+    expect(within(dialog).getByText(record.name)).toBeTruthy();
+    expect(within(dialog).getByText(record.value)).toBeTruthy();
     await user.click(within(dialog).getByRole("button", { name: "Add records" }));
 
     expect(await screen.findByText("DNS changes applied")).toBeTruthy();
@@ -295,6 +297,8 @@ describe("observation and cleanup", () => {
 
     await user.click(screen.getByRole("button", { name: "Remove records" }));
     const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(record.name)).toBeTruthy();
+    expect(within(dialog).getByText(record.value)).toBeTruthy();
     expect(within(dialog).getByText(/record drifted/)).toBeTruthy();
     expect(
       (
