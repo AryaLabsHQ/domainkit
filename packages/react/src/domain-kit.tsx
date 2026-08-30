@@ -43,6 +43,17 @@ const navigateInBrowser = (url: string): void => {
   window.location.assign(url);
 };
 
+const validatePortalContainer = (container: HTMLElement | null): HTMLElement | null => {
+  if (container === null) return null;
+  const root = container.getRootNode();
+  if (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot) {
+    throw new Error(
+      "DomainKit portalContainer must belong to the document tree; ShadowRoot portals cannot receive the package stylesheet",
+    );
+  }
+  return container;
+};
+
 export function Root({
   children,
   colorScheme = "inherit",
@@ -55,6 +66,7 @@ export function Root({
   ...props
 }: RootProps) {
   const themeStyle = toStyle(theme);
+  const validatedPortalContainer = validatePortalContainer(portalContainer);
   const content = usePart(
     "div",
     props,
@@ -73,7 +85,7 @@ export function Root({
         marks,
         messages: mergeMessages(messages),
         navigate,
-        portalContainer,
+        portalContainer: validatedPortalContainer,
         themeStyle,
         transport,
       }}

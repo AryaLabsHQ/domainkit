@@ -109,6 +109,22 @@ describe("composition and theme", () => {
     first.unmount();
   });
 
+  it("rejects portal containers inside a ShadowRoot", () => {
+    const transport = Testing.makeFakeTransport({ inspect: disconnected });
+    const host = document.createElement("div");
+    const shadow = host.attachShadow({ mode: "open" });
+    const container = document.createElement("div");
+    shadow.append(container);
+
+    expect(() =>
+      render(
+        <DomainKit.Root portalContainer={container} transport={transport}>
+          <Connection.Flow domain="mail.example.com" />
+        </DomainKit.Root>,
+      ),
+    ).toThrow("ShadowRoot portals cannot receive the package stylesheet");
+  });
+
   it("loads known provider marks from integrations.sh and falls back to a letter", () => {
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
     const { rerender } = render(
