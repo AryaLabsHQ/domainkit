@@ -5,6 +5,7 @@ for (const mode of ["light", "dark"] as const) {
     await page.goto(`/?mode=${mode}&theme=brand`);
     const trigger = page.getByRole("button", { name: "Connect", exact: true });
     await expect(trigger).toBeVisible();
+    await expect(trigger.locator('[data-domainkit-part="provider-mark"]')).toBeVisible();
     await trigger.click();
 
     const dialog = page.getByRole("dialog", { name: "Connect Cloudflare" });

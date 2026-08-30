@@ -1,3 +1,5 @@
+import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, useState } from "react";
 
 import type { PartProps } from "./composition.tsx";
@@ -120,7 +122,12 @@ export function CopyValue({
             }}
             type="button"
           >
-            {copied ? copiedLabel : copyLabel}
+            <span aria-hidden="true" data-domainkit-part="copy-glyph" data-state="idle">
+              <HugeiconsIcon icon={Copy01Icon} size={14} strokeWidth={2} />
+            </span>
+            <span aria-hidden="true" data-domainkit-part="copy-glyph" data-state="done">
+              <HugeiconsIcon icon={Tick02Icon} size={14} strokeWidth={2} />
+            </span>
           </button>
         </>
       ),

@@ -182,14 +182,15 @@ export function Status({ state, ...props }: StatusProps) {
 }
 
 export interface TriggerProps extends ComponentPropsWithoutRef<typeof BaseDialog.Trigger> {
-  readonly providerName: string;
+  readonly provider: Provider.Provider;
 }
 
-export function Trigger({ providerName, ...props }: TriggerProps) {
+export function Trigger({ provider, ...props }: TriggerProps) {
   const { messages } = useDomainKit();
   return (
     <BaseDialog.Trigger data-domainkit-part="connection-trigger" {...props}>
-      {messages.connectProvider(providerName)}
+      <Provider.Mark aria-hidden="true" provider={provider} />
+      {messages.connectProvider(provider.name)}
     </BaseDialog.Trigger>
   );
 }
@@ -390,7 +391,7 @@ export function Flow({ domain, ...props }: FlowProps) {
       ) : null}
       {snapshot === undefined ? null : (
         <BaseDialog.Root>
-          <Trigger providerName={snapshot.provider.name} />
+          <Trigger provider={snapshot.provider} />
           <Dialog controller={controller} snapshot={snapshot} />
         </BaseDialog.Root>
       )}

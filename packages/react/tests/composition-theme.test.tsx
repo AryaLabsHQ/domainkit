@@ -91,8 +91,10 @@ describe("composition and theme", () => {
         <Connection.Flow domain="mail.example.com" />
       </DomainKit.Root>,
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Authorize Cloudflare" }));
-    expect(screen.getByText("Custom provider mark")).toBeTruthy();
+    const trigger = await screen.findByRole("button", { name: "Authorize Cloudflare" });
+    expect(trigger.querySelector('[data-domainkit-part="provider-mark"]')).toBeTruthy();
+    fireEvent.click(trigger);
+    expect(screen.getAllByText("Custom provider mark").length).toBeGreaterThan(0);
   });
 
   it("ports dialogs into an HTMLElement owned by the host", async () => {
@@ -200,9 +202,16 @@ describe("composition and theme", () => {
         <Provider.Mark provider={Testing.provider({ id: "amazon-route-53", name: "Route 53" })} />
       </DomainKit.Root>,
     );
-    expect(
-      screen.getByRole("img", { name: "Route 53" }).querySelector("img")?.getAttribute("src"),
-    ).toBe("https://integrations.sh/logo/aws.amazon.com?sz=64");
+    expect(screen.getByRole("img", { name: "Route 53" }).querySelector("svg")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Route 53" }).querySelector("img")).toBeNull();
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Provider.Mark provider={Testing.provider({ id: "aws", name: "AWS" })} />
+      </DomainKit.Root>,
+    );
+    expect(screen.getByRole("img", { name: "AWS" }).querySelector("img")?.getAttribute("src")).toBe(
+      "https://integrations.sh/logo/amazonaws.com?sz=64",
+    );
     rerender(
       <DomainKit.Root transport={transport}>
         <Provider.Mark provider={Testing.provider({ id: "other", name: "Other" })} />

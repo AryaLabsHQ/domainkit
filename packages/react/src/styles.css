@@ -238,8 +238,7 @@
 
 :where(
   [data-domainkit-part="dialog-cancel"],
-  [data-domainkit-part="dialog-close"],
-  [data-domainkit-part="copy-action"]
+  [data-domainkit-part="dialog-close"]
 ) {
   background: transparent;
   border-color: transparent;
@@ -248,21 +247,67 @@
 
 :where(
   [data-domainkit-part="dialog-cancel"]:hover,
-  [data-domainkit-part="dialog-close"]:hover,
-  [data-domainkit-part="copy-action"]:hover
+  [data-domainkit-part="dialog-close"]:hover
 ) {
   background: var(--domainkit-fill);
   color: var(--domainkit-text);
 }
 
 :where([data-domainkit-part="copy-action"]) {
+  background: var(--domainkit-fill);
+  border-color: var(--domainkit-border);
+  color: var(--domainkit-muted);
+  display: inline-grid;
   flex: none;
-  font-family: var(--domainkit-font-family, ui-sans-serif, system-ui, sans-serif);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  line-height: 1;
-  min-height: 1.25rem;
-  padding: 0.15rem 0.35rem;
+  height: 1.5rem;
+  min-height: 1.5rem;
+  min-width: 1.5rem;
+  overflow: hidden;
+  padding: 0;
+  place-items: center;
+  width: 1.5rem;
+}
+
+:where([data-domainkit-part="copy-action"]:hover) {
+  background: var(--domainkit-background);
+  color: var(--domainkit-text);
+}
+
+:where([data-domainkit-part="copy-value"][data-copied] [data-domainkit-part="copy-action"]) {
+  border-color: color-mix(in srgb, var(--domainkit-success) 45%, var(--domainkit-border));
+  color: var(--domainkit-success);
+}
+
+:where([data-domainkit-part="copy-glyph"]) {
+  display: flex;
+  grid-area: 1 / 1;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+:where([data-domainkit-part="copy-glyph"][data-state="idle"]) {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
+:where(
+  [data-domainkit-part="copy-value"][data-copied] [data-domainkit-part="copy-glyph"][data-state="idle"]
+) {
+  opacity: 0;
+  transform: scale(0.5) rotate(-18deg);
+}
+
+:where([data-domainkit-part="copy-glyph"][data-state="done"]) {
+  opacity: 0;
+  transform: scale(0.5) rotate(18deg);
+}
+
+:where(
+  [data-domainkit-part="copy-value"][data-copied] [data-domainkit-part="copy-glyph"][data-state="done"]
+) {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
 }
 
 :where([data-domainkit-part="dialog-close"]) {
@@ -391,11 +436,24 @@
   width: 2rem;
 }
 
-:where([data-domainkit-part="provider-mark"] img) {
+:where([data-domainkit-part="provider-mark"] img),
+:where([data-domainkit-part="provider-mark"] svg) {
   display: block;
   height: 100%;
   object-fit: cover;
   width: 100%;
+}
+
+:where([data-domainkit-part="connection-trigger"]) {
+  gap: 0.45rem;
+}
+
+:where([data-domainkit-part="connection-trigger"] [data-domainkit-part="provider-mark"]) {
+  background: var(--domainkit-accent-contrast);
+  border-color: color-mix(in oklch, var(--domainkit-accent) 18%, transparent);
+  font-size: 0.625rem;
+  height: 1.25rem;
+  width: 1.25rem;
 }
 
 :where([data-domainkit-part="token-connect"]) {
@@ -472,7 +530,7 @@
   [data-domainkit-part="verification-status"],
   [data-domainkit-part="cleanup-flow"]
 ) {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -490,10 +548,68 @@
 
 :where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="records-panel"]),
 :where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="flow-outcome"]),
-:where([data-domainkit-part="verification-status"] > ul),
+:where([data-domainkit-part="verification-status"] > [data-domainkit-part="observation-list"]),
 :where([data-domainkit-part="verification-status"] > p),
 :where([data-domainkit-part="cleanup-flow"] > [data-domainkit-part="flow-outcome"]) {
   flex: 1 1 100%;
+}
+
+:where([data-domainkit-part="observation-list"]) {
+  background: var(--domainkit-fill);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-control-radius);
+  display: grid;
+  gap: 0.85rem;
+  max-width: 24rem;
+  padding: 0.75rem 0.85rem;
+  width: 100%;
+}
+
+:where([data-domainkit-part="observation-group"]) {
+  display: grid;
+  gap: 0.4rem;
+}
+
+:where([data-domainkit-part="observation-source"]) {
+  color: var(--domainkit-muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+:where([data-domainkit-part="observation-group"] ul) {
+  display: grid;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+:where([data-domainkit-part="observation-group"] li) {
+  display: grid;
+  gap: 0.25rem;
+}
+
+:where([data-domainkit-part="observation-row"]) {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  min-height: 1.75rem;
+}
+
+:where([data-domainkit-part="observation-record"]) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+:where([data-domainkit-part="observation-note"]) {
+  color: var(--domainkit-muted);
+  font-size: 0.75rem;
+  margin: 0;
 }
 
 :where([data-domainkit-part="records-panel"]) {
@@ -543,8 +659,9 @@
 }
 
 :where([data-domainkit-part="copy-value"]) {
-  align-items: baseline;
+  align-items: center;
   display: inline-flex;
+  flex-wrap: nowrap;
   gap: 0.35rem;
   max-width: 100%;
   min-width: 0;
@@ -553,17 +670,30 @@
 :where([data-domainkit-part="copy-value"] code) {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: inherit;
+  line-height: 1.25rem;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 :where([data-domainkit-part="record-value"]) {
-  align-items: baseline;
-  display: inline-flex;
-  flex-wrap: wrap;
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
   gap: 0.35rem;
   max-width: 100%;
   min-width: 0;
+  width: 100%;
+}
+
+:where([data-domainkit-part="record-value"] [data-domainkit-part="copy-value"]) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+:where([data-domainkit-part="record-priority"]) {
+  color: var(--domainkit-muted);
+  flex: none;
+  font-variant-numeric: tabular-nums;
 }
 
 :where([data-domainkit-part="zone-file"]) {
@@ -608,11 +738,6 @@
   gap: 0.25rem;
   justify-items: start;
   margin: 0.25rem 0 0;
-}
-
-:where([data-domainkit-part="record-priority"]) {
-  color: var(--domainkit-muted);
-  font-variant-numeric: tabular-nums;
 }
 
 :where([data-domainkit-part="record-card"] [data-domainkit-part="record-priority"]) {
