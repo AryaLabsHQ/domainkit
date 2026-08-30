@@ -278,6 +278,13 @@
   color: var(--domainkit-success);
 }
 
+:where([data-icon] svg) {
+  display: block;
+  flex: none;
+  height: 0.875rem;
+  width: 0.875rem;
+}
+
 :where([data-domainkit-part="copy-glyph"]) {
   display: flex;
   grid-area: 1 / 1;
@@ -652,7 +659,7 @@
   width: 4.5rem;
 }
 
-:where([data-domainkit-part="records-status"]) {
+:where([data-domainkit-part="records-table"] [data-column="status"]) {
   text-align: right;
   white-space: nowrap;
   width: 1%;
@@ -676,18 +683,18 @@
 }
 
 :where([data-domainkit-part="record-value"]) {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
-  flex-wrap: nowrap;
-  gap: 0.35rem;
+  flex-direction: column;
+  gap: 0.15rem;
   max-width: 100%;
   min-width: 0;
   width: 100%;
 }
 
 :where([data-domainkit-part="record-value"] [data-domainkit-part="copy-value"]) {
-  flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
 }
 
 :where([data-domainkit-part="record-priority"]) {
@@ -696,11 +703,19 @@
   font-variant-numeric: tabular-nums;
 }
 
+:where([data-domainkit-part="record-value"] [data-domainkit-part="record-priority"]) {
+  font-size: 0.6875rem;
+}
+
 :where([data-domainkit-part="zone-file"]) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   justify-content: flex-start;
+}
+
+:where([data-domainkit-part="zone-copy"], [data-domainkit-part="zone-download"]) {
+  gap: 0.4rem;
 }
 
 :where([data-domainkit-part="record-card"]) {

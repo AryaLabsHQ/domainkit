@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { Connection, DomainKit, Provider, Testing, Theme } from "../src/index.ts";
+import { Connection, DomainKit, Provider, Records, Testing, Theme } from "../src/index.ts";
 
 afterEach(cleanup);
 
@@ -32,6 +32,16 @@ describe("composition and theme", () => {
     expect(root?.dataset.colorScheme).toBe("dark");
     expect(root?.style.getPropertyValue("--domainkit-accent")).toBe("#7c3aed");
     expect(root?.style.getPropertyValue("--domainkit-radius")).toBe("1rem");
+  });
+
+  it("lets Root replace the default record icons", () => {
+    const transport = Testing.makeFakeTransport({ inspect: disconnected });
+    render(
+      <DomainKit.Root icons={{ copy: <span>host-copy</span> }} transport={transport}>
+        <Records.CopyValue value="v=spf1" />
+      </DomainKit.Root>,
+    );
+    expect(screen.getByText("host-copy")).toBeTruthy();
   });
 
   it("merges host render props without duplicating the DomainKit action", async () => {

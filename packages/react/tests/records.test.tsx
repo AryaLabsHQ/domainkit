@@ -27,6 +27,7 @@ describe("Records primitives", () => {
     expect(screen.getByRole("columnheader", { name: "Type" })).toBeTruthy();
     expect(screen.getByRole("cell", { name: "MX" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Copy mail.example.com" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Copy mail.example.com" })[0]?.querySelector("svg")).toBeTruthy();
   });
 
   it("copies a value through the clipboard", async () => {
@@ -40,7 +41,8 @@ describe("Records primitives", () => {
         },
       },
     });
-    render(<Records.CopyValue value="v=spf1 -all" />);
+    render(<Records.CopyValue copyIcon={<span>host-copy</span>} value="v=spf1 -all" />);
+    expect(screen.getByText("host-copy")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Copy v=spf1 -all" }));
     expect(writes).toEqual(["v=spf1 -all"]);
     expect(await screen.findByRole("button", { name: "Copied v=spf1 -all" })).toBeTruthy();
@@ -142,6 +144,32 @@ describe("Records primitives", () => {
     expect(screen.getByRole("columnheader", { name: "Status" })).toBeTruthy();
     expect(screen.getAllByText("Found").length).toBeGreaterThan(0);
     expect(screen.getByText("Mismatch")).toBeTruthy();
-    expect(screen.getByText("Priority 10")).toBeTruthy();
+    expect(screen.getAllByText("Priority 10").length).toBeGreaterThan(0);
+  });
+
+  it("composes table parts and lets Status children replace the tag", () => {
+    render(
+      <Records.Root>
+        <Records.Header>
+          <Records.Row>
+            <Records.Head scope="col">Type</Records.Head>
+            <Records.Head data-column="status" scope="col">
+              Status
+            </Records.Head>
+          </Records.Row>
+        </Records.Header>
+        <Records.Body>
+          <Records.Row>
+            <Records.Cell>MX</Records.Cell>
+            <Records.Cell data-column="status">
+              <Records.Status evidence={{ _tag: "Found", recordId: "mx" }}>Live</Records.Status>
+            </Records.Cell>
+          </Records.Row>
+        </Records.Body>
+      </Records.Root>,
+    );
+    expect(screen.getByRole("columnheader", { name: "Status" })).toBeTruthy();
+    expect(screen.getByText("Live")).toBeTruthy();
+    expect(screen.queryByText("Found")).toBeNull();
   });
 });

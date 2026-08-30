@@ -17,6 +17,8 @@ import "@domainkit/react/styles.css";
 
 `Records.Table` copies name and value per row. Pass `evidence` to add Found / Missing / Mismatch / Unavailable chips. `Records.Card` is the stacked layout for the same data. `Records.ZoneFile` copies and downloads BIND text via `Records.toZoneFile`.
 
+`Table` and `Card` are conveniences over public parts. Hosts that already have a table can assemble `Root`, `Header`, `Body`, `Row`, `Head`, `Cell`, `Value`, `Priority`, and `Status` themselves. `Status` children replace the `_tag` label.
+
 ## Install
 
 ```sh
@@ -64,7 +66,52 @@ Every semantic component accepts Base UI's `render` prop.
 />
 ```
 
-`DomainKit.Root` sets theme tokens, messages, provider marks, color scheme, and a portal container. The stylesheet is opt-in and uses `--domainkit-*` CSS custom properties. Record parts pick those tokens up when they sit inside Root; they still function without it.
+`DomainKit.Root` sets theme tokens, messages, provider marks, icons, color scheme, and a portal container. The stylesheet is opt-in and uses `--domainkit-*` CSS custom properties. Record parts pick those tokens up when they sit inside Root; they still function without it.
+
+Pass host icons so the package never owns an icon library. `Records.CopyValue` and `Records.ZoneFile` also accept `copyIcon` / `copiedIcon` / `downloadIcon` when you are not wrapping in Root.
+
+```tsx
+<DomainKit.Root
+  icons={{
+    copy: <Copy />,
+    copied: <Check />,
+    download: <Download />,
+  }}
+  transport={transport}
+>
+  {children}
+</DomainKit.Root>
+```
+
+```tsx
+<Records.Root>
+  <Records.Header>
+    <Records.Row>
+      <Records.Head scope="col">Type</Records.Head>
+      <Records.Head scope="col">Name</Records.Head>
+      <Records.Head scope="col">Value</Records.Head>
+    </Records.Row>
+  </Records.Header>
+  <Records.Body>
+    {records.map((record) => (
+      <Records.Row key={record.id}>
+        <Records.Cell>{record.type}</Records.Cell>
+        <Records.Cell>
+          <Records.CopyValue value={record.name} />
+        </Records.Cell>
+        <Records.Cell>
+          <Records.Value>
+            <Records.CopyValue value={record.value} />
+            {record.priority === undefined ? null : (
+              <Records.Priority priority={record.priority} />
+            )}
+          </Records.Value>
+        </Records.Cell>
+      </Records.Row>
+    ))}
+  </Records.Body>
+</Records.Root>
+```
 
 ## Server rendering
 

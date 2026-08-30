@@ -1,9 +1,8 @@
-import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
+import { useIcons } from "./icons.tsx";
 import type { DnsRecord, ObservationEvidence } from "./transport.ts";
 
 const copyText = (value: string): Promise<boolean> => {
@@ -86,18 +85,34 @@ const zoneValue = (record: DnsRecord): string => {
   }
 };
 
+type LeafState = Record<string, unknown>;
+
+function leafPart<Tag extends keyof React.JSX.IntrinsicElements>(
+  defaultTagName: Tag,
+  part: string,
+) {
+  return function Leaf(props: PartProps<Tag, LeafState>): ReactElement {
+    return usePart(defaultTagName, props, {}, { "data-domainkit-part": part });
+  };
+}
+
 export interface CopyValueProps extends PartProps<"span", { readonly copied: boolean }> {
+  readonly copiedIcon?: ReactNode;
   readonly copiedLabel?: string;
+  readonly copyIcon?: ReactNode;
   readonly copyLabel?: string;
   readonly value: string;
 }
 
 export function CopyValue({
+  copiedIcon,
   copiedLabel = "Copied",
+  copyIcon,
   copyLabel = "Copy",
   value,
   ...props
 }: CopyValueProps) {
+  const icons = useIcons();
   const [copied, setCopied] = useState(false);
   const reset = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(reset.current), []);
@@ -122,11 +137,11 @@ export function CopyValue({
             }}
             type="button"
           >
-            <span aria-hidden="true" data-domainkit-part="copy-glyph" data-state="idle">
-              <HugeiconsIcon icon={Copy01Icon} size={14} strokeWidth={2} />
+            <span aria-hidden="true" data-domainkit-part="copy-glyph" data-icon="" data-state="idle">
+              {copyIcon ?? icons.copy}
             </span>
-            <span aria-hidden="true" data-domainkit-part="copy-glyph" data-state="done">
-              <HugeiconsIcon icon={Tick02Icon} size={14} strokeWidth={2} />
+            <span aria-hidden="true" data-domainkit-part="copy-glyph" data-icon="" data-state="done">
+              {copiedIcon ?? icons.copied}
             </span>
           </button>
         </>
@@ -138,21 +153,28 @@ export function CopyValue({
 }
 
 export interface ZoneFileProps extends PartProps<"div", { readonly count: number }> {
+  readonly copiedIcon?: ReactNode;
   readonly copiedLabel?: string;
+  readonly copyIcon?: ReactNode;
   readonly copyLabel?: string;
   readonly domain: string;
+  readonly downloadIcon?: ReactNode;
   readonly downloadLabel?: string;
   readonly records: ReadonlyArray<DnsRecord>;
 }
 
 export function ZoneFile({
+  copiedIcon,
   copiedLabel = "Copied",
+  copyIcon,
   copyLabel = "Copy zone",
   domain,
+  downloadIcon,
   downloadLabel = "Download",
   records,
   ...props
 }: ZoneFileProps) {
+  const icons = useIcons();
   const [copied, setCopied] = useState(false);
   const reset = useRef<ReturnType<typeof setTimeout>>(undefined);
   const zone = toZoneFile(records);
@@ -177,6 +199,9 @@ export function ZoneFile({
             }}
             type="button"
           >
+            <span aria-hidden="true" data-icon="inline-start">
+              {copied ? (copiedIcon ?? icons.copied) : (copyIcon ?? icons.copy)}
+            </span>
             {copied ? copiedLabel : copyLabel}
           </button>
           <button
@@ -184,6 +209,9 @@ export function ZoneFile({
             onClick={() => downloadText(`${domain}.txt`, zone)}
             type="button"
           >
+            <span aria-hidden="true" data-icon="inline-start">
+              {downloadIcon ?? icons.download}
+            </span>
             {downloadLabel}
           </button>
         </>
@@ -213,12 +241,54 @@ export function Status({ evidence, ...props }: StatusProps) {
   );
 }
 
+export interface PriorityProps extends PartProps<"span", { readonly priority: number }> {
+  readonly priority?: number;
+}
+
+export function Priority({ children, priority = 0, ...props }: PriorityProps) {
+  return usePart(
+    "span",
+    props,
+    { priority },
+    {
+      children: children ?? `Priority ${priority}`,
+      "data-domainkit-part": "record-priority",
+    },
+  );
+}
+
+export const Header = leafPart("thead", "records-header");
+export const Body = leafPart("tbody", "records-body");
+export const Footer = leafPart("tfoot", "records-footer");
+export const Row = leafPart("tr", "records-row");
+export const Head = leafPart("th", "records-head");
+export const Cell = leafPart("td", "records-cell");
+export const Caption = leafPart("caption", "records-caption");
+export const Value = leafPart("span", "record-value");
+export const CardHeader = leafPart("div", "record-card-head");
+export const CardTitle = leafPart("strong", "record-card-title");
+export const CardContent = leafPart("dl", "record-card-content");
+
+export interface RootProps extends PartProps<"table", { readonly count: number }> {
+  readonly count?: number;
+}
+
+export function Root({ count = 0, ...props }: RootProps) {
+  return (
+    <div data-domainkit-part="records-panel">
+      {usePart("table", props, { count }, { "data-domainkit-part": "records-table" })}
+    </div>
+  );
+}
+
 export interface CardProps extends PartProps<"section", { readonly recordId: string }> {
+  readonly copiedIcon?: ReactNode;
+  readonly copyIcon?: ReactNode;
   readonly evidence?: ReadonlyArray<ObservationEvidence>;
   readonly record: DnsRecord;
 }
 
-export function Card({ evidence, record, ...props }: CardProps) {
+export function Card({ copiedIcon, copyIcon, evidence, record, ...props }: CardProps) {
   const matching =
     evidence === undefined ? [] : evidence.filter((item) => item.recordId === record.id);
   return usePart(
@@ -228,29 +298,27 @@ export function Card({ evidence, record, ...props }: CardProps) {
     {
       children: (
         <>
-          <div data-domainkit-part="record-card-head">
-            <strong>{record.type}</strong>
+          <CardHeader>
+            <CardTitle>{record.type}</CardTitle>
             {matching.map((item, index) => (
               <Status evidence={item} key={`${item._tag}-${index}`} />
             ))}
-          </div>
-          <dl>
+          </CardHeader>
+          <CardContent>
             <div>
               <dt>Name</dt>
               <dd>
-                <CopyValue value={record.name} />
+                <CopyValue copiedIcon={copiedIcon} copyIcon={copyIcon} value={record.name} />
               </dd>
             </div>
             <div>
               <dt>Value</dt>
               <dd>
-                {record.priority === undefined ? null : (
-                  <span data-domainkit-part="record-priority">Priority {record.priority}</span>
-                )}
-                <CopyValue value={record.value} />
+                <CopyValue copiedIcon={copiedIcon} copyIcon={copyIcon} value={record.value} />
+                {record.priority === undefined ? null : <Priority priority={record.priority} />}
               </dd>
             </div>
-          </dl>
+          </CardContent>
         </>
       ),
       "data-domainkit-part": "record-card",
@@ -259,65 +327,54 @@ export function Card({ evidence, record, ...props }: CardProps) {
 }
 
 export interface TableProps extends PartProps<"table", { readonly count: number }> {
+  readonly copiedIcon?: ReactNode;
+  readonly copyIcon?: ReactNode;
   readonly evidence?: ReadonlyArray<ObservationEvidence>;
   readonly records: ReadonlyArray<DnsRecord>;
 }
 
-export function Table({ evidence, records, ...props }: TableProps) {
+export function Table({ copiedIcon, copyIcon, evidence, records, ...props }: TableProps) {
+  const status = evidence !== undefined;
   return (
-    <div data-domainkit-part="records-panel">
-      {usePart(
-        "table",
-        props,
-        { count: records.length },
-        {
-          children: (
-            <>
-              <thead>
-                <tr>
-                  <th scope="col">Type</th>
-                  <th scope="col">Name</th>
-                  <th scope="col">Value</th>
-                  {evidence === undefined ? null : (
-                    <th data-domainkit-part="records-status" scope="col">
-                      Status
-                    </th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((record) => (
-                  <tr key={record.id}>
-                    <td>{record.type}</td>
-                    <td>
-                      <CopyValue value={record.name} />
-                    </td>
-                    <td>
-                      <span data-domainkit-part="record-value">
-                        {record.priority === undefined ? null : (
-                          <span data-domainkit-part="record-priority">{record.priority}</span>
-                        )}
-                        <CopyValue value={record.value} />
-                      </span>
-                    </td>
-                    {evidence === undefined ? null : (
-                      <td data-domainkit-part="records-status">
-                        {evidence
-                          .filter((item) => item.recordId === record.id)
-                          .map((item, index) => (
-                            <Status evidence={item} key={`${item._tag}-${index}`} />
-                          ))}
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </>
-          ),
-          "data-domainkit-part": "records-table",
-        },
-      )}
-    </div>
+    <Root count={records.length} {...props}>
+      <Header>
+        <Row>
+          <Head scope="col">Type</Head>
+          <Head scope="col">Name</Head>
+          <Head scope="col">Value</Head>
+          {status ? (
+            <Head data-column="status" scope="col">
+              Status
+            </Head>
+          ) : null}
+        </Row>
+      </Header>
+      <Body>
+        {records.map((record) => (
+          <Row key={record.id}>
+            <Cell>{record.type}</Cell>
+            <Cell>
+              <CopyValue copiedIcon={copiedIcon} copyIcon={copyIcon} value={record.name} />
+            </Cell>
+            <Cell>
+              <Value>
+                <CopyValue copiedIcon={copiedIcon} copyIcon={copyIcon} value={record.value} />
+                {record.priority === undefined ? null : <Priority priority={record.priority} />}
+              </Value>
+            </Cell>
+            {status ? (
+              <Cell data-column="status">
+                {evidence
+                  .filter((item) => item.recordId === record.id)
+                  .map((item, index) => (
+                    <Status evidence={item} key={`${item._tag}-${index}`} />
+                  ))}
+              </Cell>
+            ) : null}
+          </Row>
+        ))}
+      </Body>
+    </Root>
   );
 }
 

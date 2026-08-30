@@ -1,3 +1,5 @@
+import { Copy01Icon, Download01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -19,6 +21,12 @@ const brandTheme = {
   fontFamily: "Inter, ui-sans-serif, system-ui",
   radius: "1rem",
 } as const;
+
+const workshopIcons = {
+  copied: <HugeiconsIcon icon={Tick02Icon} />,
+  copy: <HugeiconsIcon icon={Copy01Icon} />,
+  download: <HugeiconsIcon icon={Download01Icon} />,
+};
 
 const defaultRecords: ReadonlyArray<Transport.DnsRecord> = [
   {
@@ -377,6 +385,7 @@ function Preview({ state }: { readonly state: WorkshopState }) {
   return (
     <DomainKit.Root
       colorScheme={state.colorScheme}
+      icons={workshopIcons}
       {...(state.branded ? { theme: brandTheme } : {})}
       transport={transport}
     >
