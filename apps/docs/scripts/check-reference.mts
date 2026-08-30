@@ -40,6 +40,14 @@ const exportedNames = (source: string): ReadonlyArray<string> => {
   return [...new Set([...constants, ...namespaces])].sort();
 };
 
+const documentedNames = (reference: string): ReadonlySet<string> =>
+  new Set(
+    reference
+      .split("\n")
+      .filter((line) => line.startsWith("|"))
+      .flatMap((line) => [...line.matchAll(/`([A-Za-z][A-Za-z0-9_]*)`/g)].map(([, name]) => name)),
+  );
+
 const failures = (
   await Promise.all(
     entryPoints.map(async (entryPoint) => {
@@ -47,7 +55,8 @@ const failures = (
         Bun.file(resolve(root, entryPoint.source)).text(),
         Bun.file(resolve(root, entryPoint.reference)).text(),
       ]);
-      const missing = exportedNames(source).filter((name) => !reference.includes(`\`${name}\``));
+      const inventory = documentedNames(reference);
+      const missing = exportedNames(source).filter((name) => !inventory.has(name));
       return missing.length === 0 ? [] : [`${entryPoint.label}: ${missing.join(", ")}`];
     }),
   )

@@ -21,12 +21,20 @@ intended for tests, examples, local development, and provider contract validatio
 ## Test a lifecycle without credentials
 
 ```ts
-import { DnsRecord, Provisioning } from "domainkit";
+import { DnsRecord, DomainName, Provisioning } from "domainkit";
 import { InMemoryDnsProvider } from "domainkit/testing";
 import { Effect } from "effect";
 
 const program = Provisioning.create({
-  requirements: [DnsRecord.CNAME({ name: "app.example.com", target: "tenant.example.net" })],
+  requirements: [
+    DnsRecord.Cname.make({
+      metadata: { ownership: "customer", provenance: "test", purpose: "routing" },
+      name: DomainName.parse("app.example.com"),
+      policy: "exclusive",
+      target: DomainName.parse("tenant.example.net"),
+      ttl: 300,
+    }),
+  ],
   target: Provisioning.Target.ExactZone({ zone: "example.com" }),
 }).pipe(Effect.provide(InMemoryDnsProvider.layer()));
 ```

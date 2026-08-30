@@ -11,11 +11,14 @@ Use `domainkit/promise` at framework actions, route handlers, or other boundarie
 instead of Effect values.
 
 ```ts
-import { DnsRecord, Provisioning } from "domainkit/promise";
+import { DnsRecord, DomainName, Provisioning } from "domainkit/promise";
 
-const requirement = DnsRecord.CNAME({
-  name: "app.example.com",
-  target: "tenant.example.net",
+const requirement = DnsRecord.Cname.make({
+  metadata: { ownership: "customer", provenance: "example", purpose: "routing" },
+  name: DomainName.parse("app.example.com"),
+  policy: "exclusive",
+  target: DomainName.parse("tenant.example.net"),
+  ttl: 300,
 });
 
 const result = await Provisioning.create({
@@ -31,6 +34,7 @@ const result = await Provisioning.create({
 
 | Area               | Namespaces                                                                                                                 |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Package            | `VERSION`                                                                                                                  |
 | Connections        | `Connection`, `AuthorizationLifecycle`, `ProviderAuth`, `ProviderAuthorization`, `ProviderContext`, `Secret`, `Diagnostic` |
 | Discovery          | `ProviderDiscovery`, `ZoneDiscovery`, `Zones`                                                                              |
 | DNS values         | `DnsRecord`, `DomainName`, `InvalidInput`                                                                                  |
