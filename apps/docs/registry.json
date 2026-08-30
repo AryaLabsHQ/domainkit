@@ -1,0 +1,37 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "domainkit",
+  "homepage": "https://domain-kit.dev",
+  "items": [
+    {
+      "name": "dns-table",
+      "type": "registry:ui",
+      "files": [{ "path": "registry/ui/dns-table.tsx", "type": "registry:ui" }]
+    },
+    {
+      "name": "dns-operation",
+      "type": "registry:ui",
+      "files": [{ "path": "registry/ui/dns-operation.tsx", "type": "registry:ui" }]
+    },
+    {
+      "name": "dns-status",
+      "type": "registry:ui",
+      "files": [{ "path": "registry/ui/dns-status.tsx", "type": "registry:ui" }]
+    },
+    {
+      "name": "provider-mark",
+      "type": "registry:ui",
+      "files": [{ "path": "registry/ui/provider-mark.tsx", "type": "registry:ui" }]
+    },
+    {
+      "name": "copy-value",
+      "type": "registry:ui",
+      "files": [{ "path": "registry/ui/copy-value.tsx", "type": "registry:ui" }]
+    },
+    {
+      "name": "async-state",
+      "type": "registry:ui",
+      "files": [{ "path": "registry/ui/async-state.tsx", "type": "registry:ui" }]
+    }
+  ]
+}
