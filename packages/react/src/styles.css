@@ -436,14 +436,6 @@
 }
 
 :where(
-  [data-domainkit-part="connected-actions"] > [data-domainkit-part="provisioning-flow"],
-  [data-domainkit-part="connected-actions"] > [data-domainkit-part="verification-status"],
-  [data-domainkit-part="connected-actions"] > [data-domainkit-part="disconnect"]
-) {
-  width: auto;
-}
-
-:where(
   [data-domainkit-part="provisioning-flow"],
   [data-domainkit-part="verification-status"],
   [data-domainkit-part="cleanup-flow"]
@@ -453,6 +445,15 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   width: 100%;
+}
+
+:where(
+  [data-domainkit-part="connected-actions"] > [data-domainkit-part="provisioning-flow"],
+  [data-domainkit-part="connected-actions"] > [data-domainkit-part="verification-status"],
+  [data-domainkit-part="connected-actions"] > [data-domainkit-part="disconnect"]
+) {
+  flex: 0 0 auto;
+  width: auto;
 }
 
 :where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="records-panel"]),
