@@ -10,6 +10,8 @@ import {
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
+import type { Icons } from "./icons.tsx";
+import { IconsProvider } from "./icons.tsx";
 import type { Catalog } from "./messages.ts";
 import { merge as mergeMessages } from "./messages.ts";
 import type { Marks } from "./provider.tsx";
@@ -24,6 +26,7 @@ export interface RootState extends Record<string, unknown> {
 export interface RootProps extends Omit<PartProps<"div", RootState>, "children"> {
   readonly children: ReactNode;
   readonly colorScheme?: RootState["colorScheme"];
+  readonly icons?: Partial<Icons>;
   readonly messages?: Partial<Catalog>;
   readonly marks?: Marks;
   readonly navigate?: (url: string) => void;
@@ -82,6 +85,7 @@ const usePortalContainer = (container: HTMLElement | null): HTMLElement | null =
 export function Root({
   children,
   colorScheme = "inherit",
+  icons,
   marks = {},
   messages,
   navigate = navigateInBrowser,
@@ -119,7 +123,7 @@ export function Root({
         transport,
       }}
     >
-      {content}
+      <IconsProvider {...(icons === undefined ? {} : { icons })}>{content}</IconsProvider>
     </Context.Provider>
   );
 }

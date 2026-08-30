@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { Connection, DomainKit, Provider, Testing, Theme } from "../src/index.ts";
+import { Connection, DomainKit, Provider, Records, Testing, Theme } from "../src/index.ts";
 
 afterEach(cleanup);
 
@@ -32,6 +32,16 @@ describe("composition and theme", () => {
     expect(root?.dataset.colorScheme).toBe("dark");
     expect(root?.style.getPropertyValue("--domainkit-accent")).toBe("#7c3aed");
     expect(root?.style.getPropertyValue("--domainkit-radius")).toBe("1rem");
+  });
+
+  it("lets Root replace the default record icons", () => {
+    const transport = Testing.makeFakeTransport({ inspect: disconnected });
+    render(
+      <DomainKit.Root icons={{ copy: <span>host-copy</span> }} transport={transport}>
+        <Records.CopyValue value="v=spf1" />
+      </DomainKit.Root>,
+    );
+    expect(screen.getByText("host-copy")).toBeTruthy();
   });
 
   it("merges host render props without duplicating the DomainKit action", async () => {
@@ -91,8 +101,10 @@ describe("composition and theme", () => {
         <Connection.Flow domain="mail.example.com" />
       </DomainKit.Root>,
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Authorize Cloudflare" }));
-    expect(screen.getByText("Custom provider mark")).toBeTruthy();
+    const trigger = await screen.findByRole("button", { name: "Authorize Cloudflare" });
+    expect(trigger.querySelector('[data-domainkit-part="provider-mark"]')).toBeTruthy();
+    fireEvent.click(trigger);
+    expect(screen.getAllByText("Custom provider mark").length).toBeGreaterThan(0);
   });
 
   it("ports dialogs into an HTMLElement owned by the host", async () => {
@@ -187,6 +199,29 @@ describe("composition and theme", () => {
     expect(
       screen.getByRole("img", { name: "Namecheap" }).querySelector("img")?.getAttribute("src"),
     ).toBe("https://integrations.sh/logo/namecheap.com?sz=64");
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Provider.Mark provider={Testing.provider({ id: "GoDaddy", name: "GoDaddy" })} />
+      </DomainKit.Root>,
+    );
+    expect(
+      screen.getByRole("img", { name: "GoDaddy" }).querySelector("img")?.getAttribute("src"),
+    ).toBe("https://integrations.sh/logo/godaddy.com?sz=64");
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Provider.Mark provider={Testing.provider({ id: "amazon-route-53", name: "Route 53" })} />
+      </DomainKit.Root>,
+    );
+    expect(screen.getByRole("img", { name: "Route 53" }).querySelector("svg")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Route 53" }).querySelector("img")).toBeNull();
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Provider.Mark provider={Testing.provider({ id: "aws", name: "AWS" })} />
+      </DomainKit.Root>,
+    );
+    expect(screen.getByRole("img", { name: "AWS" }).querySelector("img")?.getAttribute("src")).toBe(
+      "https://integrations.sh/logo/amazonaws.com?sz=64",
+    );
     rerender(
       <DomainKit.Root transport={transport}>
         <Provider.Mark provider={Testing.provider({ id: "other", name: "Other" })} />

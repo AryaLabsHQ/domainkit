@@ -1,4 +1,11 @@
-:where([data-domainkit-root]) {
+:where(
+  [data-domainkit-root],
+  [data-domainkit-part="copy-value"]:not([data-domainkit-root] *),
+  [data-domainkit-part="record-card"]:not([data-domainkit-root] *),
+  [data-domainkit-part="record-status"]:not([data-domainkit-root] *),
+  [data-domainkit-part="records-panel"]:not([data-domainkit-root] *),
+  [data-domainkit-part="zone-file"]:not([data-domainkit-root] *)
+) {
   --domainkit-accent: #0070f3;
   --domainkit-accent-contrast: #ffffff;
   --domainkit-background: #ffffff;
@@ -84,6 +91,9 @@
   [data-domainkit-part="cleanup-apply"],
   [data-domainkit-part="disconnect-action"],
   [data-domainkit-part="token-connect"] button,
+  [data-domainkit-part="copy-action"],
+  [data-domainkit-part="zone-copy"],
+  [data-domainkit-part="zone-download"],
   [data-domainkit-part="dialog-cancel"],
   [data-domainkit-part="dialog-close"]
 ) {
@@ -156,6 +166,8 @@
   [data-domainkit-part="connection-retry"],
   [data-domainkit-part="provisioning-retry"],
   [data-domainkit-part="observe-action"],
+  [data-domainkit-part="zone-copy"],
+  [data-domainkit-part="zone-download"],
   [data-domainkit-part="token-connect"] button
 ) {
   background-color: var(--domainkit-background);
@@ -172,6 +184,8 @@
   [data-domainkit-part="connection-retry"]:hover:not(:disabled),
   [data-domainkit-part="provisioning-retry"]:hover:not(:disabled),
   [data-domainkit-part="observe-action"]:hover:not(:disabled),
+  [data-domainkit-part="zone-copy"]:hover:not(:disabled),
+  [data-domainkit-part="zone-download"]:hover:not(:disabled),
   [data-domainkit-part="token-connect"] button:hover:not(:disabled)
 ) {
   background-color: var(--domainkit-fill);
@@ -231,6 +245,72 @@
 :where([data-domainkit-part="dialog-cancel"]:hover, [data-domainkit-part="dialog-close"]:hover) {
   background: var(--domainkit-fill);
   color: var(--domainkit-text);
+}
+
+:where([data-domainkit-part="copy-action"]) {
+  background: var(--domainkit-fill);
+  border-color: var(--domainkit-border);
+  color: var(--domainkit-muted);
+  display: inline-grid;
+  flex: none;
+  height: 1.5rem;
+  min-height: 1.5rem;
+  min-width: 1.5rem;
+  overflow: hidden;
+  padding: 0;
+  place-items: center;
+  width: 1.5rem;
+}
+
+:where([data-domainkit-part="copy-action"]:hover) {
+  background: var(--domainkit-background);
+  color: var(--domainkit-text);
+}
+
+:where([data-domainkit-part="copy-value"][data-copied] [data-domainkit-part="copy-action"]) {
+  border-color: color-mix(in srgb, var(--domainkit-success) 45%, var(--domainkit-border));
+  color: var(--domainkit-success);
+}
+
+:where([data-icon] svg) {
+  display: block;
+  flex: none;
+  height: 0.875rem;
+  width: 0.875rem;
+}
+
+:where([data-domainkit-part="copy-glyph"]) {
+  display: flex;
+  grid-area: 1 / 1;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+:where([data-domainkit-part="copy-glyph"][data-state="idle"]) {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
+:where(
+  [data-domainkit-part="copy-value"][data-copied]
+    [data-domainkit-part="copy-glyph"][data-state="idle"]
+) {
+  opacity: 0;
+  transform: scale(0.5) rotate(-18deg);
+}
+
+:where([data-domainkit-part="copy-glyph"][data-state="done"]) {
+  opacity: 0;
+  transform: scale(0.5) rotate(18deg);
+}
+
+:where(
+  [data-domainkit-part="copy-value"][data-copied]
+    [data-domainkit-part="copy-glyph"][data-state="done"]
+) {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
 }
 
 :where([data-domainkit-part="dialog-close"]) {
@@ -359,11 +439,24 @@
   width: 2rem;
 }
 
-:where([data-domainkit-part="provider-mark"] img) {
+:where([data-domainkit-part="provider-mark"] img),
+:where([data-domainkit-part="provider-mark"] svg) {
   display: block;
   height: 100%;
   object-fit: cover;
   width: 100%;
+}
+
+:where([data-domainkit-part="connection-trigger"]) {
+  gap: 0.45rem;
+}
+
+:where([data-domainkit-part="connection-trigger"] [data-domainkit-part="provider-mark"]) {
+  background: var(--domainkit-accent-contrast);
+  border-color: color-mix(in oklch, var(--domainkit-accent) 18%, transparent);
+  font-size: 0.625rem;
+  height: 1.25rem;
+  width: 1.25rem;
 }
 
 :where([data-domainkit-part="token-connect"]) {
@@ -440,7 +533,7 @@
   [data-domainkit-part="verification-status"],
   [data-domainkit-part="cleanup-flow"]
 ) {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -458,10 +551,68 @@
 
 :where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="records-panel"]),
 :where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="flow-outcome"]),
-:where([data-domainkit-part="verification-status"] > ul),
+:where([data-domainkit-part="verification-status"] > [data-domainkit-part="observation-list"]),
 :where([data-domainkit-part="verification-status"] > p),
 :where([data-domainkit-part="cleanup-flow"] > [data-domainkit-part="flow-outcome"]) {
   flex: 1 1 100%;
+}
+
+:where([data-domainkit-part="observation-list"]) {
+  background: var(--domainkit-fill);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-control-radius);
+  display: grid;
+  gap: 0.85rem;
+  max-width: 24rem;
+  padding: 0.75rem 0.85rem;
+  width: 100%;
+}
+
+:where([data-domainkit-part="observation-group"]) {
+  display: grid;
+  gap: 0.4rem;
+}
+
+:where([data-domainkit-part="observation-source"]) {
+  color: var(--domainkit-muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+:where([data-domainkit-part="observation-group"] ul) {
+  display: grid;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+:where([data-domainkit-part="observation-group"] li) {
+  display: grid;
+  gap: 0.25rem;
+}
+
+:where([data-domainkit-part="observation-row"]) {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  min-height: 1.75rem;
+}
+
+:where([data-domainkit-part="observation-record"]) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+:where([data-domainkit-part="observation-note"]) {
+  color: var(--domainkit-muted);
+  font-size: 0.75rem;
+  margin: 0;
 }
 
 :where([data-domainkit-part="records-panel"]) {
@@ -485,22 +636,147 @@
   letter-spacing: 0.02em;
   padding: 0.55rem 0.75rem;
   text-align: left;
+  white-space: nowrap;
 }
 
 :where([data-domainkit-part="records-table"] td) {
   border-top: 1px solid var(--domainkit-border);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.75rem;
+  line-height: 1.4;
   padding: 0.55rem 0.75rem;
   text-align: left;
-  vertical-align: top;
-  word-break: break-all;
+  vertical-align: middle;
 }
 
 :where([data-domainkit-part="records-table"] td:first-child) {
   font-weight: 600;
   white-space: nowrap;
   width: 4.5rem;
+}
+
+:where([data-domainkit-part="records-table"] [data-column="status"]) {
+  text-align: right;
+  white-space: nowrap;
+  width: 1%;
+}
+
+:where([data-domainkit-part="copy-value"]) {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+:where([data-domainkit-part="copy-value"] code) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: inherit;
+  line-height: 1.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+:where([data-domainkit-part="record-value"]) {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+:where([data-domainkit-part="record-value"] [data-domainkit-part="copy-value"]) {
+  min-width: 0;
+  width: 100%;
+}
+
+:where([data-domainkit-part="record-priority"]) {
+  color: var(--domainkit-muted);
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+:where([data-domainkit-part="record-value"] [data-domainkit-part="record-priority"]) {
+  font-size: 0.6875rem;
+}
+
+:where([data-domainkit-part="zone-file"]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-start;
+}
+
+:where([data-domainkit-part="zone-copy"], [data-domainkit-part="zone-download"]) {
+  gap: 0.4rem;
+}
+
+:where([data-domainkit-part="record-card"]) {
+  background: var(--domainkit-fill);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-control-radius);
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+}
+
+:where([data-domainkit-part="record-card-head"]) {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+:where([data-domainkit-part="record-card"] dl) {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+:where([data-domainkit-part="record-card"] dt) {
+  color: var(--domainkit-muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+:where([data-domainkit-part="record-card"] dd) {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: start;
+  margin: 0.25rem 0 0;
+}
+
+:where([data-domainkit-part="record-card"] [data-domainkit-part="record-priority"]) {
+  font-size: 0.6875rem;
+}
+
+:where([data-domainkit-part="record-status"]) {
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.15rem 0.45rem;
+}
+
+:where([data-domainkit-part="record-status"][data-status="Found"]) {
+  background: color-mix(in srgb, var(--domainkit-success) 16%, transparent);
+  color: var(--domainkit-success);
+}
+
+:where([data-domainkit-part="record-status"][data-status="Missing"]),
+:where([data-domainkit-part="record-status"][data-status="Mismatch"]) {
+  background: color-mix(in srgb, var(--domainkit-danger) 14%, transparent);
+  color: var(--domainkit-danger);
+}
+
+:where([data-domainkit-part="record-status"][data-status="Unavailable"]) {
+  background: var(--domainkit-background);
+  color: var(--domainkit-muted);
 }
 
 :where([data-domainkit-part="plan-operations"], [data-domainkit-part="cleanup-operations"]) {

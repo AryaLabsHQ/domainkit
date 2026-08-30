@@ -255,7 +255,10 @@ describe("observation and cleanup", () => {
       </DomainKit.Root>,
     );
     await user.click(screen.getByRole("button", { name: "Check DNS" }));
-    expect(await screen.findAllByText(/dkim: Found/)).toHaveLength(2);
+    expect(await screen.findAllByText("dkim")).toHaveLength(2);
+    expect(screen.getAllByText("Found")).toHaveLength(2);
+    expect(screen.getByText("Provider")).toBeTruthy();
+    expect(screen.getByText("Public DNS")).toBeTruthy();
     expect(transport.calls.observe).toEqual([
       {
         connectionId: "connection-1",

@@ -3,8 +3,15 @@ import { useCallback } from "react";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
+import { Status as RecordStatus } from "./records.tsx";
 import * as RequestState from "./request-state.ts";
-import type { Connected, DnsRecord, Failure, Observation } from "./transport.ts";
+import type {
+  Connected,
+  DnsRecord,
+  Failure,
+  Observation,
+  ObservationEvidence,
+} from "./transport.ts";
 
 export type State =
   | { readonly _tag: "Idle" }
@@ -58,6 +65,32 @@ export function useController(config: ObserveConfig) {
   return { observe, state } as const;
 }
 
+const evidenceNote = (evidence: ObservationEvidence): string | undefined => {
+  switch (evidence._tag) {
+    case "Mismatch":
+    case "Unavailable":
+      return evidence.message;
+    case "Found":
+    case "Missing":
+      return undefined;
+    default: {
+      const _exhaustive: never = evidence;
+      return _exhaustive;
+    }
+  }
+};
+
+const observationGroups = (
+  observation: Observation,
+): ReadonlyArray<{
+  readonly evidence: ReadonlyArray<ObservationEvidence>;
+  readonly label: string;
+}> =>
+  [
+    { evidence: observation.provider, label: "Provider" },
+    { evidence: observation.publicDns, label: "Public DNS" },
+  ].filter((group) => group.evidence.length > 0);
+
 export interface StatusProps extends PartProps<"div", { readonly status: State["_tag"] }> {
   readonly config: ObserveConfig;
 }
@@ -74,13 +107,31 @@ export function Status({ config, ...props }: StatusProps) {
       children: (
         <>
           {state._tag === "Observation" ? (
-            <ul>
-              {[...state.provider, ...state.publicDns].map((evidence, index) => (
-                <li key={`${evidence._tag}-${evidence.recordId}-${index}`}>
-                  {evidence.recordId}: {evidence._tag}
-                </li>
+            <div data-domainkit-part="observation-list">
+              {observationGroups(state).map((group) => (
+                <section data-domainkit-part="observation-group" key={group.label}>
+                  <p data-domainkit-part="observation-source">{group.label}</p>
+                  <ul>
+                    {group.evidence.map((evidence, index) => {
+                      const note = evidenceNote(evidence);
+                      return (
+                        <li key={`${evidence._tag}-${evidence.recordId}-${index}`}>
+                          <div data-domainkit-part="observation-row">
+                            <span data-domainkit-part="observation-record">
+                              {evidence.recordId}
+                            </span>
+                            <RecordStatus evidence={evidence} />
+                          </div>
+                          {note === undefined ? null : (
+                            <p data-domainkit-part="observation-note">{note}</p>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
               ))}
-            </ul>
+            </div>
           ) : state._tag === "Failure" ? (
             <p data-domainkit-part="flow-outcome" data-tone="danger" role="alert">
               {state.message}

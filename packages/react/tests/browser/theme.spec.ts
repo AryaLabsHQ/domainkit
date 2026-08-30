@@ -5,6 +5,7 @@ for (const mode of ["light", "dark"] as const) {
     await page.goto(`/?mode=${mode}&theme=brand`);
     const trigger = page.getByRole("button", { name: "Connect", exact: true });
     await expect(trigger).toBeVisible();
+    await expect(trigger.locator('[data-domainkit-part="provider-mark"]')).toBeVisible();
     await trigger.click();
 
     const dialog = page.getByRole("dialog", { name: "Connect Cloudflare" });
@@ -43,4 +44,27 @@ test("provisioning and cleanup dialogs preserve review focus", async ({ page }) 
   await expect(cleanup).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Remove records" })).toBeFocused();
+});
+
+test("workshop switches presentational stories from the sidebar", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("navigation", { name: "Stories" })).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Stories" })
+    .getByRole("button", { name: "Records" })
+    .click();
+  await expect(page.getByRole("columnheader", { name: "Type" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "MX" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy zone" })).toBeVisible();
+});
+
+test("standalone record cards retain neutral package tokens", async ({ page }) => {
+  await page.goto("/?story=card");
+  await page.locator("[data-domainkit-root]").evaluate((root) => {
+    root.removeAttribute("data-domainkit-root");
+  });
+
+  const card = page.locator('[data-domainkit-part="record-card"]').first();
+  await expect(card).toHaveCSS("background-color", "rgb(244, 244, 245)");
+  await expect(card).toHaveCSS("border-top-color", "rgb(212, 212, 216)");
 });
