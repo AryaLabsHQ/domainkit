@@ -16,6 +16,7 @@ import {
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
+import { Event as LifecycleEvent } from "./lifecycle.ts";
 import * as Provider from "./provider.tsx";
 import { failureFromDefect, failureFromError, type Failure } from "./atom.ts";
 
@@ -49,7 +50,7 @@ export interface Model {
 }
 
 export function useModel(domain: string): Model {
-  const { navigate, runtime } = useDomainKit();
+  const { emit, navigate, runtime } = useDomainKit();
   return useMemo(() => {
     const actionState = Atom.make<State | undefined>(undefined);
     const inspect = runtime.atom(
@@ -79,6 +80,7 @@ export function useModel(domain: string): Model {
       get.set(actionState, State.Submitting({ snapshot }));
       const complete = (
         request: Effect.Effect<Transport.ConnectionResult, Transport.Failure, Transport.Service>,
+        source: "connect" | "reuse",
       ) =>
         request.pipe(
           Effect.tap((result) =>
@@ -88,6 +90,12 @@ export function useModel(domain: string): Model {
                 navigate(result.authorizationUrl);
               } else {
                 get.set(actionState, result);
+                emit(
+                  LifecycleEvent.ConnectionEstablished({
+                    connection: result,
+                    source,
+                  }),
+                );
               }
             }),
           ),
@@ -103,17 +111,22 @@ export function useModel(domain: string): Model {
               providerId: snapshot.provider.id,
             }),
           ),
+          "connect",
         );
       }
       if (reusableConnection === undefined) return Effect.void;
       return complete(
         Effect.flatMap(Transport.Service, (transport) =>
-          transport.connection.reuse({ connectionId: reusableConnection.connectionId, domain }),
+          transport.connection.reuse({
+            connectionId: reusableConnection.connectionId,
+            domain,
+          }),
         ),
+        "reuse",
       );
     });
     return { command, state };
-  }, [domain, navigate, runtime]);
+  }, [domain, emit, navigate, runtime]);
 }
 
 export function useController(domain: string): Controller {
@@ -452,7 +465,7 @@ export const DisconnectState = Data.taggedEnum<LocalDisconnectState>();
 export type DisconnectState = LocalDisconnectState | Transport.RemoveDomainResult | Failure;
 
 export function useDisconnect(connection: Transport.Connected) {
-  const { runtime } = useDomainKit();
+  const { emit, runtime } = useDomainKit();
   const controller = useMemo(() => {
     const state = Atom.make<DisconnectState>(DisconnectState.Idle());
     const disconnect = runtime.fn<void>()((_, get) => {
@@ -464,13 +477,18 @@ export function useDisconnect(connection: Transport.Connected) {
           preserveDns: true,
         }),
       ).pipe(
-        Effect.tap((result) => Effect.sync(() => get.set(state, result))),
+        Effect.tap((result) =>
+          Effect.sync(() => {
+            get.set(state, result);
+            emit(LifecycleEvent.DomainDisconnected({ connection, result }));
+          }),
+        ),
         Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
         Effect.asVoid,
       );
     });
     return { disconnect, state };
-  }, [connection.connectionId, connection.domain, runtime]);
+  }, [connection.connectionId, connection.domain, emit, runtime]);
   const state = useAtomValue(controller.state);
   const disconnect = useAtomSet(controller.disconnect);
   return { disconnect: () => disconnect(), state } as const;

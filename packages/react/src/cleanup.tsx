@@ -10,13 +10,18 @@ import { failureFromError, type Failure } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
+import { Event as LifecycleEvent } from "./lifecycle.ts";
 import * as Operations from "./operations.tsx";
 
 type LocalState = Data.TaggedEnum<{
-  Cleaned: { readonly result: Extract<Transport.CleanupResult, { readonly _tag: "Cleaned" }> };
+  Cleaned: {
+    readonly result: Extract<Transport.CleanupResult, { readonly _tag: "Cleaned" }>;
+  };
   Cleaning: { readonly plan: Transport.CleanupPlan };
   Idle: {};
-  Partial: { readonly result: Extract<Transport.CleanupResult, { readonly _tag: "Partial" }> };
+  Partial: {
+    readonly result: Extract<Transport.CleanupResult, { readonly _tag: "Partial" }>;
+  };
   Planning: {};
   Review: { readonly plan: Transport.CleanupPlan };
 }>;
@@ -46,7 +51,7 @@ export interface Controller {
 }
 
 export function useModel(connection: Transport.Connected, receiptId: string): Model {
-  const { runtime } = useDomainKit();
+  const { emit, runtime } = useDomainKit();
   return useMemo(() => {
     const state = Atom.make<State>(State.Idle());
     const execute = runtime.fn<Command>()((command, get) => {
@@ -85,23 +90,24 @@ export function useModel(connection: Transport.Connected, receiptId: string): Mo
         }),
       ).pipe(
         Effect.tap((result) =>
-          Effect.sync(() =>
-            get.set(
-              state,
-              result._tag === "Cleaned"
-                ? State.Cleaned({ result })
-                : result._tag === "Partial"
-                  ? State.Partial({ result })
-                  : result,
-            ),
-          ),
+          Effect.sync(() => {
+            if (result._tag === "Cleaned") {
+              get.set(state, State.Cleaned({ result }));
+              emit(LifecycleEvent.RecordsCleaned({ connection, result }));
+            } else if (result._tag === "Partial") {
+              get.set(state, State.Partial({ result }));
+              emit(LifecycleEvent.RecordsPartiallyCleaned({ connection, result }));
+            } else {
+              get.set(state, result);
+            }
+          }),
         ),
         Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
         Effect.asVoid,
       );
     });
     return { command: execute, state };
-  }, [connection.connectionId, connection.domain, receiptId, runtime]);
+  }, [connection.connectionId, connection.domain, emit, receiptId, runtime]);
 }
 
 export function useController(connection: Transport.Connected, receiptId: string): Controller {

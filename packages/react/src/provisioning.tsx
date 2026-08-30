@@ -10,14 +10,19 @@ import { failureFromError, recordsIdentity, type Failure } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
+import { Event as LifecycleEvent } from "./lifecycle.ts";
 import * as Operations from "./operations.tsx";
 import * as Records from "./records.tsx";
 
 type LocalState = Data.TaggedEnum<{
   Applying: { readonly plan: Transport.ProvisioningPlan };
-  Complete: { readonly result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" }> };
+  Complete: {
+    readonly result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" }>;
+  };
   Idle: {};
-  Partial: { readonly result: Extract<Transport.ApplyResult, { readonly _tag: "Partial" }> };
+  Partial: {
+    readonly result: Extract<Transport.ApplyResult, { readonly _tag: "Partial" }>;
+  };
   Planning: {};
   Review: { readonly plan: Transport.ProvisioningPlan };
 }>;
@@ -54,7 +59,7 @@ export function useModel(
     result: Extract<Transport.ApplyResult, { readonly _tag: "Applied" | "Partial" }>,
   ) => void,
 ): Model {
-  const { runtime } = useDomainKit();
+  const { emit, runtime } = useDomainKit();
   const recordKey = recordsIdentity(records);
   const onAppliedRef = useRef(onApplied);
   onAppliedRef.current = onApplied;
@@ -98,9 +103,11 @@ export function useModel(
           Effect.sync(() => {
             if (result._tag === "Applied") {
               get.set(state, State.Complete({ result }));
+              emit(LifecycleEvent.RecordsApplied({ connection, result }));
               onAppliedRef.current?.(result);
             } else if (result._tag === "Partial") {
               get.set(state, State.Partial({ result }));
+              emit(LifecycleEvent.RecordsPartiallyApplied({ connection, result }));
               onAppliedRef.current?.(result);
             } else {
               get.set(state, result);
@@ -112,7 +119,7 @@ export function useModel(
       );
     });
     return { command: execute, state };
-  }, [connection.connectionId, connection.domain, recordKey, runtime]);
+  }, [connection.connectionId, connection.domain, emit, recordKey, runtime]);
 }
 
 export function useController(

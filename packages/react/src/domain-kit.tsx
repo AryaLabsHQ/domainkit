@@ -6,7 +6,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useSyncExternalStore,
   type ReactNode,
   type RefObject,
@@ -16,6 +18,7 @@ import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import type { Icons } from "./icons.tsx";
 import { IconsProvider } from "./icons.tsx";
+import type * as Lifecycle from "./lifecycle.ts";
 import type { Catalog } from "./messages.ts";
 import { merge as mergeMessages } from "./messages.ts";
 import type { Marks } from "./provider.tsx";
@@ -34,6 +37,7 @@ export interface RootProps extends Omit<PartProps<"div", RootState>, "children">
   readonly messages?: Partial<Catalog>;
   readonly marks?: Marks;
   readonly navigate?: (url: string) => void;
+  readonly onEvent?: Lifecycle.Listener;
   readonly portalContainer?: HTMLElement | null;
   readonly theme?: Theme;
   readonly transport: Layer.Layer<Transport.Service>;
@@ -44,6 +48,7 @@ interface ContextValue {
   readonly navigate: (url: string) => void;
   readonly marks: Marks;
   readonly messages: Catalog;
+  readonly emit: Lifecycle.Listener;
   readonly portalContainer: RefObject<HTMLElement | null>;
   readonly themeStyle: ReturnType<typeof toStyle>;
   readonly runtime: Runtime;
@@ -93,12 +98,24 @@ export function Root({
   marks = {},
   messages,
   navigate = navigateInBrowser,
+  onEvent,
   portalContainer = null,
   theme,
   transport,
   ...props
 }: RootProps) {
   const runtime = useMemo(() => Atom.runtime(transport), [transport]);
+  const onEventRef = useRef(onEvent);
+  useLayoutEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
+  const emit = useCallback<Lifecycle.Listener>((event) => {
+    try {
+      onEventRef.current?.(event);
+    } catch {
+      // Host observers are best-effort and cannot change a completed mutation's outcome.
+    }
+  }, []);
   const themeStyle = toStyle(theme);
   const resolvedPortalContainer = usePortalContainer(portalContainer);
   const portalContainerRef = useMemo<RefObject<HTMLElement | null>>(
@@ -121,6 +138,7 @@ export function Root({
       <Context.Provider
         value={{
           colorScheme,
+          emit,
           marks,
           messages: mergeMessages(messages),
           navigate,
