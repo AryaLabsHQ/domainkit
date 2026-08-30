@@ -19,6 +19,7 @@ export interface MarkProps extends PartProps<"span", MarkState> {
 
 const logoHost = (providerId: string): string | undefined => {
   if (providerId === "cloudflare") return "cloudflare.com";
+  if (providerId === "namecheap") return "namecheap.com";
   if (providerId === "vercel") return "vercel.com";
   return undefined;
 };

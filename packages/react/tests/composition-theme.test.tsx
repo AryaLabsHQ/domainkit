@@ -160,6 +160,14 @@ describe("composition and theme", () => {
     );
     rerender(
       <DomainKit.Root transport={transport}>
+        <Provider.Mark provider={Testing.provider({ id: "namecheap", name: "Namecheap" })} />
+      </DomainKit.Root>,
+    );
+    expect(
+      screen.getByRole("img", { name: "Namecheap" }).querySelector("img")?.getAttribute("src"),
+    ).toBe("https://integrations.sh/logo/namecheap.com?sz=64");
+    rerender(
+      <DomainKit.Root transport={transport}>
         <Provider.Mark provider={Testing.provider({ id: "other", name: "Other" })} />
       </DomainKit.Root>,
     );
