@@ -1,5 +1,6 @@
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Transport } from "domainkit";
 
 import {
@@ -36,6 +37,38 @@ const connection = {
 };
 
 describe("provisioning lifecycle", () => {
+  it("exposes a shared Atom model to custom provisioning UI", async () => {
+    const transport = Testing.makeFakeTransport({ inspect: connection });
+    const CustomProvisioning = () => {
+      const model = Provisioning.useModel(connection, [record]);
+      const state = useAtomValue(model.state);
+      const command = useAtomSet(model.command);
+      return (
+        <>
+          <span>{state._tag}</span>
+          {state._tag === "Idle" ? (
+            <button onClick={() => command(Provisioning.Command.Plan())}>Plan records</button>
+          ) : null}
+          {state._tag === "Review" ? (
+            <button onClick={() => command(Provisioning.Command.Apply({ plan: state.plan }))}>
+              Apply plan
+            </button>
+          ) : null}
+        </>
+      );
+    };
+    render(
+      <DomainKit.Root transport={transport}>
+        <CustomProvisioning />
+      </DomainKit.Root>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Plan records" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Apply plan" }));
+    expect(await screen.findByText("Complete")).toBeTruthy();
+    expect(transport.calls.apply).toHaveLength(1);
+  });
+
   it("reviews exact operations and applies only the approved server digest", async () => {
     const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });
@@ -177,6 +210,46 @@ describe("provisioning lifecycle", () => {
 });
 
 describe("observation and cleanup", () => {
+  it("exposes cleanup and verification Atom models to custom host UI", async () => {
+    const transport = Testing.makeFakeTransport({ inspect: connection });
+    const CustomLifecycle = () => {
+      const cleanupModel = Cleanup.useModel(connection, "receipt-1");
+      const cleanupState = useAtomValue(cleanupModel.state);
+      const cleanupCommand = useAtomSet(cleanupModel.command);
+      const verificationModel = Verification.useModel({
+        connection,
+        domain: connection.domain,
+        records: [record],
+      });
+      const verificationState = useAtomValue(verificationModel.state);
+      const verificationCommand = useAtomSet(verificationModel.command);
+      return (
+        <>
+          <span>Cleanup {cleanupState._tag}</span>
+          {cleanupState._tag === "Idle" ? (
+            <button onClick={() => cleanupCommand(Cleanup.Command.Plan())}>Plan cleanup</button>
+          ) : null}
+          <span>Verification {verificationState._tag}</span>
+          <button onClick={() => verificationCommand(Verification.Command.Observe())}>
+            Observe records
+          </button>
+        </>
+      );
+    };
+    render(
+      <DomainKit.Root transport={transport}>
+        <CustomLifecycle />
+      </DomainKit.Root>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Plan cleanup" }));
+    expect(await screen.findByText("Cleanup Review")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Observe records" }));
+    expect(await screen.findByText("Verification Observation")).toBeTruthy();
+    expect(transport.calls.cleanupPlan).toHaveLength(1);
+    expect(transport.calls.observe).toHaveLength(1);
+  });
+
   it("does not revive an applied receipt after the host receipt cycles", async () => {
     const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });

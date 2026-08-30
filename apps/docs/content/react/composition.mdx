@@ -75,3 +75,30 @@ The opt-in stylesheet reads `--domainkit-*` variables. Theme props set those var
 ```
 
 Presentational record parts accept browser-safe records directly and do not require `DomainKit.Root` or a transport.
+
+## Effect Atom lifecycle models
+
+Every stateful lifecycle exposes the atoms used by its packaged controller and flow:
+
+```tsx
+const model = Provisioning.useModel(connection, records);
+const state = useAtomValue(model.state);
+const command = useAtomSet(model.command);
+
+if (state._tag === "Review") {
+  return (
+    <Operations.Root lifecycle="provisioning">
+      {state.plan.operations.map((operation) => (
+        <Operations.Item key={operation.id} operation={operation} />
+      ))}
+      <button onClick={() => command(Provisioning.Command.Apply({ plan: state.plan }))}>
+        Apply approved plan
+      </button>
+    </Operations.Root>
+  );
+}
+```
+
+The same model seam is available as `Connection.useModel`, `Verification.useModel`, and
+`Cleanup.useModel`. `Operations.List` is the complete neutral operation recipe; its exported parts
+support Base UI render elements, forwarded refs, state-aware classes, and host event handlers.

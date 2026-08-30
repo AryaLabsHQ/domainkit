@@ -46,10 +46,15 @@ export function DomainSetup() {
 
 `Provisioning.Flow` accepts `showRecords={false}` when the host already renders the DNS record list with `Records.Table`.
 
-Effect applications can compose connection UI directly from `Connection.useModel(domain)`. The
-model exposes `state` and `command` atoms; dispatch values with the exported
-`Connection.Command` constructors. `Connection.useController` and `Connection.Flow` consume that
-same model rather than maintaining a second state machine.
+Effect applications can compose lifecycle UI directly from `Connection.useModel`,
+`Provisioning.useModel`, `Verification.useModel`, and `Cleanup.useModel`. Each model exposes
+`state` and `command` atoms; dispatch values with the corresponding exported `Command`
+constructors. The packaged controllers and flows consume those same models rather than maintaining
+second state machines.
+
+`Operations.List` is the shared provisioning and cleanup review recipe. Hosts can instead assemble
+`Operations.Root`, `Item`, `Kind`, `Type`, `Record`, `Name`, `Value`, `Priority`, and `Reason` with
+Base UI render props.
 
 ## Transport ownership
 
