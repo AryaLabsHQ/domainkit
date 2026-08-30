@@ -40,8 +40,8 @@ const stories = [
   { id: "connection", group: "Flows", title: "Connection" },
   { id: "lifecycle", group: "Flows", title: "Domain" },
   { id: "records", group: "Presentational", title: "Records" },
-  { id: "card", group: "Presentational", title: "Record card" },
-  { id: "provider", group: "Presentational", title: "Provider mark" },
+  { id: "card", group: "Presentational", title: "Record Card" },
+  { id: "provider", group: "Presentational", title: "Provider Mark" },
   { id: "verification", group: "Presentational", title: "Verification" },
 ] as const;
 
@@ -385,7 +385,28 @@ function Preview({ state }: { readonly state: WorkshopState }) {
   );
 }
 
+const constrainSelectDropdown = (root: HTMLElement, dropdown: HTMLElement): void => {
+  const gap = 4;
+  const trigger = root.querySelector<HTMLElement>(".dialkit-select-trigger[data-open='true']");
+  if (trigger === null) return;
+  const rootBox = root.getBoundingClientRect();
+  const triggerBox = trigger.getBoundingClientRect();
+  const spaceBelow = Math.max(0, rootBox.bottom - triggerBox.bottom - gap);
+  const spaceAbove = Math.max(0, triggerBox.top - rootBox.top - gap);
+  const above = spaceBelow < 160 && spaceAbove > spaceBelow;
+  const maxHeight = Math.min(280, Math.max(120, above ? spaceAbove : spaceBelow));
+  dropdown.style.maxHeight = `${maxHeight}px`;
+  dropdown.style.overflowY = "auto";
+  dropdown.style.overscrollBehavior = "contain";
+  const height = Math.min(maxHeight, dropdown.scrollHeight);
+  const top = above
+    ? triggerBox.top - rootBox.top - height - gap
+    : triggerBox.bottom - rootBox.top + gap;
+  dropdown.style.top = `${Math.max(8, top)}px`;
+};
+
 export function Workshop({ initial }: { readonly initial: WorkshopState }) {
+  const addons = useRef<HTMLElement>(null);
   const [story, setStory] = useState(initial.story);
   const [recordIds, setRecordIds] = useState(() => initial.records.map((record) => record.id));
   const nextRecord = useRef(initial.records.length + 1);
@@ -455,6 +476,26 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
     if (name !== undefined) dial.setValue("providerName", name);
   }, [dial, providerId, story]);
 
+  useEffect(() => {
+    const host = addons.current;
+    if (host === null) return;
+    const attach = (dropdown: HTMLElement) => {
+      const root = dropdown.closest(".dialkit-root");
+      if (root instanceof HTMLElement) constrainSelectDropdown(root, dropdown);
+    };
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node instanceof HTMLElement && node.classList.contains("dialkit-select-dropdown")) {
+            requestAnimationFrame(() => attach(node));
+          }
+        }
+      }
+    });
+    observer.observe(host, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div data-scheme={state.colorScheme} data-workshop="">
       <nav aria-label="Stories" data-react-grab-ignore="" data-workshop-sidebar="">
@@ -491,7 +532,12 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
           </div>
         </div>
       </div>
-      <section aria-label="Controls" data-react-grab-ignore="" data-workshop-addons="">
+      <section
+        aria-label="Controls"
+        data-react-grab-ignore=""
+        data-workshop-addons=""
+        ref={addons}
+      >
         <DialRoot mode="inline" theme={state.colorScheme} />
       </section>
     </div>

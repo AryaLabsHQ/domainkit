@@ -12,6 +12,7 @@ body,
 
 [data-workshop] {
   --workshop-accent: #18181b;
+  --workshop-control: #2563eb;
   --workshop-bg: #f4f4f5;
   --workshop-border: #e4e4e7;
   --workshop-canvas: #fafafa;
@@ -32,6 +33,7 @@ body,
 
 [data-workshop][data-scheme="dark"] {
   --workshop-accent: #fafafa;
+  --workshop-control: #60a5fa;
   --workshop-bg: #18181b;
   --workshop-border: #27272a;
   --workshop-canvas: #09090b;
@@ -165,4 +167,100 @@ body,
 [data-workshop-addons] .dialkit-folder-title:not(.dialkit-folder-title-root) {
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+[data-workshop-addons] .dialkit-root {
+  --dial-border: var(--workshop-border);
+  --dial-border-hover: color-mix(in srgb, var(--workshop-control) 28%, var(--workshop-border));
+  --dial-dropdown-bg: var(--workshop-fill);
+  --dial-glass-bg: var(--workshop-fill);
+  --dial-shadow-dropdown: 0 16px 40px rgb(15 23 42 / 22%);
+  --dial-surface: var(--workshop-fill);
+  --dial-surface-active: color-mix(in srgb, var(--workshop-control) 10%, var(--workshop-fill));
+  --dial-surface-hover: var(--workshop-bg);
+  --dial-surface-subtle: var(--workshop-border);
+  --dial-text-focus: var(--workshop-text);
+  --dial-text-label: var(--workshop-muted);
+  --dial-text-primary: var(--workshop-text);
+  --dial-text-root: var(--workshop-text);
+  --dial-text-section: var(--workshop-muted);
+}
+
+[data-workshop-addons] .dialkit-select-trigger,
+[data-workshop-addons] .dialkit-preset-trigger,
+[data-workshop-addons] .dialkit-toolbar-add,
+[data-workshop-addons] .dialkit-button {
+  background: var(--workshop-fill);
+  border: 1px solid var(--workshop-border);
+  box-shadow: 0 1px 0 rgb(15 23 42 / 4%);
+}
+
+[data-workshop-addons] .dialkit-text-control {
+  background: var(--workshop-bg);
+  border: 1px solid var(--workshop-border);
+}
+
+[data-workshop-addons] .dialkit-select-label,
+[data-workshop-addons] .dialkit-text-label {
+  color: var(--workshop-muted);
+  font-weight: 500;
+}
+
+[data-workshop-addons] .dialkit-select-value,
+[data-workshop-addons] .dialkit-text-input,
+[data-workshop-addons] .dialkit-preset-trigger {
+  color: var(--workshop-text);
+  font-weight: 600;
+}
+
+[data-workshop-addons] .dialkit-select-chevron {
+  color: var(--workshop-muted);
+  opacity: 1;
+}
+
+[data-workshop-addons] .dialkit-select-trigger:hover,
+[data-workshop-addons] .dialkit-preset-trigger:hover,
+[data-workshop-addons] .dialkit-toolbar-add:hover,
+[data-workshop-addons] .dialkit-button:hover {
+  background: var(--workshop-bg);
+  border-color: color-mix(in srgb, var(--workshop-control) 22%, var(--workshop-border));
+}
+
+[data-workshop-addons] .dialkit-text-control:focus-within,
+[data-workshop-addons] .dialkit-select-trigger:focus-visible,
+[data-workshop-addons] .dialkit-select-trigger[data-open="true"],
+[data-workshop-addons] .dialkit-preset-trigger[data-open="true"] {
+  background: var(--workshop-fill);
+  border-color: var(--workshop-control);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--workshop-control) 22%, transparent);
+}
+
+[data-workshop-addons] .dialkit-select-trigger[data-open="true"] .dialkit-select-chevron {
+  color: var(--workshop-control);
+}
+
+[data-workshop-addons] .dialkit-select-dropdown {
+  background: var(--workshop-fill);
+  border: 1px solid var(--workshop-border);
+  box-shadow: var(--dial-shadow-dropdown);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  z-index: 20;
+}
+
+[data-workshop-addons] .dialkit-select-option {
+  border: 1px solid transparent;
+  color: var(--workshop-text);
+}
+
+[data-workshop-addons] .dialkit-select-option:hover {
+  background: var(--workshop-bg);
+}
+
+[data-workshop-addons] .dialkit-select-option[data-selected="true"] {
+  background: color-mix(in srgb, var(--workshop-control) 14%, var(--workshop-fill));
+  border-color: color-mix(in srgb, var(--workshop-control) 28%, transparent);
+  color: var(--workshop-control);
+  font-weight: 650;
 }
