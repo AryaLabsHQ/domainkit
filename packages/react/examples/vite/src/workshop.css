@@ -189,6 +189,21 @@ body,
   padding: 0.35rem 0.75rem;
 }
 
+[data-workshop-host-actions] {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+[data-workshop-host-actions] [data-domainkit-part="flow-outcome"] {
+  flex-basis: 100%;
+  order: 2;
+  text-align: end;
+}
+
 [data-scheme="dark"] [data-workshop-host-button] {
   background: #fafafa;
   color: #18181b;

@@ -5,9 +5,11 @@ import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
 import { Transport } from "domainkit";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Cleanup,
   Connection,
   Domain,
   DomainKit,
+  Provisioning,
   Provider,
   Records,
   Testing,
@@ -48,6 +50,7 @@ const defaultRecords: ReadonlyArray<Transport.DnsRecord> = [
 const stories = [
   { id: "connection", group: "Flows", title: "Connection" },
   { id: "host-connection", group: "Flows", title: "Host connection" },
+  { id: "host-lifecycle", group: "Flows", title: "Host lifecycle" },
   { id: "lifecycle", group: "Flows", title: "Domain" },
   { id: "records", group: "Presentational", title: "Records" },
   { id: "card", group: "Presentational", title: "Record Card" },
@@ -73,6 +76,7 @@ function isStoryId(value: string): value is StoryId {
     case "card":
     case "connection":
     case "host-connection":
+    case "host-lifecycle":
     case "lifecycle":
     case "provider":
     case "records":
@@ -151,7 +155,11 @@ const providerNames: Record<string, string> = Object.fromEntries(
 
 const usesDomain = (story: StoryId): boolean => story !== "provider";
 const usesRecords = (story: StoryId): boolean =>
-  story === "card" || story === "lifecycle" || story === "records" || story === "verification";
+  story === "card" ||
+  story === "host-lifecycle" ||
+  story === "lifecycle" ||
+  story === "records" ||
+  story === "verification";
 
 const asString = (value: unknown, fallback: string): string =>
   typeof value === "string" ? value : fallback;
@@ -290,7 +298,7 @@ function makeTransport(
       operations: [],
     } satisfies Transport.CleanupPlan,
     inspect:
-      state.story === "lifecycle"
+      state.story === "lifecycle" || state.story === "host-lifecycle"
         ? {
             _tag: "Connected",
             connectionId: "connection-1",
@@ -358,6 +366,53 @@ function HostConnectionRow({ domain }: { readonly domain: string }) {
   );
 }
 
+function HostLifecycleRow({
+  domain,
+  initialReceiptId,
+  records,
+}: {
+  readonly domain: string;
+  readonly initialReceiptId?: string;
+  readonly records: ReadonlyArray<Transport.DnsRecord>;
+}) {
+  const connection = Connection.useController(domain).state;
+  const [appliedReceiptId, setAppliedReceiptId] = useState<string>();
+  if (connection._tag !== "Connected") {
+    return <Connection.Status state={connection} />;
+  }
+  const receiptId = appliedReceiptId ?? initialReceiptId;
+  return (
+    <Connection.Root status={connection._tag}>
+      <div data-workshop-host-row="">
+        <div data-workshop-host-identity="">
+          <Provider.Mark provider={connection.provider} />
+          <div>
+            <strong>{connection.provider.name}</strong>
+            <p>Connected</p>
+          </div>
+        </div>
+        <div data-workshop-host-actions="">
+          {receiptId === undefined ? null : (
+            <Cleanup.Flow
+              connection={connection}
+              receiptId={receiptId}
+              style={{ display: "contents" }}
+            />
+          )}
+          <Connection.DisconnectAction connection={connection} style={{ display: "contents" }} />
+          <Provisioning.Flow
+            connection={connection}
+            onApplied={(result) => setAppliedReceiptId(result.receiptId)}
+            records={records}
+            showRecords={false}
+            style={{ display: "contents" }}
+          />
+        </div>
+      </div>
+    </Connection.Root>
+  );
+}
+
 function Preview({ state }: { readonly state: WorkshopState }) {
   const { domain, providerId, providerName, story } = state;
   const records = useRef(state.records);
@@ -380,6 +435,15 @@ function Preview({ state }: { readonly state: WorkshopState }) {
             <HostConnectionRow domain={state.domain} />
           </div>
         </div>
+      );
+      break;
+    case "host-lifecycle":
+      children = (
+        <HostLifecycleRow
+          domain={state.domain}
+          {...(state.receipt ? { initialReceiptId: "receipt-1" } : {})}
+          records={state.records}
+        />
       );
       break;
     case "lifecycle":
