@@ -177,22 +177,50 @@
 }
 
 :where([data-domainkit-part="cleanup-trigger"], [data-domainkit-part="disconnect-action"]) {
-  background: var(--domainkit-background);
+  background-color: var(--domainkit-background);
   border-color: var(--domainkit-border);
+  box-shadow:
+    var(--domainkit-button-raised-shadow),
+    inset 0 1px 0 var(--domainkit-button-raised-glint),
+    inset 0 -1px 0 var(--domainkit-button-raised-shade);
   color: var(--domainkit-danger);
 }
 
 :where(
-  [data-domainkit-part="cleanup-trigger"]:hover,
-  [data-domainkit-part="disconnect-action"]:hover
+  [data-domainkit-part="cleanup-trigger"]:hover:not(:disabled),
+  [data-domainkit-part="disconnect-action"]:hover:not(:disabled)
 ) {
-  background: color-mix(in srgb, var(--domainkit-danger) 8%, var(--domainkit-background));
+  background-color: color-mix(in srgb, var(--domainkit-danger) 8%, var(--domainkit-background));
 }
 
 :where([data-domainkit-part="cleanup-apply"]) {
-  background: var(--domainkit-danger);
-  border-color: var(--domainkit-danger);
+  --domainkit-button-face: color-mix(in oklch, var(--domainkit-danger), white 22%);
+  --domainkit-button-glint: color-mix(in oklch, var(--domainkit-danger), white 42%);
+  --domainkit-button-edge: color-mix(in oklch, var(--domainkit-danger), black 18%);
+  background-color: var(--domainkit-danger);
+  background-image: linear-gradient(
+    to bottom,
+    var(--domainkit-button-face),
+    var(--domainkit-danger)
+  );
+  border-color: var(--domainkit-button-edge);
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.18),
+    inset 0 1px 0 var(--domainkit-button-glint);
   color: var(--domainkit-accent-contrast);
+}
+
+:where([data-domainkit-part="cleanup-apply"]:hover:not(:disabled)) {
+  --domainkit-button-face: color-mix(in oklch, var(--domainkit-danger), white 28%);
+}
+
+:where([data-domainkit-part="cleanup-apply"]:active:not(:disabled)) {
+  background-image: linear-gradient(
+    to bottom,
+    var(--domainkit-danger),
+    color-mix(in oklch, var(--domainkit-danger), black 10%)
+  );
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.28);
 }
 
 :where([data-domainkit-part="dialog-cancel"], [data-domainkit-part="dialog-close"]) {
