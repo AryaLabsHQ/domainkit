@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import { useMemo } from "react";
 
-import { failureFromCause } from "./atom.ts";
+import { failureFromCause, type Failure } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
@@ -25,7 +25,7 @@ export type State =
       readonly result: Extract<Transport.CleanupResult, { readonly _tag: "Partial" }>;
     }
   | { readonly _tag: "Stale"; readonly message: string }
-  | Transport.Failure;
+  | Failure;
 
 type Command = Data.TaggedEnum<{
   Apply: { readonly plan: Transport.CleanupPlan };

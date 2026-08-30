@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import { useMemo } from "react";
 
-import { failureFromCause, recordsIdentity } from "./atom.ts";
+import { failureFromCause, recordsIdentity, type Failure } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
@@ -14,7 +14,7 @@ export type State =
   | { readonly _tag: "Idle" }
   | { readonly _tag: "Observing" }
   | Transport.Observation
-  | Transport.Failure;
+  | Failure;
 
 export interface ObserveConfig {
   readonly connection?: Transport.Connected;

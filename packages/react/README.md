@@ -46,6 +46,11 @@ export function DomainSetup() {
 
 `Provisioning.Flow` accepts `showRecords={false}` when the host already renders the DNS record list with `Records.Table`.
 
+Effect applications can compose connection UI directly from `Connection.useModel(domain)`. The
+model exposes `state` and `command` atoms; dispatch values with the exported
+`Connection.Command` constructors. `Connection.useController` and `Connection.Flow` consume that
+same model rather than maintaining a second state machine.
+
 ## Transport ownership
 
 `DomainKit.Root` receives a `Layer<Transport.Service>`. Controllers run the service through Effect Atom, so request interruption, stale result suppression, and subtree disposal follow the Effect lifecycle. Implement the service with authenticated application endpoints. Do not place provider credentials or provider API clients in the browser.

@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import { useMemo, useRef } from "react";
 
-import { failureFromCause, recordsIdentity } from "./atom.ts";
+import { failureFromCause, recordsIdentity, type Failure } from "./atom.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
@@ -26,7 +26,7 @@ export type State =
       readonly result: Extract<Transport.ApplyResult, { readonly _tag: "Partial" }>;
     }
   | { readonly _tag: "Stale"; readonly message: string }
-  | Transport.Failure;
+  | Failure;
 
 export interface Controller {
   readonly apply: () => void;

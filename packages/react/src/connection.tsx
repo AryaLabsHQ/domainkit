@@ -1,5 +1,5 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Transport } from "domainkit";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -16,12 +16,12 @@ import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import * as Provider from "./provider.tsx";
-import { failureFromCause } from "./atom.ts";
+import { failureFromCause, type Failure } from "./atom.ts";
 
 export type State =
   | { readonly _tag: "Loading" }
   | Transport.ConnectionSnapshot
-  | Transport.Failure
+  | Failure
   | { readonly _tag: "Submitting"; readonly snapshot: Disconnected }
   | { readonly _tag: "Redirecting"; readonly snapshot: Disconnected };
 
@@ -34,88 +34,104 @@ export interface Controller {
   readonly state: State;
 }
 
-type Command = Data.TaggedEnum<{
-  Connect: { readonly method: Transport.Method; readonly snapshot: Disconnected };
-  Reuse: { readonly connectionId: string; readonly snapshot: Disconnected };
+export type Command = Data.TaggedEnum<{
+  Connect: { readonly method: Transport.Method };
+  Retry: {};
+  Reuse: {};
 }>;
-const Command = Data.taggedEnum<Command>();
+export const Command = Data.taggedEnum<Command>();
 
-export function useController(domain: string): Controller {
+export interface Model {
+  readonly command: Atom.AtomResultFn<Command, void>;
+  readonly state: Atom.Atom<State>;
+}
+
+export function useModel(domain: string): Model {
   const { navigate, runtime } = useDomainKit();
-  const controller = useMemo(() => {
+  return useMemo(() => {
     const actionState = Atom.make<State | undefined>(undefined);
     const inspect = runtime.atom(
       Effect.flatMap(Transport.Service, (transport) => transport.connection.inspect({ domain })),
     );
-    const execute = runtime.fn<Command>()((command, get) => {
-      get.set(actionState, { _tag: "Submitting", snapshot: command.snapshot });
-      const request = Effect.flatMap(Transport.Service, (transport) =>
-        command._tag === "Connect"
-          ? transport.connection.connect({
-              domain,
-              method: command.method,
-              providerId: command.snapshot.provider.id,
-            })
-          : transport.connection.reuse({ connectionId: command.connectionId, domain }),
-      );
-      return request.pipe(
-        Effect.tap((result) =>
-          Effect.sync(() => {
-            if (result._tag === "Redirect") {
-              get.set(actionState, { _tag: "Redirecting", snapshot: command.snapshot });
-              navigate(result.authorizationUrl);
-            } else {
-              get.set(actionState, result);
-            }
-          }),
-        ),
-        Effect.catchCause((cause) =>
-          Effect.sync(() =>
-            get.set(
-              actionState,
-              failureFromCause(
-                cause,
-                command._tag === "Connect" ? "connection.connect" : "connection.reuse",
-                "The connection request failed",
+    const state = Atom.make((get): State => {
+      const action = get(actionState);
+      if (action !== undefined) return action;
+      const inspection = get(inspect);
+      return inspection._tag === "Success"
+        ? inspection.value
+        : inspection._tag === "Failure"
+          ? failureFromCause(inspection.cause, "connection.inspect", "Provider detection failed")
+          : { _tag: "Loading" };
+    });
+    const command = runtime.fn<Command>()((input, get) => {
+      if (input._tag === "Retry") {
+        get.set(actionState, undefined);
+        get.refresh(inspect);
+        return Effect.void;
+      }
+      const snapshot = get(state);
+      if (snapshot._tag !== "Disconnected") return Effect.void;
+      const reusableConnection = snapshot.reusableConnection;
+      if (input._tag === "Reuse" && reusableConnection === undefined) return Effect.void;
+      get.set(actionState, { _tag: "Submitting", snapshot });
+      const complete = (
+        request: Effect.Effect<Transport.ConnectionResult, Transport.Failure, Transport.Service>,
+        operation: string,
+      ) =>
+        request.pipe(
+          Effect.tap((result) =>
+            Effect.sync(() => {
+              if (result._tag === "Redirect") {
+                get.set(actionState, { _tag: "Redirecting", snapshot });
+                navigate(result.authorizationUrl);
+              } else {
+                get.set(actionState, result);
+              }
+            }),
+          ),
+          Effect.catchCause((cause) =>
+            Effect.sync(() =>
+              get.set(
+                actionState,
+                failureFromCause(cause, operation, "The connection request failed"),
               ),
             ),
           ),
+          Effect.asVoid,
+        );
+      if (input._tag === "Connect") {
+        return complete(
+          Effect.flatMap(Transport.Service, (transport) =>
+            transport.connection.connect({
+              domain,
+              method: input.method,
+              providerId: snapshot.provider.id,
+            }),
+          ),
+          "connection.connect",
+        );
+      }
+      if (reusableConnection === undefined) return Effect.void;
+      return complete(
+        Effect.flatMap(Transport.Service, (transport) =>
+          transport.connection.reuse({ connectionId: reusableConnection.connectionId, domain }),
         ),
-        Effect.asVoid,
+        "connection.reuse",
       );
     });
-    return { actionState, execute, inspect };
+    return { command, state };
   }, [domain, navigate, runtime]);
-  const inspection = useAtomValue(controller.inspect);
-  const actionState = useAtomValue(controller.actionState);
-  const setActionState = useAtomSet(controller.actionState);
-  const execute = useAtomSet(controller.execute);
-  const refresh = useAtomRefresh(controller.inspect);
-  const state: State =
-    actionState ??
-    (inspection._tag === "Success"
-      ? inspection.value
-      : inspection._tag === "Failure"
-        ? failureFromCause(inspection.cause, "connection.inspect", "Provider detection failed")
-        : { _tag: "Loading" });
+}
+
+export function useController(domain: string): Controller {
+  const model = useModel(domain);
+  const state = useAtomValue(model.state);
+  const execute = useAtomSet(model.command);
 
   return {
-    connect: (method) => {
-      if (state._tag === "Disconnected") execute(Command.Connect({ method, snapshot: state }));
-    },
-    retry: () => {
-      setActionState(undefined);
-      refresh();
-    },
-    reuse: () => {
-      if (state._tag === "Disconnected" && state.reusableConnection !== undefined)
-        execute(
-          Command.Reuse({
-            connectionId: state.reusableConnection.connectionId,
-            snapshot: state,
-          }),
-        );
-    },
+    connect: (method) => execute(Command.Connect({ method })),
+    retry: () => execute(Command.Retry()),
+    reuse: () => execute(Command.Reuse()),
     state,
   };
 }
@@ -439,7 +455,7 @@ export type DisconnectState =
   | { readonly _tag: "Idle" }
   | { readonly _tag: "Disconnecting" }
   | Transport.RemoveDomainResult
-  | Transport.Failure;
+  | Failure;
 
 export function useDisconnect(connection: Transport.Connected) {
   const { runtime } = useDomainKit();

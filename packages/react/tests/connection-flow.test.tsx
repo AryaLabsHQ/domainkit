@@ -1,5 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Transport } from "domainkit";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -19,6 +20,33 @@ const disconnected = (reusable = false) => ({
 });
 
 describe("Connection.Flow", () => {
+  it("exposes the same Atom model to custom host UI", async () => {
+    const transport = Testing.makeFakeTransport({ inspect: disconnected() });
+    const CustomConnection = () => {
+      const model = Connection.useModel("mail.example.com");
+      const state = useAtomValue(model.state);
+      const command = useAtomSet(model.command);
+      return state._tag === "Disconnected" ? (
+        <button
+          onClick={() => command(Connection.Command.Connect({ method: Transport.Method.OAuth() }))}
+        >
+          Custom connect
+        </button>
+      ) : (
+        <span>{state._tag}</span>
+      );
+    };
+    render(
+      <DomainKit.Root transport={transport}>
+        <CustomConnection />
+      </DomainKit.Root>,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "Custom connect" }));
+    expect(await screen.findByText("Connected")).toBeTruthy();
+    expect(transport.calls.connect).toHaveLength(1);
+  });
+
   it("runs a canonical Effect transport layer", async () => {
     const service = Transport.Service.of({
       cleanup: {

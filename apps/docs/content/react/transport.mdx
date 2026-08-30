@@ -57,6 +57,10 @@ export const transport = Transport.layerFromAsync({
 
 Successful outcomes use schema-backed tagged models. Failures use `Transport.Failure` in the Effect error channel. Decode untrusted request, database, and provider data at your server boundary before mapping it into these browser-safe wire types.
 
+Custom UI can consume `Connection.useModel(domain)` with `useAtomValue(model.state)` and
+`useAtomSet(model.command)`. Dispatch commands with `Connection.Command.Connect`, `Reuse`, and
+`Retry`; the packaged controller and flow use the same atoms.
+
 <Callout type="warning" title="No browser credentials">
   A token input may collect a credential, but submit it directly to your authenticated server
   endpoint. Never construct a Cloudflare or Vercel provider client in browser code.
