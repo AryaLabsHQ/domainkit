@@ -12,7 +12,7 @@ import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import type { Icons } from "./icons.tsx";
 import { IconsProvider } from "./icons.tsx";
-import type { Catalog, ResolvedCatalog } from "./messages.ts";
+import type { Catalog } from "./messages.ts";
 import { merge as mergeMessages } from "./messages.ts";
 import type { Marks } from "./provider.tsx";
 import type { Theme } from "./theme.ts";
@@ -39,7 +39,7 @@ interface ContextValue {
   readonly colorScheme: RootState["colorScheme"];
   readonly navigate: (url: string) => void;
   readonly marks: Marks;
-  readonly messages: ResolvedCatalog;
+  readonly messages: Catalog;
   readonly portalContainer: RefObject<HTMLElement | null>;
   readonly themeStyle: ReturnType<typeof toStyle>;
   readonly transport: DomainKitTransport;
