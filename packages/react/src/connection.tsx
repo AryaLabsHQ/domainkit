@@ -6,10 +6,12 @@ import {
   useState,
   type ComponentPropsWithoutRef,
   type FormEvent,
-  type ReactNode,
 } from "react";
 
+import type { PartProps } from "./composition.tsx";
+import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
+import * as Provider from "./provider.tsx";
 import type { AuthenticationMethod, Connected, ConnectionSnapshot, Failure } from "./transport.ts";
 
 export type State =
@@ -116,41 +118,59 @@ export function useController(domain: string): Controller {
   };
 }
 
-export interface RootProps extends ComponentPropsWithoutRef<"div"> {
-  readonly children: ReactNode;
+export interface RootState extends Record<string, unknown> {
+  readonly status: State["_tag"];
 }
 
-export function Root({ children, ...props }: RootProps) {
-  return (
-    <div data-domainkit-part="connection-root" {...props}>
-      {children}
-    </div>
+export interface RootProps extends PartProps<"div", RootState> {
+  readonly status?: State["_tag"];
+}
+
+export function Root({ children, status = "Loading", ...props }: RootProps) {
+  return usePart(
+    "div",
+    props,
+    { status },
+    {
+      children,
+      "data-domainkit-part": "connection-root",
+    },
   );
 }
 
-export interface StatusProps extends ComponentPropsWithoutRef<"div"> {
+export interface StatusState extends Record<string, unknown> {
+  readonly status: State["_tag"];
+}
+
+export interface StatusProps extends PartProps<"div", StatusState> {
   readonly state: State;
 }
 
 export function Status({ state, ...props }: StatusProps) {
+  const { messages } = useDomainKit();
   const text =
     state._tag === "Loading"
-      ? "Detecting DNS provider…"
+      ? messages.detectingProvider
       : state._tag === "Connected"
-        ? `${state.provider.name} connected`
+        ? messages.connected(state.provider.name)
         : state._tag === "Unsupported"
-          ? "Automatic connection is not available for this domain"
+          ? messages.automaticUnavailable
           : state._tag === "Failure"
             ? state.message
             : state._tag === "Redirecting"
-              ? "Opening provider authorization…"
+              ? messages.openingAuthorization
               : state._tag === "Submitting"
-                ? "Connecting…"
+                ? messages.connecting
                 : `${state.provider.name} is available`;
-  return (
-    <div data-domainkit-part="connection-status" data-state={state._tag} {...props}>
-      {text}
-    </div>
+  return usePart(
+    "div",
+    props,
+    { status: state._tag },
+    {
+      children: text,
+      "data-domainkit-part": "connection-status",
+      "data-state": state._tag,
+    },
   );
 }
 
@@ -159,28 +179,65 @@ export interface TriggerProps extends ComponentPropsWithoutRef<typeof BaseDialog
 }
 
 export function Trigger({ providerName, ...props }: TriggerProps) {
+  const { messages } = useDomainKit();
   return (
     <BaseDialog.Trigger data-domainkit-part="connection-trigger" {...props}>
-      Connect {providerName}
+      {messages.connectProvider(providerName)}
     </BaseDialog.Trigger>
   );
 }
 
-interface MethodProps {
-  readonly controller: Controller;
-  readonly method: AuthenticationMethod;
+export interface ActionState extends Record<string, unknown> {
+  readonly authentication: "oauth" | "reuse" | "token";
 }
 
-function Method({ controller, method }: MethodProps) {
+export interface OAuthActionProps extends PartProps<"button", ActionState> {
+  readonly controller: Controller;
+  readonly label: string;
+}
+
+export function OAuthAction({ controller, label, ...props }: OAuthActionProps) {
+  return usePart(
+    "button",
+    props,
+    { authentication: "oauth" },
+    {
+      children: label,
+      "data-domainkit-part": "oauth-connect",
+      onClick: () => void controller.connect("oauth"),
+      type: "button",
+    },
+  );
+}
+
+export interface ReuseActionProps extends PartProps<"button", ActionState> {
+  readonly controller: Controller;
+  readonly label: string;
+}
+
+export function ReuseAction({ controller, label, ...props }: ReuseActionProps) {
+  return usePart(
+    "button",
+    props,
+    { authentication: "reuse" },
+    {
+      children: label,
+      "data-domainkit-part": "reuse-connection",
+      onClick: () => void controller.reuse(),
+      type: "button",
+    },
+  );
+}
+
+export interface TokenActionProps extends Omit<PartProps<"form", ActionState>, "method"> {
+  readonly controller: Controller;
+  readonly method: Extract<AuthenticationMethod, { readonly _tag: "Token" }>;
+}
+
+export function TokenAction({ controller, method, ...props }: TokenActionProps) {
+  const { messages } = useDomainKit();
   const [token, setToken] = useState("");
   const [parameters, setParameters] = useState<Readonly<Record<string, string>>>({});
-  if (method._tag === "OAuth") {
-    return (
-      <button data-domainkit-part="oauth-connect" onClick={() => void controller.connect("oauth")}>
-        {method.label}
-      </button>
-    );
-  }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (token.length > 0) {
@@ -197,43 +254,52 @@ function Method({ controller, method }: MethodProps) {
   const missingRequiredParameter = method.parameters?.some(
     (parameter) => parameter.required === true && !parameters[parameter.key],
   );
-  return (
-    <form data-domainkit-part="token-connect" onSubmit={submit}>
-      {method.parameters?.map((parameter) => (
-        <label key={parameter.key}>
-          {parameter.label}
-          <input
-            name={parameter.key}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              setParameters((current) => ({
-                ...current,
-                [parameter.key]: value,
-              }));
-            }}
-            placeholder={parameter.placeholder}
-            required={parameter.required}
-            type="text"
-            value={parameters[parameter.key] ?? ""}
-          />
-          {parameter.description === undefined ? null : <small>{parameter.description}</small>}
-        </label>
-      ))}
-      <label>
-        API token
-        <input
-          autoComplete="off"
-          name="token"
-          onChange={(event) => setToken(event.currentTarget.value)}
-          placeholder={method.placeholder}
-          type="password"
-          value={token}
-        />
-      </label>
-      <button disabled={token.length === 0 || missingRequiredParameter === true} type="submit">
-        {method.label}
-      </button>
-    </form>
+  return usePart(
+    "form",
+    props,
+    { authentication: "token" },
+    {
+      children: (
+        <>
+          {method.parameters?.map((parameter) => (
+            <label key={parameter.key}>
+              {parameter.label}
+              <input
+                name={parameter.key}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setParameters((current) => ({
+                    ...current,
+                    [parameter.key]: value,
+                  }));
+                }}
+                placeholder={parameter.placeholder}
+                required={parameter.required}
+                type="text"
+                value={parameters[parameter.key] ?? ""}
+              />
+              {parameter.description === undefined ? null : <small>{parameter.description}</small>}
+            </label>
+          ))}
+          <label>
+            {messages.tokenLabel}
+            <input
+              autoComplete="off"
+              name="token"
+              onChange={(event) => setToken(event.currentTarget.value)}
+              placeholder={method.placeholder}
+              type="password"
+              value={token}
+            />
+          </label>
+          <button disabled={token.length === 0 || missingRequiredParameter === true} type="submit">
+            {method.label}
+          </button>
+        </>
+      ),
+      "data-domainkit-part": "token-connect",
+      onSubmit: submit,
+    },
   );
 }
 
@@ -243,23 +309,51 @@ export interface DialogProps {
 }
 
 export function Dialog({ controller, snapshot }: DialogProps) {
+  const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   return (
-    <BaseDialog.Portal>
+    <BaseDialog.Portal container={portalContainer}>
       <BaseDialog.Backdrop data-domainkit-part="dialog-backdrop" />
-      <BaseDialog.Popup data-domainkit-part="connection-dialog">
-        <BaseDialog.Title>Connect {snapshot.provider.name}</BaseDialog.Title>
-        <BaseDialog.Description>
-          Authorize DNS changes for {snapshot.domain}.
-        </BaseDialog.Description>
-        {snapshot.reusableConnection === undefined ? null : (
-          <button data-domainkit-part="reuse-connection" onClick={() => void controller.reuse()}>
-            Use {snapshot.reusableConnection.label}
-          </button>
-        )}
-        {snapshot.provider.authentication.map((method) => (
-          <Method controller={controller} key={method._tag} method={method} />
-        ))}
-        <BaseDialog.Close>Cancel</BaseDialog.Close>
+      <BaseDialog.Popup
+        data-domainkit-part="connection-dialog"
+        data-domainkit-root=""
+        data-color-scheme={colorScheme}
+        style={themeStyle}
+      >
+        <div data-domainkit-part="dialog-header">
+          <Provider.Mark provider={snapshot.provider} />
+          <div data-domainkit-part="dialog-heading">
+            <BaseDialog.Title data-domainkit-part="dialog-title">
+              {messages.dialogTitle(snapshot.provider.name)}
+            </BaseDialog.Title>
+            <BaseDialog.Description data-domainkit-part="dialog-description">
+              {messages.dialogDescription(snapshot.domain)}
+            </BaseDialog.Description>
+          </div>
+          <BaseDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
+            ×
+          </BaseDialog.Close>
+        </div>
+        <div data-domainkit-part="dialog-body">
+          {snapshot.provider.authentication.map((method) =>
+            method._tag === "OAuth" ? (
+              <OAuthAction controller={controller} key={method._tag} label={method.label} />
+            ) : null,
+          )}
+          {snapshot.reusableConnection === undefined ? null : (
+            <ReuseAction
+              controller={controller}
+              label={messages.reuseConnection(snapshot.reusableConnection.label)}
+            />
+          )}
+          {snapshot.provider.authentication.map((method) =>
+            method._tag === "Token" ? (
+              <TokenAction controller={controller} key={method._tag} method={method} />
+            ) : null,
+          )}
+        </div>
+        <div data-domainkit-part="dialog-footer">
+          <BaseDialog.Close data-domainkit-part="dialog-cancel">{messages.cancel}</BaseDialog.Close>
+        </div>
       </BaseDialog.Popup>
     </BaseDialog.Portal>
   );
@@ -279,12 +373,13 @@ export function Flow({ domain, ...props }: FlowProps) {
         ? state.snapshot
         : undefined;
   return (
-    <Root {...props}>
+    <Root {...props} status={state._tag}>
       <Status state={state} />
       {state._tag === "Failure" && state.retry !== "never" ? (
-        <button onClick={controller.retry}>
-          {state.retry === "after-user-action" ? "Check again" : "Try again"}
-        </button>
+        <RetryAction
+          controller={controller}
+          kind={state.retry === "after-user-action" ? "after-user-action" : "retry"}
+        />
       ) : null}
       {snapshot === undefined ? null : (
         <BaseDialog.Root>
@@ -293,6 +388,26 @@ export function Flow({ domain, ...props }: FlowProps) {
         </BaseDialog.Root>
       )}
     </Root>
+  );
+}
+
+export interface RetryActionProps extends PartProps<"button", { readonly status: "Failure" }> {
+  readonly controller: Controller;
+  readonly kind?: "after-user-action" | "retry";
+}
+
+export function RetryAction({ controller, kind = "retry", ...props }: RetryActionProps) {
+  const { messages } = useDomainKit();
+  return usePart(
+    "button",
+    props,
+    { status: "Failure" },
+    {
+      children: kind === "after-user-action" ? messages.checkAgain : messages.retry,
+      "data-domainkit-part": "connection-retry",
+      onClick: controller.retry,
+      type: "button",
+    },
   );
 }
 

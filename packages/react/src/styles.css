@@ -1,0 +1,336 @@
+:where([data-domainkit-root]) {
+  --domainkit-accent: #0070f3;
+  --domainkit-accent-contrast: #ffffff;
+  --domainkit-background: #ffffff;
+  --domainkit-border: #d4d4d8;
+  --domainkit-danger: #dc2626;
+  --domainkit-fill: #f4f4f5;
+  --domainkit-font-family: ui-sans-serif, system-ui, sans-serif;
+  --domainkit-muted: #52525b;
+  --domainkit-radius: 0.75rem;
+  --domainkit-shadow: 0 16px 40px rgb(15 23 42 / 0.12);
+  --domainkit-success: #059669;
+  --domainkit-text: #18181b;
+  --domainkit-control-radius: calc(var(--domainkit-radius) * 0.5);
+  --domainkit-button-raised-glint: rgb(255 255 255 / 0.95);
+  --domainkit-button-raised-shade: rgb(15 23 42 / 0.1);
+  --domainkit-button-raised-shadow: 0 1px 2px rgb(15 23 42 / 0.1);
+  color: var(--domainkit-text);
+  color-scheme: light;
+  font-family: var(--domainkit-font-family);
+}
+
+:where([data-domainkit-root][data-color-scheme="dark"]) {
+  --domainkit-background: #18181b;
+  --domainkit-border: #3f3f46;
+  --domainkit-fill: #27272a;
+  --domainkit-muted: #a1a1aa;
+  --domainkit-shadow: 0 16px 40px rgb(0 0 0 / 0.4);
+  --domainkit-success: #34d399;
+  --domainkit-text: #fafafa;
+  --domainkit-button-raised-glint: rgb(255 255 255 / 0.14);
+  --domainkit-button-raised-shade: rgb(0 0 0 / 0.42);
+  --domainkit-button-raised-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :where([data-domainkit-root][data-color-scheme="inherit"]) {
+    --domainkit-background: #18181b;
+    --domainkit-border: #3f3f46;
+    --domainkit-fill: #27272a;
+    --domainkit-muted: #a1a1aa;
+    --domainkit-shadow: 0 16px 40px rgb(0 0 0 / 0.4);
+    --domainkit-success: #34d399;
+    --domainkit-text: #fafafa;
+    --domainkit-button-raised-glint: rgb(255 255 255 / 0.14);
+    --domainkit-button-raised-shade: rgb(0 0 0 / 0.42);
+    --domainkit-button-raised-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+    color-scheme: dark;
+  }
+}
+
+:where([data-domainkit-part="connection-root"]) {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+
+:where([data-domainkit-part="connection-status"]) {
+  color: var(--domainkit-muted);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+:where([data-domainkit-part="connection-status"][data-state="Connected"]) {
+  color: var(--domainkit-success);
+  font-weight: 500;
+}
+
+:where([data-domainkit-part="connection-status"][data-state="Failure"]) {
+  color: var(--domainkit-danger);
+}
+
+:where(
+  [data-domainkit-part="connection-trigger"],
+  [data-domainkit-part="oauth-connect"],
+  [data-domainkit-part="reuse-connection"],
+  [data-domainkit-part="connection-retry"],
+  [data-domainkit-part="token-connect"] button,
+  [data-domainkit-part="dialog-cancel"],
+  [data-domainkit-part="dialog-close"]
+) {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--domainkit-control-radius);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  justify-content: center;
+  line-height: 1.2;
+  min-height: 2.25rem;
+  padding: 0.45rem 0.85rem;
+  transition:
+    background-color 120ms ease,
+    background-image 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+:where([data-domainkit-part="connection-trigger"], [data-domainkit-part="oauth-connect"]) {
+  --domainkit-button-face: color-mix(in oklch, var(--domainkit-accent), white 22%);
+  --domainkit-button-glint: color-mix(in oklch, var(--domainkit-accent), white 42%);
+  --domainkit-button-edge: color-mix(in oklch, var(--domainkit-accent), black 18%);
+  background-color: var(--domainkit-accent);
+  background-image: linear-gradient(
+    to bottom,
+    var(--domainkit-button-face),
+    var(--domainkit-accent)
+  );
+  border-color: var(--domainkit-button-edge);
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.18),
+    inset 0 1px 0 var(--domainkit-button-glint);
+  color: var(--domainkit-accent-contrast);
+}
+
+:where(
+  [data-domainkit-part="connection-trigger"]:hover:not(:disabled),
+  [data-domainkit-part="oauth-connect"]:hover:not(:disabled)
+) {
+  --domainkit-button-face: color-mix(in oklch, var(--domainkit-accent), white 28%);
+}
+
+:where(
+  [data-domainkit-part="connection-trigger"]:active:not(:disabled),
+  [data-domainkit-part="oauth-connect"]:active:not(:disabled)
+) {
+  background-image: linear-gradient(
+    to bottom,
+    var(--domainkit-accent),
+    color-mix(in oklch, var(--domainkit-accent), black 10%)
+  );
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.28);
+}
+
+:where(
+  [data-domainkit-part="reuse-connection"],
+  [data-domainkit-part="connection-retry"],
+  [data-domainkit-part="token-connect"] button
+) {
+  background-color: var(--domainkit-background);
+  border-color: var(--domainkit-border);
+  box-shadow:
+    var(--domainkit-button-raised-shadow),
+    inset 0 1px 0 var(--domainkit-button-raised-glint),
+    inset 0 -1px 0 var(--domainkit-button-raised-shade);
+  color: var(--domainkit-text);
+}
+
+:where(
+  [data-domainkit-part="reuse-connection"]:hover:not(:disabled),
+  [data-domainkit-part="connection-retry"]:hover:not(:disabled),
+  [data-domainkit-part="token-connect"] button:hover:not(:disabled)
+) {
+  background-color: var(--domainkit-fill);
+}
+
+:where([data-domainkit-part="dialog-cancel"], [data-domainkit-part="dialog-close"]) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--domainkit-muted);
+}
+
+:where([data-domainkit-part="dialog-cancel"]:hover, [data-domainkit-part="dialog-close"]:hover) {
+  background: var(--domainkit-fill);
+  color: var(--domainkit-text);
+}
+
+:where([data-domainkit-part="dialog-close"]) {
+  flex: none;
+  min-height: 2rem;
+  padding: 0;
+  width: 2rem;
+}
+
+:where([data-domainkit-part]:disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+:where([data-domainkit-part="dialog-backdrop"]) {
+  background: rgb(15 23 42 / 0.45);
+  inset: 0;
+  position: fixed;
+  transition: opacity 150ms ease;
+  z-index: 1000;
+}
+
+:where([data-domainkit-part="connection-dialog"]) {
+  background: var(--domainkit-background);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-radius);
+  box-shadow: var(--domainkit-shadow);
+  color: var(--domainkit-text);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  left: 50%;
+  max-height: calc(100vh - 2rem);
+  max-width: calc(100vw - 2rem);
+  overflow: hidden;
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+  width: 24rem;
+  z-index: 1001;
+}
+
+:where(
+  [data-domainkit-part="connection-dialog"][data-starting-style],
+  [data-domainkit-part="connection-dialog"][data-ending-style]
+) {
+  opacity: 0;
+  transform: translate(-50%, -48%) scale(0.98);
+}
+
+:where([data-domainkit-part="dialog-header"]) {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--domainkit-border);
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0.85rem;
+}
+
+:where([data-domainkit-part="dialog-heading"]) {
+  display: grid;
+  flex: 1;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+:where([data-domainkit-part="dialog-title"]) {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+
+:where([data-domainkit-part="dialog-description"]) {
+  color: var(--domainkit-muted);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+:where([data-domainkit-part="dialog-body"]) {
+  display: grid;
+  gap: 0.65rem;
+  overflow: auto;
+  padding: 1rem;
+}
+
+:where([data-domainkit-part="dialog-body"] [data-domainkit-part="oauth-connect"]),
+:where([data-domainkit-part="dialog-body"] [data-domainkit-part="reuse-connection"]) {
+  width: 100%;
+}
+
+:where([data-domainkit-part="dialog-footer"]) {
+  border-top: 1px solid var(--domainkit-border);
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 1rem;
+}
+
+:where([data-domainkit-part="provider-mark"]) {
+  align-items: center;
+  background: var(--domainkit-fill);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-control-radius);
+  display: inline-flex;
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  height: 2rem;
+  justify-content: center;
+  overflow: hidden;
+  width: 2rem;
+}
+
+:where([data-domainkit-part="provider-mark"] img) {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+:where([data-domainkit-part="token-connect"]) {
+  background: var(--domainkit-fill);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-control-radius);
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.75rem;
+}
+
+:where([data-domainkit-part="token-connect"] label) {
+  color: var(--domainkit-muted);
+  display: grid;
+  font-size: 0.8125rem;
+  gap: 0.35rem;
+}
+
+:where([data-domainkit-part="token-connect"] small) {
+  color: var(--domainkit-muted);
+  font-size: 0.75rem;
+}
+
+:where([data-domainkit-part="token-connect"] input) {
+  background: var(--domainkit-background);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-control-radius);
+  color: var(--domainkit-text);
+  font: inherit;
+  min-height: 2.25rem;
+  padding: 0 0.65rem;
+}
+
+:where([data-domainkit-part="token-connect"] button) {
+  justify-self: start;
+}
+
+:where([data-domainkit-part]:focus-visible) {
+  outline: 2px solid var(--domainkit-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where([data-domainkit-part]) {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
