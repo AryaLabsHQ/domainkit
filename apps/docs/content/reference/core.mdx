@@ -1,0 +1,94 @@
+---
+title: Core API
+description: Reference for the namespaces exported by the canonical domainkit Effect entry point.
+sidebar:
+  label: Core API
+seo:
+  title: DomainKit core API reference
+---
+
+Import the canonical API from `domainkit`:
+
+```ts
+import { DnsRecord, Provisioning, Verification } from "domainkit";
+```
+
+`VERSION` is the package version copied from the installed package manifest.
+
+{/* reference-inventory:start */}
+
+## Domain values and validation
+
+| Namespace      | Purpose                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------- |
+| `VERSION`      | Installed DomainKit package version from the package manifest.                                    |
+| `DomainName`   | Decode, normalize, and brand DNS names at an untrusted boundary.                                  |
+| `DnsRecord`    | Schemas and constructors for A, AAAA, CAA, CNAME, MX, NS, SRV, TXT, observed, and opaque records. |
+| `InvalidInput` | Schema-backed invalid-input failure used by decoding and validation APIs.                         |
+| `Digest`       | Canonical JSON encoding and SHA-256 helpers used for digest-bound plans.                          |
+| `DnsData`      | Normalize DNS answer data before comparing public resolver evidence.                              |
+
+## Authorization and connections
+
+| Namespace                 | Purpose                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| `Connection`              | Inspect, start, complete, reuse, remove, and revoke domain connections.        |
+| `AuthorizationLifecycle`  | Durable repository contract for authorization attempts and transitions.        |
+| `ConnectionAuthorization` | Authorize domain connection actions against provider and domain context.       |
+| `ProviderAuth`            | Provider authentication manifests and supported authentication methods.        |
+| `ProviderAuthorization`   | Provider authorization capabilities and grant evidence.                        |
+| `ProviderContext`         | Provider, account, and connection context carried through authorization.       |
+| `ProviderDiscovery`       | Select a provider candidate for a domain.                                      |
+| `ZoneDiscovery`           | Discover an authoritative zone and provider from a domain.                     |
+| `Zones`                   | Zone lookup and candidate value types.                                         |
+| `Secret`                  | Redacted secret value used to keep credentials out of logs and diagnostics.    |
+| `Diagnostic`              | Structured, safe-to-present diagnostic information for authorization failures. |
+
+## Planning and cleanup
+
+| Namespace      | Purpose                                                      |
+| -------------- | ------------------------------------------------------------ |
+| `Provisioning` | Create, authorize, validate, and apply additive DNS plans.   |
+| `DnsPlan`      | Plan, authorization, operation, result, and receipt schemas. |
+| `Deletion`     | Create, authorize, and apply receipt-bound cleanup plans.    |
+
+## Verification
+
+| Namespace                | Purpose                                                                     |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `Verification`           | Observe provider and public DNS evidence under an explicit resolver policy. |
+| `DnsResolver`            | Resolver service contract and structured observation outcomes.              |
+| `DnsResolverPool`        | Combine resolver evidence with any-match, all-match, or quorum policy.      |
+| `DnsOverHttps`           | Generic DNS-over-HTTPS resolver implementation.                             |
+| `CloudflareDnsOverHttps` | Cloudflare public resolver implementation and layer.                        |
+| `GoogleDnsOverHttps`     | Google public resolver implementation and layer.                            |
+
+## Providers and host transport
+
+| Namespace     | Purpose                                                                    |
+| ------------- | -------------------------------------------------------------------------- |
+| `DnsProvider` | Provider-independent DNS record capability and adapters.                   |
+| `Cloudflare`  | Cloudflare OAuth, token, account discovery, and DNS provider constructors. |
+| `Vercel`      | Vercel Integration, token, team discovery, and DNS provider constructors.  |
+| `Transport`   | Browser-safe application contract used by `@domainkit/react`.              |
+
+{/* reference-inventory:end */}
+
+Every namespace groups its schemas, tagged constructors, services, layers, and failure types. Use
+the namespace rather than importing an internal module path; this makes the package boundary visible
+at call sites and keeps upgrades source-checkable.
+
+## Lifecycle map
+
+| Job                | Start with               | Persist before continuing                  |
+| ------------------ | ------------------------ | ------------------------------------------ |
+| Connect a provider | `Connection.start`       | authorization attempt and provider context |
+| Complete OAuth     | `Connection.complete`    | resulting connection and grant             |
+| Plan records       | `Provisioning.create`    | plan, digest, and attempt identity         |
+| Approve changes    | `Provisioning.authorize` | digest-bound authorization                 |
+| Apply records      | `Provisioning.apply`     | receipt, including partial results         |
+| Observe records    | `Verification.observe`   | evidence useful to your product state      |
+| Plan cleanup       | `Deletion.create`        | receipt-bound deletion plan                |
+| Apply cleanup      | `Deletion.apply`         | cleanup result before removing the grant   |
+
+See [Plans and receipts](/docs/core/plans) for lifecycle semantics.

@@ -1,0 +1,54 @@
+---
+title: Testing API
+description: Reference for DomainKit in-memory services and provider conformance helpers.
+sidebar:
+  label: Testing API
+seo:
+  title: DomainKit testing API reference
+---
+
+Import deterministic test support from `domainkit/testing`. This entry point is public, but it is
+intended for tests, examples, local development, and provider contract validation.
+
+{/* reference-inventory:start */}
+
+| Namespace                         | Purpose                                                                                  |
+| --------------------------------- | ---------------------------------------------------------------------------------------- |
+| `InMemoryDnsProvider`             | Stateful DNS provider layer for planning, application, deletion, and verification tests. |
+| `InMemoryDnsResolver`             | Resolver layer with controlled answers and failures.                                     |
+| `InMemoryAuthorizationLifecycle`  | Durable-in-process authorization attempt repository for lifecycle tests.                 |
+| `InMemoryConnectionContinuations` | In-process continuation storage for connection flows.                                    |
+| `ProviderConformance`             | Shared contract suite for any `DnsProvider` implementation.                              |
+
+{/* reference-inventory:end */}
+
+## Test a lifecycle without credentials
+
+```ts
+import { DnsRecord, DomainName, Provisioning } from "domainkit";
+import { InMemoryDnsProvider } from "domainkit/testing";
+import { Effect } from "effect";
+
+const program = Provisioning.create({
+  requirements: [
+    DnsRecord.Cname.make({
+      metadata: { ownership: "customer", provenance: "test", purpose: "routing" },
+      name: DomainName.parse("app.example.com"),
+      policy: "exclusive",
+      target: DomainName.parse("tenant.example.net"),
+      ttl: 300,
+    }),
+  ],
+  target: Provisioning.Target.ExactZone({ zone: "example.com" }),
+}).pipe(Effect.provide(InMemoryDnsProvider.layer()));
+```
+
+The executable [quickstart](/docs/quickstart) follows this path through plan, authorize, apply, and
+idempotent re-plan.
+
+## Validate a provider adapter
+
+Run `ProviderConformance` against a fresh isolated provider instance. The suite checks create, read,
+list, delete, opaque-record preservation, error normalization, and idempotency expectations. Add
+provider-specific tests for authentication, discovery, pagination, rate limits, and live API
+behavior; the shared suite cannot prove those concerns.

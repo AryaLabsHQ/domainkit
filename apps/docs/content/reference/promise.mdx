@@ -1,0 +1,61 @@
+---
+title: Promise API
+description: Reference for the domainkit/promise adapter entry point.
+sidebar:
+  label: Promise API
+seo:
+  title: DomainKit Promise API reference
+---
+
+Use `domainkit/promise` at framework actions, route handlers, or other boundaries that want Promises
+instead of Effect values.
+
+```ts
+import { DnsRecord, DomainName, Provisioning } from "domainkit/promise";
+
+const requirement = DnsRecord.Cname.make({
+  metadata: { ownership: "customer", provenance: "example", purpose: "routing" },
+  name: DomainName.parse("app.example.com"),
+  policy: "exclusive",
+  target: DomainName.parse("tenant.example.net"),
+  ttl: 300,
+});
+
+const result = await Provisioning.create({
+  provider,
+  requirements: [requirement],
+  target: Provisioning.Target.ExactZone({ zone: "example.com" }),
+});
+```
+
+`VERSION` reports the installed package version.
+
+## Exported namespaces
+
+{/* reference-inventory:start */}
+
+| Area               | Namespaces                                                                                                                 |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Package            | `VERSION`                                                                                                                  |
+| Connections        | `Connection`, `AuthorizationLifecycle`, `ProviderAuth`, `ProviderAuthorization`, `ProviderContext`, `Secret`, `Diagnostic` |
+| Discovery          | `ProviderDiscovery`, `ZoneDiscovery`, `Zones`                                                                              |
+| DNS values         | `DnsRecord`, `DomainName`, `InvalidInput`                                                                                  |
+| Provider contracts | `DnsProvider`, `Cloudflare`, `Vercel`                                                                                      |
+| Plans              | `DnsPlan`, `Provisioning`, `Deletion`                                                                                      |
+| Verification       | `Verification`, `DnsResolver`, `DnsResolverPool`, `DnsOverHttps`, `CloudflareDnsOverHttps`, `GoogleDnsOverHttps`           |
+
+{/* reference-inventory:end */}
+
+The Promise API accepts Promise-shaped provider and resolver interfaces where appropriate and runs
+the canonical Effect programs internally. Results, tagged outcomes, plan digests, and failure
+semantics remain aligned with the core entry point.
+
+## Boundary rule
+
+Choose one internal programming model per application layer. Do not repeatedly convert Effect to
+Promise and back through the same lifecycle. If the application core uses Effect, keep the canonical
+entry point and call `Effect.runPromise` once at the framework boundary. If the host is Promise-first,
+use this entry point consistently.
+
+For browser UI, implement the narrower [application transport](/docs/reference/transport) rather
+than sending the Promise provider object to the client.

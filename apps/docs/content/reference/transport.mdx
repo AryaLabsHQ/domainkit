@@ -1,0 +1,74 @@
+---
+title: Transport API
+description: Reference for the browser-safe application transport consumed by DomainKit React.
+sidebar:
+  label: Transport API
+seo:
+  title: DomainKit application transport API reference
+---
+
+`Transport` is a host-facing contract, not a provider client. Implement it on the server, authorize
+each method as a product operation, and give `DomainKit.Root` a layer that calls your authenticated
+endpoints.
+
+## Service methods
+
+| Method                    | Input                    | Result               |
+| ------------------------- | ------------------------ | -------------------- |
+| `connection.inspect`      | `InspectInput`           | `ConnectionSnapshot` |
+| `connection.connect`      | `ConnectInput`           | `ConnectionResult`   |
+| `connection.reuse`        | `ReuseInput`             | `Connected`          |
+| `connection.removeDomain` | `RemoveDomainInput`      | `RemoveDomainResult` |
+| `provisioning.plan`       | `ProvisioningPlanInput`  | `ProvisioningPlan`   |
+| `provisioning.apply`      | `ProvisioningApplyInput` | `ApplyResult`        |
+| `verification.observe`    | `ObserveInput`           | `Observation`        |
+| `cleanup.plan`            | `CleanupPlanInput`       | `CleanupPlan`        |
+| `cleanup.apply`           | `CleanupApplyInput`      | `CleanupResult`      |
+
+The canonical `Interface` returns Effect values with `Failure` in the error channel. `Service` is
+the Effect context service accepted by the React root.
+
+## Connection wire models
+
+- `Provider` describes display-safe provider identity and authentication methods.
+- `Connected`, `Disconnected`, and `Unsupported` form `ConnectionSnapshot`.
+- `ConnectionResult` is either `Connected` or `Redirect`.
+- `RemoveDomainInput` requires `preserveDns: true`; DNS deletion is the independent cleanup flow.
+
+## Plan and result wire models
+
+- `ProvisioningPlan` contains `digest`, `expiresAt`, and `PlanOperation` values.
+- `PlanOperation` is `Create`, `Noop`, or `Conflict`.
+- `ApplyResult` is `Applied`, `Partial`, or `Stale` and contains per-operation results when present.
+- `CleanupPlan` contains receipt-bound `Delete`, `AlreadyAbsent`, or `Blocked` operations.
+- `CleanupResult` is `Cleaned`, `Partial`, or `Stale`.
+
+The browser submits only the persisted digest when applying a plan. The server retrieves the plan,
+checks the authenticated actor, authorizes the requested operation, and stores the returned result.
+
+## Observation wire models
+
+`ObserveInput.sources` explicitly enables provider and public-DNS evidence. `Observation` returns
+each source separately as `Found`, `Mismatch`, `Missing`, or `Unavailable` evidence. The host maps
+that evidence into product status and retry policy.
+
+## Promise adapter
+
+`AsyncInterface` mirrors all service methods with Promises. Use `fromAsync` to produce an Effect
+`Interface`, or `layerFromAsync` to produce a `Layer<Transport.Service>` directly. `toAsync` adapts an
+environment-free Effect implementation to Promises. `AsyncOptions.onError` can normalize foreign
+failures into `Transport.Failure`.
+
+```ts
+import { Transport } from "domainkit";
+
+export const layer = Transport.layerFromAsync({
+  connection: api.connections,
+  provisioning: api.provisioning,
+  verification: api.verification,
+  cleanup: api.cleanup,
+});
+```
+
+See [React transport integration](/docs/react/transport) for a host architecture and security
+checklist.
