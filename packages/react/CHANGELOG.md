@@ -1,9 +1,6 @@
----
-packages:
-  "@domainkit/react": minor
----
+## @domainkit/react@0.1.0
 
-## Publish the DomainKit React 0.1 contract
+### Publish the DomainKit React 0.1 contract
 
 Ship accessible React flows for connecting DNS providers, reviewing and applying record plans,
 verifying DNS, removing managed records, and disconnecting domains. Applications can compose the
