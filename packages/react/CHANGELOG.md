@@ -1,3 +1,10 @@
+## @domainkit/react@0.3.1
+
+### Keep the React package aligned with DomainKit core
+
+Validate the packed React artifact against the current core version so releases cannot publish an
+incompatible stale dependency range.
+
 ## @domainkit/react@0.3.0
 
 ### Compose connection rows with host controls
