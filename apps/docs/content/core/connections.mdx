@@ -2,7 +2,7 @@
 title: Connections
 description: Connect Cloudflare or Vercel with OAuth, an integration, or a token. Secrets stay on your server. Reuse an account grant when the same owner adds a domain.
 seo:
-  title: Connect DNS providers while keeping secrets on your server
+  title: Connect DNS providers with host-owned secrets
 ---
 
 `Connection.start` accepts either an interactive provider flow or a token method. Interactive starts return `Redirect`; token methods normally return `Connected`. `Connection.complete` consumes a short-lived continuation exactly once.
