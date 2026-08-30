@@ -109,6 +109,7 @@
 :where(
   [data-domainkit-part="connection-trigger"],
   [data-domainkit-part="oauth-connect"],
+  [data-domainkit-part="plan-trigger"],
   [data-domainkit-part="plan-apply"]
 ) {
   --domainkit-button-face: color-mix(in oklch, var(--domainkit-accent), white 22%);
@@ -130,6 +131,7 @@
 :where(
   [data-domainkit-part="connection-trigger"]:hover:not(:disabled),
   [data-domainkit-part="oauth-connect"]:hover:not(:disabled),
+  [data-domainkit-part="plan-trigger"]:hover:not(:disabled),
   [data-domainkit-part="plan-apply"]:hover:not(:disabled)
 ) {
   --domainkit-button-face: color-mix(in oklch, var(--domainkit-accent), white 28%);
@@ -138,6 +140,7 @@
 :where(
   [data-domainkit-part="connection-trigger"]:active:not(:disabled),
   [data-domainkit-part="oauth-connect"]:active:not(:disabled),
+  [data-domainkit-part="plan-trigger"]:active:not(:disabled),
   [data-domainkit-part="plan-apply"]:active:not(:disabled)
 ) {
   background-image: linear-gradient(
@@ -151,7 +154,6 @@
 :where(
   [data-domainkit-part="reuse-connection"],
   [data-domainkit-part="connection-retry"],
-  [data-domainkit-part="plan-trigger"],
   [data-domainkit-part="provisioning-retry"],
   [data-domainkit-part="observe-action"],
   [data-domainkit-part="token-connect"] button
@@ -168,7 +170,6 @@
 :where(
   [data-domainkit-part="reuse-connection"]:hover:not(:disabled),
   [data-domainkit-part="connection-retry"]:hover:not(:disabled),
-  [data-domainkit-part="plan-trigger"]:hover:not(:disabled),
   [data-domainkit-part="provisioning-retry"]:hover:not(:disabled),
   [data-domainkit-part="observe-action"]:hover:not(:disabled),
   [data-domainkit-part="token-connect"] button:hover:not(:disabled)
@@ -177,20 +178,18 @@
 }
 
 :where([data-domainkit-part="cleanup-trigger"], [data-domainkit-part="disconnect-action"]) {
-  background-color: var(--domainkit-background);
-  border-color: var(--domainkit-border);
-  box-shadow:
-    var(--domainkit-button-raised-shadow),
-    inset 0 1px 0 var(--domainkit-button-raised-glint),
-    inset 0 -1px 0 var(--domainkit-button-raised-shade);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
   color: var(--domainkit-danger);
+  font-weight: 500;
 }
 
 :where(
   [data-domainkit-part="cleanup-trigger"]:hover:not(:disabled),
   [data-domainkit-part="disconnect-action"]:hover:not(:disabled)
 ) {
-  background-color: color-mix(in srgb, var(--domainkit-danger) 8%, var(--domainkit-background));
+  background: color-mix(in srgb, var(--domainkit-danger) 8%, transparent);
 }
 
 :where([data-domainkit-part="cleanup-apply"]) {
@@ -428,6 +427,22 @@
   min-width: 0;
 }
 
+:where([data-domainkit-part="connected-actions"]) {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+:where(
+  [data-domainkit-part="connected-actions"] > [data-domainkit-part="provisioning-flow"],
+  [data-domainkit-part="connected-actions"] > [data-domainkit-part="verification-status"],
+  [data-domainkit-part="connected-actions"] > [data-domainkit-part="disconnect"]
+) {
+  width: auto;
+}
+
 :where(
   [data-domainkit-part="provisioning-flow"],
   [data-domainkit-part="verification-status"],
@@ -558,13 +573,10 @@
   color: var(--domainkit-muted);
 }
 
-:where([data-domainkit-part="connected-danger"]) {
-  border-top: 1px solid var(--domainkit-border);
+:where([data-domainkit-part="cleanup-flow"]) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  padding-top: 0.75rem;
-  width: 100%;
 }
 
 :where([data-domainkit-part="flow-outcome"]) {

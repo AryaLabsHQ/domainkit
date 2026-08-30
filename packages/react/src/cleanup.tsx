@@ -5,13 +5,7 @@ import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import * as RequestState from "./request-state.ts";
-import type {
-  CleanupPlan,
-  CleanupResult,
-  Connected,
-  Failure,
-  RemoveDomainResult,
-} from "./transport.ts";
+import type { CleanupPlan, CleanupResult, Connected, Failure } from "./transport.ts";
 
 export type State =
   | { readonly _tag: "Idle" }
@@ -27,8 +21,6 @@ export type State =
       readonly result: Extract<CleanupResult, { readonly _tag: "Partial" }>;
     }
   | { readonly _tag: "Stale"; readonly message: string }
-  | { readonly _tag: "Disconnecting" }
-  | RemoveDomainResult
   | Failure;
 
 export function useController(connection: Connected, receiptId: string) {
@@ -81,25 +73,8 @@ export function useController(connection: Connected, receiptId: string) {
     }
   }, [connection.connectionId, connection.domain, receiptId, requestState, state, transport]);
 
-  const disconnect = useCallback(async () => {
-    const request = requestState.begin({ _tag: "Disconnecting" });
-    try {
-      requestState.commit(
-        request,
-        await transport.connection.removeDomain({
-          connectionId: connection.connectionId,
-          domain: connection.domain,
-          preserveDns: true,
-        }),
-      );
-    } catch (cause) {
-      requestState.commit(request, toFailure(cause));
-    }
-  }, [connection.connectionId, connection.domain, requestState, transport]);
-
   return {
     apply,
-    disconnect,
     dismiss: () => requestState.reset({ _tag: "Idle" }),
     plan,
     state,
@@ -129,11 +104,6 @@ export function Flow({ connection, receiptId, ...props }: FlowProps) {
     {
       children: (
         <>
-          {state._tag === "Removed" ? (
-            <p data-domainkit-part="flow-outcome" data-tone="success">
-              {messages.domainDisconnected}
-            </p>
-          ) : null}
           {state._tag === "Cleaned" ? (
             <p data-domainkit-part="flow-outcome" data-tone="success">
               {messages.cleanupComplete}
@@ -216,14 +186,6 @@ export function Flow({ connection, receiptId, ...props }: FlowProps) {
               </BaseDialog.Portal>
             )}
           </BaseDialog.Root>
-          <button
-            data-domainkit-part="disconnect-action"
-            disabled={state._tag === "Disconnecting"}
-            onClick={() => void controller.disconnect()}
-            type="button"
-          >
-            {state._tag === "Disconnecting" ? messages.disconnecting : messages.disconnectDomain}
-          </button>
         </>
       ),
       "data-domainkit-part": "cleanup-flow",

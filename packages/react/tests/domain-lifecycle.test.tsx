@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import {
   Cleanup,
+  Connection,
   Domain,
   DomainKit,
   Provisioning,
@@ -44,10 +45,10 @@ describe("provisioning lifecycle", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Review DNS changes" }));
-    const dialog = await screen.findByRole("dialog", { name: "Review DNS changes" });
+    await user.click(screen.getByRole("button", { name: "Review changes" }));
+    const dialog = await screen.findByRole("dialog", { name: "Review changes" });
     expect(within(dialog).getByText(/Create/)).toBeTruthy();
-    await user.click(within(dialog).getByRole("button", { name: "Apply DNS changes" }));
+    await user.click(within(dialog).getByRole("button", { name: "Add records" }));
 
     expect(await screen.findByText("DNS changes applied")).toBeTruthy();
     expect(transport.calls.apply).toEqual([
@@ -72,12 +73,11 @@ describe("provisioning lifecycle", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Review DNS changes" }));
+    await user.click(screen.getByRole("button", { name: "Review changes" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText(/TXT differs/)).toBeTruthy();
     expect(
-      (within(dialog).getByRole("button", { name: "Apply DNS changes" }) as HTMLButtonElement)
-        .disabled,
+      (within(dialog).getByRole("button", { name: "Add records" }) as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(transport.calls.apply).toEqual([]);
   });
@@ -101,8 +101,8 @@ describe("provisioning lifecycle", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Review DNS changes" }));
-    await user.click(await screen.findByRole("button", { name: "Apply DNS changes" }));
+    await user.click(screen.getByRole("button", { name: "Review changes" }));
+    await user.click(await screen.findByRole("button", { name: "Add records" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Some DNS changes failed");
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(transport.calls.plan).toHaveLength(2);
@@ -126,7 +126,7 @@ describe("provisioning lifecycle", () => {
         <Provisioning.Flow connection={connection} records={[record]} />
       </DomainKit.Root>,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Review DNS changes" }));
+    await userEvent.click(screen.getByRole("button", { name: "Review changes" }));
 
     rerender(
       <DomainKit.Root transport={transport}>
@@ -143,8 +143,8 @@ describe("provisioning lifecycle", () => {
       await pending.promise;
     });
 
-    expect(screen.queryByRole("dialog", { name: "Review DNS changes" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Review DNS changes" })).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Review changes" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Review changes" })).toBeTruthy();
   });
 
   it("does not restore an obsolete plan after an identity cycle", async () => {
@@ -154,8 +154,8 @@ describe("provisioning lifecycle", () => {
         <Provisioning.Flow connection={connection} records={[record]} />
       </DomainKit.Root>,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Review DNS changes" }));
-    expect(await screen.findByRole("dialog", { name: "Review DNS changes" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Review changes" }));
+    expect(await screen.findByRole("dialog", { name: "Review changes" })).toBeTruthy();
 
     rerender(
       <DomainKit.Root transport={transport}>
@@ -169,7 +169,7 @@ describe("provisioning lifecycle", () => {
     );
 
     await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: "Review DNS changes" })).toBeNull(),
+      expect(screen.queryByRole("dialog", { name: "Review changes" })).toBeNull(),
     );
   });
 });
@@ -184,8 +184,8 @@ describe("observation and cleanup", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Review DNS changes" }));
-    await user.click(await screen.findByRole("button", { name: "Apply DNS changes" }));
+    await user.click(await screen.findByRole("button", { name: "Review changes" }));
+    await user.click(await screen.findByRole("button", { name: "Add records" }));
     rerender(
       <DomainKit.Root transport={transport}>
         <Domain.Flow domain="example.com" receiptId="receipt-b" records={[record]} />
@@ -197,7 +197,7 @@ describe("observation and cleanup", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Review DNS cleanup" }));
+    await user.click(screen.getByRole("button", { name: "Remove records" }));
     await waitFor(() => expect(transport.calls.cleanupPlan).toHaveLength(1));
     expect(transport.calls.cleanupPlan[0]?.receiptId).toBe("receipt-a");
   });
@@ -242,21 +242,22 @@ describe("observation and cleanup", () => {
     render(
       <DomainKit.Root transport={transport}>
         <Cleanup.Flow connection={connection} receiptId="receipt-1" />
+        <Connection.DisconnectAction connection={connection} />
       </DomainKit.Root>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Review DNS cleanup" }));
+    await user.click(screen.getByRole("button", { name: "Remove records" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText(/record drifted/)).toBeTruthy();
     expect(
       (
         within(dialog).getByRole("button", {
-          name: "Delete these DNS records",
+          name: "Remove records",
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    await user.click(screen.getByRole("button", { name: "Disconnect domain and keep DNS" }));
+    await user.click(screen.getByRole("button", { name: "Disconnect" }));
 
     await waitFor(() => expect(transport.calls.removeDomain).toHaveLength(1));
     expect(transport.calls.removeDomain[0]).toEqual({
@@ -286,7 +287,7 @@ describe("observation and cleanup", () => {
         <Cleanup.Flow connection={connection} receiptId="receipt-1" />
       </DomainKit.Root>,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Review DNS cleanup" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove records" }));
 
     rerender(
       <DomainKit.Root transport={transport}>
@@ -303,7 +304,19 @@ describe("observation and cleanup", () => {
       await pending.promise;
     });
 
-    expect(screen.queryByRole("dialog", { name: "Review DNS cleanup" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Remove records" })).toBeNull();
     expect(fake.calls.cleanupPlan[0]?.receiptId).toBe("receipt-1");
+  });
+
+  it("keeps disconnect available without a receipt and hides remove records", async () => {
+    const transport = Testing.makeFakeTransport({ inspect: connection });
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain="example.com" records={[record]} />
+      </DomainKit.Root>,
+    );
+
+    expect(await screen.findByRole("button", { name: "Disconnect" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Remove records" })).toBeNull();
   });
 });

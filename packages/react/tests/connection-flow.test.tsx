@@ -32,7 +32,7 @@ describe("Connection.Flow", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Connect Cloudflare" }));
+    await user.click(await screen.findByRole("button", { name: "Connect" }));
     await user.click(screen.getByRole("button", { name: "Continue with OAuth" }));
 
     await waitFor(() => expect(navigations).toEqual(["https://dash.cloudflare.com/oauth2/auth"]));
@@ -54,7 +54,7 @@ describe("Connection.Flow", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Connect Cloudflare" }));
+    await user.click(await screen.findByRole("button", { name: "Connect" }));
     await user.type(screen.getByLabelText("API token"), "secret-token");
     await user.click(screen.getByRole("button", { name: "Connect with token" }));
 
@@ -98,7 +98,7 @@ describe("Connection.Flow", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Connect Cloudflare" }));
+    await user.click(await screen.findByRole("button", { name: "Connect" }));
     await user.type(screen.getByLabelText("Team ID"), "team_arya");
     await user.type(screen.getByLabelText("API token"), "secret-token");
     await user.click(screen.getByRole("button", { name: "Connect with token" }));
@@ -115,7 +115,7 @@ describe("Connection.Flow", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Connect Cloudflare" }));
+    await user.click(await screen.findByRole("button", { name: "Connect" }));
     await user.click(screen.getByRole("button", { name: "Use existing account" }));
 
     expect(await screen.findByText("Cloudflare connected")).toBeTruthy();
@@ -141,7 +141,7 @@ describe("Connection.Flow", () => {
     );
 
     expect(await screen.findByText("Cloudflare connected")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Connect Cloudflare" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
   });
 
   it("recovers a failed inspection through the public retry state", async () => {
@@ -210,7 +210,7 @@ describe("Connection.Flow", () => {
       </DomainKit.Root>,
     );
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Connect Cloudflare" }));
+    await user.click(await screen.findByRole("button", { name: "Connect" }));
     await user.click(screen.getByRole("button", { name: "Continue with OAuth" }));
 
     rerender(
