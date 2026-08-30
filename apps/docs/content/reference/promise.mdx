@@ -32,6 +32,8 @@ const result = await Provisioning.create({
 
 ## Exported namespaces
 
+{/* reference-inventory:start */}
+
 | Area               | Namespaces                                                                                                                 |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | Package            | `VERSION`                                                                                                                  |
@@ -41,6 +43,8 @@ const result = await Provisioning.create({
 | Provider contracts | `DnsProvider`, `Cloudflare`, `Vercel`                                                                                      |
 | Plans              | `DnsPlan`, `Provisioning`, `Deletion`                                                                                      |
 | Verification       | `Verification`, `DnsResolver`, `DnsResolverPool`, `DnsOverHttps`, `CloudflareDnsOverHttps`, `GoogleDnsOverHttps`           |
+
+{/* reference-inventory:end */}
 
 The Promise API accepts Promise-shaped provider and resolver interfaces where appropriate and runs
 the canonical Effect programs internally. Results, tagged outcomes, plan digests, and failure

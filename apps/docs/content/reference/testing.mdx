@@ -10,6 +10,8 @@ seo:
 Import deterministic test support from `domainkit/testing`. This entry point is public, but it is
 intended for tests, examples, local development, and provider contract validation.
 
+{/* reference-inventory:start */}
+
 | Namespace                         | Purpose                                                                                  |
 | --------------------------------- | ---------------------------------------------------------------------------------------- |
 | `InMemoryDnsProvider`             | Stateful DNS provider layer for planning, application, deletion, and verification tests. |
@@ -17,6 +19,8 @@ intended for tests, examples, local development, and provider contract validatio
 | `InMemoryAuthorizationLifecycle`  | Durable-in-process authorization attempt repository for lifecycle tests.                 |
 | `InMemoryConnectionContinuations` | In-process continuation storage for connection flows.                                    |
 | `ProviderConformance`             | Shared contract suite for any `DnsProvider` implementation.                              |
+
+{/* reference-inventory:end */}
 
 ## Test a lifecycle without credentials
 

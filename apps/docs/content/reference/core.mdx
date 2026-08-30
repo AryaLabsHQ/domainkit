@@ -15,6 +15,8 @@ import { DnsRecord, Provisioning, Verification } from "domainkit";
 
 `VERSION` is the package version copied from the installed package manifest.
 
+{/* reference-inventory:start */}
+
 ## Domain values and validation
 
 | Namespace      | Purpose                                                                                           |
@@ -69,6 +71,8 @@ import { DnsRecord, Provisioning, Verification } from "domainkit";
 | `Cloudflare`  | Cloudflare OAuth, token, account discovery, and DNS provider constructors. |
 | `Vercel`      | Vercel Integration, token, team discovery, and DNS provider constructors.  |
 | `Transport`   | Browser-safe application contract used by `@domainkit/react`.              |
+
+{/* reference-inventory:end */}
 
 Every namespace groups its schemas, tagged constructors, services, layers, and failure types. Use
 the namespace rather than importing an internal module path; this makes the package boundary visible
