@@ -1,0 +1,119 @@
+---
+import PageLayout from "blume/components/layout/PageLayout.astro";
+import data from "blume:data";
+
+import DomainKitWorkshop from "../islands/DomainKitWorkshop.tsx";
+
+const { config } = data;
+const pageTitle = "React workshop — DomainKit";
+const pageDescription =
+  "Explore DomainKit's connection, lifecycle, DNS record, provider, and verification components across themes and editable states.";
+---
+
+<PageLayout
+  analytics={config.analytics}
+  banner={config.banner}
+  clientData={{
+    config: data.config,
+    navigation: data.navigation,
+    page: { route: "/workshop", title: pageTitle },
+  }}
+  favicon={config.favicon}
+  fontCssVars={data.fontCssVars}
+  logo={config.logo}
+  navigation={data.navigation}
+  ogEnabled={config.og.enabled}
+  page={{ description: pageDescription, route: "/workshop", title: pageTitle }}
+  searchEnabled={config.search.enabled}
+  site={{ description: config.description, title: config.title }}
+  siteUrl={config.site}
+  themeMode={config.theme.mode}
+  x={config.x}
+>
+  <main class="workshop-page">
+    <header>
+      <p>React components</p>
+      <h1>Workshop</h1>
+      <span>Switch stories, themes, providers, records, and lifecycle states.</span>
+    </header>
+    <DomainKitWorkshop client:only="react" />
+    <section class="about">
+      <h2>One workshop, the shipped components</h2>
+      <p>
+        This route mounts the same workshop source used by the package's Vite
+        example and browser tests. Choose a story in the left rail, then use
+        the controls to change color mode, product branding, provider identity,
+        domain names, DNS records, and receipt state. Query parameters preserve
+        the selected story, theme, and mode for direct links and refreshes.
+      </p>
+      <p>
+        The flows run against DomainKit's fake transport, so you can review
+        connection, provisioning, verification, cleanup, and record interfaces
+        without provider credentials or network mutations. Continue with the
+        <a href="/docs/react">React overview</a> or learn how to
+        <a href="/docs/react/composition">compose and theme the semantic parts</a>
+        inside your own design system.
+      </p>
+    </section>
+  </main>
+</PageLayout>
+
+<style>
+  .workshop-page {
+    margin: 0 auto;
+    max-width: 96rem;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  header {
+    margin-bottom: 1.5rem;
+  }
+
+  header p {
+    color: var(--blume-accent);
+    font-family: var(--blume-font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin: 0 0 0.5rem;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    font-family: var(--blume-font-display);
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+    letter-spacing: -0.04em;
+    line-height: 1;
+    margin: 0;
+  }
+
+  header span {
+    color: var(--blume-muted-foreground);
+    display: block;
+    margin-top: 0.75rem;
+  }
+
+  .about {
+    color: var(--blume-muted-foreground);
+    line-height: 1.65;
+    margin: 3rem auto 0;
+    max-width: 48rem;
+  }
+
+  .about h2 {
+    color: var(--blume-foreground);
+    font-family: var(--blume-font-display);
+    font-size: 1.5rem;
+    margin: 0 0 1rem;
+  }
+
+  .about p {
+    margin: 0.75rem 0;
+  }
+
+  .about a {
+    color: var(--blume-foreground);
+    font-weight: 600;
+    margin-inline: 0.2em;
+  }
+</style>

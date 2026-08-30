@@ -23,7 +23,10 @@ export default defineConfig({
   },
   navigation: {
     repo: true,
-    tabs: [{ label: "Docs", path: "/docs" }],
+    tabs: [
+      { label: "Docs", path: "/docs" },
+      { label: "Workshop", path: "/workshop" },
+    ],
   },
   search: {
     provider: "orama",
