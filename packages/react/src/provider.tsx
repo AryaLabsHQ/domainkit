@@ -48,7 +48,10 @@ const logoHosts: Readonly<Record<string, string>> = {
 };
 
 const logoKey = (providerId: string): string =>
-  providerId.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+  providerId
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 
 const logoHost = (providerId: string): string | undefined => logoHosts[logoKey(providerId)];
 
