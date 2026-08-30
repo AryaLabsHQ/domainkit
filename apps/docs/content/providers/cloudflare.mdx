@@ -1,19 +1,36 @@
 ---
-title: Cloudflare
-description: Connect Cloudflare with OAuth or a scoped API token. DomainKit finds the account from a visible zone so customers do not type an account ID.
+title: Connect Cloudflare
+description: Connect a Cloudflare account with OAuth or a scoped API token, discover the account from a known zone, and persist the resulting authorization on your server.
 seo:
-  title: Connect Cloudflare DNS with OAuth or tokens
+  title: Connect Cloudflare DNS with OAuth or API tokens
 ---
 
-Cloudflare supports OAuth and API-token connection methods. Both produce the same durable DomainKit authorization aggregate and provider context.
+<ProviderLogo provider="cloudflare" size={48} />
 
-## OAuth
+Cloudflare supports standards-based OAuth and API-token connection methods. Both produce the same
+durable DomainKit authorization aggregate and provider context.
+
+Run every step in this guide on a trusted server. Do not construct a Cloudflare provider client or
+retain the token in browser code.
+
+## Prerequisites
+
+- A durable `AuthorizationLifecycle.Repository` for authorization aggregates and credentials.
+- A short-lived, one-time continuation store for OAuth.
+- Authenticated start and callback routes bound to your host user and tenant.
+- A known customer domain whose authoritative zone the credential must be able to read.
+- For OAuth, a registered Cloudflare client, redirect URI, client secret, and the scope IDs assigned
+  to that client.
+
+## Start OAuth
 
 ```ts
 import { Cloudflare, Connection, DomainName, Secret } from "domainkit/promise";
 
+const capabilities = ["dns:read", "dns:write"] as const;
+
 const flow = Cloudflare.Auth.oauthFlow({
-  capabilities: ["dns:read", "dns:write"],
+  capabilities,
   client: {
     clientId,
     clientSecret: Secret.make(clientSecret),
@@ -26,23 +43,97 @@ const flow = Cloudflare.Auth.oauthFlow({
 
 const result = await Connection.start({
   authorizedById,
-  grant: { _tag: "account", excludedDomains: [] },
+  grant: {
+    _tag: "domains",
+    domains: [DomainName.parse("example.com")],
+  },
   method: Connection.Method.Interactive({ continuations, flow }),
   ownerId,
   repository,
 });
 ```
 
-If the credential can see the requested domain, DomainKit resolves the Cloudflare account from the zone. The customer does not need to find or type an account ID.
+An interactive start returns `Redirect`. Send its `authorizationUrl` to the browser only after the
+host has checked the current session and tenant authority.
 
-## API token
+The flow uses the known domain to resolve the selected Cloudflare account after authorization. The
+customer does not need to find or type an account ID.
+
+## Complete the callback
+
+Use the same flow configuration on the authenticated callback route:
 
 ```ts
-const method = Cloudflare.Auth.tokenConnectionMethod({
-  capabilities: ["dns:read", "dns:write"],
-  domain: DomainName.parse("example.com"),
-  token: Secret.make(apiToken),
+const connected = await Connection.complete({
+  callbackUrl: new URL(request.url),
+  continuationId,
+  continuations,
+  flow,
+  repository,
 });
 ```
 
-Ask for the narrowest token that covers the intended zones and DNS permissions. DomainKit records declared, introspected, or exercised capability evidence instead of treating scope strings as proof.
+`Connection.complete` consumes the continuation exactly once, validates the OAuth response,
+discovers the account from the known zone, and commits the provider authorization. Persist only the
+non-secret provider context in ordinary application records; the credential belongs behind the
+repository's secret-storage boundary.
+
+## Connect an API token
+
+Use a token route when the customer supplies a scoped Cloudflare API token:
+
+```ts
+const domain = DomainName.parse("example.com");
+const method = Cloudflare.Auth.tokenConnectionMethod({
+  capabilities,
+  domain,
+  token: Secret.make(apiToken),
+});
+
+const connected = await Connection.start({
+  authorizedById,
+  grant: { _tag: "domains", domains: [domain] },
+  method,
+  ownerId,
+  repository,
+});
+```
+
+Ask for the narrowest token that covers the intended zones and DNS permissions. Domain-targeted
+validation supports user-owned and account-owned API tokens and discovers the account from the
+visible zone.
+
+## Reconstruct the provider
+
+After loading and decoding the stored credential and provider context, construct the account-scoped
+provider on the server:
+
+```ts
+const provider = Cloudflare.make({
+  accountId: authorization.providerAccountId,
+  capabilities: authorization.requiredCapabilities,
+  token: credential.accessToken,
+  tokenKind: context.tokenKind,
+});
+```
+
+Use that provider through `DnsProvider.Service` for planning, apply, authoritative observation, and
+receipt-bound cleanup.
+
+## Account discovery outcomes
+
+- One matching visible zone identifies the Cloudflare account and can continue.
+- No matching zone is an actionable authorization or zone-ownership failure.
+- Ambiguous provider accounts require host/user selection; never choose an opaque account ID
+  silently.
+
+Cloudflare's non-mutating token verification response does not always enumerate DNS permissions.
+DomainKit records declared, introspected, and exercised capability evidence instead of treating
+scope strings as complete proof.
+
+## Next steps
+
+- [Integrate the host lifecycle](/docs/guides/host-integration)
+- [Provision and clean up records](/docs/guides/provision-and-clean-up)
+- [Cloudflare capability reference](/docs/reference/providers#cloudflare)
+- [Troubleshoot provider connections](/docs/guides/troubleshooting#connections)

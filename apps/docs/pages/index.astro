@@ -2,10 +2,12 @@
 import PageLayout from "blume/components/layout/PageLayout.astro";
 import data from "blume:data";
 
+import ProviderLogo from "../components/ProviderLogo.astro";
+
 const { config } = data;
-const pageTitle = "Frictionless domain setup for SaaS | DomainKit";
+const pageTitle = "Domain setup infrastructure for SaaS | DomainKit";
 const pageDescription =
-  "Make domain setup frictionless for your SaaS. Connect providers, review exact DNS changes, and apply them safely while credentials stay on your server.";
+  "Build domain setup into your SaaS. Connect DNS providers, review exact changes, and apply only an authorized plan while credentials stay on your server.";
 ---
 
 <PageLayout
@@ -27,9 +29,9 @@ const pageDescription =
     <section class="hero">
       <h1>Make domain setup frictionless</h1>
       <p class="lede">
-        Turn DNS setup into a product flow that customers can finish. DomainKit
-        connects providers, shows the exact changes, and applies only what was
-        approved. Credentials stay on your server.
+        DomainKit connects DNS providers, shows the exact changes, and applies
+        only an authorized plan. Your application keeps control of credentials,
+        persistence, policy, and the customer experience.
       </p>
       <div class="actions">
         <a class="primary" href="/docs">Read the docs</a>
@@ -40,18 +42,21 @@ const pageDescription =
     <section class="features" aria-label="DomainKit capabilities">
       <article>
         <span>01</span>
-        <h2>Plan before writing</h2>
+        <h2>Review before writing</h2>
         <p>Show exact creates, no-ops, and conflicts before authorization.</p>
       </article>
       <article>
-        <span>02</span>
-        <h2>Own the authorization</h2>
-        <p>Use Cloudflare or Vercel while your application owns consent and storage.</p>
+        <div class="provider-pair">
+          <ProviderLogo provider="cloudflare" size={24} />
+          <ProviderLogo provider="vercel" size={20} />
+        </div>
+        <h2>Keep authority in your app</h2>
+        <p>Use Cloudflare or Vercel while your application owns consent, secrets, and storage.</p>
       </article>
       <article>
         <span>03</span>
-        <h2>Compose the interface</h2>
-        <p>Adopt complete React flows or assemble semantic parts into your design system.</p>
+        <h2>Choose your interface</h2>
+        <p>Adopt complete React flows, compose lifecycle models, or render DNS records directly.</p>
       </article>
     </section>
   </main>
@@ -118,10 +123,17 @@ const pageDescription =
     padding-top: 2.5rem;
   }
 
-  article span {
+  article > span {
     color: var(--blume-muted-foreground);
     font-family: var(--blume-font-mono);
     font-size: 0.75rem;
+  }
+
+  .provider-pair {
+    align-items: center;
+    display: flex;
+    gap: 0.65rem;
+    min-height: 1.5rem;
   }
 
   h2 {

@@ -120,7 +120,12 @@ import { ProviderMark } from "@/components/ui/provider-mark";
 const record = { id: "mx", name: "mail.example.com", type: "MX", value: "mx.example.net" };
 createRoot(document.getElementById("root")!).render(
   <main>
-    <ProviderMark label="Example DNS"><span>E</span></ProviderMark>
+    <ProviderMark label="Cloudflare">
+      <img alt="" height={32} src="https://integrations.sh/logo/cloudflare.com?sz=64" width={32} />
+    </ProviderMark>
+    <ProviderMark label="Vercel">
+      <img alt="" height={32} src="https://integrations.sh/logo/vercel.com?sz=64" width={32} />
+    </ProviderMark>
     <DnsTable records={[{ ...record, status: <DnsStatus tone="success">Found</DnsStatus> }]} />
     <DnsOperation action="Create" {...record} />
     <CopyValue value={record.value} />

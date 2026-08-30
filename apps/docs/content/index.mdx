@@ -1,16 +1,21 @@
 ---
-title: Reviewable DNS plans
-description: Connect domains with reviewable DNS plans. DomainKit authorizes an exact digest, applies it through your provider, and never silently overwrites records.
+title: Domain setup infrastructure
+description: Build provider-connected domain setup into your SaaS with exact DNS plans, host-owned credentials, and React flows you control.
 sidebar:
   label: Overview
   order: 1
 seo:
-  title: DNS provisioning SDK with reviewable plans
+  title: Domain setup infrastructure for SaaS
 ---
 
-DomainKit is a TypeScript SDK for connecting domains and turning DNS requirements into reviewable, authorized plans.
+DomainKit is a TypeScript toolkit for building provider-connected domain setup into a SaaS product.
+Your application defines the DNS requirements and owns the customer, credential, persistence, and
+policy boundaries. DomainKit supplies the portable connection, planning, authorization,
+verification, and cleanup lifecycle.
 
-The package root is Effect-native. A secondary Promise facade is available for foreign runtime boundaries. `@domainkit/react` provides browser-safe connection, provisioning, verification, cleanup, and DNS record interfaces over a transport owned by the host application.
+The package root is Effect-native. A secondary Promise facade is available for foreign runtime
+boundaries. `@domainkit/react` provides browser-safe connection, provisioning, verification,
+cleanup, and DNS record interfaces over a transport owned by the host application.
 
 ```package-install
 domainkit
@@ -29,15 +34,26 @@ domainkit
   <Card title="React UI" href="/docs/react" icon="component">
     Use complete flows or compose semantic parts into your own product.
   </Card>
-  <Card title="Cloudflare" href="/docs/providers/cloudflare" icon="cloud">
+  <ProviderCard title="Cloudflare" href="/docs/providers/cloudflare" provider="cloudflare">
     Connect with OAuth or scoped API tokens and discover the owning account.
-  </Card>
-  <Card title="Vercel" href="/docs/providers/vercel" icon="triangle">
+  </ProviderCard>
+  <ProviderCard title="Vercel" href="/docs/providers/vercel" provider="vercel">
     Preserve personal or team context from a Vercel Integration installation.
-  </Card>
+  </ProviderCard>
 </CardGroup>
 
-## Principles
+## Product boundary
+
+| DomainKit owns                              | Your application owns                                  |
+| ------------------------------------------- | ------------------------------------------------------ |
+| Provider-neutral DNS requirements and plans | Product-specific DNS requirements                      |
+| Digest-bound plan authorization             | Identity, tenancy, consent, and audit policy           |
+| Cloudflare and Vercel provider integrations | Credential encryption and durable persistence          |
+| Provider and public-DNS observation         | Authenticated routes and product readiness state       |
+| Receipt-bound cleanup                       | When and how users may remove records                  |
+| Browser-safe React lifecycle contracts      | Branding, surrounding UI, notifications, and telemetry |
+
+## Safety model
 
 - **Review before mutation.** A plan lists creates, exact no-ops, and conflicts before any write.
 - **Authorize the digest.** Apply accepts the reviewed plan plus authorization for that exact digest.
