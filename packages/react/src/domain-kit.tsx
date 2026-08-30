@@ -108,7 +108,7 @@ export function Root({
     },
   );
   return (
-    <Context
+    <Context.Provider
       value={{
         colorScheme,
         marks,
@@ -120,7 +120,7 @@ export function Root({
       }}
     >
       {content}
-    </Context>
+    </Context.Provider>
   );
 }
 

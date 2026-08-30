@@ -6,7 +6,8 @@ import { github } from "tegami/plugins/github";
 
 import rootPackage from "../packages/domainkit/package.json" with { type: "json" };
 
-const PACKAGE_ID = "npm:domainkit";
+const CORE_PACKAGE_ID = "npm:domainkit";
+const REACT_PACKAGE_ID = "npm:@domainkit/react";
 const REPOSITORY = "AryaLabsHQ/domainkit";
 
 if (rootPackage.name !== "domainkit") throw new Error("Unexpected release package");
@@ -15,8 +16,10 @@ const releaseChecks = (): TegamiPlugin => ({
   name: "domainkit-release-checks",
   enforce: "pre",
   async afterPreflight({ plan }) {
-    const packagePlan = plan.packages.get(PACKAGE_ID);
-    if (packagePlan?.preflight?.shouldPublish !== true) return;
+    const shouldPublish = [CORE_PACKAGE_ID, REACT_PACKAGE_ID].some(
+      (packageId) => plan.packages.get(packageId)?.preflight?.shouldPublish === true,
+    );
+    if (!shouldPublish) return;
 
     const child = Bun.spawn(["bun", "run", "release:check"], {
       cwd: this.cwd,
@@ -31,12 +34,17 @@ const versionTag = (): TegamiPlugin => ({
   name: "domainkit-version-tag",
   enforce: "post",
   initPublishPlan({ plan }) {
-    const pkg = this.graph.get(PACKAGE_ID);
-    const packagePlan = plan.packages.get(PACKAGE_ID);
-    if (pkg?.version === undefined || packagePlan === undefined) return;
+    for (const [packageId, tag] of [
+      [CORE_PACKAGE_ID, (version: string) => `v${version}`],
+      [REACT_PACKAGE_ID, (version: string) => `@domainkit/react@${version}`],
+    ] as const) {
+      const pkg = this.graph.get(packageId);
+      const packagePlan = plan.packages.get(packageId);
+      if (pkg?.version === undefined || packagePlan === undefined) continue;
 
-    packagePlan.git ??= {};
-    packagePlan.git.tag = `v${pkg.version}`;
+      packagePlan.git ??= {};
+      packagePlan.git.tag = tag(pkg.version);
+    }
   },
 });
 

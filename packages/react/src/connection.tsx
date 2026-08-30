@@ -12,7 +12,14 @@ import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import * as Provider from "./provider.tsx";
-import type { AuthenticationMethod, Connected, ConnectionSnapshot, Failure } from "./transport.ts";
+import * as RequestState from "./request-state.ts";
+import type {
+  AuthenticationMethod,
+  Connected,
+  ConnectionSnapshot,
+  Failure,
+  RemoveDomainResult,
+} from "./transport.ts";
 
 export type State =
   | { readonly _tag: "Loading" }
@@ -407,6 +414,81 @@ export function RetryAction({ controller, kind = "retry", ...props }: RetryActio
       "data-domainkit-part": "connection-retry",
       onClick: controller.retry,
       type: "button",
+    },
+  );
+}
+
+export type DisconnectState =
+  | { readonly _tag: "Idle" }
+  | { readonly _tag: "Disconnecting" }
+  | RemoveDomainResult
+  | Failure;
+
+export function useDisconnect(connection: Connected) {
+  const { transport } = useDomainKit();
+  const requestState = RequestState.useController<DisconnectState>(
+    `${connection.connectionId}:${connection.domain}:disconnect`,
+    { _tag: "Idle" },
+  );
+  const disconnect = useCallback(async () => {
+    const request = requestState.begin({ _tag: "Disconnecting" });
+    try {
+      requestState.commit(
+        request,
+        await transport.connection.removeDomain({
+          connectionId: connection.connectionId,
+          domain: connection.domain,
+          preserveDns: true,
+        }),
+      );
+    } catch (cause) {
+      requestState.commit(request, failure(cause));
+    }
+  }, [connection.connectionId, connection.domain, requestState, transport]);
+  return { disconnect, state: requestState.state } as const;
+}
+
+export interface DisconnectActionProps extends PartProps<
+  "div",
+  { readonly status: DisconnectState["_tag"] }
+> {
+  readonly connection: Connected;
+}
+
+export function DisconnectAction({ connection, ...props }: DisconnectActionProps) {
+  const controller = useDisconnect(connection);
+  const { messages } = useDomainKit();
+  const state = controller.state;
+  return usePart(
+    "div",
+    props,
+    { status: state._tag },
+    {
+      children: (
+        <>
+          {state._tag === "Removed" ? (
+            <p data-domainkit-part="flow-outcome" data-tone="success">
+              {messages.domainDisconnected}
+            </p>
+          ) : null}
+          {state._tag === "Failure" ? (
+            <p data-domainkit-part="flow-outcome" data-tone="danger" role="alert">
+              {state.message}
+            </p>
+          ) : null}
+          {state._tag === "Removed" ? null : (
+            <button
+              data-domainkit-part="disconnect-action"
+              disabled={state._tag === "Disconnecting"}
+              onClick={() => void controller.disconnect()}
+              type="button"
+            >
+              {state._tag === "Disconnecting" ? messages.disconnecting : messages.disconnectDomain}
+            </button>
+          )}
+        </>
+      ),
+      "data-domainkit-part": "disconnect",
     },
   );
 }

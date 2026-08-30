@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 for (const mode of ["light", "dark"] as const) {
   test(`${mode} connection dialog preserves keyboard and theme behavior`, async ({ page }) => {
     await page.goto(`/?mode=${mode}&theme=brand`);
-    const trigger = page.getByRole("button", { name: "Connect Cloudflare" });
+    const trigger = page.getByRole("button", { name: "Connect", exact: true });
     await expect(trigger).toBeVisible();
     await trigger.click();
 
@@ -28,3 +28,19 @@ for (const mode of ["light", "dark"] as const) {
     await expect(trigger).toBeFocused();
   });
 }
+
+test("provisioning and cleanup dialogs preserve review focus", async ({ page }) => {
+  await page.goto("/?flow=lifecycle&theme=brand");
+  await page.getByRole("button", { name: "Review changes" }).click();
+  const plan = page.getByRole("dialog", { name: "Review changes" });
+  await expect(plan).toBeVisible();
+  await expect(plan.getByText(/Create MX mail.example.com/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Review changes" })).toBeFocused();
+
+  await page.getByRole("button", { name: "Remove records" }).click();
+  const cleanup = page.getByRole("dialog", { name: "Remove records" });
+  await expect(cleanup).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Remove records" })).toBeFocused();
+});

@@ -104,7 +104,7 @@ describe("composition and theme", () => {
         <Connection.Flow domain="mail.example.com" />
       </DomainKit.Root>,
     );
-    fireEvent.click(await first.findByRole("button", { name: "Connect Cloudflare" }));
+    fireEvent.click(await first.findByRole("button", { name: "Connect" }));
     expect(host.querySelector('[data-domainkit-part="connection-dialog"]')).toBeTruthy();
     first.unmount();
   });

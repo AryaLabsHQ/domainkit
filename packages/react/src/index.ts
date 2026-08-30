@@ -1,7 +1,12 @@
+export * as Cleanup from "./cleanup.tsx";
 export * as Connection from "./connection.tsx";
+export * as Domain from "./domain.tsx";
 export * as DomainKit from "./domain-kit.tsx";
 export * as Messages from "./messages.ts";
 export * as Provider from "./provider.tsx";
+export * as Provisioning from "./provisioning.tsx";
+export * as Records from "./records.tsx";
 export * as Testing from "./testing.ts";
 export * as Theme from "./theme.ts";
 export * as Transport from "./transport.ts";
+export * as Verification from "./verification.tsx";
