@@ -1,3 +1,17 @@
+## @domainkit/react@0.4.0
+
+### Compose stable connected-domain actions
+
+Compose review, cleanup, and disconnect actions into a stable connected-provider surface with host-owned semantic tokens.
+
+### Add host theme presets
+
+Add seven theme presets and token-complete workshop coverage for light and dark host integrations.
+
+### Expose structured lifecycle events
+
+Expose structured lifecycle events from `DomainKit.Root` after successful user-triggered mutations.
+
 ## @domainkit/react@0.3.1
 
 ### Keep the React package aligned with DomainKit core
