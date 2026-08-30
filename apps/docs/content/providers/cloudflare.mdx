@@ -25,7 +25,14 @@ retain the token in browser code.
 ## Start OAuth
 
 ```ts
-import { Cloudflare, Connection, DomainName, Secret } from "domainkit/promise";
+import {
+  Cloudflare,
+  Connection,
+  DnsRecord,
+  DomainName,
+  Secret,
+  Verification,
+} from "domainkit/promise";
 
 const capabilities = ["dns:read", "dns:write"] as const;
 
@@ -117,8 +124,29 @@ const provider = Cloudflare.make({
 });
 ```
 
-Pass that provider through the Promise APIs' `provider` fields for planning, apply, authoritative
-observation, and receipt-bound cleanup.
+Pass that provider directly through the Promise APIs' `provider` fields for planning, apply, and
+receipt-bound cleanup. Authoritative observation also needs the zone-tagged verification wrapper:
+
+```ts
+const zone = DomainName.parse("example.com");
+const record = DnsRecord.parse({
+  _tag: "TXT",
+  metadata: {
+    ownership: "customer",
+    provenance: "example",
+    purpose: "domain verification",
+  },
+  name: "_verify.example.com",
+  policy: "append",
+  ttl: 300,
+  value: "verification-value",
+});
+
+await Verification.observe({
+  provider: Verification.Provider.Enabled({ provider, zone }),
+  record,
+});
+```
 
 ## Account discovery outcomes
 
