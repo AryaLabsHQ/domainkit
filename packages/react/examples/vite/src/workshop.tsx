@@ -56,6 +56,15 @@ export interface WorkshopState {
   readonly story: StoryId;
 }
 
+export const nextRecordId = (
+  records: Readonly<Record<string, Transport.DnsRecord>>,
+  start: number,
+): { readonly id: string; readonly next: number } => {
+  let sequence = start;
+  while (Object.hasOwn(records, `record-${sequence}`)) sequence += 1;
+  return { id: `record-${sequence}`, next: sequence + 1 };
+};
+
 function isStoryId(value: string): value is StoryId {
   switch (value) {
     case "card":
@@ -383,8 +392,9 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
     id: "workshop",
     onAction: (path) => {
       if (path === "records.add") {
-        const id = `record-${nextRecord.current}`;
-        nextRecord.current += 1;
+        const allocated = nextRecordId(seeds.current, nextRecord.current);
+        const id = allocated.id;
+        nextRecord.current = allocated.next;
         seeds.current[id] = {
           id,
           name: "example.com",

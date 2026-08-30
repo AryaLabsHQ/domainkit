@@ -79,6 +79,22 @@ describe("Records primitives", () => {
     }
   });
 
+  it("exports absolute, import-safe BIND records", () => {
+    expect(Records.toZoneFile(records)).toBe(
+      'mail.example.com. IN MX 10 feedback-smtp.example.net.\nmail.example.com. IN TXT "v=spf1 include:example.net ~all"\n',
+    );
+    expect(
+      Records.toZoneFile([
+        {
+          id: "quoted-txt",
+          name: "example.com",
+          type: "TXT",
+          value: 'contains "quotes" and \\slashes',
+        },
+      ]),
+    ).toBe('example.com. IN TXT "contains \\"quotes\\" and \\\\slashes"\n');
+  });
+
   it("renders optional status chips and stacked cards", () => {
     const mx = records[0];
     const evidence: ReadonlyArray<Records.ObservationEvidence> = [

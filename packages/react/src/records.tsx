@@ -27,6 +27,22 @@ const downloadText = (filename: string, contents: string): void => {
   URL.revokeObjectURL(url);
 };
 
+const absoluteDomainName = (value: string): string => (value.endsWith(".") ? value : `${value}.`);
+
+const zoneValue = (record: DnsRecord): string => {
+  switch (record.type.toUpperCase()) {
+    case "CNAME":
+    case "MX":
+    case "NS":
+    case "PTR":
+      return absoluteDomainName(record.value);
+    case "TXT":
+      return JSON.stringify(record.value);
+    default:
+      return record.value;
+  }
+};
+
 export interface CopyValueProps extends PartProps<"span", { readonly copied: boolean }> {
   readonly copiedLabel?: string;
   readonly copyLabel?: string;
@@ -261,7 +277,7 @@ export const toZoneFile = (records: ReadonlyArray<DnsRecord>): string =>
   `${records
     .map(
       (record) =>
-        `${record.name} IN ${record.type} ${record.priority === undefined ? "" : `${record.priority} `}${record.value}`,
+        `${absoluteDomainName(record.name)} IN ${record.type} ${record.priority === undefined ? "" : `${record.priority} `}${zoneValue(record)}`,
     )
     .join("\n")}\n`;
 

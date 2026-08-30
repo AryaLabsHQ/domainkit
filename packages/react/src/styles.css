@@ -1,4 +1,11 @@
-:where([data-domainkit-root]) {
+:where(
+  [data-domainkit-root],
+  [data-domainkit-part="copy-value"]:not([data-domainkit-root] *),
+  [data-domainkit-part="record-card"]:not([data-domainkit-root] *),
+  [data-domainkit-part="record-status"]:not([data-domainkit-root] *),
+  [data-domainkit-part="records-panel"]:not([data-domainkit-root] *),
+  [data-domainkit-part="zone-file"]:not([data-domainkit-root] *)
+) {
   --domainkit-accent: #0070f3;
   --domainkit-accent-contrast: #ffffff;
   --domainkit-background: #ffffff;

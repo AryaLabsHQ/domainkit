@@ -56,3 +56,14 @@ test("workshop switches presentational stories from the sidebar", async ({ page 
   await expect(page.getByRole("cell", { name: "MX" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy zone" })).toBeVisible();
 });
+
+test("standalone record cards retain neutral package tokens", async ({ page }) => {
+  await page.goto("/?story=card");
+  await page.locator("[data-domainkit-root]").evaluate((root) => {
+    root.removeAttribute("data-domainkit-root");
+  });
+
+  const card = page.locator('[data-domainkit-part="record-card"]').first();
+  await expect(card).toHaveCSS("background-color", "rgb(244, 244, 245)");
+  await expect(card).toHaveCSS("border-top-color", "rgb(212, 212, 216)");
+});
