@@ -36,7 +36,7 @@ export interface Controller {
 }
 
 export type Command = Data.TaggedEnum<{
-  Apply: { readonly plan: Transport.ProvisioningPlan };
+  Apply: {};
   Dismiss: {};
   Plan: {};
 }>;
@@ -79,12 +79,19 @@ export function useModel(
           Effect.asVoid,
         );
       }
-      get.set(state, State.Applying({ plan: command.plan }));
+      const current = get(state);
+      if (
+        current._tag !== "Review" ||
+        current.plan.operations.some((operation) => operation._tag === "Conflict")
+      )
+        return Effect.void;
+      const plan = current.plan;
+      get.set(state, State.Applying({ plan }));
       return Effect.flatMap(Transport.Service, (transport) =>
         transport.provisioning.apply({
           connectionId: connection.connectionId,
           domain: connection.domain,
-          planDigest: command.plan.digest,
+          planDigest: plan.digest,
         }),
       ).pipe(
         Effect.tap((result) =>
@@ -120,13 +127,7 @@ export function useController(
   const execute = useAtomSet(model.command);
 
   return {
-    apply: () => {
-      if (
-        state._tag === "Review" &&
-        !state.plan.operations.some((operation) => operation._tag === "Conflict")
-      )
-        execute(Command.Apply({ plan: state.plan }));
-    },
+    apply: () => execute(Command.Apply()),
     dismiss: () => execute(Command.Dismiss()),
     plan: () => execute(Command.Plan()),
     retry: () => execute(Command.Plan()),

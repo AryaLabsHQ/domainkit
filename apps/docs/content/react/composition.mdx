@@ -91,9 +91,7 @@ if (state._tag === "Review") {
       {state.plan.operations.map((operation) => (
         <Operations.Item key={operation.id} operation={operation} />
       ))}
-      <button onClick={() => command(Provisioning.Command.Apply({ plan: state.plan }))}>
-        Apply approved plan
-      </button>
+      <button onClick={() => command(Provisioning.Command.Apply())}>Apply approved plan</button>
     </Operations.Root>
   );
 }

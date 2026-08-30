@@ -27,7 +27,7 @@ export type State =
   | Failure;
 
 export type Command = Data.TaggedEnum<{
-  Apply: { readonly plan: Transport.CleanupPlan };
+  Apply: {};
   Dismiss: {};
   Plan: {};
 }>;
@@ -68,12 +68,19 @@ export function useModel(connection: Transport.Connected, receiptId: string): Mo
           Effect.asVoid,
         );
       }
-      get.set(state, State.Cleaning({ plan: command.plan }));
+      const current = get(state);
+      if (
+        current._tag !== "Review" ||
+        current.plan.operations.some((operation) => operation._tag === "Blocked")
+      )
+        return Effect.void;
+      const plan = current.plan;
+      get.set(state, State.Cleaning({ plan }));
       return Effect.flatMap(Transport.Service, (transport) =>
         transport.cleanup.apply({
           connectionId: connection.connectionId,
           domain: connection.domain,
-          planDigest: command.plan.digest,
+          planDigest: plan.digest,
           receiptId,
         }),
       ).pipe(
@@ -103,13 +110,7 @@ export function useController(connection: Transport.Connected, receiptId: string
   const execute = useAtomSet(model.command);
 
   return {
-    apply: () => {
-      if (
-        state._tag === "Review" &&
-        !state.plan.operations.some((operation) => operation._tag === "Blocked")
-      )
-        execute(Command.Apply({ plan: state.plan }));
-    },
+    apply: () => execute(Command.Apply()),
     dismiss: () => execute(Command.Dismiss()),
     plan: () => execute(Command.Plan()),
     state,
