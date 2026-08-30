@@ -1,11 +1,14 @@
 ---
-title: Introduction
-description: Build provider-independent domain connection, reviewable DNS provisioning, and composable React flows into your TypeScript product.
+title: Reviewable DNS plans
+description: Connect domains with reviewable DNS plans. DomainKit authorizes an exact digest, applies it through your provider, and never silently overwrites records.
 sidebar:
+  label: Overview
   order: 1
+seo:
+  title: TypeScript DNS provisioning SDK with reviewable plans
 ---
 
-DomainKit is a provider-independent TypeScript SDK for connecting domains and turning DNS requirements into reviewable, authorized provisioning plans.
+DomainKit is a TypeScript SDK for connecting domains and turning DNS requirements into reviewable, authorized plans.
 
 The core package is Effect-native and includes a Promise facade. `@domainkit/react` provides browser-safe connection, provisioning, verification, cleanup, and DNS record interfaces over a transport owned by the host application.
 
@@ -17,7 +20,7 @@ domainkit
   <Card title="Quickstart" href="/docs/quickstart" icon="rocket">
     Install DomainKit and build your first reviewable DNS plan.
   </Card>
-  <Card title="Plans and receipts" href="/docs/core/plans" icon="file">
+  <Card title="Plans" href="/docs/core/plans" icon="file">
     Understand the immutable plan, authorization, apply, and cleanup lifecycle.
   </Card>
   <Card title="Connect providers" href="/docs/core/connections" icon="link">
@@ -34,7 +37,7 @@ domainkit
   </Card>
 </CardGroup>
 
-## Design principles
+## Principles
 
 - **Review before mutation.** A plan lists creates, exact no-ops, and conflicts before any write.
 - **Authorize the digest.** Apply accepts the reviewed plan plus authorization for that exact digest.

@@ -1,6 +1,8 @@
 ---
-title: Host transport
-description: Implement the browser-safe DomainKit transport with authenticated application endpoints and keep every provider credential on the server.
+title: Transport
+description: Implement the DomainKit React transport with authenticated app endpoints. Provider credentials and API clients stay on the server.
+seo:
+  title: Keep DNS provider credentials off the React client
 ---
 
 `DomainKit.Root` receives a Promise-based `DomainKitTransport`. The shape is intentionally application-facing rather than a browser wrapper around provider APIs.
@@ -39,7 +41,7 @@ export const transport: Transport.DomainKitTransport = {
 
 Every outcome uses `_tag`, including failures and retry guidance. Decode untrusted request, database, and provider data at your server boundary before mapping it into these browser-safe wire types.
 
-<Callout type="warning" title="Do not proxy credentials to React">
+<Callout type="warning" title="No browser credentials">
   A token input may collect a credential, but submit it directly to your authenticated server
   endpoint. Never construct a Cloudflare or Vercel provider client in browser code.
 </Callout>

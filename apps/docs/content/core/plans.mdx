@@ -1,11 +1,13 @@
 ---
-title: Plans and receipts
-description: Learn how DomainKit separates DNS discovery, immutable planning, digest-bound approval, provider writes, receipts, and safe cleanup.
+title: Plans
+description: DomainKit plans DNS as creates, no-ops, and conflicts. You authorize an exact digest, apply it, and clean up only from a stored receipt.
+seo:
+  title: "DNS plans you review, authorize, apply, and clean up"
 ---
 
 DomainKit treats DNS provisioning as a reviewed transaction, even when the provider API does not offer transactions.
 
-## The lifecycle
+## Lifecycle
 
 | Artifact      | Meaning                                                                             |
 | ------------- | ----------------------------------------------------------------------------------- |
@@ -17,7 +19,7 @@ DomainKit treats DNS provisioning as a reviewed transaction, even when the provi
 
 Authorization does not make a stale plan safe. Apply rechecks provider state and returns a stale result rather than writing against changed DNS.
 
-## Conflict behavior
+## Conflicts
 
 DomainKit is additive and fail-closed:
 
@@ -34,7 +36,7 @@ const authorization = await Provisioning.authorize(plan, selectedOperationIds, {
 });
 ```
 
-## Cleanup is a separate review
+## Cleanup
 
 A receipt proves which writes belong to a previous apply. Cleanup creates a new deletion plan from that receipt, then requires authorization for the cleanup digest. If a record drifted, deletion is blocked instead of removing data that DomainKit can no longer prove it owns.
 

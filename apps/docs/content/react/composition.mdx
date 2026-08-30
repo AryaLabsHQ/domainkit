@@ -1,6 +1,8 @@
 ---
-title: Composition and theming
-description: Compose DomainKit React parts with Base UI render props, host-owned icons and provider marks, messages, and CSS design tokens.
+title: Composition
+description: Compose DomainKit React parts with Base UI render props, your icons and provider marks, and CSS tokens that match your product.
+seo:
+  title: Theme DomainKit React parts to match your design system
 ---
 
 Complete flows are conveniences over semantic parts. Every public part accepts Base UI's `render` prop plus state-aware `className` and `style` values.
@@ -13,7 +15,7 @@ Complete flows are conveniences over semantic parts. Every public part accepts B
 />
 ```
 
-## Theme at the root
+## Theming
 
 ```tsx
 <DomainKit.Root
@@ -30,7 +32,7 @@ Complete flows are conveniences over semantic parts. Every public part accepts B
 
 The opt-in stylesheet reads `--domainkit-*` variables. Theme props set those variables without replacing the host font, palette, or icon system.
 
-## Build a records table from parts
+## Records from parts
 
 ```tsx
 <Records.Root>
