@@ -32,7 +32,6 @@ const releaseChecks = (): TegamiPlugin => ({
 
 const refreshBunWorkspaceLock = (): TegamiPlugin => ({
   name: "domainkit-refresh-bun-workspace-lock",
-  enforce: "post",
   async applyCliDraft() {
     const child = Bun.spawn(["bun", "install"], {
       cwd: this.cwd,
@@ -81,6 +80,7 @@ const paper = tegami({
     updateLockFile: true,
   },
   plugins: [
+    refreshBunWorkspaceLock(),
     github({
       repo: REPOSITORY,
       pushTags: true,
@@ -98,7 +98,6 @@ const paper = tegami({
         },
       },
     }),
-    refreshBunWorkspaceLock(),
     releaseChecks(),
     versionTag(),
   ],
