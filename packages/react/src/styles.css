@@ -12,6 +12,9 @@
   --domainkit-success: #059669;
   --domainkit-text: #18181b;
   --domainkit-control-radius: calc(var(--domainkit-radius) * 0.5);
+  --domainkit-button-raised-glint: rgb(255 255 255 / 0.95);
+  --domainkit-button-raised-shade: rgb(15 23 42 / 0.1);
+  --domainkit-button-raised-shadow: 0 1px 2px rgb(15 23 42 / 0.1);
   color: var(--domainkit-text);
   color-scheme: light;
   font-family: var(--domainkit-font-family);
@@ -25,6 +28,9 @@
   --domainkit-shadow: 0 16px 40px rgb(0 0 0 / 0.4);
   --domainkit-success: #34d399;
   --domainkit-text: #fafafa;
+  --domainkit-button-raised-glint: rgb(255 255 255 / 0.14);
+  --domainkit-button-raised-shade: rgb(0 0 0 / 0.42);
+  --domainkit-button-raised-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
   color-scheme: dark;
 }
 
@@ -37,6 +43,9 @@
     --domainkit-shadow: 0 16px 40px rgb(0 0 0 / 0.4);
     --domainkit-success: #34d399;
     --domainkit-text: #fafafa;
+    --domainkit-button-raised-glint: rgb(255 255 255 / 0.14);
+    --domainkit-button-raised-shade: rgb(0 0 0 / 0.42);
+    --domainkit-button-raised-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
     color-scheme: dark;
   }
 }
@@ -83,12 +92,47 @@
   line-height: 1.2;
   min-height: 2.25rem;
   padding: 0.45rem 0.85rem;
+  transition:
+    background-color 120ms ease,
+    background-image 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
 :where([data-domainkit-part="connection-trigger"], [data-domainkit-part="oauth-connect"]) {
-  background: var(--domainkit-accent);
-  border-color: var(--domainkit-accent);
+  --domainkit-button-face: color-mix(in oklch, var(--domainkit-accent), white 22%);
+  --domainkit-button-glint: color-mix(in oklch, var(--domainkit-accent), white 42%);
+  --domainkit-button-edge: color-mix(in oklch, var(--domainkit-accent), black 18%);
+  background-color: var(--domainkit-accent);
+  background-image: linear-gradient(
+    to bottom,
+    var(--domainkit-button-face),
+    var(--domainkit-accent)
+  );
+  border-color: var(--domainkit-button-edge);
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.18),
+    inset 0 1px 0 var(--domainkit-button-glint);
   color: var(--domainkit-accent-contrast);
+}
+
+:where(
+  [data-domainkit-part="connection-trigger"]:hover:not(:disabled),
+  [data-domainkit-part="oauth-connect"]:hover:not(:disabled)
+) {
+  --domainkit-button-face: color-mix(in oklch, var(--domainkit-accent), white 28%);
+}
+
+:where(
+  [data-domainkit-part="connection-trigger"]:active:not(:disabled),
+  [data-domainkit-part="oauth-connect"]:active:not(:disabled)
+) {
+  background-image: linear-gradient(
+    to bottom,
+    var(--domainkit-accent),
+    color-mix(in oklch, var(--domainkit-accent), black 10%)
+  );
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.28);
 }
 
 :where(
@@ -96,17 +140,21 @@
   [data-domainkit-part="connection-retry"],
   [data-domainkit-part="token-connect"] button
 ) {
-  background: var(--domainkit-background);
+  background-color: var(--domainkit-background);
   border-color: var(--domainkit-border);
+  box-shadow:
+    var(--domainkit-button-raised-shadow),
+    inset 0 1px 0 var(--domainkit-button-raised-glint),
+    inset 0 -1px 0 var(--domainkit-button-raised-shade);
   color: var(--domainkit-text);
 }
 
 :where(
-  [data-domainkit-part="reuse-connection"]:hover,
-  [data-domainkit-part="connection-retry"]:hover,
-  [data-domainkit-part="token-connect"] button:hover
+  [data-domainkit-part="reuse-connection"]:hover:not(:disabled),
+  [data-domainkit-part="connection-retry"]:hover:not(:disabled),
+  [data-domainkit-part="token-connect"] button:hover:not(:disabled)
 ) {
-  background: var(--domainkit-fill);
+  background-color: var(--domainkit-fill);
 }
 
 :where([data-domainkit-part="dialog-cancel"], [data-domainkit-part="dialog-close"]) {
