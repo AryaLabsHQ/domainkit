@@ -1,6 +1,6 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Publish the DomainKit React 0.1 contract\n\nShip accessible React flows for connecting DNS providers, reviewing and applying record plans,\nverifying DNS, removing managed records, and disconnecting domains. Applications can compose the\nsemantic parts, provide their own theme and icons, or use the complete default flows.\n\nThe package also includes host-free DNS record tables, cards, copy controls, status presentation,\nand zone-file export, with a workshop for testing the components and theme contract.\n"
-    filename: react-0-1.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: patch\n---\n\n## Show exact DNS operation values\n\nDisplay record values and optional priority in provisioning and cleanup reviews so users can inspect\nthe complete DNS mutation before authorizing it.\n"
+    filename: react-operation-values.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
@@ -8,10 +8,13 @@ core:packages:
   - id: npm:domainkit
     updated: false
   - changelogIds:
-      - react-0-1.md
+      - react-operation-values.md
     id: npm:@domainkit/react
     updated: true
+  - id: npm:@domainkit/docs
+    updated: false
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:domainkit
   - id: npm:@domainkit/react
+  - id: npm:@domainkit/docs
