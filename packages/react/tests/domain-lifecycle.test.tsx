@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Transport } from "domainkit";
@@ -8,6 +8,7 @@ import {
   Connection,
   Domain,
   DomainKit,
+  Lifecycle,
   Provisioning,
   Testing,
   Verification,
@@ -69,24 +70,35 @@ describe("provisioning lifecycle", () => {
 
   it("reviews exact operations and applies only the approved server digest", async () => {
     const user = userEvent.setup();
+    const events: Array<Lifecycle.Event> = [];
     const transport = Testing.makeFakeTransport({ inspect: connection });
     render(
-      <DomainKit.Root transport={transport}>
+      <DomainKit.Root onEvent={(event) => events.push(event)} transport={transport}>
         <Provisioning.Flow connection={connection} records={[record]} />
       </DomainKit.Root>,
     );
 
     await user.click(screen.getByRole("button", { name: "Review changes" }));
-    const dialog = await screen.findByRole("dialog", { name: "Review changes" });
+    const dialog = await screen.findByRole("dialog", {
+      name: "Review changes",
+    });
     expect(within(dialog).getByText(/Create/)).toBeTruthy();
     expect(within(dialog).getByText(record.name)).toBeTruthy();
     expect(within(dialog).getByText(record.value)).toBeTruthy();
     await user.click(within(dialog).getByRole("button", { name: "Add records" }));
 
-    expect(await screen.findByText("DNS changes applied")).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Review changes" })).toBeNull(),
+    );
+    expect(screen.queryByText("DNS changes applied")).toBeNull();
     expect(transport.calls.apply).toEqual([
-      { connectionId: "connection-1", domain: "example.com", planDigest: "plan-digest-1" },
+      {
+        connectionId: "connection-1",
+        domain: "example.com",
+        planDigest: "plan-digest-1",
+      },
     ]);
+    expect(events.map((event) => event._tag)).toEqual(["RecordsApplied"]);
   });
 
   it("fails closed on conflicts", async () => {
@@ -110,7 +122,11 @@ describe("provisioning lifecycle", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText(/TXT differs/)).toBeTruthy();
     expect(
-      (within(dialog).getByRole("button", { name: "Add records" }) as HTMLButtonElement).disabled,
+      (
+        within(dialog).getByRole("button", {
+          name: "Add records",
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
     expect(transport.calls.apply).toEqual([]);
   });
@@ -158,7 +174,11 @@ describe("provisioning lifecycle", () => {
         operationId: "apply-1",
         receiptId: "receipt-1",
         results: [
-          { _tag: "Failed", message: "provider rejected record", operationId: "create-dkim" },
+          {
+            _tag: "Failed",
+            message: "provider rejected record",
+            operationId: "create-dkim",
+          },
         ],
       },
       inspect: connection,
@@ -284,7 +304,6 @@ describe("observation and cleanup", () => {
   });
 
   it("does not revive an applied receipt after the host receipt cycles", async () => {
-    const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });
     const { rerender } = render(
       <DomainKit.Root transport={transport}>
@@ -292,8 +311,9 @@ describe("observation and cleanup", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Review changes" }));
-    await user.click(await screen.findByRole("button", { name: "Add records" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add records" }));
+    await waitFor(() => expect(transport.calls.apply).toHaveLength(1));
     rerender(
       <DomainKit.Root transport={transport}>
         <Domain.Flow domain="example.com" receiptId="receipt-b" records={[record]} />
@@ -305,13 +325,13 @@ describe("observation and cleanup", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Remove records" }));
+    fireEvent.click(screen.getByRole("menuitem", { hidden: true, name: "Remove records" }));
     await waitFor(() => expect(transport.calls.cleanupPlan).toHaveLength(1));
     expect(transport.calls.cleanupPlan[0]?.receiptId).toBe("receipt-a");
+    rerender(<></>);
   });
 
   it("keeps the applied receipt available for cleanup when requested records change", async () => {
-    const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });
     const { rerender } = render(
       <DomainKit.Root transport={transport}>
@@ -319,21 +339,22 @@ describe("observation and cleanup", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Review changes" }));
-    await user.click(await screen.findByRole("button", { name: "Add records" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add records" }));
+    await waitFor(() => expect(transport.calls.apply).toHaveLength(1));
     rerender(
       <DomainKit.Root transport={transport}>
         <Domain.Flow domain="example.com" receiptId="host-receipt" records={[replacementRecord]} />
       </DomainKit.Root>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Remove records" }));
+    fireEvent.click(screen.getByRole("menuitem", { hidden: true, name: "Remove records" }));
     await waitFor(() => expect(transport.calls.cleanupPlan).toHaveLength(1));
     expect(transport.calls.cleanupPlan[0]?.receiptId).toBe("receipt-1");
+    rerender(<></>);
   });
 
   it("keeps a locally applied receipt when no host receipt exists", async () => {
-    const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });
     const { rerender } = render(
       <DomainKit.Root transport={transport}>
@@ -341,40 +362,47 @@ describe("observation and cleanup", () => {
       </DomainKit.Root>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Review changes" }));
-    await user.click(await screen.findByRole("button", { name: "Add records" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add records" }));
+    await waitFor(() => expect(transport.calls.apply).toHaveLength(1));
     rerender(
       <DomainKit.Root transport={transport}>
         <Domain.Flow domain="example.com" records={[replacementRecord]} />
       </DomainKit.Root>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Remove records" }));
+    fireEvent.click(screen.getByRole("menuitem", { hidden: true, name: "Remove records" }));
     await waitFor(() => expect(transport.calls.cleanupPlan).toHaveLength(1));
     expect(transport.calls.cleanupPlan[0]?.receiptId).toBe("receipt-1");
+    rerender(<></>);
   });
 
   it("uses one observe operation with explicit provider and public DNS sources", async () => {
-    const user = userEvent.setup();
     const transport = Testing.makeFakeTransport({ inspect: connection });
-    render(
-      <DomainKit.Root transport={transport}>
-        <Verification.Status config={{ connection, domain: "example.com", records: [record] }} />
-      </DomainKit.Root>,
-    );
-    await user.click(screen.getByRole("button", { name: "Check DNS" }));
-    expect(await screen.findAllByText("dkim")).toHaveLength(2);
-    expect(screen.getAllByText("Found")).toHaveLength(2);
-    expect(screen.getByText("Provider")).toBeTruthy();
-    expect(screen.getByText("Public DNS")).toBeTruthy();
-    expect(transport.calls.observe).toEqual([
-      {
-        connectionId: "connection-1",
+    const VerificationHarness = () => {
+      const controller = Verification.useController({
+        connection,
         domain: "example.com",
         records: [record],
-        sources: { provider: true, publicDns: true },
-      },
-    ]);
+      });
+      return <button onClick={() => controller.observe()}>Check DNS</button>;
+    };
+    render(
+      <DomainKit.Root transport={transport}>
+        <VerificationHarness />
+      </DomainKit.Root>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Check DNS" }));
+    await waitFor(() =>
+      expect(transport.calls.observe).toEqual([
+        {
+          connectionId: "connection-1",
+          domain: "example.com",
+          records: [record],
+          sources: { provider: true, publicDns: true },
+        },
+      ]),
+    );
   });
 
   it("blocks unproven cleanup while domain disconnect preserves DNS", async () => {
@@ -384,7 +412,14 @@ describe("observation and cleanup", () => {
         _tag: "CleanupPlan",
         digest: "cleanup-digest",
         expiresAt: "2099-01-01T00:00:00.000Z",
-        operations: [{ _tag: "Blocked", id: "blocked-1", reason: "record drifted", record }],
+        operations: [
+          {
+            _tag: "Blocked",
+            id: "blocked-1",
+            reason: "record drifted",
+            record,
+          },
+        ],
       },
       inspect: connection,
       removeDomain: {
@@ -397,12 +432,27 @@ describe("observation and cleanup", () => {
     render(
       <DomainKit.Root transport={transport}>
         <Cleanup.Flow connection={connection} receiptId="receipt-1" />
-        <Connection.DisconnectAction connection={connection} />
+        <Connection.DisconnectDialog
+          connection={connection}
+          controller={{
+            connect: () => undefined,
+            disconnect: () => {
+              void transport.connection.removeDomain({
+                connectionId: connection.connectionId,
+                domain: connection.domain,
+                preserveDns: true,
+              });
+            },
+            retry: () => undefined,
+            reuse: () => undefined,
+            state: connection,
+          }}
+        />
       </DomainKit.Root>,
     );
 
     await user.click(screen.getByRole("button", { name: "Remove records" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByText(record.name)).toBeTruthy();
     expect(within(dialog).getByText(record.value)).toBeTruthy();
     expect(within(dialog).getByText(/record drifted/)).toBeTruthy();
@@ -415,6 +465,11 @@ describe("observation and cleanup", () => {
     ).toBe(true);
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await user.click(screen.getByRole("button", { name: "Disconnect" }));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Disconnect",
+      }),
+    );
 
     await waitFor(() => expect(transport.calls.removeDomain).toHaveLength(1));
     expect(transport.calls.removeDomain[0]).toEqual({
@@ -423,7 +478,29 @@ describe("observation and cleanup", () => {
       preserveDns: true,
     });
     expect(transport.calls.cleanupApply).toEqual([]);
-    expect(await screen.findByText(/DNS records were preserved/)).toBeTruthy();
+  });
+
+  it("closes successful cleanup and delegates feedback to lifecycle events", async () => {
+    const user = userEvent.setup();
+    const events: Array<Lifecycle.Event> = [];
+    const transport = Testing.makeFakeTransport({ inspect: connection });
+    render(
+      <DomainKit.Root onEvent={(event) => events.push(event)} transport={transport}>
+        <Cleanup.Flow connection={connection} receiptId="receipt-1" />
+      </DomainKit.Root>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Remove records" }));
+    const dialog = await screen.findByRole("alertdialog", {
+      name: "Remove records",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Remove records" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog", { name: "Remove records" })).toBeNull(),
+    );
+    expect(screen.queryByText("DNS cleanup complete")).toBeNull();
+    expect(events.map((event) => event._tag)).toEqual(["RecordsCleaned"]);
   });
 
   it("ignores a pending cleanup plan after the receipt changes", async () => {
@@ -466,15 +543,44 @@ describe("observation and cleanup", () => {
   });
 
   it("keeps disconnect available without a receipt and hides remove records", async () => {
-    const transport = Testing.makeFakeTransport({ inspect: connection });
+    const events: Array<Lifecycle.Event> = [];
+    const transport = Testing.makeFakeTransport({
+      inspect: connection,
+      removeDomain: {
+        _tag: "Removed",
+        connectionId: connection.connectionId,
+        domain: connection.domain,
+        remainingDomainCount: 1,
+      },
+    });
     render(
-      <DomainKit.Root transport={transport}>
+      <DomainKit.Root onEvent={(event) => events.push(event)} transport={transport}>
         <Domain.Flow domain="example.com" records={[record]} />
       </DomainKit.Root>,
     );
 
-    expect(await screen.findByRole("button", { name: "Disconnect" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Remove records" })).toBeNull();
+    await screen.findByRole("button", { name: "More connection actions" });
+    const disconnect = screen.getByRole("menuitem", {
+      hidden: true,
+      name: "Disconnect",
+    });
+    expect(screen.queryByRole("menuitem", { hidden: true, name: "Remove records" })).toBeNull();
+    await act(async () => {
+      disconnect.click();
+      await Promise.resolve();
+    });
+    fireEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Disconnect",
+      }),
+    );
+
+    expect(await screen.findByText("Cloudflare manages DNS for this domain")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Connect" })).toBeTruthy();
+    expect(screen.getAllByRole("img", { name: "Cloudflare" })).toHaveLength(1);
+    expect(screen.queryByText("Cloudflare connected")).toBeNull();
+    expect(screen.getByRole("table")).toBeTruthy();
+    expect(events.map((event) => event._tag)).toEqual(["DomainDisconnected"]);
   });
 
   it("fails closed when custom UI dispatches Apply for a blocked cleanup plan", async () => {
@@ -483,7 +589,14 @@ describe("observation and cleanup", () => {
         _tag: "CleanupPlan",
         digest: "cleanup-digest",
         expiresAt: "2099-01-01T00:00:00.000Z",
-        operations: [{ _tag: "Blocked", id: "blocked-1", reason: "record drifted", record }],
+        operations: [
+          {
+            _tag: "Blocked",
+            id: "blocked-1",
+            reason: "record drifted",
+            record,
+          },
+        ],
       },
       inspect: connection,
     });

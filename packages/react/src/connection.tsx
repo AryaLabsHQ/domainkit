@@ -1,3 +1,4 @@
+import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Transport } from "domainkit";
@@ -10,17 +11,19 @@ import {
   useState,
   type ComponentPropsWithoutRef,
   type FormEvent,
+  type ReactElement,
   type ReactNode,
 } from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
-import { Event as LifecycleEvent } from "./lifecycle.ts";
 import * as Provider from "./provider.tsx";
+import { Event as LifecycleEvent } from "./lifecycle.ts";
 import { failureFromDefect, failureFromError, type Failure } from "./atom.ts";
 
 type LocalState = Data.TaggedEnum<{
+  Disconnecting: { readonly snapshot: Transport.Connected };
   Loading: {};
   Redirecting: { readonly snapshot: Disconnected };
   Submitting: { readonly snapshot: Disconnected };
@@ -32,6 +35,7 @@ type Disconnected = Extract<Transport.ConnectionSnapshot, { readonly _tag: "Disc
 
 export interface Controller {
   readonly connect: (method: Transport.Method) => void;
+  readonly disconnect: () => void;
   readonly retry: () => void;
   readonly reuse: () => void;
   readonly state: State;
@@ -39,6 +43,7 @@ export interface Controller {
 
 export type Command = Data.TaggedEnum<{
   Connect: { readonly method: Transport.Method };
+  Disconnect: {};
   Retry: {};
   Reuse: {};
 }>;
@@ -74,6 +79,43 @@ export function useModel(domain: string): Model {
         return Effect.void;
       }
       const snapshot = get(state);
+      if (input._tag === "Disconnect") {
+        if (snapshot._tag !== "Connected") return Effect.void;
+        get.set(actionState, State.Disconnecting({ snapshot }));
+        return Effect.flatMap(Transport.Service, (transport) =>
+          transport.connection.removeDomain({
+            connectionId: snapshot.connectionId,
+            domain: snapshot.domain,
+            preserveDns: true,
+          }),
+        ).pipe(
+          Effect.tap((result) =>
+            Effect.sync(() => {
+              get.set(actionState, {
+                _tag: "Disconnected",
+                domain: snapshot.domain,
+                provider: snapshot.provider,
+                ...(result.remainingDomainCount > 0
+                  ? {
+                      reusableConnection: {
+                        connectionId: result.connectionId,
+                        label: snapshot.provider.name,
+                      },
+                    }
+                  : {}),
+              });
+              emit(
+                LifecycleEvent.DomainDisconnected({
+                  connection: snapshot,
+                  result,
+                }),
+              );
+            }),
+          ),
+          Effect.catch((error) => Effect.sync(() => get.set(actionState, failureFromError(error)))),
+          Effect.asVoid,
+        );
+      }
       if (snapshot._tag !== "Disconnected") return Effect.void;
       const reusableConnection = snapshot.reusableConnection;
       if (input._tag === "Reuse" && reusableConnection === undefined) return Effect.void;
@@ -136,6 +178,7 @@ export function useController(domain: string): Controller {
 
   return {
     connect: (method) => execute(Command.Connect({ method })),
+    disconnect: () => execute(Command.Disconnect()),
     retry: () => execute(Command.Retry()),
     reuse: () => execute(Command.Reuse()),
     state,
@@ -177,15 +220,17 @@ export function Status({ children, state, ...props }: StatusProps) {
       ? messages.detectingProvider
       : state._tag === "Connected"
         ? messages.connected(state.provider.name)
-        : state._tag === "Unsupported"
-          ? messages.automaticUnavailable
-          : state._tag === "Failure"
-            ? state.message
-            : state._tag === "Redirecting"
-              ? messages.openingAuthorization
-              : state._tag === "Submitting"
-                ? messages.connecting
-                : messages.providerAvailable(state.provider.name);
+        : state._tag === "Disconnecting"
+          ? messages.disconnecting
+          : state._tag === "Unsupported"
+            ? messages.automaticUnavailable
+            : state._tag === "Failure"
+              ? state.message
+              : state._tag === "Redirecting"
+                ? messages.openingAuthorization
+                : state._tag === "Submitting"
+                  ? messages.connecting
+                  : messages.providerAvailable(state.provider.name);
   return usePart(
     "div",
     props,
@@ -242,6 +287,7 @@ export interface OAuthActionProps extends PartProps<"button", ActionState> {
 }
 
 export function OAuthAction({ controller, label, ...props }: OAuthActionProps) {
+  const pending = controller.state._tag === "Submitting" || controller.state._tag === "Redirecting";
   return usePart(
     "button",
     props,
@@ -249,6 +295,7 @@ export function OAuthAction({ controller, label, ...props }: OAuthActionProps) {
     {
       children: label,
       "data-domainkit-part": "oauth-connect",
+      disabled: pending,
       onClick: () => controller.connect(Transport.Method.OAuth()),
       type: "button",
     },
@@ -261,6 +308,7 @@ export interface ReuseActionProps extends PartProps<"button", ActionState> {
 }
 
 export function ReuseAction({ controller, label, ...props }: ReuseActionProps) {
+  const pending = controller.state._tag === "Submitting" || controller.state._tag === "Redirecting";
   return usePart(
     "button",
     props,
@@ -268,6 +316,7 @@ export function ReuseAction({ controller, label, ...props }: ReuseActionProps) {
     {
       children: label,
       "data-domainkit-part": "reuse-connection",
+      disabled: pending,
       onClick: () => void controller.reuse(),
       type: "button",
     },
@@ -281,6 +330,7 @@ export interface TokenActionProps extends Omit<PartProps<"form", ActionState>, "
 
 export function TokenAction({ controller, method, ...props }: TokenActionProps) {
   const { messages } = useDomainKit();
+  const pending = controller.state._tag === "Submitting" || controller.state._tag === "Redirecting";
   const [token, setToken] = useState("");
   const [parameters, setParameters] = useState<Readonly<Record<string, string>>>({});
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -312,6 +362,7 @@ export function TokenAction({ controller, method, ...props }: TokenActionProps) 
               {parameter.label}
               <input
                 name={parameter.key}
+                disabled={pending}
                 onChange={(event) => {
                   const value = event.currentTarget.value;
                   setParameters((current) => ({
@@ -331,6 +382,7 @@ export function TokenAction({ controller, method, ...props }: TokenActionProps) 
             {messages.tokenLabel}
             <input
               autoComplete="off"
+              disabled={pending}
               name="token"
               onChange={(event) => setToken(event.currentTarget.value)}
               placeholder={method.placeholder}
@@ -338,7 +390,10 @@ export function TokenAction({ controller, method, ...props }: TokenActionProps) 
               value={token}
             />
           </label>
-          <button disabled={token.length === 0 || missingRequiredParameter === true} type="submit">
+          <button
+            disabled={pending || token.length === 0 || missingRequiredParameter === true}
+            type="submit"
+          >
             {method.label}
           </button>
         </>
@@ -356,9 +411,25 @@ export interface DialogProps {
 
 export function Dialog({ controller, snapshot }: DialogProps) {
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
+  const pending = controller.state._tag === "Submitting" || controller.state._tag === "Redirecting";
+  const oauthMethods = snapshot.provider.authentication.filter(
+    (method): method is Extract<Transport.AuthenticationMethod, { readonly _tag: "OAuth" }> =>
+      method._tag === "OAuth",
+  );
+  const tokenMethods = snapshot.provider.authentication.filter(
+    (method): method is Extract<Transport.AuthenticationMethod, { readonly _tag: "Token" }> =>
+      method._tag === "Token",
+  );
+  const hasProviderAccountPath =
+    oauthMethods.length > 0 || snapshot.reusableConnection !== undefined;
   return (
     <BaseDialog.Portal container={portalContainer}>
-      <BaseDialog.Backdrop data-domainkit-part="dialog-backdrop" />
+      <BaseDialog.Backdrop
+        data-color-scheme={colorScheme}
+        data-domainkit-part="dialog-backdrop"
+        data-domainkit-root=""
+        style={themeStyle}
+      />
       <BaseDialog.Popup
         data-domainkit-part="connection-dialog"
         data-domainkit-root=""
@@ -375,31 +446,46 @@ export function Dialog({ controller, snapshot }: DialogProps) {
               {messages.dialogDescription(snapshot.domain)}
             </BaseDialog.Description>
           </div>
-          <BaseDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
-            ×
-          </BaseDialog.Close>
+          {pending ? null : (
+            <BaseDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
+              ×
+            </BaseDialog.Close>
+          )}
         </div>
         <div data-domainkit-part="dialog-body">
-          {snapshot.provider.authentication.map((method) =>
-            method._tag === "OAuth" ? (
-              <OAuthAction controller={controller} key={method._tag} label={method.label} />
-            ) : null,
-          )}
-          {snapshot.reusableConnection === undefined ? null : (
-            <ReuseAction
-              controller={controller}
-              label={messages.reuseConnection(snapshot.reusableConnection.label)}
-            />
-          )}
-          {snapshot.provider.authentication.map((method) =>
-            method._tag === "Token" ? (
-              <TokenAction controller={controller} key={method._tag} method={method} />
-            ) : null,
-          )}
+          {hasProviderAccountPath ? (
+            <div data-domainkit-part="provider-authentication">
+              {oauthMethods.map((method) => (
+                <OAuthAction controller={controller} key={method._tag} label={method.label} />
+              ))}
+              {snapshot.reusableConnection === undefined ? null : (
+                <ReuseAction
+                  controller={controller}
+                  label={messages.reuseConnection(snapshot.reusableConnection.label)}
+                />
+              )}
+            </div>
+          ) : null}
+          {hasProviderAccountPath && tokenMethods.length > 0 ? (
+            <div
+              aria-label={messages.authenticationAlternative}
+              data-domainkit-part="authentication-separator"
+              role="separator"
+            >
+              <span aria-hidden="true">{messages.authenticationAlternative}</span>
+            </div>
+          ) : null}
+          {tokenMethods.map((method) => (
+            <TokenAction controller={controller} key={method._tag} method={method} />
+          ))}
         </div>
-        <div data-domainkit-part="dialog-footer">
-          <BaseDialog.Close data-domainkit-part="dialog-cancel">{messages.cancel}</BaseDialog.Close>
-        </div>
+        {pending ? null : (
+          <div data-domainkit-part="dialog-footer">
+            <BaseDialog.Close data-domainkit-part="dialog-cancel">
+              {messages.cancel}
+            </BaseDialog.Close>
+          </div>
+        )}
       </BaseDialog.Popup>
     </BaseDialog.Portal>
   );
@@ -428,7 +514,13 @@ export function Flow({ domain, ...props }: FlowProps) {
         />
       ) : null}
       {snapshot === undefined ? null : (
-        <BaseDialog.Root>
+        <BaseDialog.Root
+          onOpenChange={(open, eventDetails) => {
+            if (!open && (state._tag === "Submitting" || state._tag === "Redirecting")) {
+              eventDetails.cancel();
+            }
+          }}
+        >
           <ConnectTrigger provider={snapshot.provider} />
           <Dialog controller={controller} snapshot={snapshot} />
         </BaseDialog.Root>
@@ -457,85 +549,133 @@ export function RetryAction({ controller, kind = "retry", ...props }: RetryActio
   );
 }
 
-type LocalDisconnectState = Data.TaggedEnum<{
-  Disconnecting: {};
-  Idle: {};
-}>;
-export const DisconnectState = Data.taggedEnum<LocalDisconnectState>();
-export type DisconnectState = LocalDisconnectState | Transport.RemoveDomainResult | Failure;
-
-export function useDisconnect(connection: Transport.Connected) {
-  const { emit, runtime } = useDomainKit();
-  const controller = useMemo(() => {
-    const state = Atom.make<DisconnectState>(DisconnectState.Idle());
-    const disconnect = runtime.fn<void>()((_, get) => {
-      get.set(state, DisconnectState.Disconnecting());
-      return Effect.flatMap(Transport.Service, (transport) =>
-        transport.connection.removeDomain({
-          connectionId: connection.connectionId,
-          domain: connection.domain,
-          preserveDns: true,
-        }),
-      ).pipe(
-        Effect.tap((result) =>
-          Effect.sync(() => {
-            get.set(state, result);
-            emit(LifecycleEvent.DomainDisconnected({ connection, result }));
-          }),
-        ),
-        Effect.catch((error) => Effect.sync(() => get.set(state, failureFromError(error)))),
-        Effect.asVoid,
-      );
-    });
-    return { disconnect, state };
-  }, [connection.connectionId, connection.domain, emit, runtime]);
-  const state = useAtomValue(controller.state);
-  const disconnect = useAtomSet(controller.disconnect);
-  return { disconnect: () => disconnect(), state } as const;
+export interface CardProps extends PartProps<"div", { readonly status: State["_tag"] }> {
+  readonly status: State["_tag"];
 }
 
-export interface DisconnectActionProps extends PartProps<
-  "div",
-  { readonly status: DisconnectState["_tag"] }
-> {
-  readonly connection: Transport.Connected;
-}
-
-export function DisconnectAction({ connection, ...props }: DisconnectActionProps) {
-  const controller = useDisconnect(connection);
-  const { messages } = useDomainKit();
-  const state = controller.state;
+export function Card({ status, ...props }: CardProps) {
   return usePart(
     "div",
     props,
-    { status: state._tag },
-    {
-      children: (
-        <>
-          {state._tag === "Removed" ? (
-            <p data-domainkit-part="flow-outcome" data-tone="success">
-              {messages.domainDisconnected}
-            </p>
-          ) : null}
-          {state._tag === "Failure" ? (
-            <p data-domainkit-part="flow-outcome" data-tone="danger" role="alert">
-              {state.message}
-            </p>
-          ) : null}
-          {state._tag === "Removed" ? null : (
+    { status },
+    { "data-domainkit-part": "connected-card", "data-state": status },
+  );
+}
+
+export interface CardIdentityProps extends PartProps<"div", { readonly status: State["_tag"] }> {
+  readonly status: State["_tag"];
+}
+
+export function CardIdentity({ status, ...props }: CardIdentityProps) {
+  return usePart(
+    "div",
+    props,
+    { status },
+    { "data-domainkit-part": "connected-identity", "data-state": status },
+  );
+}
+
+export interface CardActionsProps extends PartProps<"div", { readonly status: State["_tag"] }> {
+  readonly status: State["_tag"];
+}
+
+export function CardActions({ status, ...props }: CardActionsProps) {
+  return usePart(
+    "div",
+    props,
+    { status },
+    { "data-domainkit-part": "connected-actions", "data-state": status },
+  );
+}
+
+export interface DisconnectDialogProps {
+  readonly connection: Transport.Connected;
+  readonly controller: Controller;
+  readonly onOpenChange?: (open: boolean) => void;
+  readonly open?: boolean;
+  readonly trigger?: ReactElement | null;
+}
+
+export function DisconnectDialog({
+  connection,
+  controller,
+  onOpenChange,
+  open: openProp,
+  trigger,
+}: DisconnectDialogProps) {
+  const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = (nextOpen: boolean) => {
+    if (openProp === undefined) setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
+  const disconnecting = controller.state._tag === "Disconnecting";
+  return (
+    <BaseAlertDialog.Root
+      onOpenChange={(nextOpen, eventDetails) => {
+        if (!nextOpen && disconnecting) {
+          eventDetails.cancel();
+          return;
+        }
+        setOpen(nextOpen);
+      }}
+      open={open}
+    >
+      {trigger === null ? null : (
+        <BaseAlertDialog.Trigger
+          data-domainkit-part="disconnect-trigger"
+          {...(trigger === undefined ? {} : { render: trigger })}
+        >
+          {messages.disconnectDomain}
+        </BaseAlertDialog.Trigger>
+      )}
+      <BaseAlertDialog.Portal container={portalContainer}>
+        <BaseAlertDialog.Backdrop
+          data-color-scheme={colorScheme}
+          data-domainkit-part="dialog-backdrop"
+          data-domainkit-root=""
+          style={themeStyle}
+        />
+        <BaseAlertDialog.Popup
+          data-color-scheme={colorScheme}
+          data-domainkit-part="disconnect-dialog"
+          data-domainkit-root=""
+          style={themeStyle}
+        >
+          <div data-domainkit-part="dialog-header">
+            <div data-domainkit-part="dialog-heading">
+              <BaseAlertDialog.Title data-domainkit-part="dialog-title">
+                {messages.disconnectTitle(connection.provider.name)}
+              </BaseAlertDialog.Title>
+              <BaseAlertDialog.Description data-domainkit-part="dialog-description">
+                {messages.disconnectConsent}
+              </BaseAlertDialog.Description>
+            </div>
+            {disconnecting ? null : (
+              <BaseAlertDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
+                ×
+              </BaseAlertDialog.Close>
+            )}
+          </div>
+          <div data-domainkit-part="dialog-footer">
+            {disconnecting ? null : (
+              <BaseAlertDialog.Close data-domainkit-part="dialog-cancel">
+                {messages.cancel}
+              </BaseAlertDialog.Close>
+            )}
             <button
               data-domainkit-part="disconnect-action"
-              disabled={state._tag === "Disconnecting"}
-              onClick={() => void controller.disconnect()}
+              disabled={disconnecting}
+              onClick={() => controller.disconnect()}
               type="button"
             >
-              {state._tag === "Disconnecting" ? messages.disconnecting : messages.disconnectDomain}
+              {disconnecting ? messages.disconnecting : messages.disconnectDomain}
             </button>
-          )}
-        </>
-      ),
-      "data-domainkit-part": "disconnect",
-    },
+          </div>
+        </BaseAlertDialog.Popup>
+      </BaseAlertDialog.Portal>
+    </BaseAlertDialog.Root>
   );
 }
 

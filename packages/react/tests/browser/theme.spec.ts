@@ -39,11 +39,13 @@ test("provisioning and cleanup dialogs preserve review focus", async ({ page }) 
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Review changes" })).toBeFocused();
 
-  await page.getByRole("button", { name: "Remove records" }).click();
-  const cleanup = page.getByRole("dialog", { name: "Remove records" });
+  const actions = page.getByRole("button", { name: "More connection actions" });
+  await actions.click();
+  await page.getByRole("menuitem", { name: "Remove records" }).click();
+  const cleanup = page.getByRole("alertdialog", { name: "Remove records" });
   await expect(cleanup).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Remove records" })).toBeFocused();
+  await expect(actions).toBeFocused();
 });
 
 test("connection recipe fills the workshop column", async ({ page }) => {
