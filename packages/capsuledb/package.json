@@ -1,6 +1,6 @@
 {
   "name": "@domainkit/capsuledb",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Optional CapsuleDB persistence for DomainKit",
   "license": "MIT",
   "repository": {
@@ -22,6 +22,9 @@
     },
     "./package.json": "./package.json"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown",
     "release:check": "bun run typecheck && bun run test && bun run build && bun run test:artifact",
@@ -30,7 +33,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "domainkit": "workspace:^0.5.0"
+    "domainkit": "workspace:^0.6.0"
   },
   "devDependencies": {
     "@effect/sql-pg": "4.0.0-rc.112",
