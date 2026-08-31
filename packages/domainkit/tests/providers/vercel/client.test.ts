@@ -197,6 +197,26 @@ describe("Vercel Effect client", () => {
     });
   });
 
+  it.effect("rejects unsupported account-kind targets before creating DNS access", () => {
+    const client = make(
+      async () => {
+        throw new Error("must not call the provider");
+      },
+      { _tag: "team", teamId: "team-1" },
+    );
+    return Effect.gen(function* () {
+      const failure = yield* client
+        .forTarget({
+          accountId: "account-1",
+          accountKind: "account",
+          zoneId: "domain-1",
+          zoneName: DomainName.parse("example.com"),
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(failure.reason, "unsupported");
+    });
+  });
+
   it.effect("discovers personal and paginated team accounts", () => {
     const recording = recordedFetch([
       { body: { user: { id: "user-1", name: null, username: "saatvik" } } },
