@@ -12,11 +12,6 @@ body,
 
 [data-workshop],
 [data-workshop-select-positioner] {
-  --workshop-font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --workshop-font-sans: "IBM Plex Sans", Inter, ui-sans-serif, system-ui, sans-serif;
-}
-
-[data-workshop] {
   --workshop-accent: #18181b;
   --workshop-control: #2563eb;
   --workshop-bg: #f4f4f5;
@@ -26,6 +21,16 @@ body,
   --workshop-fill: #ffffff;
   --workshop-muted: #71717a;
   --workshop-text: #18181b;
+  --workshop-font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --workshop-font-sans: "IBM Plex Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+[data-workshop-select-positioner],
+[data-workshop-select-positioner] * {
+  box-sizing: border-box;
+}
+
+[data-workshop] {
   background: var(--workshop-fill);
   color: var(--workshop-text);
   display: grid;

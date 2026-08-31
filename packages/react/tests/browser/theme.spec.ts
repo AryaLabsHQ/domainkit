@@ -240,11 +240,16 @@ test("workshop switches presentational stories from the sidebar", async ({ page 
     const popup = document.querySelector<HTMLElement>("[data-workshop-select-popup]");
     const trigger = document.querySelector<HTMLElement>("[data-workshop-select-trigger]");
     if (popup === null || trigger === null) throw new Error("Workshop theme controls are missing");
+    const popupStyle = getComputedStyle(popup);
     return {
+      background: popupStyle.backgroundColor,
+      color: popupStyle.color,
       popup: getComputedStyle(popup).fontFamily,
       trigger: getComputedStyle(trigger).fontFamily,
     };
   });
+  expect(menuFonts.background).toBe("rgb(255, 255, 255)");
+  expect(menuFonts.color).toBe("rgb(24, 24, 27)");
   expect(menuFonts.popup).toBe(menuFonts.trigger);
   expect(menuFonts.popup).toContain("IBM Plex Sans");
   await page.keyboard.press("Escape");
