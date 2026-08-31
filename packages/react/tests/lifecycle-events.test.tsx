@@ -6,12 +6,7 @@ import { Connection, DomainKit, Lifecycle, Provisioning, Testing } from "../src/
 
 afterEach(cleanup);
 
-const connection = {
-  _tag: "Connected" as const,
-  connectionId: "connection-1",
-  domain: "example.com",
-  provider: Testing.provider(),
-};
+const connection = Testing.connected();
 
 const record: Transport.DnsRecord = {
   id: "dkim",
@@ -48,14 +43,24 @@ describe("host lifecycle events", () => {
 
   it("commits disconnect state before notifying a throwing listener", async () => {
     const user = userEvent.setup();
-    const transport = Testing.makeFakeTransport({ inspect: connection });
+    const transport = Testing.makeFakeTransport({
+      inspect: [
+        connection,
+        {
+          _tag: "Disconnected",
+          domain: connection.attachment.domain,
+          provider: connection.provider,
+          reusableConnections: [],
+        },
+      ],
+    });
     const DisconnectHarness = () => {
-      const controller = Connection.useController(connection.domain);
+      const controller = Connection.useController(connection.attachment.domain);
       return (
         <>
           <span>{controller.state._tag}</span>
           {controller.state._tag === "Connected" ? (
-            <button onClick={controller.disconnect} type="button">
+            <button onClick={controller.detach} type="button">
               Disconnect
             </button>
           ) : null}
@@ -76,12 +81,8 @@ describe("host lifecycle events", () => {
     await user.click(await screen.findByRole("button", { name: "Disconnect" }));
 
     await waitFor(() => expect(screen.getByText("Disconnected")).toBeTruthy());
-    expect(transport.calls.removeDomain).toEqual([
-      {
-        connectionId: connection.connectionId,
-        domain: connection.domain,
-        preserveDns: true,
-      },
+    expect(transport.calls.detach).toEqual([
+      { attachmentId: connection.attachment.id, preserveDns: true },
     ]);
   });
 

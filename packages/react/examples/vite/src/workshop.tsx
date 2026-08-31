@@ -8,7 +8,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
-import { Transport } from "domainkit";
+import { DomainName, Transport } from "domainkit";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Cleanup,
@@ -126,6 +126,7 @@ export interface WorkshopState {
   readonly receipt: boolean;
   readonly records: ReadonlyArray<Transport.DnsRecord>;
   readonly story: StoryId;
+  readonly targetState: "ambiguous" | "unavailable" | "unique";
   readonly theme: WorkshopThemeId;
 }
 
@@ -149,6 +150,7 @@ export function stateFromSearch(search: string): WorkshopState {
   const parameters = new URLSearchParams(search);
   const storyParameter = parameters.get("story");
   const themeParameter = parameters.get("theme");
+  const targetParameter = parameters.get("targets");
   return {
     colorScheme: parameters.get("mode") === "dark" ? "dark" : "light",
     domain: "mail.example.com",
@@ -162,21 +164,30 @@ export function stateFromSearch(search: string): WorkshopState {
         : parameters.get("flow") === "lifecycle"
           ? "lifecycle"
           : "connection",
+    targetState:
+      targetParameter === "ambiguous" || targetParameter === "unavailable"
+        ? targetParameter
+        : "unique",
     theme:
       themeParameter !== null && isWorkshopThemeId(themeParameter) ? themeParameter : "neutral",
   };
 }
 
-function searchFromState(state: Pick<WorkshopState, "colorScheme" | "story" | "theme">): string {
+function searchFromState(
+  state: Pick<WorkshopState, "colorScheme" | "story" | "targetState" | "theme">,
+): string {
   const parameters = new URLSearchParams();
   parameters.set("story", state.story);
   if (state.story === "lifecycle") parameters.set("flow", "lifecycle");
   parameters.set("mode", state.colorScheme);
+  if (state.targetState !== "unique") parameters.set("targets", state.targetState);
   if (state.theme !== "neutral") parameters.set("theme", state.theme);
   return `?${parameters}`;
 }
 
-function writeSearch(state: Pick<WorkshopState, "colorScheme" | "story" | "theme">): void {
+function writeSearch(
+  state: Pick<WorkshopState, "colorScheme" | "story" | "targetState" | "theme">,
+): void {
   const next = `${window.location.pathname}${searchFromState(state)}`;
   window.history.replaceState(null, "", next);
 }
@@ -316,6 +327,17 @@ const storyConfig = ({
     };
     config.providerName = { type: "text", default: initial.providerName };
   }
+  if (story === "connection" || story === "host-connection") {
+    config.targetState = {
+      type: "select",
+      options: [
+        { label: "Unique target", value: "unique" },
+        { label: "Ambiguous targets", value: "ambiguous" },
+        { label: "Unavailable targets", value: "unavailable" },
+      ],
+      default: initial.targetState,
+    };
+  }
   if (usesRecords(story)) {
     const records: DialConfig = {};
     for (const id of recordIds) {
@@ -329,10 +351,59 @@ const storyConfig = ({
 };
 
 function makeTransport(
-  state: Pick<WorkshopState, "domain" | "providerId" | "providerName" | "story">,
+  state: Pick<WorkshopState, "domain" | "providerId" | "providerName" | "story" | "targetState">,
   records: () => ReadonlyArray<Transport.DnsRecord>,
 ) {
-  const provider = Testing.provider({ id: state.providerId, name: state.providerName });
+  const provider = Testing.provider({
+    authentication:
+      state.providerId === "vercel"
+        ? [
+            { _tag: "Integration", label: "Install Vercel Integration" },
+            { _tag: "Token", label: "Connect with token", placeholder: "Paste API token" },
+          ]
+        : Testing.provider().authentication,
+    id: state.providerId,
+    name: state.providerName,
+  });
+  const targets =
+    state.targetState === "unavailable"
+      ? []
+      : [
+          Testing.target({
+            evidence: {
+              accountName: "Arya Labs",
+              nameservers: [],
+              status: "active",
+              zoneType: "full",
+            },
+          }),
+          ...(state.targetState === "ambiguous"
+            ? [
+                Testing.target({
+                  accountId: "team-2",
+                  accountKind: "team",
+                  evidence: {
+                    accountName: "Samva Team",
+                    nameservers: [],
+                    status: "active",
+                    zoneType: "full",
+                  },
+                  zoneId: "zone-2",
+                }),
+              ]
+            : []),
+        ];
+  const disconnected = {
+    _tag: "Disconnected" as const,
+    domain: state.domain,
+    provider,
+    reusableConnections: [
+      {
+        connection: Testing.connection({ providerId: state.providerId }),
+        targets,
+      },
+    ],
+  };
   const transport = Testing.makeFakeTransport({
     cleanupPlan: {
       _tag: "CleanupPlan",
@@ -340,21 +411,31 @@ function makeTransport(
       expiresAt: "2099-01-01T00:00:00.000Z",
       operations: [],
     } satisfies Transport.CleanupPlan,
+    detach: {
+      _tag: "Detached",
+      attachment: Testing.attachment({
+        connectionId: "connection-1",
+        domain: DomainName.parse(state.domain),
+        target: targets[0] ?? Testing.target(),
+      }),
+      connection: Testing.connection({ providerId: state.providerId }),
+      remainingAttachments: 0,
+    },
     inspect:
       state.story === "lifecycle" || state.story === "host-lifecycle"
         ? {
-            _tag: "Connected",
-            connectionId: "connection-1",
-            domain: state.domain,
+            ...Testing.connected({
+              attachment: Testing.attachment({
+                domain: DomainName.parse(state.domain),
+                target: targets[0] ?? Testing.target(),
+              }),
+              connection: Testing.connection({ providerId: state.providerId }),
+            }),
             provider,
           }
-        : {
-            _tag: "Disconnected",
-            domain: state.domain,
-            provider,
-            reusableConnection: { connectionId: "connection-1", label: "Arya Labs account" },
-          },
+        : disconnected,
   });
+  let detached = false;
   return Transport.layerFromAsync({
     ...transport,
     cleanup: {
@@ -371,6 +452,16 @@ function makeTransport(
           })),
         };
       },
+    },
+    connection: {
+      ...transport.connection,
+      detach: async (input) => {
+        const result = await transport.connection.detach(input);
+        detached = true;
+        return result;
+      },
+      inspect: (input) =>
+        detached ? Promise.resolve(disconnected) : transport.connection.inspect(input),
     },
   });
 }
@@ -464,12 +555,16 @@ function Preview({ state }: { readonly state: WorkshopState }) {
     const timeout = window.setTimeout(() => setEvent(undefined), 4_000);
     return () => window.clearTimeout(timeout);
   }, [event]);
-  const { domain, providerId, providerName, story } = state;
+  const { domain, providerId, providerName, story, targetState } = state;
   const records = useRef(state.records);
   records.current = state.records;
   const transport = useMemo(
-    () => makeTransport({ domain, providerId, providerName, story }, () => records.current),
-    [domain, providerId, providerName, story],
+    () =>
+      makeTransport(
+        { domain, providerId, providerName, story, targetState },
+        () => records.current,
+      ),
+    [domain, providerId, providerName, story, targetState],
   );
   const provider = Testing.provider({ id: state.providerId, name: state.providerName });
   let children: ReactNode;
@@ -569,8 +664,8 @@ function workshopEventMessage(event: Lifecycle.Event): string {
   switch (event._tag) {
     case "ConnectionEstablished":
       return `${event.connection.provider.name} connected`;
-    case "DomainDisconnected":
-      return "Domain disconnected";
+    case "DomainDetached":
+      return "Domain detached";
     case "RecordsApplied":
       return "DNS records added";
     case "RecordsCleaned":
@@ -637,12 +732,23 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
     receipt: asString(values.receipt, initial.receipt ? "on" : "off") === "on",
     records: recordsFromDial(recordIds, values.records, seeds.current),
     story,
+    targetState:
+      asString(values.targetState, initial.targetState) === "ambiguous"
+        ? "ambiguous"
+        : asString(values.targetState, initial.targetState) === "unavailable"
+          ? "unavailable"
+          : "unique",
     theme,
   };
 
   useEffect(() => {
-    writeSearch({ colorScheme: state.colorScheme, story: state.story, theme: state.theme });
-  }, [state.colorScheme, state.story, state.theme]);
+    writeSearch({
+      colorScheme: state.colorScheme,
+      story: state.story,
+      targetState: state.targetState,
+      theme: state.theme,
+    });
+  }, [state.colorScheme, state.story, state.targetState, state.theme]);
 
   useEffect(() => {
     if (story !== "provider" || providerId === lastProviderId.current) return;
@@ -705,7 +811,7 @@ export function Workshop({ initial }: { readonly initial: WorkshopState }) {
         <div data-workshop-canvas="">
           <div data-workshop-frame="">
             <Preview
-              key={`${state.story}:${state.domain}:${state.providerId}:${state.providerName}:${state.receipt}`}
+              key={`${state.story}:${state.domain}:${state.providerId}:${state.providerName}:${state.receipt}:${state.targetState}`}
               state={state}
             />
           </div>

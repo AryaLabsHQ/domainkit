@@ -73,8 +73,8 @@ export function useModel(
         get.set(state, State.Planning());
         return Effect.flatMap(Transport.Service, (transport) =>
           transport.provisioning.plan({
-            connectionId: connection.connectionId,
-            domain: connection.domain,
+            attachmentId: connection.attachment.id,
+            domain: connection.attachment.domain,
             records,
           }),
         ).pipe(
@@ -92,8 +92,8 @@ export function useModel(
       get.set(state, State.Applying({ plan }));
       return Effect.flatMap(Transport.Service, (transport) =>
         transport.provisioning.apply({
-          connectionId: connection.connectionId,
-          domain: connection.domain,
+          attachmentId: connection.attachment.id,
+          domain: connection.attachment.domain,
           planDigest: plan.digest,
         }),
       ).pipe(
@@ -117,7 +117,7 @@ export function useModel(
       );
     });
     return { command: execute, state };
-  }, [connection.connectionId, connection.domain, emit, recordKey, runtime]);
+  }, [connection.attachment.domain, connection.attachment.id, emit, recordKey, runtime]);
 }
 
 export function useController(

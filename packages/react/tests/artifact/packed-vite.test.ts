@@ -60,7 +60,7 @@ const transport = Testing.makeFakeTransport({
     _tag: "Disconnected",
     domain: "mail.example.com",
     provider: Testing.provider(),
-    reusableConnection: { connectionId: "connection-1", label: "existing account" },
+    reusableConnections: [],
   },
 });
 function CustomConnection() {

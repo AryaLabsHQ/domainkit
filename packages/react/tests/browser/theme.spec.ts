@@ -29,7 +29,7 @@ for (const mode of ["light", "dark"] as const) {
       "background-color",
       "rgb(223, 122, 54)",
     );
-    await expect(dialog.getByRole("button", { name: "Use Arya Labs account" })).not.toHaveCSS(
+    await expect(dialog.getByRole("button", { name: /Use Arya Labs/ })).not.toHaveCSS(
       "background-color",
       "rgb(223, 122, 54)",
     );
@@ -135,6 +135,56 @@ test("connection recipe fills the workshop column", async ({ page }) => {
     return Math.abs(frameBox.width - rootBox.width);
   });
   expect(delta).toBeLessThan(1);
+});
+
+test("reusable connections require an explicit target and never reconnect", async ({ page }) => {
+  await page.goto("/?story=connection&theme=samva&targets=ambiguous");
+  const trigger = page.getByRole("button", { name: "Connect", exact: true });
+  await trigger.click();
+
+  const dialog = page.getByRole("dialog", { name: "Connect Cloudflare" });
+  const targetList = dialog.locator('[data-domainkit-part="target-list"]');
+  await expect(targetList).toHaveAttribute("data-state", "ambiguous");
+  await expect(dialog.locator('[data-domainkit-part="attach-target"]')).toHaveCount(2);
+  await expect(dialog.getByRole("button", { name: /Use Samva Team/ })).toBeVisible();
+
+  await dialog.getByRole("button", { name: /Use Samva Team/ }).click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.locator('[data-domainkit-part="connection-status"][data-state="Connected"]'),
+  ).toHaveText("Cloudflare connected");
+
+  await page.goto("/?story=connection&theme=samva&targets=unavailable");
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  const unavailable = page
+    .getByRole("dialog", { name: "Connect Cloudflare" })
+    .locator('[data-domainkit-part="target-list"]');
+  await expect(unavailable).toHaveAttribute("data-state", "unavailable");
+  await expect(unavailable.locator('[data-domainkit-part="attach-target"]')).toHaveCount(0);
+  await expect(unavailable).toContainText("No provider targets are available");
+});
+
+test("detaching the final attachment preserves its reusable target", async ({ page }) => {
+  await page.goto("/?flow=lifecycle&theme=neutral");
+
+  await page.getByRole("button", { name: "More connection actions" }).click();
+  await page.getByRole("menuitem", { name: "Disconnect" }).click();
+  const confirmation = page.getByRole("alertdialog");
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole("button", { name: "Disconnect" }).click();
+  await expect(page.locator('[data-domainkit-part="connection-status"]')).toHaveAttribute(
+    "data-state",
+    "Disconnected",
+  );
+
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Connect Cloudflare" });
+  await expect(dialog.locator('[data-domainkit-part="target-list"]')).toHaveAttribute(
+    "data-state",
+    "unique",
+  );
+  await expect(dialog.getByRole("button", { name: /Use Arya Labs/ })).toBeVisible();
 });
 
 test("host-composed connection rows fill wide and narrow columns", async ({ page }) => {

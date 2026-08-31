@@ -20,6 +20,7 @@ export interface Catalog {
   readonly disconnectDomain: string;
   readonly disconnectConsent: string;
   readonly disconnecting: string;
+  readonly detaching: string;
   readonly disconnectTitle: (provider: string) => string;
   readonly domainDisconnected: string;
   readonly dialogDescription: (domain: string) => string;
@@ -33,7 +34,9 @@ export interface Catalog {
   readonly reviewCleanup: string;
   readonly reviewDns: string;
   readonly retry: string;
-  readonly reuseConnection: (connection: string) => string;
+  readonly existingConnection: string;
+  readonly targetUnavailable: string;
+  readonly attachTarget: (target: string) => string;
   readonly tokenLabel: string;
 }
 
@@ -58,10 +61,11 @@ export const english: Catalog = {
   detectingProvider: "Detecting DNS provider…",
   disconnectDomain: "Disconnect",
   disconnectConsent:
-    "The provider connection will be removed. Existing DNS records will be preserved.",
+    "This domain will be detached from the provider. Existing DNS records will be preserved.",
   disconnecting: "Disconnecting…",
-  disconnectTitle: (provider) => `Disconnect ${provider}?`,
-  domainDisconnected: "Domain disconnected. DNS records were preserved.",
+  detaching: "Detaching domain…",
+  disconnectTitle: (provider) => `Detach ${provider}?`,
+  domainDisconnected: "Domain detached. DNS records were preserved.",
   dialogDescription: (domain) => `Authorize DNS changes for ${domain}.`,
   dialogTitle: (provider) => `Connect ${provider}`,
   openingAuthorization: "Opening provider authorization…",
@@ -73,7 +77,9 @@ export const english: Catalog = {
   reviewCleanup: "Remove records",
   reviewDns: "Review changes",
   retry: "Try again",
-  reuseConnection: (connection) => `Use ${connection}`,
+  existingConnection: "Existing provider connection",
+  targetUnavailable: "No provider targets are available for this connection.",
+  attachTarget: (target) => `Use ${target}`,
   tokenLabel: "API token",
 };
 

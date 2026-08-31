@@ -23,7 +23,7 @@ import { Event as LifecycleEvent } from "./lifecycle.ts";
 import { failureFromDefect, failureFromError, type Failure } from "./atom.ts";
 
 type LocalState = Data.TaggedEnum<{
-  Disconnecting: { readonly snapshot: Transport.Connected };
+  Detaching: { readonly snapshot: Transport.Connected };
   Loading: {};
   Redirecting: { readonly snapshot: Disconnected };
   Submitting: { readonly snapshot: Disconnected };
@@ -33,19 +33,28 @@ export type State = LocalState | Transport.ConnectionSnapshot | Failure;
 
 type Disconnected = Extract<Transport.ConnectionSnapshot, { readonly _tag: "Disconnected" }>;
 
+const sameTarget = (left: Transport.ProviderTarget, right: Transport.ProviderTarget): boolean =>
+  left.accountId === right.accountId &&
+  left.accountKind === right.accountKind &&
+  left.zoneId === right.zoneId &&
+  left.zoneName === right.zoneName;
+
 export interface Controller {
+  readonly attach: (
+    connection: Transport.ReusableConnection,
+    target: Transport.ProviderTarget,
+  ) => void;
   readonly connect: (method: Transport.Method) => void;
-  readonly disconnect: () => void;
+  readonly detach: () => void;
   readonly retry: () => void;
-  readonly reuse: () => void;
   readonly state: State;
 }
 
 export type Command = Data.TaggedEnum<{
+  Attach: { readonly connectionId: string; readonly target: Transport.ProviderTarget };
   Connect: { readonly method: Transport.Method };
-  Disconnect: {};
+  Detach: {};
   Retry: {};
-  Reuse: {};
 }>;
 export const Command = Data.taggedEnum<Command>();
 
@@ -79,50 +88,54 @@ export function useModel(domain: string): Model {
         return Effect.void;
       }
       const snapshot = get(state);
-      if (input._tag === "Disconnect") {
+      if (input._tag === "Detach") {
         if (snapshot._tag !== "Connected") return Effect.void;
-        get.set(actionState, State.Disconnecting({ snapshot }));
+        get.set(actionState, State.Detaching({ snapshot }));
         return Effect.flatMap(Transport.Service, (transport) =>
-          transport.connection.removeDomain({
-            connectionId: snapshot.connectionId,
-            domain: snapshot.domain,
-            preserveDns: true,
-          }),
-        ).pipe(
-          Effect.tap((result) =>
-            Effect.sync(() => {
-              get.set(actionState, {
-                _tag: "Disconnected",
-                domain: snapshot.domain,
-                provider: snapshot.provider,
-                ...(result.remainingDomainCount > 0
-                  ? {
-                      reusableConnection: {
-                        connectionId: result.connectionId,
-                        label: snapshot.provider.name,
-                      },
-                    }
-                  : {}),
-              });
-              emit(
-                LifecycleEvent.DomainDisconnected({
-                  connection: snapshot,
-                  result,
-                }),
-              );
+          Effect.flatMap(
+            transport.connection.detach({
+              attachmentId: snapshot.attachment.id,
+              preserveDns: true,
             }),
+            (result) => {
+              const fallback: Disconnected = {
+                _tag: "Disconnected",
+                domain: snapshot.attachment.domain,
+                provider: snapshot.provider,
+                reusableConnections: [
+                  {
+                    connection: result.connection,
+                    targets: [result.attachment.target],
+                  },
+                ],
+              };
+              return Effect.flatMap(
+                Effect.sync(() => {
+                  get.set(actionState, fallback);
+                  emit(
+                    LifecycleEvent.DomainDetached({
+                      connection: snapshot,
+                      result,
+                    }),
+                  );
+                }),
+                () =>
+                  transport.connection.inspect({ domain }).pipe(
+                    Effect.catch(() => Effect.succeed(fallback)),
+                    Effect.tap((refreshed) => Effect.sync(() => get.set(actionState, refreshed))),
+                  ),
+              );
+            },
           ),
+        ).pipe(
           Effect.catch((error) => Effect.sync(() => get.set(actionState, failureFromError(error)))),
           Effect.asVoid,
         );
       }
       if (snapshot._tag !== "Disconnected") return Effect.void;
-      const reusableConnection = snapshot.reusableConnection;
-      if (input._tag === "Reuse" && reusableConnection === undefined) return Effect.void;
-      get.set(actionState, State.Submitting({ snapshot }));
       const complete = (
         request: Effect.Effect<Transport.ConnectionResult, Transport.Failure, Transport.Service>,
-        source: "connect" | "reuse",
+        source: "connect" | "attach",
       ) =>
         request.pipe(
           Effect.tap((result) =>
@@ -144,6 +157,28 @@ export function useModel(domain: string): Model {
           Effect.catch((error) => Effect.sync(() => get.set(actionState, failureFromError(error)))),
           Effect.asVoid,
         );
+      if (input._tag === "Attach") {
+        const reusableConnection = snapshot.reusableConnections.find(
+          ({ connection }) => connection.id === input.connectionId,
+        );
+        if (reusableConnection === undefined) return Effect.void;
+        const target = reusableConnection.targets.find((candidate) =>
+          sameTarget(candidate, input.target),
+        );
+        if (target === undefined) return Effect.void;
+        get.set(actionState, State.Submitting({ snapshot }));
+        return complete(
+          Effect.flatMap(Transport.Service, (transport) =>
+            transport.connection.attach({
+              connectionId: input.connectionId,
+              domain,
+              target,
+            }),
+          ),
+          "attach",
+        );
+      }
+      get.set(actionState, State.Submitting({ snapshot }));
       if (input._tag === "Connect") {
         return complete(
           Effect.flatMap(Transport.Service, (transport) =>
@@ -156,16 +191,7 @@ export function useModel(domain: string): Model {
           "connect",
         );
       }
-      if (reusableConnection === undefined) return Effect.void;
-      return complete(
-        Effect.flatMap(Transport.Service, (transport) =>
-          transport.connection.reuse({
-            connectionId: reusableConnection.connectionId,
-            domain,
-          }),
-        ),
-        "reuse",
-      );
+      return Effect.void;
     });
     return { command, state };
   }, [domain, emit, navigate, runtime]);
@@ -177,10 +203,11 @@ export function useController(domain: string): Controller {
   const execute = useAtomSet(model.command);
 
   return {
+    attach: (connection, target) =>
+      execute(Command.Attach({ connectionId: connection.connection.id, target })),
     connect: (method) => execute(Command.Connect({ method })),
-    disconnect: () => execute(Command.Disconnect()),
+    detach: () => execute(Command.Detach()),
     retry: () => execute(Command.Retry()),
-    reuse: () => execute(Command.Reuse()),
     state,
   };
 }
@@ -220,8 +247,8 @@ export function Status({ children, state, ...props }: StatusProps) {
       ? messages.detectingProvider
       : state._tag === "Connected"
         ? messages.connected(state.provider.name)
-        : state._tag === "Disconnecting"
-          ? messages.disconnecting
+        : state._tag === "Detaching"
+          ? messages.detaching
           : state._tag === "Unsupported"
             ? messages.automaticUnavailable
             : state._tag === "Failure"
@@ -278,7 +305,7 @@ export function ConnectTrigger({ children, provider, ...props }: ConnectTriggerP
 }
 
 export interface ActionState extends Record<string, unknown> {
-  readonly authentication: "oauth" | "reuse" | "token";
+  readonly authentication: "attach" | "integration" | "oauth" | "token";
 }
 
 export interface OAuthActionProps extends PartProps<"button", ActionState> {
@@ -302,22 +329,51 @@ export function OAuthAction({ controller, label, ...props }: OAuthActionProps) {
   );
 }
 
-export interface ReuseActionProps extends PartProps<"button", ActionState> {
+export interface IntegrationActionProps extends PartProps<"button", ActionState> {
   readonly controller: Controller;
   readonly label: string;
 }
 
-export function ReuseAction({ controller, label, ...props }: ReuseActionProps) {
+export function IntegrationAction({ controller, label, ...props }: IntegrationActionProps) {
   const pending = controller.state._tag === "Submitting" || controller.state._tag === "Redirecting";
   return usePart(
     "button",
     props,
-    { authentication: "reuse" },
+    { authentication: "integration" },
     {
       children: label,
-      "data-domainkit-part": "reuse-connection",
+      "data-domainkit-part": "integration-connect",
       disabled: pending,
-      onClick: () => void controller.reuse(),
+      onClick: () => controller.connect(Transport.Method.Integration()),
+      type: "button",
+    },
+  );
+}
+
+export interface AttachActionProps extends PartProps<"button", ActionState> {
+  readonly connection: Transport.ReusableConnection;
+  readonly controller: Controller;
+  readonly label: string;
+  readonly target: Transport.ProviderTarget;
+}
+
+export function AttachAction({
+  connection,
+  controller,
+  label,
+  target,
+  ...props
+}: AttachActionProps) {
+  const pending = controller.state._tag === "Submitting" || controller.state._tag === "Redirecting";
+  return usePart(
+    "button",
+    props,
+    { authentication: "attach" },
+    {
+      children: label,
+      "data-domainkit-part": "attach-target",
+      disabled: pending,
+      onClick: () => controller.attach(connection, target),
       type: "button",
     },
   );
@@ -409,9 +465,16 @@ export interface DialogProps {
   readonly snapshot: Disconnected;
 }
 
+export const targetLabel = (target: Transport.ProviderTarget): string =>
+  `${target.evidence?.accountName ?? target.accountId} · ${target.zoneName}`;
+
 export function Dialog({ controller, snapshot }: DialogProps) {
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   const pending = controller.state._tag === "Submitting" || controller.state._tag === "Redirecting";
+  const integrationMethods = snapshot.provider.authentication.filter(
+    (method): method is Extract<Transport.AuthenticationMethod, { readonly _tag: "Integration" }> =>
+      method._tag === "Integration",
+  );
   const oauthMethods = snapshot.provider.authentication.filter(
     (method): method is Extract<Transport.AuthenticationMethod, { readonly _tag: "OAuth" }> =>
       method._tag === "OAuth",
@@ -421,7 +484,9 @@ export function Dialog({ controller, snapshot }: DialogProps) {
       method._tag === "Token",
   );
   const hasProviderAccountPath =
-    oauthMethods.length > 0 || snapshot.reusableConnection !== undefined;
+    integrationMethods.length > 0 ||
+    oauthMethods.length > 0 ||
+    snapshot.reusableConnections.length > 0;
   return (
     <BaseDialog.Portal container={portalContainer}>
       <BaseDialog.Backdrop
@@ -455,15 +520,48 @@ export function Dialog({ controller, snapshot }: DialogProps) {
         <div data-domainkit-part="dialog-body">
           {hasProviderAccountPath ? (
             <div data-domainkit-part="provider-authentication">
+              {integrationMethods.map((method) => (
+                <IntegrationAction controller={controller} key={method._tag} label={method.label} />
+              ))}
               {oauthMethods.map((method) => (
                 <OAuthAction controller={controller} key={method._tag} label={method.label} />
               ))}
-              {snapshot.reusableConnection === undefined ? null : (
-                <ReuseAction
-                  controller={controller}
-                  label={messages.reuseConnection(snapshot.reusableConnection.label)}
-                />
-              )}
+              {snapshot.reusableConnections.map((connection) => (
+                <section
+                  data-connection-id={connection.connection.id}
+                  data-domainkit-part="reusable-connection"
+                  key={connection.connection.id}
+                >
+                  <div data-domainkit-part="reusable-connection-heading">
+                    <strong>{messages.existingConnection}</strong>
+                    <span>{connection.connection.providerId}</span>
+                  </div>
+                  <div
+                    data-domainkit-part="target-list"
+                    data-state={
+                      connection.targets.length === 0
+                        ? "unavailable"
+                        : connection.targets.length === 1
+                          ? "unique"
+                          : "ambiguous"
+                    }
+                  >
+                    {connection.targets.length === 0 ? (
+                      <p data-domainkit-part="target-unavailable">{messages.targetUnavailable}</p>
+                    ) : (
+                      connection.targets.map((target) => (
+                        <AttachAction
+                          connection={connection}
+                          controller={controller}
+                          key={`${target.accountId}:${target.zoneId}`}
+                          label={messages.attachTarget(targetLabel(target))}
+                          target={target}
+                        />
+                      ))
+                    )}
+                  </div>
+                </section>
+              ))}
             </div>
           ) : null}
           {hasProviderAccountPath && tokenMethods.length > 0 ? (
@@ -610,11 +708,11 @@ export function DisconnectDialog({
     if (openProp === undefined) setInternalOpen(nextOpen);
     onOpenChange?.(nextOpen);
   };
-  const disconnecting = controller.state._tag === "Disconnecting";
+  const detaching = controller.state._tag === "Detaching";
   return (
     <BaseAlertDialog.Root
       onOpenChange={(nextOpen, eventDetails) => {
-        if (!nextOpen && disconnecting) {
+        if (!nextOpen && detaching) {
           eventDetails.cancel();
           return;
         }
@@ -652,25 +750,25 @@ export function DisconnectDialog({
                 {messages.disconnectConsent}
               </BaseAlertDialog.Description>
             </div>
-            {disconnecting ? null : (
+            {detaching ? null : (
               <BaseAlertDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
                 ×
               </BaseAlertDialog.Close>
             )}
           </div>
           <div data-domainkit-part="dialog-footer">
-            {disconnecting ? null : (
+            {detaching ? null : (
               <BaseAlertDialog.Close data-domainkit-part="dialog-cancel">
                 {messages.cancel}
               </BaseAlertDialog.Close>
             )}
             <button
               data-domainkit-part="disconnect-action"
-              disabled={disconnecting}
-              onClick={() => controller.disconnect()}
+              disabled={detaching}
+              onClick={() => controller.detach()}
               type="button"
             >
-              {disconnecting ? messages.disconnecting : messages.disconnectDomain}
+              {detaching ? messages.detaching : messages.disconnectDomain}
             </button>
           </div>
         </BaseAlertDialog.Popup>
