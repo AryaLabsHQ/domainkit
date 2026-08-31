@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { DnsRecord, DomainName, Secret } from "../../../src/index.ts";
+import { Connection, DnsRecord, DomainName, ProviderSession, Secret } from "../../../src/index.ts";
 import * as Vercel from "../../../src/providers/vercel/index.ts";
 import * as Records from "../../../src/providers/vercel/records.ts";
 import {
@@ -27,6 +27,211 @@ describe("Vercel Effect client", () => {
         [portableZone],
       );
       assert.strictEqual(Vercel.discovery(client).provider, client);
+    });
+  });
+
+  it.effect("discovers every authoritative domain in one team installation", () => {
+    const delegated = {
+      ...domain,
+      id: "domain-2",
+      name: "mail.example.com",
+      nameservers: ["ns1.mail.example.net", "ns2.mail.example.net"],
+    };
+    const recording = recordedFetch([
+      { body: domainPage([domain, delegated]), expect: { pathname: "/v5/domains" } },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      const targets = yield* client.listTargets();
+      assert.deepStrictEqual(
+        targets.map(({ accountId, accountKind, zoneId, zoneName }) => ({
+          accountId,
+          accountKind,
+          zoneId,
+          zoneName,
+        })),
+        [
+          {
+            accountId: "team-1",
+            accountKind: "team",
+            zoneId: "domain-1",
+            zoneName: DomainName.parse("example.com"),
+          },
+          {
+            accountId: "team-1",
+            accountKind: "team",
+            zoneId: "domain-2",
+            zoneName: DomainName.parse("mail.example.com"),
+          },
+        ],
+      );
+      assert.deepStrictEqual(targets[1]?.evidence, {
+        nameservers: [
+          DomainName.parse("ns1.mail.example.net"),
+          DomainName.parse("ns2.mail.example.net"),
+        ],
+        status: "active",
+        zoneType: "zeit.world",
+      });
+      assert.strictEqual(
+        new URL(recording.requests[0]?.url ?? "").searchParams.get("teamId"),
+        "team-1",
+      );
+    });
+  });
+
+  it.effect("resolves the closest Vercel installation target and reports not found", () => {
+    const delegated = { ...domain, id: "domain-2", name: "mail.example.com" };
+    const resolved = make(recordedFetch([{ body: domainPage([domain, delegated]) }]).fetch, {
+      _tag: "team",
+      teamId: "team-1",
+    });
+    const missing = make(
+      recordedFetch([
+        { body: domainPage([]) },
+        {
+          body: { error: { code: "not_found", message: "Domain not found" } },
+          init: { status: 404 },
+        },
+        {
+          body: { error: { code: "not_found", message: "Domain not found" } },
+          init: { status: 404 },
+        },
+      ]).fetch,
+      { _tag: "team", teamId: "team-1" },
+    );
+    return Effect.gen(function* () {
+      const domainName = DomainName.parse("mail.example.com");
+      const selection = yield* resolved.resolveTarget(domainName);
+      assert.strictEqual(selection._tag, "Resolved");
+      if (selection._tag === "Resolved") {
+        assert.strictEqual(selection.target.zoneId, "domain-2");
+        assert.strictEqual(selection.target.zoneName, "mail.example.com");
+      }
+      assert.deepStrictEqual(
+        yield* missing.resolveTarget(domainName),
+        ProviderSession.Resolution.NotFound({ domain: domainName }),
+      );
+    });
+  });
+
+  it.effect("does not expose a fallback domain from a different requested account", () => {
+    const otherAccountDomain = { ...domain, teamId: "team-2" };
+    const recording = recordedFetch([
+      { body: domainPage([]), expect: { pathname: "/v5/domains" } },
+      {
+        body: authoritativeConfig,
+        expect: { pathname: "/v6/domains/example.com/config" },
+      },
+      {
+        body: { domain: otherAccountDomain },
+        expect: { pathname: "/v5/domains/example.com" },
+      },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      assert.deepStrictEqual(
+        yield* client.listTargets({
+          accountId: "team-1",
+          domain: DomainName.parse("example.com"),
+        }),
+        [],
+      );
+    });
+  });
+
+  it.effect("revalidates a selected domain before binding Vercel writes", () => {
+    const selected: Connection.ProviderTarget = {
+      accountId: "team-1",
+      accountKind: "team",
+      evidence: {
+        nameservers: [DomainName.parse("ns1.vercel-dns.com")],
+        status: "active",
+        zoneType: "zeit.world",
+      },
+      zoneId: "domain-1",
+      zoneName: DomainName.parse("example.com"),
+    };
+    const recording = recordedFetch([
+      { body: domainPage([domain]), expect: { pathname: "/v5/domains" } },
+      {
+        body: { uid: "selected-record" },
+        expect: { method: "POST", pathname: "/v2/domains/example.com/records" },
+      },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      const provider = yield* client.forTarget(selected);
+      const result = yield* provider.createRecord(
+        selected.zoneName,
+        DnsRecord.parse({
+          _tag: "TXT",
+          metadata: { ownership: "customer", provenance: "test", purpose: "verification" },
+          name: "_probe.example.com",
+          policy: "append",
+          ttl: 300,
+          value: "domainkit",
+        }),
+      );
+      assert.deepStrictEqual(result, { providerRecordId: "selected-record" });
+      assert.strictEqual(recording.requests.length, 2);
+    });
+  });
+
+  it.effect("rejects a target whose identifiers were not discovered for the installation", () => {
+    const recording = recordedFetch([{ body: domainPage([domain]) }]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      const failure = yield* client
+        .forTarget({
+          accountId: "team-1",
+          accountKind: "team",
+          zoneId: "forged-domain",
+          zoneName: DomainName.parse("example.com"),
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(failure.reason, "authorization");
+      assert.strictEqual(recording.requests.length, 1);
+    });
+  });
+
+  it.effect("rejects targets outside the selected team installation", () => {
+    const client = make(
+      async () => {
+        throw new Error("must not call the provider");
+      },
+      { _tag: "team", teamId: "team-1" },
+    );
+    return Effect.gen(function* () {
+      const failure = yield* client
+        .forTarget({
+          accountId: "team-2",
+          accountKind: "team",
+          zoneId: "domain-2",
+          zoneName: DomainName.parse("other.example"),
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(failure.reason, "authorization");
+    });
+  });
+
+  it.effect("rejects unsupported account-kind targets before creating DNS access", () => {
+    const client = make(
+      async () => {
+        throw new Error("must not call the provider");
+      },
+      { _tag: "team", teamId: "team-1" },
+    );
+    return Effect.gen(function* () {
+      const failure = yield* client
+        .forTarget({
+          accountId: "account-1",
+          accountKind: "account",
+          zoneId: "domain-1",
+          zoneName: DomainName.parse("example.com"),
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(failure.reason, "unsupported");
     });
   });
 

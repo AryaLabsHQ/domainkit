@@ -16,6 +16,7 @@ export * as DnsRecord from "./domain/dns-record.ts";
 export * as DomainName from "./domain/domain-name.ts";
 export * as InvalidInput from "./invalid-input.ts";
 export * as DnsProvider from "./provider/provider.ts";
+export * as ProviderSession from "./provider/session.ts";
 export * as ConnectionAuthorization from "./plan/connection-authorization.ts";
 export * as Digest from "./plan/canonical-json.ts";
 export * as Deletion from "./plan/deletion.ts";

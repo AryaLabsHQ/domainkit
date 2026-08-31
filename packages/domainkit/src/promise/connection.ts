@@ -15,6 +15,7 @@ export {
   encode,
   ProviderConnection,
   ProviderTarget,
+  ProviderTargetEvidence,
   validate,
 } from "../auth/connection.ts";
 

@@ -5,6 +5,7 @@ const coreSource = "packages/domainkit/src/";
 
 const runtimeExitFiles = new Set([
   `${coreSource}provider/provider.ts`,
+  `${coreSource}provider/session.ts`,
   `${coreSource}verification/resolver.ts`,
   `${coreSource}stores/connection.ts`,
   `${coreSource}stores/authorization.ts`,
@@ -19,6 +20,7 @@ const foreignPromiseFiles = new Set([
   `${coreSource}auth/oauth.ts`,
   `${coreSource}plan/canonical-json.ts`,
   `${coreSource}provider/provider.ts`,
+  `${coreSource}provider/session.ts`,
   `${coreSource}providers/cloudflare/client.ts`,
   `${coreSource}providers/vercel/auth.ts`,
   `${coreSource}providers/vercel/client.ts`,

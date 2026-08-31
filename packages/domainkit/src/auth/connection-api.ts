@@ -7,6 +7,7 @@ export {
   encode,
   ProviderConnection,
   ProviderTarget,
+  ProviderTargetEvidence,
   validate,
 } from "./connection.ts";
 export { attach, detach, disconnect } from "./connection-lifecycle.ts";

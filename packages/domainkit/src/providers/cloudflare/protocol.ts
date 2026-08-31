@@ -37,6 +37,7 @@ export const Zone = S.Struct({
   name: S.String,
   name_servers: S.Array(S.String),
   status: S.optionalKey(S.String),
+  type: S.optionalKey(S.Literals(["full", "partial", "secondary", "internal"])),
 });
 export interface Zone extends S.Schema.Type<typeof Zone> {}
 

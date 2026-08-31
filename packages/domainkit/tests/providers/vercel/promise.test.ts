@@ -27,4 +27,17 @@ describe("Vercel Promise facade", () => {
     });
     assert.deepStrictEqual(credential.context, { _tag: "personal" });
   });
+
+  it("mirrors credential-scoped target discovery", async () => {
+    const recording = recordedFetch([{ body: domainPage([domain]) }]);
+    const client = Vercel.make({
+      capabilities: ["dns:read"],
+      context: { _tag: "team", teamId: "team-1" },
+      fetch: recording.fetch,
+      token: Secret.make("token"),
+    });
+    const targets = await client.listTargets();
+    assert.strictEqual(targets[0]?.zoneId, "domain-1");
+    assert.strictEqual(targets[0]?.accountId, "team-1");
+  });
 });

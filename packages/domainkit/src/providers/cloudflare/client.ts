@@ -2,11 +2,13 @@ import { Effect, Schema as S } from "effect";
 
 import type * as ProviderAuth from "../../auth/manifest.ts";
 import type * as Secret from "../../auth/secret.ts";
+import * as Connection from "../../auth/connection.ts";
 import * as DomainName from "../../domain/domain-name.ts";
 import type * as DnsRecord from "../../domain/dns-record.ts";
 import type * as ZoneDiscovery from "../../discovery/zone-discovery.ts";
 import * as Zones from "../../discovery/zones.ts";
 import * as DnsProvider from "../../provider/provider.ts";
+import * as ProviderSession from "../../provider/session.ts";
 import * as Protocol from "./protocol.ts";
 import * as Records from "./records.ts";
 
@@ -14,7 +16,8 @@ export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Re
 
 /** Configuration for an Effect-native Cloudflare authoritative-DNS client. */
 export interface Options {
-  readonly accountId: string;
+  /** Account scope for account tokens; omit for user or OAuth credentials. */
+  readonly accountId?: string;
   readonly baseUrl?: string;
   /** Capabilities the host required when issuing or authorizing this credential. */
   readonly capabilities: ProviderAuth.TokenValidation["capabilities"];
@@ -40,10 +43,20 @@ export interface Zone {
 }
 
 export interface Interface extends DnsProvider.Interface {
+  readonly providerId: "cloudflare";
+  readonly forTarget: (
+    target: Connection.ProviderTarget,
+  ) => Effect.Effect<DnsProvider.Interface, DnsProvider.Error>;
   readonly listAccounts: () => Effect.Effect<ReadonlyArray<Account>, DnsProvider.Error>;
   readonly listZones: (
     input?: ListZonesInput,
   ) => Effect.Effect<ReadonlyArray<Zone>, DnsProvider.Error>;
+  readonly listTargets: (
+    input?: ProviderSession.ListTargetsInput,
+  ) => Effect.Effect<ReadonlyArray<Connection.ProviderTarget>, DnsProvider.Error>;
+  readonly resolveTarget: (
+    domain: DomainName.DomainName,
+  ) => Effect.Effect<ProviderSession.Resolution, DnsProvider.Error>;
   readonly validateToken: () => Effect.Effect<ProviderAuth.TokenValidation, DnsProvider.Error>;
 }
 
@@ -74,6 +87,12 @@ interface DomainCredentialOptions extends CredentialOptions {
   readonly domain: DomainName.DomainName;
   readonly tokenKind?: "account" | "user";
 }
+
+interface TargetOptions {
+  readonly target: Connection.ProviderTarget;
+}
+
+type InternalOptions = Options & Partial<TargetOptions>;
 
 const makeTransport = (options: CredentialOptions) => {
   const fetch = options.fetch ?? globalThis.fetch;
@@ -233,10 +252,31 @@ export const validateDomainToken = Effect.fn("CloudflareClient.validateDomainTok
 
 /** Creates an Effect-native Cloudflare client without owning the credential lifecycle. */
 export function make(options: Options): Interface {
+  return makeClient(options);
+}
+
+function makeClient(options: InternalOptions): Interface {
   const { allZones, inspectToken, request } = makeTransport(options);
 
   const resolveZone = Effect.fn("CloudflareClient.resolveZone")((name: DomainName.DomainName) =>
     Effect.gen(function* () {
+      if (options.target !== undefined) {
+        if (name !== options.target.zoneName && !name.endsWith(`.${options.target.zoneName}`)) {
+          return yield* Effect.fail(
+            failure(
+              "resolveZone",
+              `Cloudflare target ${options.target.zoneName} does not cover ${name}`,
+              { reason: "not_found" },
+            ),
+          );
+        }
+        return {
+          account: { id: options.target.accountId, name: options.target.accountId },
+          id: options.target.zoneId,
+          name: options.target.zoneName,
+          name_servers: options.target.evidence?.nameservers ?? [],
+        } satisfies Protocol.Zone;
+      }
       const matches = yield* allZones(options.accountId, name);
       const match = matches[0];
       if (matches.length === 1 && match !== undefined) return match;
@@ -244,8 +284,12 @@ export function make(options: Options): Interface {
         failure(
           "resolveZone",
           matches.length === 0
-            ? `Cloudflare zone ${name} was not found in account ${options.accountId}`
-            : `Cloudflare returned multiple zones named ${name} in account ${options.accountId}`,
+            ? options.accountId === undefined
+              ? `Cloudflare zone ${name} was not found in the authorized accounts`
+              : `Cloudflare zone ${name} was not found in account ${options.accountId}`
+            : options.accountId === undefined
+              ? `Cloudflare returned multiple zones named ${name} across authorized accounts`
+              : `Cloudflare returned multiple zones named ${name} in account ${options.accountId}`,
           { reason: matches.length === 0 ? "not_found" : "response" },
         ),
       );
@@ -337,16 +381,110 @@ export function make(options: Options): Interface {
     ),
   );
 
+  const listTargets = Effect.fn("CloudflareClient.listTargets")(
+    (input: ProviderSession.ListTargetsInput = {}) =>
+      Effect.gen(function* () {
+        const names =
+          input.domain === undefined
+            ? undefined
+            : new Set(Zones.candidates(input.domain).map((name) => String(name)));
+        const zones = yield* allZones(input.accountId ?? options.accountId);
+        return yield* Effect.forEach(
+          zones.filter(
+            (zone) => zone.type !== "internal" && (names === undefined || names.has(zone.name)),
+          ),
+          targetFromZone,
+        );
+      }),
+  );
+
+  const resolveTarget = Effect.fn("CloudflareClient.resolveTarget")(
+    (domain: DomainName.DomainName) =>
+      Effect.gen(function* () {
+        const candidates = yield* listTargets({ domain });
+        for (const zoneName of Zones.candidates(domain)) {
+          const matches = candidates.filter((target) => target.zoneName === zoneName);
+          if (matches.length === 1) {
+            const target = matches[0];
+            if (target !== undefined) return ProviderSession.Resolution.Resolved({ target });
+          }
+          if (matches.length > 1) {
+            return ProviderSession.Resolution.SelectionRequired({ candidates: matches });
+          }
+        }
+        return ProviderSession.Resolution.NotFound({ domain });
+      }),
+  );
+
+  const forTarget = Effect.fn("CloudflareClient.forTarget")((target: Connection.ProviderTarget) =>
+    Effect.gen(function* () {
+      if (target.accountKind !== null && target.accountKind !== "account") {
+        return yield* Effect.fail(
+          failure("forTarget", "Cloudflare targets must use the account account kind", {
+            reason: "request",
+          }),
+        );
+      }
+      if (target.evidence?.zoneType === "internal") {
+        return yield* Effect.fail(
+          failure("forTarget", "Cloudflare internal zones cannot host managed DNS records", {
+            reason: "unsupported",
+          }),
+        );
+      }
+      const discovered = yield* listTargets({
+        accountId: target.accountId,
+        domain: target.zoneName,
+      });
+      const selected = discovered.find(
+        (candidate) =>
+          candidate.accountId === target.accountId &&
+          candidate.zoneId === target.zoneId &&
+          candidate.zoneName === target.zoneName,
+      );
+      if (selected === undefined) {
+        return yield* Effect.fail(
+          failure(
+            "forTarget",
+            `Cloudflare target ${target.zoneName} is not visible to this credential`,
+            { reason: "authorization" },
+          ),
+        );
+      }
+      if (selected.evidence?.zoneType === "internal") {
+        return yield* Effect.fail(
+          failure("forTarget", "Cloudflare internal zones cannot host managed DNS records", {
+            reason: "unsupported",
+          }),
+        );
+      }
+      const client = makeClient({ ...options, accountId: selected.accountId, target: selected });
+      return {
+        id: client.id,
+        createRecord: client.createRecord,
+        deleteRecord: client.deleteRecord,
+        getRecord: client.getRecord,
+        listRecords: client.listRecords,
+      } satisfies DnsProvider.Interface;
+    }),
+  );
+
   const validateToken = Effect.fn("CloudflareClient.validateToken")(() =>
     Effect.gen(function* () {
       const path =
         options.tokenKind === "account"
-          ? `/accounts/${encodeURIComponent(options.accountId)}/tokens/verify`
+          ? options.accountId === undefined
+            ? yield* Effect.fail(
+                failure("validateToken", "Cloudflare account tokens require an account ID", {
+                  reason: "request",
+                }),
+              )
+            : `/accounts/${encodeURIComponent(options.accountId)}/tokens/verify`
           : "/user/tokens/verify";
       const expiresAt = yield* inspectToken(path);
       yield* allZones(options.accountId);
       return {
-        accountId: options.accountId,
+        accountId: options.accountId ?? "",
         capabilities: options.capabilities,
         expiresAt,
         scopes: [],
@@ -356,15 +494,44 @@ export function make(options: Options): Interface {
 
   return {
     id: "cloudflare",
+    providerId: "cloudflare",
     createRecord,
     deleteRecord,
     getRecord,
     listAccounts,
     listRecords,
     listZones,
+    listTargets,
+    resolveTarget,
+    forTarget,
     validateToken,
   };
 }
+
+const targetFromZone = Effect.fn("CloudflareClient.targetFromZone")((zone: Protocol.Zone) =>
+  Effect.gen(function* () {
+    const name = yield* DomainName.decode(zone.name).pipe(
+      Effect.mapError((cause) => failure("listTargets", cause.message, { reason: "response" })),
+    );
+    const nameservers = yield* Effect.forEach(zone.name_servers, (nameserver) =>
+      DomainName.decode(nameserver).pipe(
+        Effect.mapError((cause) => failure("listTargets", cause.message, { reason: "response" })),
+      ),
+    );
+    return {
+      accountId: zone.account.id,
+      accountKind: "account" as const,
+      evidence: {
+        accountName: zone.account.name,
+        nameservers,
+        status: zone.status ?? "unknown",
+        zoneType: zone.type ?? "unknown",
+      },
+      zoneId: zone.id,
+      zoneName: name,
+    } satisfies Connection.ProviderTarget;
+  }),
+);
 
 const projectZone = Effect.fn("CloudflareClient.projectZone")((zone: Protocol.Zone) =>
   Effect.gen(function* () {
