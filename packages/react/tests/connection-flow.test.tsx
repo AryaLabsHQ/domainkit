@@ -397,7 +397,13 @@ describe("Connection.Flow", () => {
           {controller.state._tag === "Connected" ? (
             <button onClick={controller.detach}>Detach target</button>
           ) : controller.state._tag === "Disconnected" ? (
-            <span>{controller.state.reusableConnections[0]?.targets[0]?.zoneId}</span>
+            <span>
+              targets-
+              {controller.state.reusableConnections.reduce(
+                (count, connection) => count + connection.targets.length,
+                0,
+              )}
+            </span>
           ) : null}
         </>
       );
@@ -411,7 +417,8 @@ describe("Connection.Flow", () => {
     await user.click(await screen.findByRole("button", { name: "Detach target" }));
 
     expect(await screen.findByText("Disconnected")).toBeTruthy();
-    expect(screen.getByText("zone-1")).toBeTruthy();
+    expect(screen.getByText("targets-0")).toBeTruthy();
+    expect(screen.queryByText("zone-1")).toBeNull();
     expect(events.map((event) => event._tag)).toEqual(["DomainDetached"]);
     expect(transport.calls.inspect).toHaveLength(2);
   });

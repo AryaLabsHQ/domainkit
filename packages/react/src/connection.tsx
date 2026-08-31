@@ -98,20 +98,15 @@ export function useModel(domain: string): Model {
               preserveDns: true,
             }),
             (result) => {
-              const fallback: Disconnected = {
+              const detached: Disconnected = {
                 _tag: "Disconnected",
                 domain: snapshot.attachment.domain,
                 provider: snapshot.provider,
-                reusableConnections: [
-                  {
-                    connection: result.connection,
-                    targets: [result.attachment.target],
-                  },
-                ],
+                reusableConnections: [],
               };
               return Effect.flatMap(
                 Effect.sync(() => {
-                  get.set(actionState, fallback);
+                  get.set(actionState, detached);
                   emit(
                     LifecycleEvent.DomainDetached({
                       connection: snapshot,
@@ -121,7 +116,7 @@ export function useModel(domain: string): Model {
                 }),
                 () =>
                   transport.connection.inspect({ domain }).pipe(
-                    Effect.catch(() => Effect.succeed(fallback)),
+                    Effect.catch(() => Effect.succeed(detached)),
                     Effect.tap((refreshed) => Effect.sync(() => get.set(actionState, refreshed))),
                   ),
               );
