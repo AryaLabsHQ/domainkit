@@ -153,6 +153,14 @@ export const connect = Effect.fn("Connection.connect")(function* (input: Connect
       retry: "after-user-action",
     });
   }
+  if (existing?.authorization.revocation._tag === "Pending") {
+    return yield* new Error({
+      category: "authorization",
+      message: "Provider authorization is awaiting revocation recovery",
+      operation: "Connection.connect",
+      retry: "after-user-action",
+    });
+  }
   if (
     existing !== null &&
     (existing.authorization.providerId !== input.providerId ||

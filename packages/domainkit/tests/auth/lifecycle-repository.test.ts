@@ -205,6 +205,16 @@ describe("managed DNS lifecycle repository", () => {
       assert.strictEqual(failed._tag, "Failure");
       const pending = yield* repository.get(aggregate.authorization.id);
       assert.strictEqual(pending?.authorization.revocation._tag, "Pending");
+      const reconnect = yield* connect(
+        "organization-1",
+        "token-reconnect",
+        aggregate.authorization.id,
+      ).pipe(Effect.result);
+      assert.strictEqual(reconnect._tag, "Failure");
+      assert.strictEqual(
+        (yield* repository.get(aggregate.authorization.id))?.authorization.revocation._tag,
+        "Pending",
+      );
       yield* repository.recover({
         authorizationId: aggregate.authorization.id,
         revoke: () => Effect.void,
