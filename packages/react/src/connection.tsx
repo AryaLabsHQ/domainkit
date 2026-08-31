@@ -33,6 +33,31 @@ export type State = LocalState | Transport.ConnectionSnapshot | Failure;
 
 type Disconnected = Extract<Transport.ConnectionSnapshot, { readonly _tag: "Disconnected" }>;
 
+const sameTarget = (left: Transport.ProviderTarget, right: Transport.ProviderTarget): boolean =>
+  left.accountId === right.accountId &&
+  left.accountKind === right.accountKind &&
+  left.zoneId === right.zoneId &&
+  left.zoneName === right.zoneName;
+
+const reusableConnectionsAfterDetach = (
+  reusableConnections: ReadonlyArray<Transport.ReusableConnection>,
+  result: Transport.DetachResult,
+): ReadonlyArray<Transport.ReusableConnection> => {
+  const existing = reusableConnections.find(
+    ({ connection }) => connection.id === result.connection.id,
+  );
+  const targets =
+    existing === undefined
+      ? [result.attachment.target]
+      : existing.targets.some((target) => sameTarget(target, result.attachment.target))
+        ? existing.targets
+        : [...existing.targets, result.attachment.target];
+  return [
+    ...reusableConnections.filter(({ connection }) => connection.id !== result.connection.id),
+    { connection: result.connection, targets },
+  ];
+};
+
 export interface Controller {
   readonly attach: (
     connection: Transport.ReusableConnection,
@@ -61,6 +86,7 @@ export function useModel(domain: string): Model {
   const { emit, navigate, runtime } = useDomainKit();
   return useMemo(() => {
     const actionState = Atom.make<State | undefined>(undefined);
+    let reusableConnections: ReadonlyArray<Transport.ReusableConnection> = [];
     const inspect = runtime.atom(
       Effect.flatMap(Transport.Service, (transport) => transport.connection.inspect({ domain })),
     );
@@ -77,6 +103,7 @@ export function useModel(domain: string): Model {
     });
     const command = runtime.fn<Command>()((input, get) => {
       if (input._tag === "Retry") {
+        reusableConnections = [];
         get.set(actionState, undefined);
         get.refresh(inspect);
         return Effect.void;
@@ -97,12 +124,7 @@ export function useModel(domain: string): Model {
                 _tag: "Disconnected",
                 domain: snapshot.attachment.domain,
                 provider: snapshot.provider,
-                reusableConnections: [
-                  {
-                    connection: result.connection,
-                    targets: [result.attachment.target],
-                  },
-                ],
+                reusableConnections: reusableConnectionsAfterDetach(reusableConnections, result),
               });
               emit(
                 LifecycleEvent.DomainDetached({
@@ -117,20 +139,6 @@ export function useModel(domain: string): Model {
         );
       }
       if (snapshot._tag !== "Disconnected") return Effect.void;
-      if (input._tag === "Attach") {
-        const reusableConnection = snapshot.reusableConnections.find(
-          ({ connection }) => connection.id === input.connectionId,
-        );
-        if (
-          reusableConnection === undefined ||
-          !reusableConnection.targets.some(
-            (target) =>
-              target.accountId === input.target.accountId && target.zoneId === input.target.zoneId,
-          )
-        )
-          return Effect.void;
-      }
-      get.set(actionState, State.Submitting({ snapshot }));
       const complete = (
         request: Effect.Effect<Transport.ConnectionResult, Transport.Failure, Transport.Service>,
         source: "connect" | "attach",
@@ -155,6 +163,30 @@ export function useModel(domain: string): Model {
           Effect.catch((error) => Effect.sync(() => get.set(actionState, failureFromError(error)))),
           Effect.asVoid,
         );
+      if (input._tag === "Attach") {
+        const reusableConnection = snapshot.reusableConnections.find(
+          ({ connection }) => connection.id === input.connectionId,
+        );
+        if (reusableConnection === undefined) return Effect.void;
+        const target = reusableConnection.targets.find((candidate) =>
+          sameTarget(candidate, input.target),
+        );
+        if (target === undefined) return Effect.void;
+        reusableConnections = snapshot.reusableConnections;
+        get.set(actionState, State.Submitting({ snapshot }));
+        return complete(
+          Effect.flatMap(Transport.Service, (transport) =>
+            transport.connection.attach({
+              connectionId: input.connectionId,
+              domain,
+              target,
+            }),
+          ),
+          "attach",
+        );
+      }
+      reusableConnections = snapshot.reusableConnections;
+      get.set(actionState, State.Submitting({ snapshot }));
       if (input._tag === "Connect") {
         return complete(
           Effect.flatMap(Transport.Service, (transport) =>
@@ -167,17 +199,7 @@ export function useModel(domain: string): Model {
           "connect",
         );
       }
-      if (input._tag !== "Attach") return Effect.void;
-      return complete(
-        Effect.flatMap(Transport.Service, (transport) =>
-          transport.connection.attach({
-            connectionId: input.connectionId,
-            domain,
-            target: input.target,
-          }),
-        ),
-        "attach",
-      );
+      return Effect.void;
     });
     return { command, state };
   }, [domain, emit, navigate, runtime]);
