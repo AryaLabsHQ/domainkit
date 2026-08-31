@@ -2,10 +2,13 @@ import { Effect, Schema as S } from "effect";
 
 import type * as ProviderAuth from "../../auth/manifest.ts";
 import type * as Secret from "../../auth/secret.ts";
+import * as Connection from "../../auth/connection.ts";
 import * as DomainName from "../../domain/domain-name.ts";
 import type * as DnsRecord from "../../domain/dns-record.ts";
 import type * as ZoneDiscovery from "../../discovery/zone-discovery.ts";
+import * as Zones from "../../discovery/zones.ts";
 import * as DnsProvider from "../../provider/provider.ts";
+import * as ProviderSession from "../../provider/session.ts";
 import * as Protocol from "./protocol.ts";
 import * as Records from "./records.ts";
 
@@ -47,10 +50,20 @@ export interface Zone {
 }
 
 export interface Interface extends DnsProvider.Interface {
+  readonly providerId: "vercel";
+  readonly forTarget: (
+    target: Connection.ProviderTarget,
+  ) => Effect.Effect<DnsProvider.Interface, DnsProvider.Error>;
   readonly listAccounts: () => Effect.Effect<ReadonlyArray<Account>, DnsProvider.Error>;
   readonly listZones: (
     input?: ListZonesInput,
   ) => Effect.Effect<ReadonlyArray<Zone>, DnsProvider.Error>;
+  readonly listTargets: (
+    input?: ProviderSession.ListTargetsInput,
+  ) => Effect.Effect<ReadonlyArray<Connection.ProviderTarget>, DnsProvider.Error>;
+  readonly resolveTarget: (
+    domain: DomainName.DomainName,
+  ) => Effect.Effect<ProviderSession.Resolution, DnsProvider.Error>;
   readonly validateToken: () => Effect.Effect<ProviderAuth.TokenValidation, DnsProvider.Error>;
 }
 
@@ -62,8 +75,18 @@ export function discovery(client: Interface): ZoneDiscovery.Source {
   };
 }
 
+interface TargetOptions {
+  readonly target: Connection.ProviderTarget;
+}
+
+type InternalOptions = Options & Partial<TargetOptions>;
+
 /** Creates an Effect-native Vercel client without owning the credential lifecycle. */
 export function make(options: Options): Interface {
+  return makeClient(options);
+}
+
+function makeClient(options: InternalOptions): Interface {
   const fetch = options.fetch ?? globalThis.fetch;
   const baseUrl = (options.baseUrl ?? "https://api.vercel.com").replace(/\/$/, "");
 
@@ -178,6 +201,18 @@ export function make(options: Options): Interface {
 
   const resolveZone = Effect.fn("VercelClient.resolveZone")((name: DomainName.DomainName) =>
     Effect.gen(function* () {
+      if (options.target !== undefined) {
+        if (name !== options.target.zoneName && !name.endsWith(`.${options.target.zoneName}`)) {
+          return yield* Effect.fail(
+            failure(
+              "resolveZone",
+              `Vercel target ${options.target.zoneName} does not cover ${name}`,
+              { reason: "not_found" },
+            ),
+          );
+        }
+        return options.target.zoneName;
+      }
       const domain = yield* discoverZone(name);
       if (domain === null) {
         return yield* Effect.fail(
@@ -324,6 +359,93 @@ export function make(options: Options): Interface {
     }),
   );
 
+  const listTargets = Effect.fn("VercelClient.listTargets")(
+    (input: ProviderSession.ListTargetsInput = {}) =>
+      Effect.gen(function* () {
+        const names =
+          input.domain === undefined
+            ? undefined
+            : new Set(Zones.candidates(input.domain).map((name) => String(name)));
+        const domains = (yield* allDomains()).filter(
+          (domain) =>
+            hasDnsStorage(domain) &&
+            (names === undefined || names.has(domain.name)) &&
+            (input.accountId === undefined || (domain.teamId ?? domain.userId) === input.accountId),
+        );
+        if (domains.length > 0 || input.domain === undefined) {
+          return yield* Effect.forEach(domains, targetFromDomain);
+        }
+        for (const name of Zones.candidates(input.domain)) {
+          const discovered = yield* discoverZone(name);
+          if (
+            discovered !== null &&
+            (input.accountId === undefined ||
+              (discovered.teamId ?? discovered.userId) === input.accountId)
+          ) {
+            return [yield* targetFromDomain(discovered)];
+          }
+        }
+        return [];
+      }),
+  );
+
+  const resolveTarget = Effect.fn("VercelClient.resolveTarget")((domain: DomainName.DomainName) =>
+    Effect.gen(function* () {
+      const candidates = yield* listTargets({ domain });
+      for (const zoneName of Zones.candidates(domain)) {
+        const matches = candidates.filter((target) => target.zoneName === zoneName);
+        if (matches.length === 1) {
+          const target = matches[0];
+          if (target !== undefined) return ProviderSession.Resolution.Resolved({ target });
+        }
+        if (matches.length > 1) {
+          return ProviderSession.Resolution.SelectionRequired({ candidates: matches });
+        }
+      }
+      return ProviderSession.Resolution.NotFound({ domain });
+    }),
+  );
+
+  const forTarget = Effect.fn("VercelClient.forTarget")((target: Connection.ProviderTarget) =>
+    Effect.gen(function* () {
+      if (target.accountKind === "team") {
+        if (options.context._tag !== "team" || options.context.teamId !== target.accountId) {
+          return yield* Effect.fail(
+            failure("forTarget", "Vercel team target is outside the selected installation", {
+              reason: "authorization",
+            }),
+          );
+        }
+      } else if (target.accountKind === "personal" && options.context._tag !== "personal") {
+        return yield* Effect.fail(
+          failure("forTarget", "Vercel personal target is outside the selected installation", {
+            reason: "authorization",
+          }),
+        );
+      } else if (target.accountKind === "account") {
+        return yield* Effect.fail(
+          failure("forTarget", "Vercel does not support account-kind targets", {
+            reason: "unsupported",
+          }),
+        );
+      } else if (target.accountKind === null) {
+        return yield* Effect.fail(
+          failure("forTarget", "Vercel targets must identify a personal or team account", {
+            reason: "request",
+          }),
+        );
+      }
+      const client = makeClient({ ...options, target });
+      return {
+        id: client.id,
+        createRecord: client.createRecord,
+        deleteRecord: client.deleteRecord,
+        getRecord: client.getRecord,
+        listRecords: client.listRecords,
+      } satisfies DnsProvider.Interface;
+    }),
+  );
+
   const validateToken = Effect.fn("VercelClient.validateToken")(() =>
     Effect.gen(function* () {
       let accountId: string;
@@ -351,12 +473,16 @@ export function make(options: Options): Interface {
 
   return {
     id: "vercel",
+    providerId: "vercel",
     createRecord,
     deleteRecord,
     getRecord,
     listAccounts,
     listRecords,
     listZones,
+    listTargets,
+    resolveTarget,
+    forTarget,
     validateToken,
   };
 }
@@ -389,6 +515,32 @@ const projectZone = Effect.fn("VercelClient.projectZone")((domain: Protocol.Doma
       nameservers,
       status: domain.verified ? "active" : "pending",
     } as const;
+  }),
+);
+
+const targetFromDomain = Effect.fn("VercelClient.targetFromDomain")((domain: Protocol.Domain) =>
+  Effect.gen(function* () {
+    const zoneName = yield* DomainName.decode(domain.name).pipe(
+      Effect.mapError((cause) => failure("listTargets", cause.message, { reason: "response" })),
+    );
+    const nameservers = yield* Effect.forEach(
+      domain.nameservers.length > 0 ? domain.nameservers : domain.intendedNameservers,
+      (nameserver) =>
+        DomainName.decode(nameserver).pipe(
+          Effect.mapError((cause) => failure("listTargets", cause.message, { reason: "response" })),
+        ),
+    );
+    return {
+      accountId: domain.teamId ?? domain.userId,
+      accountKind: domain.teamId === null ? ("personal" as const) : ("team" as const),
+      evidence: {
+        nameservers,
+        status: domain.verified ? "active" : "pending",
+        zoneType: domain.serviceType,
+      },
+      zoneId: domain.id,
+      zoneName,
+    } satisfies Connection.ProviderTarget;
   }),
 );
 

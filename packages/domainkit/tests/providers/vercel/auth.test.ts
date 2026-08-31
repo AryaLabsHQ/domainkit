@@ -18,7 +18,7 @@ describe("Vercel authorization", () => {
       _tag: "integration",
       capabilities,
       installUrl: "https://vercel.com/integrations/domainkit/new",
-      tokenEndpoint: "https://api.vercel.com/oauth/access_token",
+      tokenEndpoint: "https://api.vercel.com/v2/oauth/access_token",
     });
   });
 
@@ -34,7 +34,7 @@ describe("Vercel authorization", () => {
           token_type: "Bearer",
           user_id: "user-1",
         },
-        expect: { method: "POST", pathname: "/oauth/access_token" },
+        expect: { method: "POST", pathname: "/v2/oauth/access_token" },
       },
     ]);
     return Effect.gen(function* () {
@@ -132,7 +132,7 @@ describe("Vercel authorization", () => {
           token_type: "Bearer",
           user_id: "user-1",
         },
-        expect: { method: "POST", pathname: "/oauth/access_token" },
+        expect: { method: "POST", pathname: "/v2/oauth/access_token" },
       },
     ]);
     const flow = Vercel.Auth.integrationFlow({
@@ -150,7 +150,9 @@ describe("Vercel authorization", () => {
       assert.strictEqual(JSON.stringify(started.payload), '"[REDACTED]"');
       const authentication = yield* flow.complete(
         started.payload,
-        new URL("https://app.example/vercel/callback?code=authorization-code&state=continuation-1"),
+        new URL(
+          "https://app.example/vercel/callback?code=authorization-code&configurationId=icfg-1&state=continuation-1&teamId=team-1",
+        ),
       );
       assert.strictEqual(authentication.providerAccountId, "team-1");
       assert.deepStrictEqual(authentication.providerContext, {

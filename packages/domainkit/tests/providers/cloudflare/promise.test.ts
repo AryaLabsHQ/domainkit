@@ -29,4 +29,16 @@ describe("Cloudflare Promise facade", () => {
     );
     assert.strictEqual(subject.accountId, "account-1");
   });
+
+  it("mirrors credential-scoped target discovery and target-bound writes", async () => {
+    const recording = recordedFetch([{ body: page([zone]) }]);
+    const client = Cloudflare.make({
+      capabilities: ["dns:read", "dns:write"],
+      fetch: recording.fetch,
+      token: Secret.make("token"),
+    });
+    const targets = await client.listTargets();
+    assert.strictEqual(targets[0]?.zoneId, "zone-1");
+    assert.strictEqual(targets[0]?.accountId, "account-1");
+  });
 });

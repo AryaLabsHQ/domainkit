@@ -8,7 +8,9 @@ import type * as ProviderAuth from "../../auth/manifest.ts";
 import * as ProviderContext from "../../auth/provider-context.ts";
 import * as Secret from "../../auth/secret.ts";
 import type * as DomainName from "../../domain/domain-name.ts";
+import * as DnsProvider from "../../provider/provider.ts";
 import * as Client from "./client.ts";
+import * as ProviderSession from "../../provider/session.ts";
 
 const authorizationServer = {
   authorization_endpoint: "https://dash.cloudflare.com/oauth2/auth",
@@ -17,7 +19,10 @@ const authorizationServer = {
   token_endpoint: "https://dash.cloudflare.com/oauth2/token",
 } as const;
 
-const Context = Schema.Struct({ tokenKind: Schema.Literals(["account", "user"]) });
+const Context = Schema.Struct({
+  accountId: Schema.optionalKey(Schema.String),
+  tokenKind: Schema.Literals(["account", "user"]),
+});
 export type Context = typeof Context.Type;
 export const contextCodec = ProviderContext.codec("cloudflare.v1", Context);
 
@@ -167,7 +172,11 @@ export function tokenConnectionMethod(
         credential: { accessToken: token, refreshToken: null, tokenType: "bearer" },
         expiresAt: validated.expiresAt,
         providerAccountId: validated.accountId,
-        providerContext: yield* contextCodec.encode({ tokenKind: options.tokenKind ?? "user" }),
+        providerContext: yield* contextCodec.encode(
+          options.tokenKind === "account"
+            ? { accountId: validated.accountId, tokenKind: "account" }
+            : { tokenKind: "user" },
+        ),
         scopes: [...validated.scopes],
       } satisfies Connection.Authentication;
     }),
@@ -205,6 +214,62 @@ export const oauthAuthentication = Effect.fn("CloudflareAuth.oauthAuthentication
     scopes: (options.tokens.scope ?? "").split(" ").filter(Boolean),
   } satisfies Connection.Authentication;
 });
+
+/** Restore a credential-scoped Cloudflare session from persisted authorization state. */
+export function restore(
+  options: ProviderSession.RestoreInput & Pick<Client.Options, "baseUrl" | "fetch">,
+): Effect.Effect<Client.Interface, DnsProvider.Error> {
+  return Effect.gen(function* () {
+    if (options.authorization.providerId !== "cloudflare") {
+      return yield* Effect.fail(
+        failure("restore", "Provider authorization belongs to another provider", "authorization"),
+      );
+    }
+    if (options.authorization.method === "integration") {
+      return yield* Effect.fail(
+        failure("restore", "Cloudflare does not support integration credentials", "unsupported"),
+      );
+    }
+    if (options.authorization.revocation._tag !== "Active") {
+      return yield* Effect.fail(
+        failure("restore", "Cloudflare authorization is pending revocation", "authorization"),
+      );
+    }
+    const missingCapability = options.authorization.requiredCapabilities.find(
+      (capability) =>
+        !options.authorization.capabilityEvidence.some((item) => item.capability === capability),
+    );
+    if (missingCapability !== undefined) {
+      return yield* Effect.fail(
+        failure(
+          "restore",
+          `Cloudflare authorization lacks evidence for ${missingCapability}`,
+          "authorization",
+        ),
+      );
+    }
+    if (
+      options.authorization.expiresAt !== null &&
+      (Number.isNaN(options.authorization.expiresAt.valueOf()) ||
+        options.authorization.expiresAt <= new Date())
+    ) {
+      return yield* Effect.fail(
+        failure("restore", "Cloudflare authorization has expired", "authentication"),
+      );
+    }
+    const context = yield* contextCodec
+      .decode(options.authorization.providerContext)
+      .pipe(Effect.mapError((cause) => failure("restore", cause.message, "response")));
+    return Client.make({
+      ...(context.accountId === undefined ? {} : { accountId: context.accountId }),
+      ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
+      capabilities: options.authorization.capabilityEvidence.map(({ capability }) => capability),
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+      token: options.credential.accessToken,
+      tokenKind: context.tokenKind,
+    });
+  });
+}
 
 export type OAuthFlowOptions = SubjectResolverOptions & {
   readonly client: ProviderAuth.OAuthClientConfiguration;
@@ -252,4 +317,12 @@ export function oauthFlow(options: OAuthFlowOptions): Connection.InteractiveFlow
         state: continuationId,
       }),
   };
+}
+
+function failure(
+  operation: string,
+  message: string,
+  reason: DnsProvider.ErrorReason,
+): DnsProvider.Error {
+  return new DnsProvider.Error({ message, operation, providerId: "cloudflare", reason });
 }

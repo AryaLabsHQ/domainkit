@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { DnsRecord, DomainName, Secret } from "../../../src/index.ts";
+import { Connection, DnsRecord, DomainName, ProviderSession, Secret } from "../../../src/index.ts";
 import * as Cloudflare from "../../../src/providers/cloudflare/index.ts";
 import { page, portableZone, recordedFetch, single, zone } from "./fixtures.ts";
 
@@ -21,6 +21,176 @@ describe("Cloudflare Effect client", () => {
       const zones = yield* Cloudflare.discovery(client).listZones(DomainName.parse("example.com"));
       assert.strictEqual(zones[0]?.status, "unknown");
       assert.strictEqual(Cloudflare.discovery(client).provider, client);
+    });
+  });
+
+  it.effect("discovers credential-scoped targets across accounts and preserves evidence", () => {
+    const secondZone = {
+      ...zone,
+      id: "zone-2",
+      name: "mail.example.com",
+      name_servers: ["ns1.mail.example.net", "ns2.mail.example.net"],
+      type: "partial" as const,
+    };
+    const otherAccountZone = {
+      ...zone,
+      account: { id: "account-2", name: "Other Account" },
+      id: "zone-3",
+      type: "full" as const,
+    };
+    const recording = recordedFetch([{ body: page([zone, secondZone, otherAccountZone]) }]);
+    const client = Cloudflare.make({
+      capabilities,
+      fetch: recording.fetch,
+      token,
+    });
+    return Effect.gen(function* () {
+      const targets = yield* client.listTargets();
+      assert.deepStrictEqual(
+        targets.map(({ accountId, zoneId, zoneName }) => ({ accountId, zoneId, zoneName })),
+        [
+          { accountId: "account-1", zoneId: "zone-1", zoneName: DomainName.parse("example.com") },
+          {
+            accountId: "account-1",
+            zoneId: "zone-2",
+            zoneName: DomainName.parse("mail.example.com"),
+          },
+          { accountId: "account-2", zoneId: "zone-3", zoneName: DomainName.parse("example.com") },
+        ],
+      );
+      assert.deepStrictEqual(targets[1]?.evidence, {
+        nameservers: [
+          DomainName.parse("ns1.mail.example.net"),
+          DomainName.parse("ns2.mail.example.net"),
+        ],
+        accountName: "Example Account",
+        status: "active",
+        zoneType: "partial",
+      });
+      assert.ok(recording.requests[0]?.url.includes("type=full%2Cpartial%2Csecondary%2Cinternal"));
+    });
+  });
+
+  it.effect(
+    "requires explicit selection for an ambiguous account target and reports missing zones",
+    () => {
+      const ambiguous = Cloudflare.make({
+        capabilities,
+        fetch: recordedFetch([
+          {
+            body: page([
+              zone,
+              { ...zone, account: { id: "account-2", name: "Other Account" }, id: "zone-2" },
+            ]),
+          },
+        ]).fetch,
+        token,
+      });
+      const missing = Cloudflare.make({
+        capabilities,
+        fetch: recordedFetch([{ body: page([]) }]).fetch,
+        token,
+      });
+      return Effect.gen(function* () {
+        const domain = DomainName.parse("www.example.com");
+        const selection = yield* ambiguous.resolveTarget(domain);
+        assert.strictEqual(selection._tag, "SelectionRequired");
+        if (selection._tag === "SelectionRequired") {
+          assert.deepStrictEqual(
+            selection.candidates.map(({ accountId }) => accountId),
+            ["account-1", "account-2"],
+          );
+        }
+        assert.deepStrictEqual(
+          yield* missing.resolveTarget(domain),
+          ProviderSession.Resolution.NotFound({ domain }),
+        );
+      });
+    },
+  );
+
+  it.effect("binds record operations to the selected zone without re-discovering it", () => {
+    const selected: Connection.ProviderTarget = {
+      accountId: "account-1",
+      accountKind: "account",
+      evidence: {
+        accountName: "Example Account",
+        nameservers: [DomainName.parse("ada.ns.cloudflare.com")],
+        status: "active",
+        zoneType: "full",
+      },
+      zoneId: "zone-1",
+      zoneName: DomainName.parse("example.com"),
+    };
+    const created = record("TXT", "_probe.example.com", { content: "domainkit" });
+    const recording = recordedFetch([
+      { body: page([zone]), expect: { pathname: "/client/v4/zones" } },
+      {
+        body: single(created),
+        expect: { method: "POST", pathname: "/client/v4/zones/zone-1/dns_records" },
+      },
+    ]);
+    const client = Cloudflare.make({
+      capabilities,
+      fetch: recording.fetch,
+      token,
+    });
+    return Effect.gen(function* () {
+      const provider = yield* client.forTarget(selected);
+      const result = yield* provider.createRecord(
+        selected.zoneName,
+        DnsRecord.parse({
+          _tag: "TXT",
+          metadata: { ownership: "customer", provenance: "test", purpose: "verification" },
+          name: "_probe.example.com",
+          policy: "append",
+          ttl: 300,
+          value: "domainkit",
+        }),
+      );
+      assert.strictEqual(result.providerRecordId, "record-txt");
+      assert.strictEqual(recording.requests.length, 2);
+    });
+  });
+
+  it.effect("rejects a target whose identifiers were not discovered for the credential", () => {
+    const recording = recordedFetch([{ body: page([zone]) }]);
+    const client = Cloudflare.make({
+      capabilities,
+      fetch: recording.fetch,
+      token,
+    });
+    return Effect.gen(function* () {
+      const failure = yield* client
+        .forTarget({
+          accountId: "account-1",
+          accountKind: "account",
+          zoneId: "forged-zone",
+          zoneName: DomainName.parse("example.com"),
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(failure.reason, "authorization");
+      assert.strictEqual(recording.requests.length, 1);
+    });
+  });
+
+  it.effect("rejects Cloudflare internal zones as DNS targets", () => {
+    const client = Cloudflare.make({ capabilities, token });
+    return Effect.gen(function* () {
+      const failure = yield* client
+        .forTarget({
+          accountId: "account-1",
+          accountKind: "account",
+          evidence: {
+            nameservers: [],
+            status: "active",
+            zoneType: "internal",
+          },
+          zoneId: "zone-internal",
+          zoneName: DomainName.parse("internal.example"),
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(failure.reason, "unsupported");
     });
   });
 

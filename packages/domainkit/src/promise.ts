@@ -9,6 +9,7 @@ export * as Diagnostic from "./auth/diagnostic.ts";
 export * as ProviderContext from "./auth/provider-context.ts";
 export * as Secret from "./auth/secret.ts";
 export type * as DnsProvider from "./promise/dns-provider.ts";
+export * as ProviderSession from "./promise/provider-session.ts";
 export type * as DnsResolver from "./promise/dns-resolver.ts";
 export * as ProviderAuth from "./promise/provider-auth.ts";
 export * as ProviderDiscovery from "./discovery/selection.ts";
