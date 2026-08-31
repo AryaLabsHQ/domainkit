@@ -74,15 +74,15 @@ DomainKit makes provider integration an explicit part of the SaaS application. T
 a supported provider API, keeps the credential and durable lifecycle state behind its own boundaries,
 and uses DomainKit for the portable DNS semantics around that connection.
 
-| | Domain Connect | DomainKit |
-| --- | --- | --- |
-| Primary unit | A provider-supported service template | A provider connection, target, and DNS lifecycle |
-| DNS write path | The DNS provider applies the template | The host server calls a provider adapter |
-| Provider onboarding | Provider participation and template onboarding are required | The host integrates the provider API through an adapter |
-| Main scope | A constrained setup operation | Connection, planning, authorization, apply, observation, and cleanup |
-| State model | Protocol and provider flow state | Plans, digests, domain attachments, receipts, and observations |
-| Portability | Broad in principle when providers participate | Adapter-dependent, with behavior the host can exercise and test |
-| Credential boundary | Provider owns the provider credential flow | The host owns credential custody, routes, consent, and persistence |
+|                     | Domain Connect                                              | DomainKit                                                            |
+| ------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| Primary unit        | A provider-supported service template                       | A provider connection, target, and DNS lifecycle                     |
+| DNS write path      | The DNS provider applies the template                       | The host server calls a provider adapter                             |
+| Provider onboarding | Provider participation and template onboarding are required | The host integrates the provider API through an adapter              |
+| Main scope          | A constrained setup operation                               | Connection, planning, authorization, apply, observation, and cleanup |
+| State model         | Protocol and provider flow state                            | Plans, digests, domain attachments, receipts, and observations       |
+| Portability         | Broad in principle when providers participate               | Adapter-dependent, with behavior the host can exercise and test      |
+| Credential boundary | Provider owns the provider credential flow                  | The host owns credential custody, routes, consent, and persistence   |
 
 The adapter model does not eliminate provider-specific work. You still need an adapter for each
 provider you support. It does remove the requirement that every provider accept your service template
