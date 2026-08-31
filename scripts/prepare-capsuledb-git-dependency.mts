@@ -3,8 +3,8 @@ import { join, resolve } from "node:path";
 
 const capsuleDbSha = "561aa127b37055f885c703583c3c5e80b44395f3";
 const workspaceRoot = resolve(import.meta.dir, "..");
-const installedRoot = join(workspaceRoot, "node_modules", "capsuledb");
 const integrationRoot = join(workspaceRoot, "packages", "capsuledb");
+const installedRoot = join(integrationRoot, "node_modules", "capsuledb");
 const output = join(installedRoot, "dist");
 
 const exists = (path: string) =>
