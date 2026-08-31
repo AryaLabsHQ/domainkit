@@ -250,8 +250,10 @@ describe("composition and theme", () => {
     );
     const mark = screen.getByRole("img", { name: "Namecheap" });
     const image = mark.querySelector("img");
-    expect(image).toBeTruthy();
-    fireEvent.error(image!);
+    if (image === null) {
+      throw new Error("Expected a provider mark image");
+    }
+    fireEvent.error(image);
     expect(mark.textContent).toBe("N");
   });
 
