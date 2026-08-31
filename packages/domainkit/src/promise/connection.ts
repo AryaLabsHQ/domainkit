@@ -2,25 +2,23 @@ import { Data, Effect, Layer } from "effect";
 
 import * as Connection from "../auth/connection.ts";
 import * as Connect from "../auth/connect.ts";
-import type * as Repository from "./authorization-lifecycle.ts";
 import type * as ProviderAuthorization from "../auth/authorization.ts";
 import { webCryptoLayer } from "../plan/canonical-json.ts";
-import * as LifecycleRepository from "./authorization-lifecycle.ts";
+import * as Lifecycle from "./managed-dns-connections.ts";
 import type * as Secret from "../auth/secret.ts";
 
 export {
-  assertGrant,
   AuthorizationError,
-  coversDomain,
+  authorizationError,
+  ConnectionStatus,
+  DomainAttachment,
   encode,
-  Grant,
-  includeDomains,
-  removeDomain as removeDomainFromGrant,
-  Schema,
+  ProviderConnection,
+  ProviderTarget,
+  validate,
 } from "../auth/connection.ts";
-export type { Connection, OAuthContinuation, StoredCredential } from "../auth/connection.ts";
 
-export function decode(input: unknown): Promise<Connection.Connection> {
+export function decode(input: unknown): Promise<Connection.ProviderConnection> {
   return Effect.runPromise(Connection.decode(input));
 }
 
@@ -93,11 +91,6 @@ const effectContinuations = (store: ContinuationStore): Connect.ContinuationStor
     }),
 });
 
-export const toAsyncContinuations = (store: Connect.ContinuationStore): ContinuationStore => ({
-  consume: (id, now) => Effect.runPromise(store.consume(id, now)),
-  put: (continuation) => Effect.runPromise(store.put(continuation)),
-});
-
 const effectFlow = (flow: InteractiveFlow): Connect.InteractiveFlow => ({
   complete: (payload, callbackUrl) =>
     Effect.tryPromise({
@@ -139,17 +132,17 @@ export function fromEffectTokenMethod(
 export async function start(
   input: Connect.BaseInput & {
     readonly method: Method;
-    readonly repository: Repository.Repository;
+    readonly repository: Lifecycle.AsyncInterface;
   },
 ): Promise<Connect.StartResult> {
   return Effect.runPromise(
     Connect.start({
       authorizedById: input.authorizedById,
-      grant: input.grant,
+      ...(input.authorizationId === undefined ? {} : { authorizationId: input.authorizationId }),
       method: effectMethod(input.method),
       ownerId: input.ownerId,
     }).pipe(
-      Effect.provide(Layer.merge(LifecycleRepository.layerFrom(input.repository), webCryptoLayer)),
+      Effect.provide(Layer.merge(Lifecycle.layerFromAsync(input.repository), webCryptoLayer)),
     ),
   );
 }
@@ -159,8 +152,8 @@ export async function complete(input: {
   readonly continuationId: string;
   readonly continuations: ContinuationStore;
   readonly flow: InteractiveFlow;
-  readonly repository: Repository.Repository;
-}): Promise<Repository.Aggregate> {
+  readonly repository: Lifecycle.AsyncInterface;
+}): Promise<Connection.ProviderConnection> {
   return Effect.runPromise(
     Connect.complete({
       callbackUrl: input.callbackUrl,
@@ -168,41 +161,55 @@ export async function complete(input: {
       continuations: effectContinuations(input.continuations),
       flow: effectFlow(input.flow),
     }).pipe(
-      Effect.provide(Layer.merge(LifecycleRepository.layerFrom(input.repository), webCryptoLayer)),
+      Effect.provide(Layer.merge(Lifecycle.layerFromAsync(input.repository), webCryptoLayer)),
     ),
   );
 }
 
-/** Extends one owner binding without repeating provider authentication. */
-export async function extend(
-  input: Connect.ExtendInput & { readonly repository: Repository.Repository },
-): Promise<Repository.Aggregate> {
-  return Effect.runPromise(
-    Connect.extend({
-      connectionId: input.connectionId,
-      grant: input.grant,
-      ownerId: input.ownerId,
-    }).pipe(Effect.provide(LifecycleRepository.layerFrom(input.repository))),
-  );
+export function attach(input: {
+  readonly attachment: Connection.DomainAttachment;
+  readonly connectionId: string;
+  readonly ownerId: string;
+  readonly repository: Lifecycle.AsyncInterface;
+}): Promise<Lifecycle.AttachmentResult> {
+  return input.repository.attach({
+    attachment: input.attachment,
+    connectionId: input.connectionId,
+    ownerId: input.ownerId,
+  });
 }
 
-/** Removes one domain from an owner binding without revoking provider authorization. */
-export async function removeDomain(
-  input: Connect.RemoveDomainInput & { readonly repository: Repository.Repository },
-): Promise<Connect.RemoveDomainResult> {
-  return Effect.runPromise(
-    Connect.removeDomain({
-      connectionId: input.connectionId,
-      domain: input.domain,
-      ownerId: input.ownerId,
-    }).pipe(Effect.provide(LifecycleRepository.layerFrom(input.repository))),
-  );
+export function detach(input: {
+  readonly attachmentId: string;
+  readonly ownerId: string;
+  readonly repository: Lifecycle.AsyncInterface;
+}): Promise<Lifecycle.DetachResult> {
+  return input.repository.detach({
+    attachmentId: input.attachmentId,
+    ownerId: input.ownerId,
+  });
 }
 
-export { Error, RemoveDomainResult, StartResult } from "../auth/connect.ts";
+export function disconnect(input: {
+  readonly connectionId: string;
+  readonly ownerId: string;
+  readonly repository: Lifecycle.AsyncInterface;
+  readonly revoke: (authorization: ProviderAuthorization.ProviderAuthorization) => Promise<void>;
+}): Promise<Lifecycle.DisconnectResult> {
+  return input.repository.disconnect({
+    connectionId: input.connectionId,
+    ownerId: input.ownerId,
+    revoke: input.revoke,
+  });
+}
+
+export { Error, StartResult } from "../auth/connect.ts";
 export type {
   Authentication,
-  ConnectionStartResult,
-  ExtendInput,
-  RemoveDomainInput,
-} from "../auth/connection-api.ts";
+  AuthenticationFailure,
+  BaseInput,
+  CompleteInput,
+  Continuation,
+  Failure,
+  InteractiveStart,
+} from "../auth/connect.ts";

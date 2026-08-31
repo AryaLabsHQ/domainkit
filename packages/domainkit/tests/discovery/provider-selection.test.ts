@@ -1,19 +1,15 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import {
-  Connection,
-  DomainName,
-  ProviderAuthorization,
-  ProviderDiscovery,
-  Zones,
-} from "../../src/promise.ts";
+import { Connection, DomainName, ProviderDiscovery, Zones } from "../../src/promise.ts";
+import * as ProviderAuthorization from "../../src/auth/authorization.ts";
 
-const connection: Connection.Connection = {
-  authorizationId: "authorization-1",
+const connection: Connection.ProviderConnection = {
   createdAt: new Date("2026-08-27T00:00:00.000Z"),
-  grant: { _tag: "account", excludedDomains: [] },
   id: "connection-1",
+  method: "token",
   ownerId: "organization-1",
+  providerId: "cloudflare",
+  status: "active",
 };
 
 const authorization: ProviderAuthorization.ProviderAuthorization = {
@@ -26,12 +22,24 @@ const authorization: ProviderAuthorization.ProviderAuthorization = {
   expiresAt: null,
   id: "authorization-1",
   method: "token",
-  providerAccountId: "account-1",
   providerContext: { value: {}, version: "cloudflare.v1" },
   providerId: "cloudflare",
   requiredCapabilities: ["dns:read", "dns:write"],
   revocation: { _tag: "Active" },
   scopes: [],
+};
+
+const attachment: Connection.DomainAttachment = {
+  connectionId: connection.id,
+  createdAt: new Date("2026-08-27T00:00:00.000Z"),
+  domain: DomainName.parse("www.example.com"),
+  id: "attachment-1",
+  target: {
+    accountId: "account-1",
+    accountKind: "account",
+    zoneId: "zone-1",
+    zoneName: DomainName.parse("example.com"),
+  },
 };
 
 describe("provider discovery", () => {
@@ -47,16 +55,15 @@ describe("provider discovery", () => {
     ]);
   });
 
-  it("selects the unique connected zone with decisive nameserver evidence", () => {
+  it("selects the unique attached provider zone with decisive nameserver evidence", () => {
     const selection = ProviderDiscovery.select({
       authoritativeNameservers: ["ADA.NS.CLOUDFLARE.COM.", "BOB.NS.CLOUDFLARE.COM"],
       connectedZones: [
         {
           authorization,
+          attachment,
           connection,
           nameservers: ["ada.ns.cloudflare.com", "bob.ns.cloudflare.com"],
-          providerId: "cloudflare",
-          zone: "example.com",
         },
       ],
       domain: "www.example.com",
@@ -77,13 +84,12 @@ describe("provider discovery", () => {
       connectedZones: [
         {
           authorization,
+          attachment,
           connection,
           nameservers: ["ada.ns.cloudflare.com"],
-          providerId: "cloudflare",
-          zone: "example.com",
         },
       ],
-      domain: "example.com",
+      domain: "www.example.com",
     });
     assert.deepStrictEqual(selection, {
       _tag: "manual",
@@ -99,5 +105,15 @@ describe("provider discovery", () => {
       ],
       reason: "unsupported",
     });
+  });
+
+  it("matches an explicit provider account to the exact attachment target", () => {
+    const selection = ProviderDiscovery.select({
+      authoritativeNameservers: [],
+      connectedZones: [{ authorization, attachment, connection, nameservers: [] }],
+      domain: "www.example.com",
+      explicit: { accountId: "account-1", providerId: "cloudflare", zone: "example.com" },
+    });
+    assert.strictEqual(selection._tag, "selected");
   });
 });

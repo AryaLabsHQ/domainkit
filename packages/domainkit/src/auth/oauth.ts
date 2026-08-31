@@ -4,13 +4,12 @@ import * as oauth from "oauth4webapi";
 import { Error as InvalidInputError } from "../invalid-input.ts";
 import { CryptoError, sha256Text } from "../plan/canonical-json.ts";
 import * as DnsProvider from "../provider/provider.ts";
-import * as ConnectionStore from "../stores/connection.ts";
-import * as CredentialStore from "../stores/credential.ts";
-import * as ProviderAuthorizationStore from "../stores/authorization.ts";
 import type * as Storage from "../stores/error.ts";
 import * as OAuthStateStore from "../stores/oauth-state.ts";
 import * as Connection from "./connection.ts";
 import * as ProviderAuthorization from "./authorization.ts";
+import * as Connect from "./connect.ts";
+import * as Lifecycle from "./lifecycle-repository.ts";
 import type * as ProviderAuth from "./manifest.ts";
 import { Value as Secret } from "./secret.ts";
 
@@ -18,11 +17,11 @@ export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Re
 
 export interface BeginInput {
   readonly client: ProviderAuth.OAuthClientConfiguration;
-  readonly grant: Connection.Grant;
   readonly method: ProviderAuth.OAuthMethod;
+  readonly authorizationId?: string;
   readonly ownerId: string;
   readonly redirectUri: string;
-  readonly subjectId: string;
+  readonly authorizedById: string;
   readonly ttlMs?: number;
 }
 
@@ -38,10 +37,12 @@ export interface OAuthSubjectResolver {
 
 export type OAuthError =
   | Connection.AuthorizationError
+  | Connect.Error
   | CryptoError
   | InvalidInputError
   | DnsProvider.Error
-  | Storage.Error;
+  | Storage.Error
+  | Lifecycle.Error;
 
 function beginProgram(
   input: BeginInput,
@@ -77,12 +78,12 @@ function beginProgram(
       clientId: input.client.clientId,
       codeVerifier: Secret.from(codeVerifier),
       expiresAt: new Date(now + (input.ttlMs ?? 10 * 60_000)),
-      grant: input.grant,
       method: input.method,
+      ...(input.authorizationId === undefined ? {} : { authorizationId: input.authorizationId }),
       ownerId: input.ownerId,
       redirectUri: input.redirectUri,
       stateHash,
-      authorizedById: input.subjectId,
+      authorizedById: input.authorizedById,
     });
     return { authorizationUrl };
   });
@@ -95,23 +96,12 @@ function completeProgram(input: {
   readonly providerId: string;
   readonly resolveSubject: OAuthSubjectResolver;
 }): Effect.Effect<
-  {
-    readonly authorization: ProviderAuthorization.ProviderAuthorization;
-    readonly connection: Connection.Connection;
-  },
+  { readonly connection: Connection.ProviderConnection },
   OAuthError,
-  | OAuthStateStore.Service
-  | ProviderAuthorizationStore.Service
-  | ConnectionStore.Service
-  | CredentialStore.Service
-  | Crypto.Crypto
+  OAuthStateStore.Service | Lifecycle.Service | Crypto.Crypto
 > {
   return Effect.gen(function* () {
     const stateStore = yield* OAuthStateStore.Service;
-    const authorizationStore = yield* ProviderAuthorizationStore.Service;
-    const connectionStore = yield* ConnectionStore.Service;
-    const credentialStore = yield* CredentialStore.Service;
-    const cryptoService = yield* Crypto.Crypto;
     const state = input.callbackUrl.searchParams.get("state");
     if (state === null) {
       return yield* Connection.authorizationError(
@@ -152,52 +142,44 @@ function completeProgram(input: {
     });
     const accessToken = Secret.from(tokens.access_token);
     const subject = yield* input.resolveSubject(tokens, accessToken);
-    const existingAuthorization = yield* authorizationStore.findByProviderAccount(
-      input.providerId,
-      subject.accountId,
-    );
-    const authorizationId =
-      existingAuthorization?.id ??
-      (yield* cryptoService.randomUUIDv4.pipe(
-        Effect.mapError((cause) => new CryptoError({ message: cause.message })),
-      ));
-    const authorization = yield* ProviderAuthorization.validate({
+    const aggregate = yield* Connect.connect({
+      authentication: {
+        capabilityEvidence: continuation.method.capabilities.map((capability) => ({
+          capability,
+          evidence: ProviderAuthorization.Evidence.Introspected({ observedAt: new Date(now) }),
+        })),
+        credential: {
+          accessToken,
+          refreshToken:
+            tokens.refresh_token === undefined ? null : Secret.from(tokens.refresh_token),
+          tokenType: tokens.token_type,
+        },
+        expiresAt: subject.expiresAt,
+        providerAccountId: subject.accountId,
+        providerContext: { value: {}, version: `${input.providerId}.v1` },
+        scopes: (tokens.scope ?? continuation.method.scopes.join(" ")).split(" ").filter(Boolean),
+      },
       authorizedById: continuation.authorizedById,
-      capabilityEvidence: continuation.method.capabilities.map((capability) => ({
-        capability,
-        evidence: ProviderAuthorization.Evidence.Introspected({ observedAt: new Date(now) }),
-      })),
-      createdAt: existingAuthorization?.createdAt ?? new Date(now),
-      expiresAt: subject.expiresAt,
-      id: authorizationId,
+      ...(continuation.authorizationId === undefined
+        ? {}
+        : { authorizationId: continuation.authorizationId }),
       method: "oauth2",
-      providerAccountId: subject.accountId,
-      providerContext: { value: {}, version: `${input.providerId}.v1` },
+      ownerId: continuation.ownerId,
       providerId: input.providerId,
       requiredCapabilities: [...continuation.method.capabilities],
-      revocation: { _tag: "Active" },
-      scopes: (tokens.scope ?? continuation.method.scopes.join(" ")).split(" ").filter(Boolean),
     });
-    const existingConnection = yield* connectionStore.find(continuation.ownerId, authorization.id);
-    const connection = yield* Connection.validate({
-      authorizationId: authorization.id,
-      createdAt: existingConnection?.createdAt ?? new Date(now),
-      grant: continuation.grant,
-      id:
-        existingConnection?.id ??
-        (yield* cryptoService.randomUUIDv4.pipe(
-          Effect.mapError((cause) => new CryptoError({ message: cause.message })),
-        )),
-      ownerId: continuation.ownerId,
-    });
-    yield* credentialStore.put(authorization.id, {
-      accessToken,
-      refreshToken: tokens.refresh_token === undefined ? null : Secret.from(tokens.refresh_token),
-      tokenType: tokens.token_type,
-    });
-    yield* authorizationStore.put(authorization);
-    yield* connectionStore.put(connection);
-    return { authorization, connection };
+    const storedConnection = aggregate.connections.find(
+      ({ ownerId }) => ownerId === continuation.ownerId,
+    );
+    if (storedConnection === undefined) {
+      return yield* Connection.authorizationError(
+        "Provider authorization returned no organization connection",
+        "OAuth.complete",
+      );
+    }
+    return {
+      connection: Connection.project(storedConnection, aggregate.authorization, new Date(now)),
+    };
   });
 }
 
@@ -206,10 +188,17 @@ function refreshProgram(input: {
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly fetch?: Fetch;
   readonly method: ProviderAuth.OAuthMethod;
-}): Effect.Effect<void, OAuthError, CredentialStore.Service> {
+}): Effect.Effect<void, OAuthError, Lifecycle.Service> {
   return Effect.gen(function* () {
-    const credentialStore = yield* CredentialStore.Service;
-    const credential = yield* requireCredential(input.authorization.id, credentialStore);
+    const lifecycle = yield* Lifecycle.Service;
+    const aggregate = yield* lifecycle.get(input.authorization.id);
+    if (aggregate === null) {
+      return yield* Connection.authorizationError(
+        "Connection credentials are unavailable",
+        "OAuth.refresh",
+      );
+    }
+    const credential = aggregate.credential;
     const refreshToken = credential.refreshToken;
     if (refreshToken === null) {
       return yield* Connection.authorizationError(
@@ -230,14 +219,22 @@ function refreshProgram(input: {
       );
       return oauth.processRefreshTokenResponse(as, client, response);
     });
-    yield* credentialStore.put(input.authorization.id, {
-      accessToken: Secret.from(tokens.access_token),
-      refreshToken:
-        tokens.refresh_token === undefined
-          ? credential.refreshToken
-          : Secret.from(tokens.refresh_token),
-      tokenType: tokens.token_type,
-    });
+    const expiresAt =
+      typeof tokens.expires_in === "number"
+        ? new Date(Date.now() + tokens.expires_in * 1_000)
+        : input.authorization.expiresAt;
+    yield* lifecycle.rotate(
+      input.authorization.id,
+      {
+        accessToken: Secret.from(tokens.access_token),
+        refreshToken:
+          tokens.refresh_token === undefined
+            ? credential.refreshToken
+            : Secret.from(tokens.refresh_token),
+        tokenType: tokens.token_type,
+      },
+      expiresAt,
+    );
   });
 }
 
@@ -246,7 +243,7 @@ function revokeProgram(input: {
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly fetch?: Fetch;
   readonly method: ProviderAuth.OAuthMethod;
-}): Effect.Effect<void, OAuthError, CredentialStore.Service> {
+}): Effect.Effect<void, OAuthError, Lifecycle.Service> {
   return Effect.gen(function* () {
     if (input.method.authorizationServer.revocation_endpoint === undefined) {
       return yield* Connection.authorizationError(
@@ -254,8 +251,15 @@ function revokeProgram(input: {
         "OAuth.revoke",
       );
     }
-    const credentialStore = yield* CredentialStore.Service;
-    const credential = yield* requireCredential(input.authorization.id, credentialStore);
+    const lifecycle = yield* Lifecycle.Service;
+    const aggregate = yield* lifecycle.get(input.authorization.id);
+    if (aggregate === null) {
+      return yield* Connection.authorizationError(
+        "Connection credentials are unavailable",
+        "OAuth.revoke",
+      );
+    }
+    const credential = aggregate.credential;
     const as = input.method.authorizationServer as oauth.AuthorizationServer;
     const authentication = yield* effectClientAuthentication(input.method, input.client);
     yield* providerRequest(input.authorization.providerId, async (signal) => {
@@ -268,7 +272,6 @@ function revokeProgram(input: {
       );
       await oauth.processRevocationResponse(response);
     });
-    yield* credentialStore.delete(input.authorization.id);
   });
 }
 
@@ -316,26 +319,6 @@ function requestOptions(
         [oauth.customFetch]: (url, options) =>
           fetchImplementation(url, { ...options, body: options.body }),
       };
-}
-
-function requireCredential(
-  connectionId: string,
-  store: CredentialStore.Interface,
-): Effect.Effect<Connection.StoredCredential, Connection.AuthorizationError | Storage.Error> {
-  return store
-    .get(connectionId)
-    .pipe(
-      Effect.flatMap((credential) =>
-        credential === null
-          ? Effect.fail(
-              Connection.authorizationError(
-                "Connection credentials are unavailable",
-                "OAuth.requireCredential",
-              ),
-            )
-          : Effect.succeed(credential),
-      ),
-    );
 }
 
 function providerRequest<A>(providerId: string, request: (signal: AbortSignal) => Promise<A>) {

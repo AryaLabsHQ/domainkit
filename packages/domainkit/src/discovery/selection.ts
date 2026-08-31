@@ -7,10 +7,9 @@ import * as Zones from "./zones.ts";
 
 export interface ConnectedZone {
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
-  readonly connection: Connection.Connection;
+  readonly attachment: Connection.DomainAttachment;
+  readonly connection: Connection.ProviderConnection;
   readonly nameservers: ReadonlyArray<string>;
-  readonly providerId: string;
-  readonly zone: string;
 }
 
 export const Evidence = Schema.Struct({
@@ -51,13 +50,16 @@ export function select(input: {
   const zoneCandidates = new Set(Zones.candidates(domain));
   const authoritative = nameserverSet(input.authoritativeNameservers);
   const eligible = input.connectedZones.filter((connected) => {
-    if (!zoneCandidates.has(DomainName.parse(connected.zone))) return false;
+    if (!zoneCandidates.has(connected.attachment.target.zoneName)) return false;
     try {
-      Connection.assertGrant(connected.connection, connected.authorization, {
+      Connection.assertAttachment({
+        attachment: connected.attachment,
         capability: "dns:read",
+        connection: connected.connection,
         domain,
         ...(input.now === undefined ? {} : { now: input.now }),
-        providerId: connected.providerId,
+        providerId: connected.connection.providerId,
+        authorization: connected.authorization,
       });
       return true;
     } catch {
@@ -70,13 +72,13 @@ export function select(input: {
     const explicitZone = DomainName.parse(input.explicit.zone);
     const index = eligible.findIndex(
       (connected) =>
-        connected.providerId === input.explicit?.providerId &&
-        connected.authorization.providerAccountId === input.explicit.accountId &&
-        DomainName.parse(connected.zone) === explicitZone,
+        connected.connection.providerId === input.explicit?.providerId &&
+        connected.attachment.target.accountId === input.explicit.accountId &&
+        connected.attachment.target.zoneName === explicitZone,
     );
     if (index < 0) {
       throw Connection.authorizationError(
-        "Explicit provider zone is not connected or granted",
+        "Explicit provider zone is not connected for this domain",
         "ProviderDiscovery.select",
       );
     }
@@ -103,13 +105,13 @@ function evidenceFor(
   const configured = new Set(nameserverSet(connected.nameservers));
   const matchedNameservers = authoritative.filter((nameserver) => configured.has(nameserver));
   return {
-    accountId: connected.authorization.providerAccountId,
+    accountId: connected.attachment.target.accountId,
     connectionId: connected.connection.id,
     decisiveNameserverMatch:
       authoritative.length > 0 && matchedNameservers.length === authoritative.length,
     matchedNameservers,
-    providerId: connected.providerId,
-    zone: DomainName.parse(connected.zone),
+    providerId: connected.connection.providerId,
+    zone: connected.attachment.target.zoneName,
   };
 }
 

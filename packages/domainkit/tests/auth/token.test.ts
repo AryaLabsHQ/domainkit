@@ -1,14 +1,10 @@
 import { assert, describe, expect, it } from "@effect/vitest";
 
-import {
-  AuthorizationLifecycle,
-  Connection,
-  ProviderAuthorization,
-  Secret,
-} from "../../src/promise.ts";
-import { InMemoryAuthorizationLifecycle } from "../../src/testing.ts";
+import { Connection, ManagedDnsConnections, Secret } from "../../src/promise.ts";
+import * as ProviderAuthorization from "../../src/auth/authorization.ts";
+import { InMemoryManagedDnsConnections } from "../../src/testing.ts";
 
-const authenticate = async (): Promise<Connection.Authentication> => ({
+const authenticate = async (token = "token"): Promise<Connection.Authentication> => ({
   capabilityEvidence: [
     {
       capability: "dns:read",
@@ -20,7 +16,7 @@ const authenticate = async (): Promise<Connection.Authentication> => ({
     },
   ],
   credential: {
-    accessToken: Secret.make("token"),
+    accessToken: Secret.make(token),
     refreshToken: null,
     tokenType: "bearer",
   },
@@ -31,13 +27,12 @@ const authenticate = async (): Promise<Connection.Authentication> => ({
 });
 
 describe("Promise connections", () => {
-  it("delegates token connections to the Effect lifecycle", async () => {
-    const repository = AuthorizationLifecycle.toAsync(InMemoryAuthorizationLifecycle.make());
+  it("persists a token connection and returns only its public projection", async () => {
+    const repository = ManagedDnsConnections.toAsync(InMemoryManagedDnsConnections.make());
     const result = await Connection.start({
       authorizedById: "user-1",
-      grant: { _tag: "account", excludedDomains: [] },
       method: Connection.Method.Token({
-        authenticate,
+        authenticate: (token) => authenticate(token.expose()),
         providerId: "example",
         requiredCapabilities: ["dns:read", "dns:write"],
         token: Secret.make("token"),
@@ -47,17 +42,24 @@ describe("Promise connections", () => {
     });
     assert.strictEqual(result._tag, "Connected");
     if (result._tag !== "Connected") return;
-    assert.strictEqual(
-      (await repository.get(result.aggregate.authorization.id))?.credential.accessToken.expose(),
-      "token",
-    );
+    assert.deepStrictEqual(Object.keys(result.connection).sort(), [
+      "createdAt",
+      "id",
+      "method",
+      "ownerId",
+      "providerId",
+      "status",
+    ]);
+    const aggregate = await repository.getByConnectionId(result.connection.id);
+    assert.strictEqual(aggregate?.credential.accessToken.expose(), "token");
+    assert.strictEqual(aggregate?.connections.length, 1);
+    assert.strictEqual(aggregate?.attachments.length, 0);
   });
 
   it("fails loudly when required capability evidence is absent", async () => {
     await expect(
       Connection.start({
         authorizedById: "user-1",
-        grant: { _tag: "account", excludedDomains: [] },
         method: Connection.Method.Token({
           authenticate: async () => ({
             ...(await authenticate()),
@@ -68,7 +70,7 @@ describe("Promise connections", () => {
           token: Secret.make("token"),
         }),
         ownerId: "organization-1",
-        repository: AuthorizationLifecycle.toAsync(InMemoryAuthorizationLifecycle.make()),
+        repository: ManagedDnsConnections.toAsync(InMemoryManagedDnsConnections.make()),
       }),
     ).rejects.toMatchObject({ _tag: "ConnectionError" });
   });

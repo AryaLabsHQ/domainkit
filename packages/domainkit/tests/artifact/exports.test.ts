@@ -25,10 +25,14 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof promiseApi.Provisioning.create, "function");
     assert.strictEqual(typeof promiseApi.ZoneDiscovery.discover, "function");
     assert.strictEqual(typeof promiseApi.Connection.start, "function");
-    assert.strictEqual(typeof promiseApi.Connection.extend, "function");
+    assert.strictEqual(typeof promiseApi.Connection.attach, "function");
+    assert.strictEqual(typeof promiseApi.Connection.detach, "function");
+    assert.strictEqual(typeof promiseApi.Connection.disconnect, "function");
     assert.strictEqual(typeof effectApi.Connection.start, "function");
-    assert.strictEqual(typeof effectApi.Connection.extend, "function");
-    assert.strictEqual(typeof effectApi.AuthorizationLifecycle.Service, "function");
+    assert.strictEqual(typeof effectApi.Connection.attach, "function");
+    assert.strictEqual(typeof effectApi.Connection.detach, "function");
+    assert.strictEqual(typeof effectApi.Connection.disconnect, "function");
+    assert.strictEqual(typeof effectApi.ManagedDnsConnections.Service, "function");
     assert.strictEqual(typeof effectApi.DnsProvider.Service, "function");
     assert.strictEqual(typeof effectApi.Transport.Service, "function");
     assert.strictEqual(typeof effectApi.Transport.Method.OAuth, "function");
@@ -54,6 +58,11 @@ describe("public namespaces", () => {
 
   it("does not flatten service tags or operations onto either entry point", () => {
     assert.strictEqual("createPlan" in promiseApi, false);
+    assert.strictEqual("AuthorizationLifecycle" in effectApi, false);
+    assert.strictEqual("ProviderAuthorization" in effectApi, false);
+    assert.strictEqual("Grant" in effectApi.Connection, false);
+    assert.strictEqual("extend" in effectApi.Connection, false);
+    assert.strictEqual("removeDomain" in effectApi.Connection, false);
     assert.strictEqual("DnsProviderService" in effectApi, false);
     assert.strictEqual("layerDnsProviderFromPromise" in effectApi, false);
     assert.strictEqual("InMemoryConnectionStore" in testingApi, false);

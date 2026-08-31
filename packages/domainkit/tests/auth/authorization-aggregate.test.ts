@@ -1,9 +1,10 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { Connection, Diagnostic, ProviderAuthorization } from "../../src/index.ts";
+import { Connection, Diagnostic } from "../../src/index.ts";
+import * as ProviderAuthorization from "../../src/auth/authorization.ts";
 
-describe("authorization aggregate model", () => {
+describe("provider authorization internals", () => {
   it.effect("round-trips evidence and versioned provider context", () =>
     Effect.gen(function* () {
       const authorization: ProviderAuthorization.ProviderAuthorization = {
@@ -26,7 +27,6 @@ describe("authorization aggregate model", () => {
         expiresAt: null,
         id: "authorization-1",
         method: "integration",
-        providerAccountId: "team-1",
         providerContext: {
           value: { installationId: "icfg_1", teamId: "team-1" },
           version: "vercel.v1",
@@ -46,12 +46,15 @@ describe("authorization aggregate model", () => {
     }),
   );
 
-  it("projects safe shared diagnostics from precise tagged errors", () => {
-    const error = Connection.authorizationError("Grant expired", "Connection.assertGrant");
+  it("projects safe diagnostics without exposing the authorization aggregate", () => {
+    const error = Connection.authorizationError(
+      "Domain attachment expired",
+      "Connection.assertAttachment",
+    );
     assert.deepStrictEqual(Diagnostic.from(error), {
       category: "authorization",
-      message: "Grant expired",
-      operation: "Connection.assertGrant",
+      message: "Domain attachment expired",
+      operation: "Connection.assertAttachment",
       retry: "after-user-action",
       tag: "AuthorizationError",
     });

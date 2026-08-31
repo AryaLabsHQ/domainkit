@@ -3,6 +3,7 @@ import { Effect, Layer } from "effect";
 import type * as Connection from "../auth/connection.ts";
 import type * as ProviderAuthorization from "../auth/authorization.ts";
 import * as ConnectionAuthorization from "../plan/connection-authorization.ts";
+import * as Lifecycle from "./managed-dns-connections.ts";
 import { webCryptoLayer } from "../plan/canonical-json.ts";
 import * as ProvisioningEffect from "../plan/plan.ts";
 import type * as DnsPlan from "../plan/types.ts";
@@ -72,13 +73,25 @@ export function apply(input: {
 export function authorizeForConnection(input: {
   readonly allowPartial?: boolean;
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
-  readonly connection: Connection.Connection;
+  readonly attachment: Connection.DomainAttachment;
+  readonly connection: Connection.ProviderConnection;
   readonly domain: string;
   readonly operationIds?: ReadonlyArray<string>;
   readonly plan: DnsPlan.DnsPlan;
+  readonly repository: Lifecycle.AsyncInterface;
 }): Promise<DnsPlan.PlanAuthorization> {
   return Effect.runPromise(
-    ConnectionAuthorization.authorize(input).pipe(Effect.provide(webCryptoLayer)),
+    ConnectionAuthorization.authorize({
+      attachment: input.attachment,
+      authorization: input.authorization,
+      connection: input.connection,
+      domain: input.domain,
+      ...(input.allowPartial === undefined ? {} : { allowPartial: input.allowPartial }),
+      ...(input.operationIds === undefined ? {} : { operationIds: input.operationIds }),
+      plan: input.plan,
+    }).pipe(
+      Effect.provide(Layer.merge(Lifecycle.layerFromAsync(input.repository), webCryptoLayer)),
+    ),
   );
 }
 
