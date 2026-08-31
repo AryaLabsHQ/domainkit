@@ -591,26 +591,40 @@ const makeRepository = Effect.gen(function* () {
                 remainingConnections: 0,
                 revokedAuthorization: true,
               };
-              return revoke(prepared.authorization).pipe(
-                Effect.andThen(
-                  sql.withTransaction(
-                    Effect.gen(function* () {
-                      const aggregate = yield* getStored(prepared.authorization.id, "update");
-                      if (aggregate?.authorization.revocation._tag !== "Pending")
-                        return yield* Effect.fail(
-                          conflict("disconnect", "Revocation state changed before completion"),
-                        );
-                      yield* sql`DELETE FROM domain_provider_attachments WHERE connection_id IN
+              return withRevocationLock(
+                prepared.authorization.id,
+                sql.withTransaction(getStored(prepared.authorization.id, "update")).pipe(
+                  Effect.flatMap((current) => {
+                    if (current?.authorization.revocation._tag !== "Pending")
+                      return Effect.fail(
+                        conflict("disconnect", "Revocation state changed before provider call"),
+                      );
+                    return revoke(current.authorization).pipe(
+                      Effect.andThen(
+                        sql.withTransaction(
+                          Effect.gen(function* () {
+                            const aggregate = yield* getStored(prepared.authorization.id, "update");
+                            if (aggregate?.authorization.revocation._tag !== "Pending")
+                              return yield* Effect.fail(
+                                conflict(
+                                  "disconnect",
+                                  "Revocation state changed before completion",
+                                ),
+                              );
+                            yield* sql`DELETE FROM domain_provider_attachments WHERE connection_id IN
                         (SELECT id FROM organization_domain_provider_connections
                          WHERE authorization_id = ${prepared.authorization.id})`;
-                      yield* sql`DELETE FROM organization_domain_provider_connections
+                            yield* sql`DELETE FROM organization_domain_provider_connections
                         WHERE authorization_id = ${prepared.authorization.id}`;
-                      yield* sql`DELETE FROM domain_provider_authorizations
+                            yield* sql`DELETE FROM domain_provider_authorizations
                         WHERE id = ${prepared.authorization.id}`;
-                    }),
-                  ),
+                          }),
+                        ),
+                      ),
+                      Effect.as(result),
+                    );
+                  }),
                 ),
-                Effect.as(result),
               );
             }),
           ),
