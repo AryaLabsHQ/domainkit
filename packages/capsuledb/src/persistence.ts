@@ -305,24 +305,14 @@ const makeRepository = Effect.gen(function* () {
     authorizationId: string,
     effect: Effect.Effect<A, E, R>,
   ) =>
-    Effect.scoped(
+    sql.withTransaction(
       Effect.gen(function* () {
-        const connection = yield* sql.reserve;
-        // SAFETY: PostgreSQL returns one boolean row for pg_try_advisory_lock.
-        const rows = (yield* connection.execute(
-          "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired",
-          [authorizationId],
-          undefined,
-        )) as ReadonlyArray<{ readonly acquired: boolean }>;
+        const rows = yield* sql<{ readonly acquired: boolean }>`
+          SELECT pg_try_advisory_xact_lock(hashtextextended(${authorizationId}, 0)) AS acquired`;
         if (rows[0]?.acquired !== true)
           return yield* Effect.fail(
             storageError(operation, "Provider revocation is already in progress", "safe"),
           );
-        yield* Effect.addFinalizer(() =>
-          connection
-            .executeRaw("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [authorizationId])
-            .pipe(Effect.ignore),
-        );
         return yield* effect;
       }),
     );
@@ -605,7 +595,7 @@ const makeRepository = Effect.gen(function* () {
               return withRevocationLock(
                 "disconnect",
                 prepared.authorization.id,
-                sql.withTransaction(getStored(prepared.authorization.id, "update")).pipe(
+                getStored(prepared.authorization.id, "update").pipe(
                   Effect.flatMap((current) => {
                     if (current?.authorization.revocation._tag !== "Pending")
                       return Effect.fail(
@@ -613,25 +603,20 @@ const makeRepository = Effect.gen(function* () {
                       );
                     return revoke(current.authorization).pipe(
                       Effect.andThen(
-                        sql.withTransaction(
-                          Effect.gen(function* () {
-                            const aggregate = yield* getStored(prepared.authorization.id, "update");
-                            if (aggregate?.authorization.revocation._tag !== "Pending")
-                              return yield* Effect.fail(
-                                conflict(
-                                  "disconnect",
-                                  "Revocation state changed before completion",
-                                ),
-                              );
-                            yield* sql`DELETE FROM domain_provider_attachments WHERE connection_id IN
+                        Effect.gen(function* () {
+                          const aggregate = yield* getStored(prepared.authorization.id, "update");
+                          if (aggregate?.authorization.revocation._tag !== "Pending")
+                            return yield* Effect.fail(
+                              conflict("disconnect", "Revocation state changed before completion"),
+                            );
+                          yield* sql`DELETE FROM domain_provider_attachments WHERE connection_id IN
                         (SELECT id FROM organization_domain_provider_connections
                          WHERE authorization_id = ${prepared.authorization.id})`;
-                            yield* sql`DELETE FROM organization_domain_provider_connections
+                          yield* sql`DELETE FROM organization_domain_provider_connections
                         WHERE authorization_id = ${prepared.authorization.id}`;
-                            yield* sql`DELETE FROM domain_provider_authorizations
+                          yield* sql`DELETE FROM domain_provider_authorizations
                         WHERE id = ${prepared.authorization.id}`;
-                          }),
-                        ),
+                        }),
                       ),
                       Effect.as(result),
                     );
@@ -715,7 +700,7 @@ const makeRepository = Effect.gen(function* () {
         withRevocationLock(
           "recover",
           authorizationId,
-          sql.withTransaction(getStored(authorizationId, "update")).pipe(
+          getStored(authorizationId, "update").pipe(
             Effect.flatMap((aggregate) => {
               if (aggregate === null)
                 return Effect.fail(missing("recover", "Provider authorization does not exist"));
@@ -728,21 +713,19 @@ const makeRepository = Effect.gen(function* () {
                 return Effect.fail(missing("recover", "Pending authorization has no connection"));
               return revoke(aggregate.authorization).pipe(
                 Effect.andThen(
-                  sql.withTransaction(
-                    Effect.gen(function* () {
-                      const current = yield* getStored(authorizationId, "update");
-                      if (current?.authorization.revocation._tag !== "Pending")
-                        return yield* Effect.fail(
-                          conflict("recover", "Revocation state changed before completion"),
-                        );
-                      yield* sql`DELETE FROM domain_provider_attachments WHERE connection_id IN
+                  Effect.gen(function* () {
+                    const current = yield* getStored(authorizationId, "update");
+                    if (current?.authorization.revocation._tag !== "Pending")
+                      return yield* Effect.fail(
+                        conflict("recover", "Revocation state changed before completion"),
+                      );
+                    yield* sql`DELETE FROM domain_provider_attachments WHERE connection_id IN
                         (SELECT id FROM organization_domain_provider_connections
                          WHERE authorization_id = ${authorizationId})`;
-                      yield* sql`DELETE FROM organization_domain_provider_connections
+                    yield* sql`DELETE FROM organization_domain_provider_connections
                         WHERE authorization_id = ${authorizationId}`;
-                      yield* sql`DELETE FROM domain_provider_authorizations WHERE id = ${authorizationId}`;
-                    }),
-                  ),
+                    yield* sql`DELETE FROM domain_provider_authorizations WHERE id = ${authorizationId}`;
+                  }),
                 ),
                 Effect.as({
                   connection: Connection.project(connection, aggregate.authorization),

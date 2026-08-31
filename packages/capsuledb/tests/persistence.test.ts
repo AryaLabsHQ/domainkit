@@ -311,6 +311,83 @@ describe("PostgreSQL authorization lifecycle capsule", () => {
   );
 
   it.effect(
+    "uses one pool connection per distinct concurrent revocation",
+    () =>
+      withPostgres(
+        (client) =>
+          withRepository(client, (repository) =>
+            Effect.gen(function* () {
+              const firstAuthorization = authorization("authorization-1");
+              const secondAuthorization = authorization("authorization-2");
+              const firstConnection = connection(firstAuthorization.id, "organization-1");
+              const secondConnection = connection(secondAuthorization.id, "organization-2");
+              yield* Effect.all(
+                [
+                  repository.connect({
+                    authorization: firstAuthorization,
+                    connection: firstConnection,
+                    credential: credential("token-1"),
+                  }),
+                  repository.connect({
+                    authorization: secondAuthorization,
+                    connection: secondConnection,
+                    credential: credential("token-2"),
+                  }),
+                ],
+                { concurrency: "unbounded" },
+              );
+              for (const storedConnection of [firstConnection, secondConnection]) {
+                yield* repository
+                  .disconnect({
+                    connectionId: storedConnection.id,
+                    ownerId: storedConnection.ownerId,
+                    revoke: () => Effect.fail("provider unavailable" as const),
+                  })
+                  .pipe(Effect.result);
+              }
+
+              let revocations = 0;
+              let releaseRevocations!: () => void;
+              const bothRevocationsStarted = new Promise<void>((resolve) => {
+                releaseRevocations = resolve;
+              });
+              const revoke = Effect.promise(async () => {
+                revocations++;
+                if (revocations === 2) releaseRevocations();
+                await new Promise<void>((resolve, reject) => {
+                  const timer = setTimeout(
+                    () => reject(new Error("Concurrent revocations did not both start")),
+                    5_000,
+                  );
+                  void bothRevocationsStarted.then(() => {
+                    clearTimeout(timer);
+                    resolve();
+                  });
+                });
+              });
+              const results = yield* Effect.all(
+                [firstAuthorization, secondAuthorization].map((candidate) =>
+                  repository
+                    .recover({
+                      authorizationId: candidate.id,
+                      revoke: () => revoke,
+                    })
+                    .pipe(Effect.result),
+                ),
+                { concurrency: "unbounded" },
+              );
+              assert.ok(results.every(({ _tag }) => _tag === "Success"));
+              assert.strictEqual(revocations, 2);
+              assert.strictEqual(yield* repository.get(firstAuthorization.id), null);
+              assert.strictEqual(yield* repository.get(secondAuthorization.id), null);
+            }),
+          ),
+        2,
+      ),
+    60_000,
+  );
+
+  it.effect(
     "serializes concurrent evidence promotion without lost updates",
     () =>
       withPostgres((client) =>
