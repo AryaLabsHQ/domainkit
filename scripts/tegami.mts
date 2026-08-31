@@ -8,6 +8,7 @@ import rootPackage from "../packages/domainkit/package.json" with { type: "json"
 
 const CORE_PACKAGE_ID = "npm:domainkit";
 const REACT_PACKAGE_ID = "npm:@domainkit/react";
+const CAPSULEDB_PACKAGE_ID = "npm:@domainkit/capsuledb";
 const REPOSITORY = "AryaLabsHQ/domainkit";
 
 if (rootPackage.name !== "domainkit") throw new Error("Unexpected release package");
@@ -16,7 +17,7 @@ const releaseChecks = (): TegamiPlugin => ({
   name: "domainkit-release-checks",
   enforce: "pre",
   async afterPreflight({ plan }) {
-    const shouldPublish = [CORE_PACKAGE_ID, REACT_PACKAGE_ID].some(
+    const shouldPublish = [CORE_PACKAGE_ID, REACT_PACKAGE_ID, CAPSULEDB_PACKAGE_ID].some(
       (packageId) => plan.packages.get(packageId)?.preflight?.shouldPublish === true,
     );
     if (!shouldPublish) return;
@@ -37,6 +38,7 @@ const versionTag = (): TegamiPlugin => ({
     for (const [packageId, tag] of [
       [CORE_PACKAGE_ID, (version: string) => `v${version}`],
       [REACT_PACKAGE_ID, (version: string) => `@domainkit/react@${version}`],
+      [CAPSULEDB_PACKAGE_ID, (version: string) => `@domainkit/capsuledb@${version}`],
     ] as const) {
       const pkg = this.graph.get(packageId);
       const packagePlan = plan.packages.get(packageId);
@@ -55,6 +57,7 @@ const paper = tegami({
     },
   },
   packages: {
+    "@domainkit/capsuledb": {},
     "@domainkit/react": { group: "public" },
     domainkit: { group: "public" },
   },
