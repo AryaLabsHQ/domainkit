@@ -6,4 +6,4 @@
 - [0004: Host-owned credentials](0004-host-owned-credentials.md)
 - [0005: Resilient DNS observation](0005-resilient-dns-observation.md)
 - [0006: Effect-first package root](0006-effect-first-package-root.md)
-- [0007: Effect-native host routes](0007-effect-native-host-routes.md)
+- [0007: Effect-first host routes with an async boundary](0007-effect-native-host-routes.md)

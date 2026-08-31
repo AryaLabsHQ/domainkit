@@ -1,12 +1,41 @@
 ---
 title: Server API
-description: Mount Effect-native provider connection routes inside your host while retaining application ownership of identity, persistence, and policy.
+description: Mount provider connection routes in Effect-native or async hosts while retaining application ownership of identity, persistence, and policy.
 sidebar:
   label: Server
 ---
 
-`domainkit/server` supplies the provider-connection HTTP seam while identity, tenancy, credentials,
-short-lived continuations, durable authorization storage, and audit policy remain host-owned.
+`domainkit/server` supplies one provider-connection HTTP seam for Effect-native and async hosts.
+Identity, tenancy, credentials, short-lived continuations, durable authorization storage, and audit
+policy remain host-owned.
+
+## Async hosts
+
+Use `createDomainKit` in a conventional async application. It accepts Promise-based host
+capabilities and returns a standard Web handler:
+
+```ts
+import { createDomainKit } from "domainkit/server";
+
+export const domainKit = await createDomainKit({
+  baseURL: "https://app.example.com",
+  basePath: "/api/domainkit",
+  defaultReturnTo: "/domains",
+  identity: hostIdentity,
+  connectionPolicy: hostConnectionPolicy,
+  providers: [cloudflare],
+  pendingAuthorizations: redisPendingAuthorizations,
+  persistence: managedDnsConnections,
+});
+```
+
+The host supplies `persistence`; DomainKit does not choose a database, run migrations, or dispose
+the host's database client. The optional `@domainkit/capsuledb` package remains an Effect-native
+implementation rather than an implicit dependency of this factory.
+
+## Effect-native hosts
+
+Use `Server.make` in an existing Effect program or provide it as a Layer with `Server.layer`:
 
 ```ts
 import { Server } from "domainkit/server";
@@ -30,10 +59,39 @@ const DomainKitServerLive = Server.layer({
 export const domainKit = Server.toWebHandler(DomainKitServerLive);
 ```
 
-Mount `domainKit.fetch` under the configured base path and dispose the runtime during a long-lived
-host's shutdown. The default base path is `/api/domainkit`. When `baseURL` is omitted, the start
-request's origin constructs the callback URL; configure it explicitly behind a reverse proxy or
-custom domain.
+Both paths use the same route program. `Server.make` leaves Effect requirements visible;
+`createDomainKit` adapts Promise capabilities at the foreign-runtime boundary.
+
+## Mount the handler
+
+The returned `fetch(Request)` works directly with Web-standard server frameworks.
+
+```ts title="Hono"
+app.all("/api/domainkit/*", (context) => domainKit.fetch(context.req.raw));
+```
+
+```ts title="Next.js App Router"
+// app/api/domainkit/[...path]/route.ts
+export const GET = domainKit.fetch;
+export const POST = domainKit.fetch;
+```
+
+```ts title="TanStack Start"
+// routes/api/domainkit/$.ts
+export const Route = createFileRoute("/api/domainkit/$")({
+  server: {
+    handlers: {
+      GET: ({ request }) => domainKit.fetch(request),
+      POST: ({ request }) => domainKit.fetch(request),
+    },
+  },
+});
+```
+
+Dispose the DomainKit handler during a long-lived host's shutdown. This releases only the runtime
+created by DomainKit; the host still owns its persistence lifecycle. The default base path is
+`/api/domainkit`. When `baseURL` is omitted, the start request's origin constructs the callback URL;
+configure it explicitly behind a reverse proxy or custom domain.
 
 ## Routes
 
@@ -67,9 +125,10 @@ before DomainKit can reuse it. Callback redirects append
 | `ManagedDnsConnections.Service` | Persist the durable authorization, credential, connection, and attachment aggregate |
 | `Crypto.Crypto`                 | Generate continuation, authorization, and connection identifiers                    |
 
-Build sibling implementations with `Layer.mergeAll`, then provide the completed dependency graph
-to `Server.layer` once. `Server.toWebHandler` is the foreign-runtime adapter; it does not replace
-the Layer graph with an async factory.
+`createDomainKit` is also a named export for Promise hosts. Its `identity`, `connectionPolicy`,
+`providers`, `pendingAuthorizations`, and `persistence` options correspond to these Effect
+services. Build Effect sibling implementations with `Layer.mergeAll`, then provide the completed
+dependency graph to `Server.layer` once.
 
 ## Failure behavior
 

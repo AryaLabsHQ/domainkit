@@ -51,7 +51,9 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof promiseApi.DnsResolverPool.defaultMake, "function");
     assert.strictEqual(typeof promiseApi.Verification.observe, "function");
     assert.strictEqual(typeof serverApi.Server.layer, "function");
+    assert.strictEqual(typeof serverApi.Server.make, "function");
     assert.strictEqual(typeof serverApi.Server.toWebHandler, "function");
+    assert.strictEqual(typeof serverApi.createDomainKit, "function");
     assert.strictEqual(typeof testingApi.InMemoryDnsProvider.layer, "function");
     assert.strictEqual(typeof testingApi.ProviderConformance.run, "function");
     assert.strictEqual(typeof testingApi.ProviderConformance.fromAsync, "function");

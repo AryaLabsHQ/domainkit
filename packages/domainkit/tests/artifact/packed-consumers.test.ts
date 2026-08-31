@@ -65,7 +65,7 @@ import {
   VERSION as PROMISE_VERSION,
 } from "domainkit/promise";
 import { InMemoryManagedDnsConnections } from "domainkit/testing";
-import { Server } from "domainkit/server";
+import { createDomainKit, Server } from "domainkit/server";
 import { Effect, Layer } from "effect";
 
 const provider = {
@@ -197,6 +197,8 @@ if (
   vercel.id !== "vercel" ||
   effectVercel.id !== "vercel" ||
   typeof Server.layer !== "function" ||
+  typeof Server.make !== "function" ||
+  typeof createDomainKit !== "function" ||
   typeof Server.toWebHandler !== "function"
 ) {
   throw new Error("Packed Promise and Effect namespaces diverged");

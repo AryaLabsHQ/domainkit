@@ -83,9 +83,26 @@ provide production durability.
 
 ## 3. Mount provider connection routes
 
-`domainkit/server` supplies a catch-all Effect Layer for the shared connection mechanics. The host
-provides identity, provider configuration, one-time continuations, durable connection storage, and
-cryptography as sibling Layers:
+`domainkit/server` supplies one catch-all route program for the shared connection mechanics. In an
+async host, pass Promise capabilities to `createDomainKit`:
+
+```ts
+import { createDomainKit } from "domainkit/server";
+
+export const domainKit = await createDomainKit({
+  baseURL: "https://app.example.com",
+  identity: HostIdentity,
+  connectionPolicy: HostConnectionPolicy,
+  providers: [CloudflareProvider],
+  pendingAuthorizations: RedisPendingAuthorizations,
+  persistence: ManagedDnsConnections,
+});
+```
+
+The host owns the persistence implementation, database setup, migrations, and database lifecycle.
+DomainKit intentionally does not supply async CapsuleDB persistence.
+
+In an Effect-native host, compose the same capabilities as sibling Layers:
 
 ```ts
 import { Server } from "domainkit/server";
@@ -106,8 +123,8 @@ const DomainKitServerLive = Server.layer({
 ```
 
 Mount `Server.toWebHandler(DomainKitServerLive).fetch` at `/api/domainkit/*`, or run
-`Server.Handler` directly inside an Effect HTTP host. An interactive provider connection has two
-server routes:
+`Server.Handler` directly inside an Effect HTTP host. Async frameworks mount `domainKit.fetch` at
+the same catch-all route. An interactive provider connection has two server routes:
 
 1. The start route checks the current user and tenant, asks the host policy to authorize any
    requested existing authorization aggregate, creates a short-lived continuation, and returns a

@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer, Ref } from "effect";
 
 import { Connection, Digest, Secret } from "../../src/index.ts";
+import { ManagedDnsConnections } from "../../src/promise.ts";
 import { Server } from "../../src/server.ts";
 import { InMemoryManagedDnsConnections } from "../../src/testing.ts";
 
@@ -65,8 +66,14 @@ const providerLayer = Server.providersLayer([
           }
           return Effect.succeed({
             capabilityEvidence: [
-              { capability: "dns:read" as const, evidence: { _tag: "Declared" as const } },
-              { capability: "dns:write" as const, evidence: { _tag: "Declared" as const } },
+              {
+                capability: "dns:read" as const,
+                evidence: { _tag: "Declared" as const },
+              },
+              {
+                capability: "dns:write" as const,
+                evidence: { _tag: "Declared" as const },
+              },
             ],
             credential: {
               accessToken: Secret.make("provider-token"),
@@ -149,7 +156,166 @@ const makeHandler = (
   );
 };
 
+const makeAsyncHandler = async () => {
+  const pending = new Map<string, Server.PendingAuthorization>();
+  return Server.createDomainKit({
+    baseURL: "https://app.example",
+    connectionPolicy: {
+      authorizeReuse: async ({ authorizationId }) => {
+        if (authorizationId !== "authorization-1") {
+          throw new Server.Error({
+            category: "authorization",
+            message: "Authorization is not available to this principal",
+            operation: "TestConnectionPolicy.authorizeReuse",
+            retry: "never",
+          });
+        }
+      },
+    },
+    defaultReturnTo: "/domains",
+    identity: {
+      authenticate: async (request) => {
+        if (request.headers.get("authorization") !== "Bearer test-session") {
+          throw new Server.Error({
+            category: "authentication",
+            message: "Session required",
+            operation: "TestIdentity.authenticate",
+            retry: "after-user-action",
+          });
+        }
+        return { authorizedById: "user-1", ownerId: "organization-1" };
+      },
+    },
+    pendingAuthorizations: {
+      consume: async (id, now) => {
+        const value = pending.get(id);
+        pending.delete(id);
+        return value !== undefined && value.continuation.expiresAt > now ? value : null;
+      },
+      get: async (id, now) => {
+        const value = pending.get(id);
+        return value !== undefined && value.continuation.expiresAt > now ? value : null;
+      },
+      put: async (value) => {
+        pending.set(value.continuation.id, value);
+      },
+    },
+    persistence: ManagedDnsConnections.toAsync(InMemoryManagedDnsConnections.make()),
+    providers: [
+      {
+        create: async ({ callbackUrl, domain }) => ({
+          complete: async (_payload, returnedUrl) => {
+            if (returnedUrl.searchParams.get("code") !== "provider-code") {
+              throw new Error("Provider code is missing");
+            }
+            return {
+              capabilityEvidence: [
+                {
+                  capability: "dns:read" as const,
+                  evidence: { _tag: "Declared" as const },
+                },
+                {
+                  capability: "dns:write" as const,
+                  evidence: { _tag: "Declared" as const },
+                },
+              ],
+              credential: {
+                accessToken: Secret.make("provider-token"),
+                refreshToken: null,
+                tokenType: "bearer" as const,
+              },
+              expiresAt: null,
+              providerAccountId: "account-1",
+              providerContext: {
+                value: { domain: domain ?? null },
+                version: "test.v1",
+              },
+              scopes: [],
+            };
+          },
+          method: "oauth2" as const,
+          providerId: "example",
+          requiredCapabilities: ["dns:read" as const, "dns:write" as const],
+          start: async (continuationId) => {
+            const authorizationUrl = new URL("https://provider.example/authorize");
+            authorizationUrl.searchParams.set("redirect_uri", callbackUrl.toString());
+            authorizationUrl.searchParams.set("state", continuationId);
+            return {
+              authorizationUrl,
+              payload: Secret.make(`payload:${continuationId}`),
+            };
+          },
+        }),
+        method: "oauth2",
+        providerId: "example",
+      },
+    ],
+  });
+};
+
 describe("DomainKit server routes", () => {
+  it("mounts the same flow for async hosts", async () => {
+    const handler = await makeAsyncHandler();
+    try {
+      const unauthenticated = await handler.fetch(
+        new Request("https://internal.example/api/domainkit/connection/start", {
+          body: JSON.stringify({
+            domain: "mail.example.com",
+            method: "oauth2",
+            providerId: "example",
+          }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        }),
+      );
+      assert.strictEqual(unauthenticated.status, 401);
+
+      const start = await handler.fetch(
+        new Request("https://internal.example/api/domainkit/connection/start", {
+          body: JSON.stringify({
+            domain: "mail.example.com",
+            method: "oauth2",
+            providerId: "example",
+            returnTo: "/domains/domain-1?tab=dns",
+          }),
+          headers: {
+            authorization: "Bearer test-session",
+            "content-type": "application/json",
+          },
+          method: "POST",
+        }),
+      );
+      assert.strictEqual(start.status, 200);
+      const body = (await start.json()) as {
+        readonly authorizationUrl: string;
+        readonly continuationId: string;
+      };
+      assert.strictEqual(
+        new URL(body.authorizationUrl).searchParams.get("redirect_uri"),
+        "https://app.example/api/domainkit/callback/example",
+      );
+
+      const callback = await handler.fetch(
+        new Request(
+          `https://app.example/api/domainkit/callback/example?state=${body.continuationId}&code=provider-code`,
+        ),
+      );
+      assert.strictEqual(callback.status, 303);
+      const destination = new URL(callback.headers.get("location") ?? "");
+      assert.strictEqual(destination.pathname, "/domains/domain-1");
+      assert.strictEqual(destination.searchParams.get("domainkit"), "connected");
+
+      const replay = await handler.fetch(
+        new Request(
+          `https://app.example/api/domainkit/callback/example?state=${body.continuationId}&code=provider-code`,
+        ),
+      );
+      assert.strictEqual(replay.status, 400);
+    } finally {
+      await handler.dispose();
+    }
+  });
+
   it("mounts one interactive start and callback flow", async () => {
     const handler = makeHandler();
     try {
@@ -161,7 +327,10 @@ describe("DomainKit server routes", () => {
             providerId: "example",
             returnTo: "/domains/domain-1?tab=dns",
           }),
-          headers: { authorization: "Bearer test-session", "content-type": "application/json" },
+          headers: {
+            authorization: "Bearer test-session",
+            "content-type": "application/json",
+          },
           method: "POST",
         }),
       );
@@ -225,7 +394,10 @@ describe("DomainKit server routes", () => {
             providerId: "example",
             returnTo: "https://attacker.example/steal",
           }),
-          headers: { authorization: "Bearer test-session", "content-type": "application/json" },
+          headers: {
+            authorization: "Bearer test-session",
+            "content-type": "application/json",
+          },
           method: "POST",
         }),
       );
@@ -247,7 +419,10 @@ describe("DomainKit server routes", () => {
             method: "oauth2",
             providerId: "example",
           }),
-          headers: { authorization: "Bearer test-session", "content-type": "application/json" },
+          headers: {
+            authorization: "Bearer test-session",
+            "content-type": "application/json",
+          },
           method: "POST",
         }),
       );
@@ -268,7 +443,10 @@ describe("DomainKit server routes", () => {
             method: "oauth2",
             providerId: "example",
           }),
-          headers: { authorization: "Bearer test-session", "content-type": "application/json" },
+          headers: {
+            authorization: "Bearer test-session",
+            "content-type": "application/json",
+          },
           method: "POST",
         }),
       );
@@ -316,7 +494,10 @@ describe("DomainKit server routes", () => {
             method: "oauth2",
             providerId: "example",
           }),
-          headers: { authorization: "Bearer test-session", "content-type": "application/json" },
+          headers: {
+            authorization: "Bearer test-session",
+            "content-type": "application/json",
+          },
           method: "POST",
         }),
       );
@@ -337,11 +518,16 @@ describe("DomainKit server routes", () => {
             method: "oauth2",
             providerId: "example",
           }),
-          headers: { authorization: "Bearer test-session", "content-type": "application/json" },
+          headers: {
+            authorization: "Bearer test-session",
+            "content-type": "application/json",
+          },
           method: "POST",
         }),
       );
-      const { continuationId } = (await start.json()) as { readonly continuationId: string };
+      const { continuationId } = (await start.json()) as {
+        readonly continuationId: string;
+      };
       const wrongOrigin = await handler.fetch(
         new Request(
           `https://attacker.example/api/domainkit/callback/example?state=${continuationId}&code=provider-code`,
