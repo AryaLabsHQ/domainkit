@@ -7,6 +7,7 @@ import * as Reactivity from "effect/unstable/reactivity/Reactivity";
 
 export const withPostgres = <A, E>(
   effect: (client: PgClient.PgClient) => Effect.Effect<A, E, SqlClient.SqlClient>,
+  maxConnections = 4,
 ): Effect.Effect<A, E | SqlError> =>
   Effect.acquireUseRelease(
     Effect.promise(() =>
@@ -20,7 +21,7 @@ export const withPostgres = <A, E>(
       Effect.scoped(
         Effect.gen(function* () {
           const client = yield* PgClient.make({
-            maxConnections: 4,
+            maxConnections,
             url: Redacted.make(container.getConnectionUri()),
           }).pipe(Effect.provide(Reactivity.layer));
           return yield* effect(client).pipe(

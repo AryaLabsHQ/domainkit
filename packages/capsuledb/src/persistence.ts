@@ -300,13 +300,24 @@ const makeRepository = Effect.gen(function* () {
   const custody = yield* CredentialCustody.Service;
   const bindings = yield* HostBindings.Service;
 
-  const withRevocationLock = <A, E, R>(authorizationId: string, effect: Effect.Effect<A, E, R>) =>
+  const withRevocationLock = <A, E, R>(
+    operation: string,
+    authorizationId: string,
+    effect: Effect.Effect<A, E, R>,
+  ) =>
     Effect.scoped(
       Effect.gen(function* () {
         const connection = yield* sql.reserve;
-        yield* connection.executeRaw("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
-          authorizationId,
-        ]);
+        // SAFETY: PostgreSQL returns one boolean row for pg_try_advisory_lock.
+        const rows = (yield* connection.execute(
+          "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired",
+          [authorizationId],
+          undefined,
+        )) as ReadonlyArray<{ readonly acquired: boolean }>;
+        if (rows[0]?.acquired !== true)
+          return yield* Effect.fail(
+            storageError(operation, "Provider revocation is already in progress", "safe"),
+          );
         yield* Effect.addFinalizer(() =>
           connection
             .executeRaw("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [authorizationId])
@@ -592,6 +603,7 @@ const makeRepository = Effect.gen(function* () {
                 revokedAuthorization: true,
               };
               return withRevocationLock(
+                "disconnect",
                 prepared.authorization.id,
                 sql.withTransaction(getStored(prepared.authorization.id, "update")).pipe(
                   Effect.flatMap((current) => {
@@ -701,6 +713,7 @@ const makeRepository = Effect.gen(function* () {
       mapSql(
         "recover",
         withRevocationLock(
+          "recover",
           authorizationId,
           sql.withTransaction(getStored(authorizationId, "update")).pipe(
             Effect.flatMap((aggregate) => {

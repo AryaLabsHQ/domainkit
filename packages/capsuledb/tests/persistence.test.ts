@@ -254,56 +254,58 @@ describe("PostgreSQL authorization lifecycle capsule", () => {
   it.effect(
     "serializes concurrent recovery before invoking provider revocation",
     () =>
-      withPostgres((client) =>
-        withRepository(client, (repository) =>
-          Effect.gen(function* () {
-            const auth = authorization();
-            const storedConnection = connection();
-            yield* repository.connect({
-              authorization: auth,
-              connection: storedConnection,
-              credential: credential("token"),
-            });
-            yield* repository
-              .disconnect({
-                connectionId: storedConnection.id,
-                ownerId: storedConnection.ownerId,
-                revoke: () => Effect.fail("provider unavailable" as const),
-              })
-              .pipe(Effect.result);
+      withPostgres(
+        (client) =>
+          withRepository(client, (repository) =>
+            Effect.gen(function* () {
+              const auth = authorization();
+              const storedConnection = connection();
+              yield* repository.connect({
+                authorization: auth,
+                connection: storedConnection,
+                credential: credential("token"),
+              });
+              yield* repository
+                .disconnect({
+                  connectionId: storedConnection.id,
+                  ownerId: storedConnection.ownerId,
+                  revoke: () => Effect.fail("provider unavailable" as const),
+                })
+                .pipe(Effect.result);
 
-            let revocations = 0;
-            const revocationStarted = yield* Deferred.make<void>();
-            const finishRevocation = yield* Deferred.make<void>();
-            const firstAttempt = yield* repository
-              .recover({
-                authorizationId: auth.id,
-                revoke: () =>
-                  Effect.sync(() => void revocations++).pipe(
-                    Effect.andThen(Deferred.succeed(revocationStarted, undefined)),
-                    Effect.andThen(Deferred.await(finishRevocation)),
-                  ),
-              })
-              .pipe(Effect.result, Effect.forkChild);
-            yield* Deferred.await(revocationStarted);
-            const concurrentAttempt = yield* repository
-              .recover({
-                authorizationId: auth.id,
-                revoke: () => Effect.sync(() => void revocations++),
-              })
-              .pipe(Effect.result, Effect.forkChild);
-            yield* Deferred.succeed(finishRevocation, undefined);
+              let revocations = 0;
+              const revocationStarted = yield* Deferred.make<void>();
+              const finishRevocation = yield* Deferred.make<void>();
+              const firstAttempt = yield* repository
+                .recover({
+                  authorizationId: auth.id,
+                  revoke: () =>
+                    Effect.sync(() => void revocations++).pipe(
+                      Effect.andThen(Deferred.succeed(revocationStarted, undefined)),
+                      Effect.andThen(Deferred.await(finishRevocation)),
+                    ),
+                })
+                .pipe(Effect.result, Effect.forkChild);
+              yield* Deferred.await(revocationStarted);
+              const concurrentAttempt = yield* repository
+                .recover({
+                  authorizationId: auth.id,
+                  revoke: () => Effect.sync(() => void revocations++),
+                })
+                .pipe(Effect.result, Effect.forkChild);
+              yield* Deferred.succeed(finishRevocation, undefined);
 
-            const attempts = yield* Effect.all(
-              [Fiber.join(firstAttempt), Fiber.join(concurrentAttempt)],
-              { concurrency: "unbounded" },
-            );
-            assert.strictEqual(attempts.filter(({ _tag }) => _tag === "Success").length, 1);
-            assert.strictEqual(attempts.filter(({ _tag }) => _tag === "Failure").length, 1);
-            assert.strictEqual(revocations, 1);
-            assert.strictEqual(yield* repository.get(auth.id), null);
-          }),
-        ),
+              const attempts = yield* Effect.all(
+                [Fiber.join(firstAttempt), Fiber.join(concurrentAttempt)],
+                { concurrency: "unbounded" },
+              );
+              assert.strictEqual(attempts.filter(({ _tag }) => _tag === "Success").length, 1);
+              assert.strictEqual(attempts.filter(({ _tag }) => _tag === "Failure").length, 1);
+              assert.strictEqual(revocations, 1);
+              assert.strictEqual(yield* repository.get(auth.id), null);
+            }),
+          ),
+        2,
       ),
     60_000,
   );
