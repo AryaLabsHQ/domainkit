@@ -1,3 +1,9 @@
+## @domainkit/react@0.5.0
+
+### Adopt provider target attachments
+
+Adopt credential-scoped provider connections, explicit provider-target attachments, and detached-domain lifecycle state.
+
 ## @domainkit/react@0.4.0
 
 ### Compose stable connected-domain actions
