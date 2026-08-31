@@ -216,6 +216,8 @@ export const connect = Effect.fn("Connection.connect")(function* (input: Connect
     authorization,
     connection,
     credential: input.authentication.credential,
+    ...(existing === null ? {} : { expectedAuthorizationId: existing.authorization.id }),
+    ...(existingConnection === null ? {} : { expectedConnectionId: existingConnection.id }),
   });
 });
 

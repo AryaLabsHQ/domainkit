@@ -215,10 +215,33 @@ describe("managed DNS lifecycle repository", () => {
         (yield* repository.get(aggregate.authorization.id))?.authorization.revocation._tag,
         "Pending",
       );
+      const staleConnection = aggregate.connections[0];
+      if (staleConnection === undefined) return yield* Effect.die("connection is missing");
+      const stalePending = yield* repository
+        .connect({
+          authorization: aggregate.authorization,
+          connection: staleConnection,
+          credential: aggregate.credential,
+          expectedAuthorizationId: aggregate.authorization.id,
+          expectedConnectionId: staleConnection.id,
+        })
+        .pipe(Effect.result);
+      assert.strictEqual(stalePending._tag, "Failure");
       yield* repository.recover({
         authorizationId: aggregate.authorization.id,
         revoke: () => Effect.void,
       });
+      assert.strictEqual(yield* repository.get(aggregate.authorization.id), null);
+      const staleRemoved = yield* repository
+        .connect({
+          authorization: aggregate.authorization,
+          connection: staleConnection,
+          credential: aggregate.credential,
+          expectedAuthorizationId: aggregate.authorization.id,
+          expectedConnectionId: staleConnection.id,
+        })
+        .pipe(Effect.result);
+      assert.strictEqual(staleRemoved._tag, "Failure");
       assert.strictEqual(yield* repository.get(aggregate.authorization.id), null);
     }).pipe(Effect.provide(layer));
   });

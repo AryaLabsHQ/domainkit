@@ -187,6 +187,25 @@ export function make(options: Options = {}): Lifecycle.Interface {
     connect: (input) =>
       serialize(
         Effect.gen(function* () {
+          const entries = yield* Ref.get(state);
+          const current = entries.get(input.authorization.id);
+          if (
+            current?.authorization.revocation._tag === "Pending" ||
+            (input.expectedAuthorizationId !== undefined && current === undefined)
+          ) {
+            return yield* conflict(
+              "connect",
+              current === undefined
+                ? "Provider authorization no longer exists"
+                : "Provider authorization is awaiting revocation recovery",
+            );
+          }
+          if (
+            input.expectedAuthorizationId !== undefined &&
+            current?.authorization.id !== input.expectedAuthorizationId
+          ) {
+            return yield* conflict("connect", "Provider authorization changed during reconnect");
+          }
           if (
             input.authorization.id !== input.connection.authorizationId ||
             input.authorization.providerId !== input.connection.providerId ||
@@ -194,17 +213,22 @@ export function make(options: Options = {}): Lifecycle.Interface {
           ) {
             return yield* conflict("connect", "Connection does not match its authorization");
           }
-          const existing = yield* get(input.authorization.id);
-          const existingConnection = existing?.connections.find(
+          const existingConnection = current?.connections.find(
             (connection) => connection.ownerId === input.connection.ownerId,
           );
+          if (
+            input.expectedConnectionId !== undefined &&
+            existingConnection?.id !== input.expectedConnectionId
+          ) {
+            return yield* conflict("connect", "Organization connection changed during reconnect");
+          }
           const connection = existingConnection ?? input.connection;
           const next: Lifecycle.Aggregate = {
             authorization: input.authorization,
-            connections: existing
-              ? [...existing.connections.filter(({ id }) => id !== connection.id), connection]
+            connections: current
+              ? [...current.connections.filter(({ id }) => id !== connection.id), connection]
               : [connection],
-            attachments: existing?.attachments ?? [],
+            attachments: current?.attachments ?? [],
             credential: input.credential,
           };
           yield* commit("connect", next);

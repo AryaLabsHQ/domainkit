@@ -15,6 +15,10 @@ export interface ConnectInput {
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly connection: Connection.StoredConnection;
   readonly credential: Connection.StoredCredential;
+  /** The authorization id observed before building a reuse update, if any. */
+  readonly expectedAuthorizationId?: string;
+  /** The owner connection id observed before building a reuse update, if any. */
+  readonly expectedConnectionId?: string;
 }
 
 export interface AttachmentResult {
