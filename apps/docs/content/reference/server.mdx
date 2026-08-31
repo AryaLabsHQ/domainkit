@@ -1,0 +1,75 @@
+---
+title: Server API
+description: Mount Effect-native provider connection routes inside your host while retaining application ownership of identity, persistence, and policy.
+sidebar:
+  label: Server
+---
+
+`domainkit/server` supplies the provider-connection HTTP seam while identity, tenancy, credentials,
+short-lived continuations, durable authorization storage, and audit policy remain host-owned.
+
+```ts
+import { Server } from "domainkit/server";
+import { Layer } from "effect";
+
+const dependencies = Layer.mergeAll(
+  IdentityLive,
+  ProvidersLive,
+  PendingAuthorizationsLive,
+  ManagedDnsConnectionsLive,
+  CryptoLive,
+);
+
+const DomainKitServerLive = Server.layer({
+  baseURL: "https://app.example.com",
+  basePath: "/api/domainkit",
+  defaultReturnTo: "/domains",
+}).pipe(Layer.provide(dependencies));
+
+export const domainKit = Server.toWebHandler(DomainKitServerLive);
+```
+
+Mount `domainKit.fetch` under the configured base path and dispose the runtime during a long-lived
+host's shutdown. The default base path is `/api/domainkit`. When `baseURL` is omitted, the start
+request's origin constructs the callback URL; configure it explicitly behind a reverse proxy or
+custom domain.
+
+## Routes
+
+| Method | Path                                  | Behavior                                                          |
+| ------ | ------------------------------------- | ----------------------------------------------------------------- |
+| `POST` | `/api/domainkit/connection/start`     | Authenticates the host principal and returns an authorization URL |
+| `GET`  | `/api/domainkit/callback/:providerId` | Consumes state once, commits the connection, and redirects        |
+
+The start body accepts `providerId`, `method`, an optional provider-selection `domain`, an optional
+existing `authorizationId`, and a same-origin `returnTo`. Callback redirects append
+`domainkit=connected` and the public `connectionId` so the host UI can continue its setup flow.
+
+## Host services
+
+{/* reference-inventory:start */}
+
+| Export   | Purpose                                                                       |
+| -------- | ----------------------------------------------------------------------------- |
+| `Server` | Routes, configuration, host service tags, errors, and the Web handler adapter |
+
+{/* reference-inventory:end */}
+
+| Service                         | Host responsibility                                                                 |
+| ------------------------------- | ----------------------------------------------------------------------------------- |
+| `Server.Identity`               | Authenticate a start request and return tenant-owned principal identifiers          |
+| `Server.Providers`              | Build a configured interactive provider flow for the selected domain and callback   |
+| `Server.PendingAuthorizations`  | Persist the opaque continuation and safe callback context until one-time consume    |
+| `ManagedDnsConnections.Service` | Persist the durable authorization, credential, connection, and attachment aggregate |
+| `Crypto.Crypto`                 | Generate continuation, authorization, and connection identifiers                    |
+
+Build sibling implementations with `Layer.mergeAll`, then provide the completed dependency graph
+to `Server.layer` once. `Server.toWebHandler` is the foreign-runtime adapter; it does not replace
+the Layer graph with an async factory.
+
+## Failure behavior
+
+Failures are returned as JSON with `category`, `message`, `operation`, and `retry`. Start requests
+without a host identity return `401`. Invalid provider input, unsafe return URLs, mismatched
+callbacks, expired state, and replayed state return `400`. Provider tokens and opaque continuation
+payloads are never serialized to the browser response.

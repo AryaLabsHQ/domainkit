@@ -65,6 +65,7 @@ import {
   VERSION as PROMISE_VERSION,
 } from "domainkit/promise";
 import { InMemoryManagedDnsConnections } from "domainkit/testing";
+import { Server } from "domainkit/server";
 import { Effect, Layer } from "effect";
 
 const provider = {
@@ -194,7 +195,9 @@ if (
   cloudflare.id !== "cloudflare" ||
   effectCloudflare.id !== "cloudflare" ||
   vercel.id !== "vercel" ||
-  effectVercel.id !== "vercel"
+  effectVercel.id !== "vercel" ||
+  typeof Server.layer !== "function" ||
+  typeof Server.toWebHandler !== "function"
 ) {
   throw new Error("Packed Promise and Effect namespaces diverged");
 }
@@ -205,12 +208,14 @@ if (
         join(directory, "types.ts"),
         `
 import type { Cloudflare, DnsProvider, Vercel } from "domainkit";
+import type { Server } from "domainkit/server";
 import type {
   Cloudflare as PromiseCloudflare,
   Vercel as PromiseVercel,
 } from "domainkit/promise";
 
 export type PublicProvider = DnsProvider.Interface;
+export type PublicServerHandler = Server.Interface;
 export type PublicProviders =
   | Cloudflare.Interface
   | PromiseCloudflare.Interface
@@ -244,6 +249,7 @@ export type PublicProviders =
         join(directory, "worker.mjs"),
         `
 import { DnsRecord, DnsResolverPool, DomainName, Verification, VERSION } from "domainkit";
+import { Server } from "domainkit/server";
 
 export default {
   async fetch() {
@@ -261,6 +267,7 @@ export default {
       domain,
       observe: typeof Verification.observe,
       policy: policy._tag,
+      server: typeof Server.layer,
       type: record._tag,
       version: VERSION,
     });
@@ -283,6 +290,7 @@ export default {
         domain: "example.com",
         observe: "function",
         policy: "AnyMatch",
+        server: "function",
         type: "TXT",
         version: packageJson.version,
       });

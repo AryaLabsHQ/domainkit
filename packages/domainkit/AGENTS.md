@@ -1,9 +1,9 @@
 # Core package guide
 
 The package root is the canonical Effect API. Public entry points are `domainkit`,
-`domainkit/promise`, and `domainkit/testing`, as declared in `package.json`. The source entry files
-and packed artifact tests are authoritative; internal module paths and superseded ADR examples are
-not public API.
+`domainkit/promise`, `domainkit/server`, and `domainkit/testing`, as declared in `package.json`.
+The source entry files and packed artifact tests are authoritative; internal module paths and
+superseded ADR examples are not public API.
 
 ## Public contract
 

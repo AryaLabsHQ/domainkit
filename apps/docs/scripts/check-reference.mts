@@ -23,6 +23,12 @@ const entryPoints: ReadonlyArray<EntryPoint> = [
   },
   {
     inventoryColumn: 1,
+    label: "domainkit/server",
+    source: "packages/domainkit/src/server.ts",
+    reference: "apps/docs/content/reference/server.mdx",
+  },
+  {
+    inventoryColumn: 1,
     label: "domainkit/testing",
     source: "packages/domainkit/src/testing.ts",
     reference: "apps/docs/content/reference/testing.mdx",

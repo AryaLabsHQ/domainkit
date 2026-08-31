@@ -83,18 +83,43 @@ provide production durability.
 
 ## 3. Mount provider connection routes
 
-An interactive provider connection has two server routes:
+`domainkit/server` supplies a catch-all Effect Layer for the shared connection mechanics. The host
+provides identity, provider configuration, one-time continuations, durable connection storage, and
+cryptography as sibling Layers:
+
+```ts
+import { Server } from "domainkit/server";
+import { Layer } from "effect";
+
+const DomainKitDependencies = Layer.mergeAll(
+  HostIdentityLive,
+  ProviderRegistryLive,
+  RedisPendingAuthorizationsLive,
+  ManagedDnsConnectionsLive,
+  CryptoLive,
+);
+
+const DomainKitServerLive = Server.layer({
+  baseURL: "https://app.example.com",
+}).pipe(Layer.provide(DomainKitDependencies));
+```
+
+Mount `Server.toWebHandler(DomainKitServerLive).fetch` at `/api/domainkit/*`, or run
+`Server.Handler` directly inside an Effect HTTP host. An interactive provider connection has two
+server routes:
 
 1. The start route checks the current user and tenant, creates a short-lived continuation, and
    returns a provider authorization URL.
-2. The callback route checks the same authority, consumes the continuation exactly once, exchanges
-   the provider code, and commits the durable authorization aggregate.
+2. The callback route trusts the initiating principal stored in the server-side continuation,
+   consumes it exactly once, exchanges the provider code, and commits the durable authorization
+   aggregate.
 
 A token route validates the submitted credential on the server and commits the same durable
 aggregate without a redirect.
 
-After connection, reconstruct the provider client from the stored credential and non-secret
-provider context. Do not ask the browser to retain the provider token or account client.
+The callback redirects to a previously validated same-origin path. After connection, reconstruct
+the provider client from the stored credential and non-secret provider context. Do not ask the
+browser to retain the provider token or account client.
 
 ## 4. Persist plan attempts before approval
 

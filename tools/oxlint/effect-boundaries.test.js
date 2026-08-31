@@ -57,6 +57,10 @@ tester.run("domainkit/no-foreign-promise-outside-boundary", noForeignPromiseOuts
       filename: path.join(process.cwd(), "packages/domainkit/src/transport.ts"),
       code: "Effect.tryPromise(() => callback());",
     },
+    {
+      filename: path.join(process.cwd(), "packages/domainkit/src/server/index.ts"),
+      code: "Effect.tryPromise(() => request.json());",
+    },
   ],
   invalid: [
     {
