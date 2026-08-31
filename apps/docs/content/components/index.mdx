@@ -1,0 +1,71 @@
+---
+title: Components
+description: Add complete domain-setup flows or compose focused React parts into a SaaS product while your application retains its transport and policy.
+sidebar:
+  label: Overview
+seo:
+  title: DomainKit React components
+---
+
+Build provider-connected domain setup with complete flows or semantic parts from
+`@domainkit/react`. Every interactive component runs over a transport supplied by your application;
+provider credentials, authenticated routes, persistence, identity, tenancy, consent, and audit
+remain host-owned.
+
+## Flows
+
+<CardGroup cols={2}>
+  <Card title="Connection" href="/components/connection">
+    Connect a DNS provider with a packaged authorization flow.
+  </Card>
+  <Card title="Host connection" href="/components/host-connection">
+    Compose the connection controller into an existing product surface.
+  </Card>
+  <Card title="Host lifecycle" href="/components/host-lifecycle">
+    Combine connection, review, apply, cleanup, and disconnect actions.
+  </Card>
+  <Card title="Domain flow" href="/components/domain">
+    Mount the complete lifecycle for one customer domain.
+  </Card>
+</CardGroup>
+
+## Components
+
+<CardGroup cols={2}>
+  <Card title="Records" href="/components/records">
+    Render DNS records as a table or downloadable zone file.
+  </Card>
+  <Card title="Record Card" href="/components/record-card">
+    Present one DNS record with copy controls and observation evidence.
+  </Card>
+  <Card title="Provider Mark" href="/components/provider-mark">
+    Render provider identity with host overrides and a safe fallback.
+  </Card>
+  <Card title="Verification" href="/components/verification">
+    Distinguish provider evidence from public-DNS observation.
+  </Card>
+</CardGroup>
+
+## Registry
+
+Copy model-free presentation components into your application through the DomainKit Shadcn
+registry. Each item has its own live preview, source view, install command, usage example, and API
+reference.
+
+<CardGroup cols={2}>
+  <Card title="Registry overview" href="/components/registry">
+    Compare every copied component and understand the registry boundary.
+  </Card>
+  <Card title="DNS table" href="/components/registry/dns-table">
+    Render DNS records with plain data and optional status values.
+  </Card>
+  <Card title="DNS Operation" href="/components/registry/dns-operation">
+    Present a planned DNS create, no-op, update, or conflict.
+  </Card>
+  <Card title="Async State" href="/components/registry/async-state">
+    Show loading, empty, and error states without a DomainKit runtime.
+  </Card>
+</CardGroup>
+
+Start with the [React overview](/docs/react) to choose an integration level. Use the
+[Registry overview](/components/registry) when you only need copied, model-free presentation parts.

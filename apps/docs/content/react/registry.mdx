@@ -7,13 +7,8 @@ The registry is a source-distribution channel for presentation-only DNS componen
 files use plain props and Tailwind tokens; they do not import `domainkit`, Effect, Atom, transports,
 or provider clients.
 
-```sh
-npx shadcn@latest add https://domain-kit.dev/r/dns-table.json
-npx shadcn@latest add https://domain-kit.dev/r/dns-operation.json
-npx shadcn@latest add https://domain-kit.dev/r/dns-status.json
-npx shadcn@latest add https://domain-kit.dev/r/provider-mark.json
-npx shadcn@latest add https://domain-kit.dev/r/copy-value.json
-npx shadcn@latest add https://domain-kit.dev/r/async-state.json
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/dns-table.json https://domain-kit.dev/r/dns-operation.json https://domain-kit.dev/r/dns-status.json https://domain-kit.dev/r/provider-mark.json https://domain-kit.dev/r/copy-value.json https://domain-kit.dev/r/async-state.json
 ```
 
 Use `@domainkit/react` for connection, OAuth, provisioning, verification, cleanup, and shared Effect
@@ -22,3 +17,6 @@ transport implementation.
 
 `provider-mark` provides the generic `ProviderMark` wrapper. Pass an image from
 `https://integrations.sh/logo/{domain}?sz=64` when the copied component needs a provider logo.
+
+Browse the [Registry component catalog](/components/registry) for a live preview, source view,
+installation command, usage example, and API reference for every shipped item.

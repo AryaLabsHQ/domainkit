@@ -14,8 +14,8 @@ responsibilities that remain at each level.
 
 Install the React package with its peer dependencies and opt in to the default stylesheet:
 
-```sh
-npm install @domainkit/react domainkit effect@rc @effect/atom-react@rc react react-dom
+```package-install
+@domainkit/react domainkit effect@rc @effect/atom-react@rc react react-dom
 ```
 
 ```tsx
@@ -38,7 +38,7 @@ your authenticated transport.
 
 React 19 is required.
 
-## Surfaces
+## Choose a surface
 
 | Surface                          | Use it when                                              |
 | -------------------------------- | -------------------------------------------------------- |
@@ -50,12 +50,15 @@ React 19 is required.
 
 Server rendering is supported. Clipboard access, downloads, and navigation occur only from browser interactions.
 
+The [component catalog](/components) owns component installation, examples, states, accessibility,
+and API details. The pages here explain package-wide integration choices and the host transport.
+
 <CardGroup cols={2}>
   <Card title="Integration levels" href="/docs/react/integration-levels" icon="layers">
     Compare complete screens, focused flows, model hooks, and low-level parts.
   </Card>
-  <Card title="Workshop" href="/workshop" icon="play">
-    Exercise every shipped story, theme, provider, lifecycle state, and record control.
+  <Card title="Components" href="/components" icon="component">
+    Explore every shipped React flow, presentation component, theme, and provider state.
   </Card>
   <Card title="Transport" href="/docs/react/transport" icon="arrow-right-left">
     Map authenticated endpoints into the browser-safe transport contract.

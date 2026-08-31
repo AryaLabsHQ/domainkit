@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const port = Number(process.env.DOMAINKIT_WORKSHOP_PORT ?? "4178");
+const port = Number(process.env.DOMAINKIT_DOCS_PORT ?? "4321");
 
 export default defineConfig({
   testDir: "tests/browser",
@@ -11,7 +11,7 @@ export default defineConfig({
     reducedMotion: "reduce",
   },
   webServer: {
-    command: `bun run build && bun run vite examples/vite --host 127.0.0.1 --port ${port}`,
+    command: `bun run --cwd ../../apps/docs dev -- --host 127.0.0.1 --port ${port}`,
     port,
     reuseExistingServer: !process.env.CI,
   },

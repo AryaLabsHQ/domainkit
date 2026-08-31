@@ -1,0 +1,121 @@
+---
+title: Domain flow
+description: Mount the complete connection, provisioning, verification, cleanup, and disconnect journey for one customer domain.
+---
+
+`Domain.Flow` is the highest-level React integration. It combines the same controllers and semantic
+parts exposed by the focused namespaces.
+
+<ReactExample story="domain" />
+
+## Installation
+
+```package-install
+@domainkit/react domainkit effect @effect/atom-react react react-dom
+```
+
+## Usage
+
+Place the flow inside `DomainKit.Root` and pass the DNS requirements produced by your product. The
+optional `receiptId` restores cleanup eligibility after the host reloads its durable state.
+
+```tsx
+<DomainKit.Root transport={transportLayer}>
+  <Domain.Flow domain={domain} records={records} receiptId={receiptId} />
+</DomainKit.Root>
+```
+
+The flow does not decide identity, tenancy, consent, audit policy, or product readiness. It renders
+the DomainKit lifecycle returned by the host transport and emits lifecycle events after completed
+user-triggered mutations.
+
+## When to use it
+
+Use `Domain.Flow` when the packaged card and action order fit your product. Choose
+[Host lifecycle](/components/host-lifecycle) when your application must control surrounding layout,
+action placement, or readiness rules.
+
+## Accessibility
+
+The complete flow includes tables, dialogs, status text, and action labels. Keep the default
+semantics when styling parts, and ensure host-provided messages remain specific about the provider,
+record action, and failure outcome.
+
+## API reference
+
+### `Domain.Flow`
+
+<TypeTable
+  type={{
+    domain: {
+      type: "string",
+      required: true,
+      description: "Customer domain whose complete setup lifecycle is rendered.",
+    },
+    receiptId: {
+      type: "string",
+      description: "Previously persisted apply receipt that enables receipt-bound cleanup.",
+    },
+    records: {
+      type: "ReadonlyArray<Transport.DnsRecord>",
+      required: true,
+      description: "Product-owned DNS requirements to plan, display, verify, and clean up.",
+    },
+  }}
+/>
+
+### `DomainKit.Root`
+
+<TypeTable
+  type={{
+    children: {
+      type: "ReactNode",
+      required: true,
+      description: "DomainKit components rendered inside the configured runtime boundary.",
+    },
+    colorScheme: {
+      type: '"dark" | "inherit" | "light"',
+      default: '"inherit"',
+      description: "Color scheme applied to DomainKit-owned surfaces.",
+    },
+    icons: {
+      type: "Partial<Icons>",
+      description: "Optional replacements for the package's default action icons.",
+    },
+    marks: {
+      type: "Provider.Marks",
+      default: "{}",
+      description: "Provider artwork overrides keyed by provider ID.",
+    },
+    messages: {
+      type: "Partial<Catalog>",
+      description: "Optional message overrides for labels, status text, and dialogs.",
+    },
+    navigate: {
+      type: "(url: string) => void",
+      default: "browser navigation",
+      description: "Navigation function used after an OAuth authorization URL is returned.",
+    },
+    onEvent: {
+      type: "Lifecycle.Listener",
+      description: "Optional listener for completed user-triggered lifecycle events.",
+    },
+    portalContainer: {
+      type: "HTMLElement | null",
+      default: "null",
+      description: "DOM container used for dialogs and popovers.",
+    },
+    theme: {
+      type: "Theme",
+      description: "Optional token theme applied to DomainKit-owned surfaces.",
+    },
+    transport: {
+      type: "Layer.Layer<Transport.Service>",
+      required: true,
+      description: "Host-owned transport implementation for connection and DNS lifecycle calls.",
+    },
+  }}
+/>
+
+See [Choose an integration level](/docs/react/integration-levels) before replacing complete flows
+with lower-level parts.

@@ -49,12 +49,25 @@ try {
         "@vitejs/plugin-react": "6.1.1",
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.5",
+        clsx: "2.1.1",
         react: "19.2.4",
         "react-dom": "19.2.4",
+        "tailwind-merge": "3.3.1",
         typescript: "7.0.2",
         vite: "8.2.2",
       },
     }),
+  );
+  await mkdir(join(fixture, "src", "lib"), { recursive: true });
+  await Bun.write(
+    join(fixture, "src", "lib", "utils.ts"),
+    `import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ReadonlyArray<ClassValue>) {
+  return twMerge(clsx(inputs));
+}
+`,
   );
   await Bun.write(
     join(fixture, "components.json"),

@@ -7,20 +7,19 @@ seo:
   title: DomainKit entry points
 ---
 
-DomainKit publishes provider-independent core entry points and an optional React package entry
-point. All public imports come from the entry points below; internal source paths are not part of the
-supported API.
+DomainKit publishes provider-independent core entry points and an optional React package. Public
+imports come from the entry points below; internal source paths are not supported API.
 
 ## Install
 
-```sh
-npm install domainkit effect@rc
+```package-install
+domainkit effect@rc
 ```
 
-Add the React package only when your product needs the packaged UI flows:
+Add the React package when your product needs packaged flows or semantic parts:
 
-```sh
-npm install @domainkit/react @effect/atom-react@rc react react-dom
+```package-install
+@domainkit/react @effect/atom-react@rc react react-dom
 ```
 
 ## Entry points
@@ -33,15 +32,14 @@ npm install @domainkit/react @effect/atom-react@rc react react-dom
 | `@domainkit/react`            | React flows, models, semantic parts, messages, and theme      |
 | `@domainkit/react/styles.css` | Optional default styles for the React package                 |
 
-The Promise entry point is an adapter over the same domain model. It is not a second lifecycle or
-wire protocol. Prefer the canonical Effect API inside Effect applications and adapt only at a
-foreign-runtime boundary.
+The Promise entry point adapts the same domain model. It is not a second lifecycle or wire
+protocol. Prefer the Effect API inside Effect applications and adapt at a foreign-runtime boundary.
 
 ## Runtime requirements
 
 - `domainkit` requires Node.js 24.10 or newer and Effect 4.
 - `@domainkit/react` requires React 19, React DOM 19, Effect 4, and Effect Atom React 4.
-- Provider credentials, OAuth state, connection state, plans, and receipts belong on the server.
+- Provider credentials, OAuth state, connections, plans, and receipts remain on the server.
 
 ## Version alignment
 
@@ -49,5 +47,5 @@ Install `domainkit` and `@domainkit/react` at the same release version. The Reac
 wire models from the core package, so mixed versions can disagree about schemas and lifecycle
 outcomes.
 
-For Promise boundaries, see the [Promise API reference](/docs/reference/promise). For deterministic
-fixtures and adapter checks, see the [Testing API reference](/docs/reference/testing).
+Continue with the [Core API](/docs/reference/core), [Promise API](/docs/reference/promise),
+[Testing API](/docs/reference/testing), or [React components](/components).

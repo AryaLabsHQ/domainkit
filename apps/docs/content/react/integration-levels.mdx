@@ -21,27 +21,16 @@ lifecycle and structure your product already owns.
 ## Present records without a transport
 
 Choose record primitives when customers still configure DNS manually or your application already
-owns connection and provisioning:
-
-```tsx
-import { Records } from "@domainkit/react";
-import "@domainkit/react/styles.css";
-
-<Records.Table records={records} />;
-```
+owns connection and provisioning. See [Records](/components/records) and
+[Record Card](/components/record-card) for installation, examples, and API details.
 
 The transport record is a presentation projection with `id`, `name`, `type`, `value`, and optional
 `priority`. Keep requirement metadata and conflict policy on the server.
 
 ## Use the complete domain flow
 
-Choose `Domain.Flow` when one screen should coordinate the complete DomainKit lifecycle:
-
-```tsx
-<DomainKit.Root transport={transport}>
-  <Domain.Flow domain="example.com" records={records} receiptId={receiptId} />
-</DomainKit.Root>
-```
+Choose `Domain.Flow` when one screen should coordinate the complete DomainKit lifecycle. See
+[Domain flow](/components/domain) for the component contract.
 
 Persist the `receiptId` in the host and supply it after reload so the cleanup entry remains
 available. `Domain.Flow` includes record presentation and DNS observation; use a more focused level
@@ -49,12 +38,8 @@ when your product already owns either surface.
 
 ## Compose focused flows
 
-An existing domain screen can use connection, provisioning, verification, and cleanup independently:
-
-```tsx
-<Connection.Flow domain={domain} />
-<Provisioning.Flow connection={connection} records={records} showRecords={false} />
-```
+An existing domain screen can use connection, provisioning, verification, and cleanup independently.
+See [Connection](/components/connection) and [Host lifecycle](/components/host-lifecycle).
 
 This is the right level when the host has its own DNS table, service-verification lifecycle, or
 cleanup placement. A transport operation may remain intentionally unused by the chosen screen, but
@@ -62,24 +47,9 @@ cleanup placement. A transport operation may remain intentionally unused by the 
 
 ## Compose models and parts
 
-Use the model seam when your design system owns the structure and interaction chrome:
-
-```tsx
-const model = Provisioning.useModel(connection, records);
-const state = useAtomValue(model.state);
-const command = useAtomSet(model.command);
-
-if (state._tag === "Review") {
-  return (
-    <Operations.Root lifecycle="provisioning">
-      <Operations.List operations={state.plan.operations} />
-      <HostButton onClick={() => command(Provisioning.Command.Apply())}>
-        Apply approved plan
-      </HostButton>
-    </Operations.Root>
-  );
-}
-```
+Use the model seam when your design system owns the structure and interaction chrome. The
+[Composition](/docs/react/composition) guide covers models, commands, render props, and theming;
+[Host connection](/components/host-connection) shows a complete composed surface.
 
 Packaged flows and controllers consume the same models. Choosing direct models does not create a
 second client state machine.

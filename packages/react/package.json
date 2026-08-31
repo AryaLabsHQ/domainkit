@@ -31,8 +31,7 @@
     "test": "vitest run --exclude tests/artifact/**/*.test.ts",
     "test:artifact": "vitest run tests/artifact",
     "test:browser": "playwright test",
-    "typecheck": "tsc --noEmit",
-    "workshop": "vite examples/vite --host 127.0.0.1 --port 4178"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -49,7 +48,6 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@types/scheduler": "0.26.0",
-    "dialkit": "1.4.3",
     "effect": "4.0.0-rc.112",
     "jsdom": "26.1.0",
     "motion": "13.1.1",

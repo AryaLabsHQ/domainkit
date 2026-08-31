@@ -20,7 +20,7 @@ routes, persistence, tenancy, or product verification policy.
 
 ## Verification
 
-For React changes run package tests, typecheck, build, and the relevant workshop/browser or packed
+For React changes run package tests, typecheck, build, and the relevant component/browser or packed
 consumer checks. If docs or registry examples change, run the docs reference, registry, and strict
 site checks too. Finish with `git diff --check` and inspect the rendered flow when UI behavior is
 involved.

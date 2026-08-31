@@ -1,16 +1,20 @@
-import type { ReactNode } from "react";
+import type { ComponentProps } from "react";
 
-export function ProviderMark({
-  children,
-  label,
-}: {
-  readonly children: ReactNode;
+import { cn } from "@/lib/utils";
+
+export interface ProviderMarkProps extends ComponentProps<"span"> {
   readonly label: string;
-}) {
+}
+
+export function ProviderMark({ children, className, label, ...props }: ProviderMarkProps) {
   return (
     <span
+      {...props}
       aria-label={label}
-      className="inline-flex size-8 items-center justify-center overflow-hidden rounded-md border bg-background [&_img]:size-full [&_img]:object-cover [&_svg]:size-full"
+      className={cn(
+        "inline-flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md [&_img]:size-full [&_img]:object-contain [&_svg]:size-full",
+        className,
+      )}
       data-slot="provider-mark"
       role="img"
     >

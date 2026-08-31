@@ -221,6 +221,7 @@ export function ZoneFile({
             {copied ? copiedLabel : copyLabel}
           </button>
           <button
+            aria-label={downloadLabel}
             data-domainkit-part="zone-download"
             onClick={() => downloadZoneFile(domain, records)}
             type="button"

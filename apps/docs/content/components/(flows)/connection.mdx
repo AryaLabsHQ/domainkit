@@ -1,0 +1,123 @@
+---
+title: Connection
+description: Connect a customer domain to a supported DNS provider through your application’s authenticated, host-owned transport and persistence boundary.
+---
+
+`Connection.Flow` renders provider discovery, authorization choices, retry states, and attachment
+over the host-owned `Transport`. It does not put provider credentials in the browser.
+
+<ReactExample story="connection" />
+
+## Installation
+
+```package-install
+@domainkit/react domainkit effect @effect/atom-react react react-dom
+```
+
+Import the default styles once in your application entry point:
+
+```tsx
+import "@domainkit/react/styles.css";
+```
+
+## Usage
+
+Render the flow inside the `DomainKit.Root` that provides your transport, theme, messages, and
+provider marks.
+
+```tsx
+import { Connection, DomainKit } from "@domainkit/react";
+
+<DomainKit.Root transport={transportLayer}>
+  <Connection.Flow domain="mail.example.com" />
+</DomainKit.Root>;
+```
+
+The transport endpoint must authenticate the user, resolve tenant policy, keep credentials on the
+server, and persist connection and domain-attachment state. See [Transport](/docs/react/transport)
+for the request boundary.
+
+## States
+
+| State          | Meaning                                                                |
+| -------------- | ---------------------------------------------------------------------- |
+| `Disconnected` | A provider can be selected or an existing authorization can be reused. |
+| `Submitting`   | The host transport is processing a token or attachment request.        |
+| `Redirecting`  | The browser is leaving for provider authorization.                     |
+| `Connected`    | The host returned an active connection and domain attachment.          |
+| `Detaching`    | A disconnect request is in progress.                                   |
+| `Failure`      | The operation failed with an explicit retry policy.                    |
+
+## Composition
+
+Use `Connection.useController(domain)` when the packaged flow does not match your product surface.
+Compose `Root`, `Status`, `ConnectTrigger`, `Dialog`, and `RetryAction` around the same controller.
+The [Host connection](/components/host-connection) page shows that integration level.
+
+## Accessibility
+
+`Connection.Dialog` uses dialog semantics and returns focus to its trigger. Keep a visible trigger
+label that names the provider, and do not suppress failure text when applying custom styles.
+
+## API reference
+
+### `Connection.Flow`
+
+<TypeTable
+  type={{
+    domain: {
+      type: "string",
+      required: true,
+      description: "Domain whose provider connection the flow manages.",
+    },
+  }}
+/>
+
+### `Connection.Dialog`
+
+<TypeTable
+  type={{
+    controller: {
+      type: "Connection.Controller",
+      required: true,
+      description: "Controller that owns connection commands and state.",
+    },
+    snapshot: {
+      type: "Disconnected",
+      required: true,
+      description: "Disconnected provider snapshot used to render authorization options.",
+    },
+  }}
+/>
+
+### `Connection.DisconnectDialog`
+
+<TypeTable
+  type={{
+    connection: {
+      type: "Transport.Connected",
+      required: true,
+      description: "Connected domain attachment to disconnect.",
+    },
+    controller: {
+      type: "Connection.Controller",
+      required: true,
+      description: "Controller that performs the detach operation.",
+    },
+    onOpenChange: {
+      type: "(open: boolean) => void",
+      description: "Called when the dialog's open state changes.",
+    },
+    open: {
+      type: "boolean",
+      description: "Controlled open state. Omit it to use the dialog's internal state.",
+    },
+    trigger: {
+      type: "ReactElement | null",
+      description: "Optional trigger element. Pass null to render no trigger.",
+    },
+  }}
+/>
+
+For the complete namespace inventory and shared runtime contracts, see the
+[React API reference](/docs/reference/react).

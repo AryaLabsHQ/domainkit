@@ -1,4 +1,4 @@
-import type { Theme } from "../../../src/theme.ts";
+import type { Theme } from "../../../../packages/react/src/theme.ts";
 
 export const workshopThemePresets = [
   {

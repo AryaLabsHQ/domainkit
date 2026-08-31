@@ -1,0 +1,104 @@
+---
+title: Verification
+description: Observe provider and public-DNS evidence for each required record without collapsing propagation or product readiness into a single boolean.
+---
+
+`Verification.Status` requests fresh observations through the host transport and presents provider
+readback separately from public DNS.
+
+<ReactExample story="verification" />
+
+## Installation
+
+```package-install
+@domainkit/react domainkit effect @effect/atom-react react react-dom
+```
+
+For model-free status and asynchronous-state primitives, use the registry:
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/dns-status.json https://domain-kit.dev/r/async-state.json
+```
+
+Those copied components are presentation-only. They do not call the DomainKit transport or interpret
+observation evidence.
+
+## Observation states
+
+| State         | Meaning                                                       |
+| ------------- | ------------------------------------------------------------- |
+| `Idle`        | No observation has been requested in this mounted controller. |
+| `Observing`   | The host is reading provider and public-DNS evidence.         |
+| `Observation` | Tagged evidence is available for the requested records.       |
+| `Failed`      | Observation failed; previous evidence may still be shown.     |
+
+`Found`, `Missing`, `Mismatch`, and provider failures are evidence about individual records. Your
+application decides whether that evidence makes the product feature ready.
+
+## Usage
+
+Include the connected provider context when available. Without it, the host can still perform public
+DNS observation according to its transport implementation.
+
+```tsx
+<Verification.Status config={{ connection, domain, records }} />
+```
+
+## Accessibility
+
+The observe action exposes its busy state and prevents duplicate requests. Keep evidence notes and
+failure messages visible; color alone cannot distinguish missing, mismatched, or unavailable DNS.
+
+## API reference
+
+### `Verification.Status`
+
+<TypeTable
+  type={{
+    config: {
+      type: "Verification.ObserveConfig",
+      required: true,
+      description: "Observation inputs used by the status controller.",
+    },
+  }}
+/>
+
+### `Verification.ObserveConfig`
+
+<TypeTable
+  type={{
+    connection: {
+      type: "Transport.Connected",
+      description: "Optional connected attachment used for provider-side observation.",
+    },
+    domain: {
+      type: "string",
+      required: true,
+      description: "Customer domain whose records are observed.",
+    },
+    records: {
+      type: "ReadonlyArray<Transport.DnsRecord>",
+      required: true,
+      description: "DNS records to compare against provider and public-DNS evidence.",
+    },
+    sources: {
+      type: "{ provider?: boolean; publicDns?: boolean }",
+      description:
+        "Select observation sources; provider follows connection presence and public DNS defaults to true.",
+    },
+  }}
+/>
+
+### `Verification.ObserveAction`
+
+<TypeTable
+  type={{
+    controller: {
+      type: "Verification.Controller",
+      required: true,
+      description: "Controller whose observe command the action invokes.",
+    },
+  }}
+/>
+
+Read [Provider evidence and public DNS](/docs/core/verification) for the observation model.

@@ -1,0 +1,68 @@
+---
+title: DNS table
+description: Render plain DNS records in a responsive table with optional priority and status cells, while your application owns the data and observation policy.
+---
+
+`dns-table` is a model-free table for record data your application already has. It renders values;
+it does not fetch DNS, interpret evidence, or decide whether a domain is ready.
+
+<Component path="registry/dns-table" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/dns-table.json
+```
+
+## Usage
+
+Pass records with stable `id` values. Status content is rendered as provided, so you can compose
+it with `dns-status` or your own status component.
+
+```tsx
+<DnsTable
+  records={[
+    {
+      id: "mx",
+      name: "mail.example.com",
+      priority: 10,
+      status: <DnsStatus tone="success">Found</DnsStatus>,
+      type: "MX",
+      value: "feedback-smtp.example.net",
+    },
+  ]}
+/>
+```
+
+## API
+
+### `DnsTable`
+
+| Prop      | Type                            | Required | Description                  |
+| --------- | ------------------------------- | -------- | ---------------------------- |
+| `records` | `ReadonlyArray<DnsTableRecord>` | yes      | Rows to render in the table. |
+
+`DnsTable` also accepts native `div` props and `className` for the bordered table panel.
+
+### `DnsTableRecord`
+
+| Field      | Type        | Required | Description                                |
+| ---------- | ----------- | -------- | ------------------------------------------ |
+| `id`       | `string`    | yes      | Stable React key for the row.              |
+| `name`     | `string`    | yes      | DNS record name.                           |
+| `priority` | `number`    | no       | Optional numeric priority, such as MX 10.  |
+| `status`   | `ReactNode` | no       | Optional content for the status column.    |
+| `type`     | `string`    | yes      | DNS record type, such as `TXT` or `CNAME`. |
+| `value`    | `string`    | yes      | DNS record value.                          |
+
+### `DnsTableRow`
+
+`DnsTableRow` is the row primitive used by `DnsTable`. It accepts `record: DnsTableRecord` and an
+optional `showStatus: boolean` (default `false`) when you need to build a custom table shell.
+It also accepts native `tr` props and `className`.
+
+## Composition
+
+Use [DNS status](/components/registry/dns-status) for status content and [Copy value](/components/registry/copy-value)
+for value-level clipboard actions. For provider readback and public-DNS observation semantics, use
+the packaged [Records](/components/records) component instead.
