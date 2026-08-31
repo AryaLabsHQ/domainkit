@@ -93,6 +93,7 @@ import { Layer } from "effect";
 
 const DomainKitDependencies = Layer.mergeAll(
   HostIdentityLive,
+  HostConnectionPolicyLive,
   ProviderRegistryLive,
   RedisPendingAuthorizationsLive,
   ManagedDnsConnectionsLive,
@@ -108,8 +109,9 @@ Mount `Server.toWebHandler(DomainKitServerLive).fetch` at `/api/domainkit/*`, or
 `Server.Handler` directly inside an Effect HTTP host. An interactive provider connection has two
 server routes:
 
-1. The start route checks the current user and tenant, creates a short-lived continuation, and
-   returns a provider authorization URL.
+1. The start route checks the current user and tenant, asks the host policy to authorize any
+   requested existing authorization aggregate, creates a short-lived continuation, and returns a
+   provider authorization URL.
 2. The callback route trusts the initiating principal stored in the server-side continuation,
    consumes it exactly once, exchanges the provider code, and commits the durable authorization
    aggregate.

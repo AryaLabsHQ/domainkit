@@ -14,6 +14,7 @@ import { Layer } from "effect";
 
 const dependencies = Layer.mergeAll(
   IdentityLive,
+  ConnectionPolicyLive,
   ProvidersLive,
   PendingAuthorizationsLive,
   ManagedDnsConnectionsLive,
@@ -42,7 +43,9 @@ custom domain.
 | `GET`  | `/api/domainkit/callback/:providerId` | Consumes state once, commits the connection, and redirects        |
 
 The start body accepts `providerId`, `method`, an optional provider-selection `domain`, an optional
-existing `authorizationId`, and a same-origin `returnTo`. Callback redirects append
+existing `authorizationId`, and a same-origin `returnTo`. When `authorizationId` is present,
+`Server.ConnectionPolicy` must authorize that exact aggregate for the authenticated principal
+before DomainKit can reuse it. Callback redirects append
 `domainkit=connected` and the public `connectionId` so the host UI can continue its setup flow.
 
 ## Host services
@@ -58,6 +61,7 @@ existing `authorizationId`, and a same-origin `returnTo`. Callback redirects app
 | Service                         | Host responsibility                                                                 |
 | ------------------------------- | ----------------------------------------------------------------------------------- |
 | `Server.Identity`               | Authenticate a start request and return tenant-owned principal identifiers          |
+| `Server.ConnectionPolicy`       | Authorize an exact existing aggregate before connection reuse                       |
 | `Server.Providers`              | Build a configured interactive provider flow for the selected domain and callback   |
 | `Server.PendingAuthorizations`  | Persist the opaque continuation and safe callback context until one-time consume    |
 | `ManagedDnsConnections.Service` | Persist the durable authorization, credential, connection, and attachment aggregate |
@@ -70,6 +74,8 @@ the Layer graph with an async factory.
 ## Failure behavior
 
 Failures are returned as JSON with `category`, `message`, `operation`, and `retry`. Start requests
-without a host identity return `401`. Invalid provider input, unsafe return URLs, mismatched
-callbacks, expired state, and replayed state return `400`. Provider tokens and opaque continuation
-payloads are never serialized to the browser response.
+without a host identity return `401`, and denied aggregate reuse returns `403`. Invalid provider
+input, unsafe return URLs, mismatched callbacks, expired state, and replayed state return `400`.
+Configuration failures return `500`, provider infrastructure failures return `502`, and storage
+failures return `503`. Provider tokens and opaque continuation payloads are never serialized to the
+browser response.

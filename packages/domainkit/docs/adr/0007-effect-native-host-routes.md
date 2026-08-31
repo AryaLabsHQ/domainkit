@@ -15,8 +15,8 @@ tenancy, credentials, persistence, and policy away from the application that own
 
 `domainkit/server` exports an Effect-native `Server.Handler` Layer. It owns the portable route
 mechanics for interactive connection start and callback completion. The host supplies Layers for
-identity, provider-flow configuration, short-lived pending authorizations, durable managed-DNS
-connections, and cryptography.
+identity, authorization-reuse policy, provider-flow configuration, short-lived pending
+authorizations, durable managed-DNS connections, and cryptography.
 
 The default mount path is `/api/domainkit`; a host may configure it. The public base URL may be
 configured and otherwise comes from the start request origin. Return destinations are validated

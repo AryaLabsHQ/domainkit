@@ -6,7 +6,14 @@ import * as Lifecycle from "../auth/lifecycle-repository.ts";
 export const DEFAULT_BASE_PATH = "/api/domainkit";
 
 export class Error extends Schema.TaggedError<Error>()("DomainKitServerError", {
-  category: Schema.Literals(["authentication", "configuration", "provider", "request", "storage"]),
+  category: Schema.Literals([
+    "authentication",
+    "authorization",
+    "configuration",
+    "provider",
+    "request",
+    "storage",
+  ]),
   message: Schema.String,
   operation: Schema.String,
   retry: Schema.Literals(["never", "after-user-action", "safe", "unknown"]),
@@ -24,6 +31,24 @@ export interface IdentityInterface {
 export class Identity extends Context.Service<Identity, IdentityInterface>()(
   "@domainkit/server/Identity",
 ) {}
+
+export interface AuthorizationReuseInput {
+  readonly authorizationId: string;
+  readonly domain: string | undefined;
+  readonly method: "integration" | "oauth2";
+  readonly principal: Principal;
+  readonly providerId: string;
+}
+
+export interface ConnectionPolicyInterface {
+  readonly authorizeReuse: (input: AuthorizationReuseInput) => Effect.Effect<void, Error>;
+}
+
+/** Host authorization boundary for reusing an existing provider authorization. */
+export class ConnectionPolicy extends Context.Service<
+  ConnectionPolicy,
+  ConnectionPolicyInterface
+>()("@domainkit/server/ConnectionPolicy") {}
 
 export interface InteractiveFlowInput {
   readonly callbackUrl: URL;
@@ -68,7 +93,7 @@ export const providersLayer = (
       return provider === undefined
         ? Effect.fail(
             new Error({
-              category: "provider",
+              category: "configuration",
               message: `Interactive provider ${input.providerId}:${input.method} is not configured`,
               operation: "Server.Providers.interactiveFlow",
               retry: "never",
@@ -141,7 +166,11 @@ const serverError = (operation: string, cause: unknown): Error => {
   if (cause instanceof Error) return cause;
   if (cause instanceof Connection.Error) {
     return new Error({
-      category: cause.category === "provider" ? "provider" : "request",
+      category: cause.operation.startsWith("Server.pending.")
+        ? "storage"
+        : cause.category === "provider"
+          ? "provider"
+          : "request",
       message: cause.message,
       operation,
       retry: cause.retry,
@@ -168,7 +197,8 @@ const normalizeBasePath = (input: string | undefined): string => {
   if (!path.startsWith("/") || path.includes("?") || path.includes("#")) {
     throw new globalThis.Error("DomainKit server basePath must be an absolute path");
   }
-  return path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  if (path === "/") return "";
+  return path.endsWith("/") ? path.slice(0, -1) : path;
 };
 
 const configuredBaseUrl = (input: string | undefined): URL | undefined => {
@@ -232,6 +262,23 @@ const parseStartInput = Effect.fn("Server.parseStartInput")((request: Request) =
   ),
 );
 
+const errorStatus = (cause: Error): number => {
+  switch (cause.category) {
+    case "authentication":
+      return 401;
+    case "authorization":
+      return 403;
+    case "request":
+      return 400;
+    case "storage":
+      return 503;
+    case "configuration":
+      return 500;
+    case "provider":
+      return cause.retry === "safe" || cause.retry === "unknown" ? 502 : 400;
+  }
+};
+
 const jsonError = (cause: Error): Response =>
   Response.json(
     {
@@ -242,7 +289,7 @@ const jsonError = (cause: Error): Response =>
         retry: cause.retry,
       },
     },
-    { status: cause.category === "authentication" ? 401 : 400 },
+    { status: errorStatus(cause) },
   );
 
 export const layer = (configuration: Configuration = {}) =>
@@ -250,6 +297,7 @@ export const layer = (configuration: Configuration = {}) =>
     Handler,
     Effect.gen(function* () {
       const identity = yield* Identity;
+      const policy = yield* ConnectionPolicy;
       const providers = yield* Providers;
       const pending = yield* PendingAuthorizations;
       const repository = yield* Lifecycle.Service;
@@ -267,6 +315,15 @@ export const layer = (configuration: Configuration = {}) =>
       const start = Effect.fn("Server.start")(function* (request: Request) {
         const principal = yield* identity.authenticate(request);
         const input = yield* parseStartInput(request);
+        if (input.authorizationId !== undefined) {
+          yield* policy.authorizeReuse({
+            authorizationId: input.authorizationId,
+            domain: input.domain,
+            method: input.method,
+            principal,
+            providerId: input.providerId,
+          });
+        }
         const requestUrl = new URL(request.url);
         const baseUrl = fixedBaseUrl ?? new URL(requestUrl.origin);
         const callbackUrl = new URL(

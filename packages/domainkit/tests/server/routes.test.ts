@@ -112,18 +112,40 @@ const identityLayer = Layer.succeed(Server.Identity)({
         ),
 });
 
-const makeHandler = () => {
+const policyLayer = Layer.succeed(Server.ConnectionPolicy)({
+  authorizeReuse: ({ authorizationId }) =>
+    authorizationId === "authorization-1"
+      ? Effect.void
+      : Effect.fail(
+          new Server.Error({
+            category: "authorization",
+            message: "Authorization is not available to this principal",
+            operation: "TestConnectionPolicy.authorizeReuse",
+            retry: "never",
+          }),
+        ),
+});
+
+const makeHandler = (
+  options: {
+    readonly basePath?: string;
+    readonly pending?: Layer.Layer<Server.PendingAuthorizations>;
+  } = {},
+) => {
   const dependencies = Layer.mergeAll(
     identityLayer,
+    policyLayer,
     providerLayer,
-    pendingLayer(),
+    options.pending ?? pendingLayer(),
     InMemoryManagedDnsConnections.layer(),
     Digest.webCryptoLayer,
   );
   return Server.toWebHandler(
-    Server.layer({ baseURL: "https://app.example", defaultReturnTo: "/domains" }).pipe(
-      Layer.provide(dependencies),
-    ),
+    Server.layer({
+      baseURL: "https://app.example",
+      ...(options.basePath === undefined ? {} : { basePath: options.basePath }),
+      defaultReturnTo: "/domains",
+    }).pipe(Layer.provide(dependencies)),
   );
 };
 
@@ -209,6 +231,97 @@ describe("DomainKit server routes", () => {
       );
       assert.strictEqual(openRedirect.status, 400);
       assert.match(await openRedirect.text(), /same-origin|configured application origin/);
+    } finally {
+      await handler.dispose();
+    }
+  });
+
+  it("requires host authorization before reusing an authorization aggregate", async () => {
+    const handler = makeHandler();
+    try {
+      const response = await handler.fetch(
+        new Request("https://app.example/api/domainkit/connection/start", {
+          body: JSON.stringify({
+            authorizationId: "another-tenant-authorization",
+            domain: "mail.example.com",
+            method: "oauth2",
+            providerId: "example",
+          }),
+          headers: { authorization: "Bearer test-session", "content-type": "application/json" },
+          method: "POST",
+        }),
+      );
+      assert.strictEqual(response.status, 403);
+      assert.match(await response.text(), /not available to this principal/);
+    } finally {
+      await handler.dispose();
+    }
+  });
+
+  it("supports mounting the handler at the application root", async () => {
+    const handler = makeHandler({ basePath: "/" });
+    try {
+      const start = await handler.fetch(
+        new Request("https://app.example/connection/start", {
+          body: JSON.stringify({
+            domain: "mail.example.com",
+            method: "oauth2",
+            providerId: "example",
+          }),
+          headers: { authorization: "Bearer test-session", "content-type": "application/json" },
+          method: "POST",
+        }),
+      );
+      assert.strictEqual(start.status, 200);
+      const body = (await start.json()) as {
+        readonly authorizationUrl: string;
+        readonly continuationId: string;
+      };
+      assert.strictEqual(
+        new URL(body.authorizationUrl).searchParams.get("redirect_uri"),
+        "https://app.example/callback/example",
+      );
+
+      const callback = await handler.fetch(
+        new Request(
+          `https://app.example/callback/example?state=${body.continuationId}&code=provider-code`,
+        ),
+      );
+      assert.strictEqual(callback.status, 303);
+    } finally {
+      await handler.dispose();
+    }
+  });
+
+  it("reports pending-state infrastructure failures as unavailable", async () => {
+    const unavailablePending = Layer.succeed(Server.PendingAuthorizations)({
+      consume: () => Effect.succeed(null),
+      get: () => Effect.succeed(null),
+      put: () =>
+        Effect.fail(
+          new Server.Error({
+            category: "storage",
+            message: "Pending authorization store is unavailable",
+            operation: "TestPending.put",
+            retry: "safe",
+          }),
+        ),
+    });
+    const handler = makeHandler({ pending: unavailablePending });
+    try {
+      const response = await handler.fetch(
+        new Request("https://app.example/api/domainkit/connection/start", {
+          body: JSON.stringify({
+            domain: "mail.example.com",
+            method: "oauth2",
+            providerId: "example",
+          }),
+          headers: { authorization: "Bearer test-session", "content-type": "application/json" },
+          method: "POST",
+        }),
+      );
+      assert.strictEqual(response.status, 503);
+      assert.match(await response.text(), /store is unavailable/);
     } finally {
       await handler.dispose();
     }
