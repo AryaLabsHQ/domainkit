@@ -1,6 +1,6 @@
 ---
 packages:
-  domainkit: major
+  domainkit: minor
 ---
 
 Replace the public domain-grant and provider-account deduplication model with

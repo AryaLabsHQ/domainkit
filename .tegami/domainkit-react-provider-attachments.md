@@ -1,6 +1,6 @@
 ---
 packages:
-  "@domainkit/react": major
+  "@domainkit/react": minor
 ---
 
 ## Adopt provider target attachments
