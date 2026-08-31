@@ -24,6 +24,8 @@ core:packages:
     updated: true
   - id: npm:@domainkit/react
     updated: true
+npm:mark-latest:
+  - id: npm:@domainkit/capsuledb
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/capsuledb
