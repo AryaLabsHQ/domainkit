@@ -18,6 +18,8 @@ const requiredFiles = new Set([
   "dist/index.mjs",
   "dist/promise.d.mts",
   "dist/promise.mjs",
+  "dist/server.d.mts",
+  "dist/server.mjs",
   "dist/testing.d.mts",
   "dist/testing.mjs",
   "package.json",

@@ -14,8 +14,9 @@ Embedding any of those choices in DomainKit would couple the protocol to one hos
 
 DomainKit defines token and interactive connection methods, a continuation store, connection
 grants, and one authorization-lifecycle repository. OAuth protocol mechanics use `oauth4webapi`.
-Hosts provide secure persistence, transport, callback routes, authorization UI, and operational
-policy.
+Hosts provide secure persistence, transport, authenticated route mounting, authorization UI, and
+operational policy. ADR 0007 permits DomainKit to supply the portable handler mechanics behind
+those host-owned routes without choosing identity, tenancy, or deployment.
 
 The repository owns one logical commit for the authorization aggregate, credential, and owner
 bindings. SQL hosts may transact it; hosts that split database and vault storage implement an
@@ -49,3 +50,4 @@ encryption system.
 - `src/auth/lifecycle-repository.ts`
 - `src/auth/connection.ts`
 - `src/testing.ts`
+- `docs/adr/0007-effect-native-host-routes.md`

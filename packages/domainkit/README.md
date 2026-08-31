@@ -54,6 +54,7 @@ and incompatible state becomes a conflict. DomainKit never silently overwrites D
 
 - `domainkit` — canonical Effect services, schemas, plans, providers, and verification;
 - `domainkit/promise` — Promise adapters for foreign-runtime boundaries;
+- `domainkit/server` — Effect-first provider connection routes with an async Web handler factory;
 - `domainkit/testing` — in-memory services and provider conformance helpers.
 
 Provider credentials, OAuth state, durable connections, plans, receipts, authorization, and audit

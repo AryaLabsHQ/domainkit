@@ -83,18 +83,62 @@ provide production durability.
 
 ## 3. Mount provider connection routes
 
-An interactive provider connection has two server routes:
+`domainkit/server` supplies one catch-all route program for the shared connection mechanics. In an
+async host, pass Promise capabilities to `createDomainKit`:
 
-1. The start route checks the current user and tenant, creates a short-lived continuation, and
-   returns a provider authorization URL.
-2. The callback route checks the same authority, consumes the continuation exactly once, exchanges
-   the provider code, and commits the durable authorization aggregate.
+```ts
+import { createDomainKit } from "domainkit/server";
+
+export const domainKit = await createDomainKit({
+  baseURL: "https://app.example.com",
+  identity: HostIdentity,
+  connectionPolicy: HostConnectionPolicy,
+  providers: [CloudflareProvider],
+  pendingAuthorizations: RedisPendingAuthorizations,
+  persistence: ManagedDnsConnections,
+});
+```
+
+The host owns the persistence implementation, database setup, migrations, and database lifecycle.
+DomainKit intentionally does not supply async CapsuleDB persistence.
+
+In an Effect-native host, compose the same capabilities as sibling Layers:
+
+```ts
+import { Server } from "domainkit/server";
+import { Layer } from "effect";
+
+const DomainKitDependencies = Layer.mergeAll(
+  HostIdentityLive,
+  HostConnectionPolicyLive,
+  ProviderRegistryLive,
+  RedisPendingAuthorizationsLive,
+  ManagedDnsConnectionsLive,
+  CryptoLive,
+);
+
+const DomainKitServerLive = Server.layer({
+  baseURL: "https://app.example.com",
+}).pipe(Layer.provide(DomainKitDependencies));
+```
+
+Mount `Server.toWebHandler(DomainKitServerLive).fetch` at `/api/domainkit/*`, or run
+`Server.Handler` directly inside an Effect HTTP host. Async frameworks mount `domainKit.fetch` at
+the same catch-all route. An interactive provider connection has two server routes:
+
+1. The start route checks the current user and tenant, asks the host policy to authorize any
+   requested existing authorization aggregate, creates a short-lived continuation, and returns a
+   provider authorization URL.
+2. The callback route trusts the initiating principal stored in the server-side continuation,
+   consumes it exactly once, exchanges the provider code, and commits the durable authorization
+   aggregate.
 
 A token route validates the submitted credential on the server and commits the same durable
 aggregate without a redirect.
 
-After connection, reconstruct the provider client from the stored credential and non-secret
-provider context. Do not ask the browser to retain the provider token or account client.
+The callback redirects to a previously validated same-origin path. After connection, reconstruct
+the provider client from the stored credential and non-secret provider context. Do not ask the
+browser to retain the provider token or account client.
 
 ## 4. Persist plan attempts before approval
 

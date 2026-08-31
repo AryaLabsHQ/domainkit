@@ -28,12 +28,14 @@ Add the React package when your product needs packaged flows or semantic parts:
 | ----------------------------- | ------------------------------------------------------------- |
 | `domainkit`                   | Canonical Effect services, schemas, plans, providers, and DNS |
 | `domainkit/promise`           | Promise adapters for hosts that do not expose Effect directly |
+| `domainkit/server`            | Effect-first routes and an async Web handler factory          |
 | `domainkit/testing`           | In-memory services and provider conformance helpers           |
 | `@domainkit/react`            | React flows, models, semantic parts, messages, and theme      |
 | `@domainkit/react/styles.css` | Optional default styles for the React package                 |
 
-The Promise entry point adapts the same domain model. It is not a second lifecycle or wire
-protocol. Prefer the Effect API inside Effect applications and adapt at a foreign-runtime boundary.
+The Promise and Web handler boundaries adapt the same Effect-native lifecycle. They do not define
+second lifecycles or wire protocols. Prefer Layers inside Effect applications and adapt only where
+the host framework requires a standard Web handler.
 
 ## Runtime requirements
 
@@ -48,4 +50,5 @@ wire models from the core package, so mixed versions can disagree about schemas 
 outcomes.
 
 Continue with the [Core API](/docs/reference/core), [Promise API](/docs/reference/promise),
-[Testing API](/docs/reference/testing), or [React components](/components).
+[Server API](/docs/reference/server), [Testing API](/docs/reference/testing), or
+[React components](/components).

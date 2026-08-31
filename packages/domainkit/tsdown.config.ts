@@ -6,6 +6,7 @@ export default defineConfig({
   entry: {
     index: "src/index.ts",
     promise: "src/promise.ts",
+    server: "src/server.ts",
     testing: "src/testing.ts",
   },
   fixedExtension: true,
