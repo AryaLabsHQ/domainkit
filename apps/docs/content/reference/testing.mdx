@@ -1,6 +1,6 @@
 ---
 title: Testing API
-description: Reference for DomainKit in-memory services and provider conformance helpers.
+description: Reference DomainKit's in-memory services and provider conformance helpers for deterministic lifecycle and adapter tests.
 sidebar:
   label: Testing API
 seo:
@@ -16,7 +16,7 @@ intended for tests, examples, local development, and provider contract validatio
 | --------------------------------- | ---------------------------------------------------------------------------------------- |
 | `InMemoryDnsProvider`             | Stateful DNS provider layer for planning, application, deletion, and verification tests. |
 | `InMemoryDnsResolver`             | Resolver layer with controlled answers and failures.                                     |
-| `InMemoryAuthorizationLifecycle`  | Durable-in-process authorization attempt repository for lifecycle tests.                 |
+| `InMemoryManagedDnsConnections`   | Durable-in-process managed connection repository for lifecycle tests.                    |
 | `InMemoryConnectionContinuations` | In-process continuation storage for connection flows.                                    |
 | `ProviderConformance`             | Shared contract suite for any `DnsProvider` implementation.                              |
 

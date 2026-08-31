@@ -1,6 +1,6 @@
 ---
 title: Core API
-description: Reference for the namespaces exported by the canonical domainkit Effect entry point.
+description: Reference the namespaces exported by DomainKit's canonical Effect entry point, including plans, providers, transport, and DNS verification.
 sidebar:
   label: Core API
 seo:
@@ -30,19 +30,19 @@ import { DnsRecord, Provisioning, Verification } from "domainkit";
 
 ## Authorization and connections
 
-| Namespace                 | Purpose                                                                        |
-| ------------------------- | ------------------------------------------------------------------------------ |
-| `Connection`              | Inspect, start, complete, reuse, remove, and revoke domain connections.        |
-| `AuthorizationLifecycle`  | Durable repository contract for authorization attempts and transitions.        |
-| `ConnectionAuthorization` | Authorize domain connection actions against provider and domain context.       |
-| `ProviderAuth`            | Provider authentication manifests and supported authentication methods.        |
-| `ProviderAuthorization`   | Provider authorization capabilities and grant evidence.                        |
-| `ProviderContext`         | Provider, account, and connection context carried through authorization.       |
-| `ProviderDiscovery`       | Select a provider candidate for a domain.                                      |
-| `ZoneDiscovery`           | Discover an authoritative zone and provider from a domain.                     |
-| `Zones`                   | Zone lookup and candidate value types.                                         |
-| `Secret`                  | Redacted secret value used to keep credentials out of logs and diagnostics.    |
-| `Diagnostic`              | Structured, safe-to-present diagnostic information for authorization failures. |
+| Namespace                 | Purpose                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------- |
+| `Connection`              | Inspect, start, complete, reuse, remove, and revoke domain connections.         |
+| `ManagedDnsConnections`   | Durable repository contract for managed provider connections and domain grants. |
+| `ConnectionAuthorization` | Authorize domain connection actions against provider and domain context.        |
+| `ProviderAuth`            | Provider authentication manifests and supported authentication methods.         |
+| `ProviderSession`         | Provider account session context and target-resolution values.                  |
+| `ProviderContext`         | Provider, account, and connection context carried through authorization.        |
+| `ProviderDiscovery`       | Select a provider candidate for a domain.                                       |
+| `ZoneDiscovery`           | Discover an authoritative zone and provider from a domain.                      |
+| `Zones`                   | Zone lookup and candidate value types.                                          |
+| `Secret`                  | Redacted secret value used to keep credentials out of logs and diagnostics.     |
+| `Diagnostic`              | Structured, safe-to-present diagnostic information for authorization failures.  |
 
 ## Planning and cleanup
 
@@ -92,4 +92,5 @@ at call sites and keeps upgrades source-checkable.
 | Apply cleanup      | `Deletion.apply`         | cleanup result before removing the grant   |
 
 See [Plans and receipts](/docs/core/plans) and
-[Provision and clean up DNS](/docs/guides/provision-and-clean-up) for lifecycle semantics.
+[Provision and clean up DNS](/docs/guides/provision-and-clean-up) for lifecycle semantics. See
+[Packages and entry points](/docs/reference/packages) when choosing the runtime boundary.

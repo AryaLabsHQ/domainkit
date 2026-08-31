@@ -1,6 +1,6 @@
 ---
 title: Promise API
-description: Reference for the domainkit/promise adapter entry point.
+description: Reference the Promise facade for DomainKit plans, provider connections, DNS records, verification, and cleanup.
 sidebar:
   label: Promise API
 seo:
@@ -34,15 +34,15 @@ const result = await Provisioning.create({
 
 {/* reference-inventory:start */}
 
-| Area               | Namespaces                                                                                                                 |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Package            | `VERSION`                                                                                                                  |
-| Connections        | `Connection`, `AuthorizationLifecycle`, `ProviderAuth`, `ProviderAuthorization`, `ProviderContext`, `Secret`, `Diagnostic` |
-| Discovery          | `ProviderDiscovery`, `ZoneDiscovery`, `Zones`                                                                              |
-| DNS values         | `DnsRecord`, `DomainName`, `InvalidInput`                                                                                  |
-| Provider contracts | `DnsProvider`, `Cloudflare`, `Vercel`                                                                                      |
-| Plans              | `DnsPlan`, `Provisioning`, `Deletion`                                                                                      |
-| Verification       | `Verification`, `DnsResolver`, `DnsResolverPool`, `DnsOverHttps`, `CloudflareDnsOverHttps`, `GoogleDnsOverHttps`           |
+| Area               | Namespaces                                                                                                       |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Package            | `VERSION`                                                                                                        |
+| Connections        | `Connection`, `ManagedDnsConnections`, `ProviderAuth`, `ProviderContext`, `Secret`, `Diagnostic`                 |
+| Discovery          | `ProviderDiscovery`, `ZoneDiscovery`, `Zones`                                                                    |
+| DNS values         | `DnsRecord`, `DomainName`, `InvalidInput`                                                                        |
+| Provider contracts | `DnsProvider`, `ProviderSession`, `Cloudflare`, `Vercel`                                                         |
+| Plans              | `DnsPlan`, `Provisioning`, `Deletion`                                                                            |
+| Verification       | `Verification`, `DnsResolver`, `DnsResolverPool`, `DnsOverHttps`, `CloudflareDnsOverHttps`, `GoogleDnsOverHttps` |
 
 {/* reference-inventory:end */}
 

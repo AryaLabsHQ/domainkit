@@ -7,7 +7,6 @@ export default defineMeta({
     "provision-and-clean-up",
     "observe-dns",
     "implement-provider",
-    "migrate-to-0-3",
     "troubleshooting",
   ],
   title: "Build",
