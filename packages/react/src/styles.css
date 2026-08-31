@@ -544,6 +544,10 @@
   width: 1.25rem;
 }
 
+:where([data-domainkit-part="provider-mark"][data-domainkit-provider="vercel"]) {
+  border-color: transparent;
+}
+
 :where([data-domainkit-part="token-connect"]) {
   background: var(--domainkit-fill);
   border: 1px solid var(--domainkit-border);

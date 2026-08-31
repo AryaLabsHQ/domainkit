@@ -212,6 +212,7 @@ describe("composition and theme", () => {
       </DomainKit.Root>,
     );
     const vercel = screen.getByRole("img", { name: "Vercel" });
+    expect(vercel.getAttribute("data-domainkit-provider")).toBe("vercel");
     expect(vercel.querySelector("img")?.getAttribute("src")).toBe(
       "https://integrations.sh/logo/vercel.com?sz=64",
     );

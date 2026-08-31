@@ -91,6 +91,7 @@ export function Mark({ provider, ...props }: MarkProps) {
       "aria-label": provider.name,
       children: content,
       "data-domainkit-part": "provider-mark",
+      "data-domainkit-provider": logoKey(provider.id),
       role: "img",
     },
   );
