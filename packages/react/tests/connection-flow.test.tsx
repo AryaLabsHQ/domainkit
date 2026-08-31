@@ -324,7 +324,7 @@ describe("Connection.Flow", () => {
     const connected = Testing.connected({
       attachment: Testing.attachment({ target: firstTarget }),
     });
-    const disconnected = {
+    const detachedSnapshot = {
       _tag: "Disconnected" as const,
       domain: "mail.example.com",
       provider: connected.provider,
@@ -336,7 +336,7 @@ describe("Connection.Flow", () => {
       ],
     };
     const transport = Testing.makeFakeTransport({
-      inspect: [connected, disconnected],
+      inspect: [connected, detachedSnapshot],
       detach: {
         _tag: "Detached",
         attachment: connected.attachment,
