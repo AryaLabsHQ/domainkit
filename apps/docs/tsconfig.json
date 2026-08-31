@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "@/components/ui/*": ["preview/ui/*"],
+      "@/lib/*": ["preview/lib/*"]
+    },
+    "strict": true,
+    "target": "ES2023"
+  },
+  "include": ["**/*"]
+}

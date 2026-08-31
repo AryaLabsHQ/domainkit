@@ -1,0 +1,110 @@
+---
+title: Host connection
+description: Compose DomainKit connection state into an existing product surface while retaining the packaged controller and dialog.
+---
+
+Use the connection controller and semantic parts when your application already owns the surrounding
+card, navigation, provider copy, or action layout.
+
+<ReactExample story="host-connection" />
+
+## Installation
+
+```package-install
+@domainkit/react domainkit effect @effect/atom-react react react-dom
+```
+
+## Usage
+
+Create one controller for the domain and derive the visible surface from its tagged state. Keep the
+controller and the rendered dialog together so pending OAuth or token submissions cannot diverge
+from the displayed state.
+
+```tsx
+const controller = Connection.useController(domain);
+
+return (
+  <Connection.Root status={controller.state._tag}>
+    <Connection.Status state={controller.state} />
+  </Connection.Root>
+);
+```
+
+## Composition contract
+
+- `useController` owns the connection model and commands for one domain.
+- `Root` exposes the state through `data-state` and accepts host styling.
+- `Status` renders the current human-readable outcome.
+- `ConnectTrigger` and `Dialog` compose with Base UI dialog state.
+- `RetryAction` follows the failure’s explicit retry policy.
+
+The host still owns authenticated endpoints, tenant checks, credential storage, connection
+persistence, and OAuth callback routes.
+
+## Accessibility
+
+Use a real button for the connection trigger. If you replace its visible text, include the provider
+name in the accessible label. Preserve dialog focus management and the disabled state while a
+submission or redirect is pending.
+
+## API reference
+
+### `Connection.Root`
+
+<TypeTable
+  type={{
+    status: {
+      type: 'Connection.State["_tag"]',
+      default: '"Loading"',
+      description: "State tag exposed through data-state and state-aware styling.",
+    },
+  }}
+/>
+
+### `Connection.Status`
+
+<TypeTable
+  type={{
+    state: {
+      type: "Connection.State",
+      required: true,
+      description: "Connection state used to derive the visible status message.",
+    },
+  }}
+/>
+
+### `Connection.ConnectTrigger`
+
+<TypeTable
+  type={{
+    children: {
+      type: "ReactNode",
+      description:
+        "Optional custom trigger content; the default includes the provider mark and label.",
+    },
+    provider: {
+      type: "Provider.Provider",
+      required: true,
+      description: "Provider descriptor whose authentication dialog the trigger opens.",
+    },
+  }}
+/>
+
+### `Connection.Dialog`
+
+<TypeTable
+  type={{
+    controller: {
+      type: "Connection.Controller",
+      required: true,
+      description: "Controller that owns connection commands and state.",
+    },
+    snapshot: {
+      type: "Disconnected",
+      required: true,
+      description: "Disconnected provider snapshot used to render authorization options.",
+    },
+  }}
+/>
+
+See [Composition](/docs/react/composition) for the shared part-prop and state-aware styling model.

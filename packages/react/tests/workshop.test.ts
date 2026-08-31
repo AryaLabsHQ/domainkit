@@ -1,12 +1,12 @@
-import { nextRecordId } from "../examples/vite/src/workshop-records.ts";
+import { nextRecordId } from "../../../apps/docs/islands/react-catalog/records.ts";
 import {
   isWorkshopThemeId,
   workshopTheme,
   workshopThemePresets,
-} from "../examples/vite/src/workshop-themes.ts";
-import { stateFromSearch } from "../examples/vite/src/workshop.tsx";
+} from "../../../apps/docs/islands/react-catalog/themes.ts";
+import { stateFromSearch } from "../../../apps/docs/islands/react-catalog/preview-state.ts";
 
-describe("workshop record controls", () => {
+describe("component catalog record controls", () => {
   it("skips IDs already present in the initial records", () => {
     const records = {
       "record-4": {
@@ -21,7 +21,7 @@ describe("workshop record controls", () => {
   });
 });
 
-describe("workshop themes", () => {
+describe("component catalog themes", () => {
   it("offers every named preset with light and dark recipes", () => {
     expect(workshopThemePresets.map(({ id }) => id)).toEqual([
       "neutral",
@@ -42,7 +42,7 @@ describe("workshop themes", () => {
 
   it("reads valid presets from URLs and falls back to neutral", () => {
     expect(stateFromSearch("?theme=samva").theme).toBe("samva");
-    expect(stateFromSearch("?theme=tokyo-night&mode=dark").theme).toBe("tokyo-night");
+    expect(stateFromSearch("?theme=samva&mode=dark").theme).toBe("samva");
     expect(stateFromSearch("?theme=brand").theme).toBe("neutral");
     expect(stateFromSearch("?theme=unknown").theme).toBe("neutral");
   });

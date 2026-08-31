@@ -1,0 +1,38 @@
+---
+title: Copy value
+description: Display a compact DNS value with an accessible clipboard action and optional copied and copy icons that your application can customize.
+---
+
+`copy-value` displays a string and copies it after a user action. It is independent of DomainKit
+records, transport, and observation state.
+
+<Component path="registry/copy-value" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/copy-value.json
+```
+
+## Usage
+
+```tsx
+<CopyValue value="v=spf1 include:example.net ~all" />
+```
+
+The component uses `navigator.clipboard` when available and reports its temporary copied state in
+the button label and `data-copied` attribute. Clipboard permission failures leave the value intact.
+
+## API
+
+| Prop         | Type        | Required | Description                           |
+| ------------ | ----------- | -------- | ------------------------------------- |
+| `value`      | `string`    | yes      | String displayed and copied.          |
+| `copyIcon`   | `ReactNode` | no       | Icon or content shown before copying. |
+| `copiedIcon` | `ReactNode` | no       | Icon or content shown after copying.  |
+
+`CopyValue` also accepts native `span` props and `className`. Its action composes the installed
+shadcn `Button` primitive.
+
+The generated button is labeled with the action and value, so keep the value meaningful and do not
+replace the accessible label with an unlabeled icon-only control.

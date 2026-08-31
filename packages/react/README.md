@@ -65,7 +65,7 @@ the mark is unavailable; hosts can replace them through the `marks` prop.
 ## Learn more
 
 - [React source and examples](https://github.com/AryaLabsHQ/domainkit/tree/main/packages/react)
-- [Vite workshop source](https://github.com/AryaLabsHQ/domainkit/tree/main/packages/react/examples/vite)
+- [React component catalog](https://domain-kit.dev/components)
 - [Application transport contract](https://github.com/AryaLabsHQ/domainkit/blob/main/packages/domainkit/src/Transport.ts)
 - [Issues](https://github.com/AryaLabsHQ/domainkit/issues)
 

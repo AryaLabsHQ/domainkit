@@ -1,4 +1,14 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
+
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 export interface DnsTableRecord {
   readonly id: string;
@@ -9,47 +19,56 @@ export interface DnsTableRecord {
   readonly value: string;
 }
 
-export function DnsTable({ records }: { readonly records: ReadonlyArray<DnsTableRecord> }) {
+export interface DnsTableProps extends ComponentProps<"div"> {
+  readonly records: ReadonlyArray<DnsTableRecord>;
+}
+
+export function DnsTable({ className, records, ...props }: DnsTableProps) {
   const hasStatus = records.some((record) => record.status !== undefined);
   return (
-    <div className="overflow-hidden rounded-lg border" data-slot="dns-table-panel">
-      <table className="w-full text-sm" data-slot="dns-table">
-        <thead className="bg-muted/50 text-left text-muted-foreground">
-          <tr>
-            <th className="px-3 py-2 font-medium">Type</th>
-            <th className="px-3 py-2 font-medium">Name</th>
-            <th className="px-3 py-2 font-medium">Value</th>
-            {hasStatus ? <th className="px-3 py-2 font-medium">Status</th> : null}
-          </tr>
-        </thead>
-        <tbody className="divide-y">
+    <div
+      className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-sm", className)}
+      data-slot="dns-table-panel"
+      {...props}
+    >
+      <Table data-slot="dns-table">
+        <TableHeader className="bg-muted/40 text-muted-foreground">
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="px-4 text-xs">Type</TableHead>
+            <TableHead className="px-4 text-xs">Name</TableHead>
+            <TableHead className="px-4 text-xs">Value</TableHead>
+            {hasStatus ? <TableHead className="px-4 text-xs">Status</TableHead> : null}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {records.map((record) => (
             <DnsTableRow key={record.id} record={record} showStatus={hasStatus} />
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
-export function DnsTableRow({
-  record,
-  showStatus = false,
-}: {
+export interface DnsTableRowProps extends ComponentProps<"tr"> {
   readonly record: DnsTableRecord;
   readonly showStatus?: boolean;
-}) {
+}
+
+export function DnsTableRow({ className, record, showStatus = false, ...props }: DnsTableRowProps) {
   return (
-    <tr data-slot="dns-table-row">
-      <td className="px-3 py-3 font-medium">{record.type}</td>
-      <td className="px-3 py-3 font-mono text-xs">{record.name}</td>
-      <td className="max-w-80 truncate px-3 py-3 font-mono text-xs" title={record.value}>
-        {record.value}
+    <TableRow className={cn("hover:bg-muted/30", className)} data-slot="dns-table-row" {...props}>
+      <TableCell className="px-4 font-medium">{record.type}</TableCell>
+      <TableCell className="px-4 font-mono text-xs">{record.name}</TableCell>
+      <TableCell className="max-w-80 px-4 font-mono text-xs">
+        <span className="block truncate" title={record.value}>
+          {record.value}
+        </span>
         {record.priority === undefined ? null : (
-          <span className="ml-2 text-muted-foreground">Priority {record.priority}</span>
+          <span className="mt-0.5 block text-muted-foreground">Priority {record.priority}</span>
         )}
-      </td>
-      {showStatus ? <td className="px-3 py-3">{record.status}</td> : null}
-    </tr>
+      </TableCell>
+      {showStatus ? <TableCell className="px-4">{record.status}</TableCell> : null}
+    </TableRow>
   );
 }

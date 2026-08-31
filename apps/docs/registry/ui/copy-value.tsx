@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+"use client";
 
-export function CopyValue({
-  copiedIcon,
-  copyIcon,
-  value,
-}: {
+import { CheckIcon, CopyIcon } from "lucide-react";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+export interface CopyValueProps extends ComponentProps<"span"> {
   readonly copiedIcon?: ReactNode;
   readonly copyIcon?: ReactNode;
   readonly value: string;
-}) {
+}
+
+export function CopyValue({ className, copiedIcon, copyIcon, value, ...props }: CopyValueProps) {
   const [copied, setCopied] = useState(false);
   const reset = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(reset.current), []);
@@ -25,19 +29,24 @@ export function CopyValue({
   };
   return (
     <span
-      className="inline-flex min-w-0 items-center gap-1"
+      className={cn(
+        "inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-muted/30 py-1 pr-1 pl-2.5 shadow-xs",
+        className,
+      )}
       data-copied={copied || undefined}
       data-slot="copy-value"
+      {...props}
     >
-      <code className="truncate text-xs">{value}</code>
-      <button
+      <code className="truncate text-xs text-foreground">{value}</code>
+      <Button
         aria-label={`${copied ? "Copied" : "Copy"} ${value}`}
-        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
         onClick={copy}
+        size="icon-xs"
         type="button"
+        variant="ghost"
       >
-        {copied ? (copiedIcon ?? "✓") : (copyIcon ?? "⧉")}
-      </button>
+        {copied ? (copiedIcon ?? <CheckIcon />) : (copyIcon ?? <CopyIcon />)}
+      </Button>
     </span>
   );
 }

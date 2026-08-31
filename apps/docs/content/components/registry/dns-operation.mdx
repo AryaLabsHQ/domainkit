@@ -1,0 +1,49 @@
+---
+title: DNS operation
+description: Show a single planned DNS operation with its action, record identity, value, priority, and optional reason in a compact neutral surface.
+---
+
+`dns-operation` is a presentational row for a DNS operation. It can display the `create`, `noop`,
+or `conflict` result from a plan, but it does not create a plan or authorize a mutation.
+
+<Component path="registry/dns-operation" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/dns-operation.json
+```
+
+## Usage
+
+Supply the action as your own text, badge, or icon. Keep the action and any conflict reason
+understandable without relying on color.
+
+```tsx
+<DnsOperation
+  action="Create"
+  name="mail.example.com"
+  priority={10}
+  type="MX"
+  value="feedback-smtp.example.net"
+/>
+```
+
+## API
+
+| Prop       | Type        | Required | Description                                    |
+| ---------- | ----------- | -------- | ---------------------------------------------- |
+| `action`   | `ReactNode` | yes      | Visible operation label or custom content.     |
+| `name`     | `string`    | yes      | DNS record name.                               |
+| `priority` | `number`    | no       | Optional numeric priority.                     |
+| `reason`   | `ReactNode` | no       | Optional explanation, commonly for a conflict. |
+| `type`     | `string`    | yes      | DNS record type.                               |
+| `value`    | `string`    | yes      | DNS record value.                              |
+
+`DnsOperation` also accepts the native props and `className` supported by the shadcn `Card` root.
+
+## Boundary
+
+DomainKit plans remain immutable and digest-bound: `dns-operation` only renders the operation your
+host has already selected. Use [Plans, authorization, and receipts](/docs/core/plans) for the
+review and apply lifecycle.

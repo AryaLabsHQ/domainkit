@@ -1,0 +1,40 @@
+---
+title: Async state
+description: Present loading, empty, and error states with simple children and Tailwind tokens, keeping asynchronous data fetching and retry policy in your host application.
+---
+
+`async-state` contains three presentation-only components for common asynchronous surfaces. They do
+not fetch data, retry requests, or own a transport.
+
+<Component path="registry/async-state" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/async-state.json
+```
+
+## Usage
+
+```tsx
+<LoadingState>Checking DNS…</LoadingState>
+<EmptyState>No domains connected.</EmptyState>
+<ErrorState>Could not load domains. Try again.</ErrorState>
+```
+
+Each component also has a useful default message when no children are supplied.
+
+## API
+
+| Component      | Props                  | Default message         |
+| -------------- | ---------------------- | ----------------------- |
+| `LoadingState` | `children?: ReactNode` | `Loading…`              |
+| `EmptyState`   | `children?: ReactNode` | `Nothing here yet.`     |
+| `ErrorState`   | `children?: ReactNode` | `Something went wrong.` |
+
+All three components also accept the native props and `className` supported by the shadcn `Empty`
+root.
+
+Keep retry actions, error details, and loading ownership in the host application. If an error is
+related to provider authorization or DNS observation, pair visible context with the relevant
+packaged flow rather than treating this component as a lifecycle state machine.

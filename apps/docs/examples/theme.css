@@ -1,0 +1,58 @@
+/* Match the token contract installed by shadcn so isolated previews render the copied artifact. */
+@theme inline {
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: var(--blume-background);
+  --foreground: var(--blume-foreground);
+  --card: var(--blume-background);
+  --card-foreground: var(--blume-foreground);
+  --primary: var(--blume-action);
+  --primary-foreground: var(--blume-action-foreground);
+  --secondary: var(--blume-muted);
+  --secondary-foreground: var(--blume-foreground);
+  --muted: var(--blume-muted);
+  --muted-foreground: var(--blume-muted-foreground);
+  --accent: var(--blume-muted);
+  --accent-foreground: var(--blume-foreground);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: var(--blume-border);
+  --input: var(--blume-border);
+  --ring: var(--blume-accent);
+}
+
+:root[data-theme="dark"] {
+  --card: color-mix(in oklch, var(--blume-background), white 4%);
+  --destructive: oklch(0.704 0.191 22.216);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

@@ -1,0 +1,93 @@
+---
+title: Record Card
+description: Present one DNS record with accessible copy controls, optional priority metadata, and provider or public-DNS observation evidence.
+---
+
+`Records.Card` is a focused alternative to the records table for setup steps, narrow layouts, and
+record-by-record progress surfaces.
+
+<ReactExample story="card" />
+
+## Installation
+
+```package-install
+@domainkit/react domainkit effect @effect/atom-react react react-dom
+```
+
+The [Registry](/components/registry) also provides model-free presentation primitives when you
+want to own the card markup and composition. Use the package component when you need DomainKit's
+record and observation types.
+
+## Usage
+
+Pass one `DnsRecord` and any evidence for its `id`:
+
+```tsx
+<Records.Card
+  record={record}
+  evidence={observation.publicDns.filter((item) => item.recordId === record.id)}
+/>
+```
+
+The card renders the record type, name, value, optional priority, copy controls, and every matching
+evidence item. It does not reduce multiple observations into a single product status.
+
+## Composition
+
+Use `CardHeader`, `CardTitle`, `CardContent`, `CopyValue`, `Priority`, and `Status` when you need a
+different structure but want the same semantic parts and state-aware styling contract.
+
+## Accessibility
+
+Keep the record type visible as the card title. Copy controls should announce both the action and
+the value. Do not communicate observation failures or pending propagation through color alone.
+
+## API reference
+
+### `Records.Card`
+
+<TypeTable
+  type={{
+    copiedIcon: {
+      type: "ReactNode",
+      description: "Optional icon shown after a record value has been copied.",
+    },
+    copyIcon: {
+      type: "ReactNode",
+      description: "Optional icon shown for record value copy actions.",
+    },
+    evidence: {
+      type: "ReadonlyArray<Transport.ObservationEvidence>",
+      description: "Optional provider or public-DNS evidence matched by record ID.",
+    },
+    record: {
+      type: "Transport.DnsRecord",
+      required: true,
+      description: "DNS record rendered by the card.",
+    },
+  }}
+/>
+
+### `Records.Status`
+
+<TypeTable
+  type={{
+    evidence: {
+      type: "Transport.ObservationEvidence",
+      required: true,
+      description: "Record evidence whose tagged status is rendered.",
+    },
+  }}
+/>
+
+### `Records.Priority`
+
+<TypeTable
+  type={{
+    priority: {
+      type: "number",
+      default: "0",
+      description: "Numeric record priority, such as an MX priority.",
+    },
+  }}
+/>

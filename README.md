@@ -7,10 +7,10 @@ persistence, and policy remain under application control.
 Plans are additive and fail closed: missing records can be created, exact records are no-ops, and
 incompatible state is reported as a conflict rather than overwritten.
 
-## Packages
+## Entry points
 
 - [`domainkit`](./packages/domainkit/README.md) provides the Effect-native core and Promise facade.
 - [`@domainkit/react`](./packages/react/README.md) provides browser-safe React flows over a host-owned transport.
 
-The repository also contains the documentation application and an interactive React workshop under
-[`apps/docs`](./apps/docs).
+The repository also contains the documentation application and its interactive React component
+catalog under [`apps/docs`](./apps/docs).

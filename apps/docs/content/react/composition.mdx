@@ -15,20 +15,8 @@ Complete flows are conveniences over semantic parts. Every public part accepts B
 />
 ```
 
-```tsx
-<Connection.Root status={state._tag}>
-  <HostCard>
-    <Provider.Mark provider={snapshot.provider} />
-    <p>Manages DNS for this domain.</p>
-    <BaseDialog.Root>
-      <Connection.Trigger render={<HostButton />}>
-        Connect {snapshot.provider.name}
-      </Connection.Trigger>
-      <Connection.Dialog controller={controller} snapshot={snapshot} />
-    </BaseDialog.Root>
-  </HostCard>
-</Connection.Root>
-```
+The [Host connection](/components/host-connection) page owns the complete controller, trigger, and
+dialog example together with its API tables.
 
 ## Theming
 
@@ -85,32 +73,9 @@ The default mutation dialogs close immediately after a complete success. Partial
 
 ## Records from parts
 
-```tsx
-<Records.Root>
-  <Records.Header>
-    <Records.Row>
-      <Records.Head scope="col">Type</Records.Head>
-      <Records.Head scope="col">Name</Records.Head>
-      <Records.Head scope="col">Value</Records.Head>
-    </Records.Row>
-  </Records.Header>
-  <Records.Body>
-    {records.map((record) => (
-      <Records.Row key={record.id}>
-        <Records.Cell>{record.type}</Records.Cell>
-        <Records.Cell>
-          <Records.CopyValue value={record.name} />
-        </Records.Cell>
-        <Records.Cell>
-          <Records.CopyValue value={record.value} />
-        </Records.Cell>
-      </Records.Row>
-    ))}
-  </Records.Body>
-</Records.Root>
-```
-
-Presentational record parts accept browser-safe records directly and do not require `DomainKit.Root` or a transport.
+Presentational record parts accept browser-safe records directly and do not require
+`DomainKit.Root` or a transport. The [Records](/components/records) page owns the table, zone-file,
+copy-control, and API examples.
 
 ## Effect Atom lifecycle models
 

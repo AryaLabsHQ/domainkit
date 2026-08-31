@@ -5,13 +5,30 @@ export default defineConfig({
     llmsTxt: true,
   },
   content: {
-    sources: [{ prefix: "docs", root: "content", type: "filesystem" }],
+    root: "content",
+    sources: [
+      {
+        exclude: ["components/**"],
+        prefix: "docs",
+        root: "content",
+        type: "filesystem",
+      },
+      {
+        include: ["components/**/*.{md,mdx}"],
+        root: "content",
+        type: "filesystem",
+      },
+    ],
   },
   deployment: {
     output: "static",
     site: "https://domain-kit.dev",
   },
   description: "Domain setup infrastructure for SaaS, with reviewable DNS plans and React flows.",
+  examples: {
+    css: "examples/theme.css",
+    source: "examples",
+  },
   github: {
     dir: "apps/docs",
     owner: "AryaLabsHQ",
@@ -24,7 +41,7 @@ export default defineConfig({
     repo: true,
     tabs: [
       { label: "Docs", path: "/docs" },
-      { label: "Workshop", path: "/workshop" },
+      { label: "Components", path: "/components" },
     ],
   },
   search: {
@@ -34,7 +51,7 @@ export default defineConfig({
     og: {
       titles: {
         "/": "Build domain setup into your SaaS",
-        "/workshop": "Try DomainKit React DNS components",
+        "/components": "DomainKit React components",
       },
     },
   },
