@@ -1,13 +1,13 @@
 # Product Marketing Context
 
-_Last updated: 2026-08-31_ · _Current public stage: open-source packages at 0.3.1; hosted documentation is not live_
+_Last updated: 2026-08-31_ · _Current public stage: open-source packages at 0.5.0; hosted documentation is live_
 
 ## Hard rules
 
 - Lead with the problem DomainKit solves for a SaaS product, then substantiate it with the DNS
   safety model. Do not make Effect, React, or a provider API the product category.
 - A public claim must describe the latest npm artifact or be held until the source that proves it is
-  released. The working tree currently contains unreleased React lifecycle-event work.
+  released.
 - Never imply that DomainKit stores credentials, supplies authenticated routes, chooses tenant
   policy, or operates a hosted control plane. Those responsibilities belong to the host application.
 - Never describe DomainKit as a DNS host, registrar, universal provider abstraction, automatic DNS
@@ -26,10 +26,9 @@ Public material may name Cloudflare and Vercel as first-party provider integrati
 the Effect-native package root, the secondary Promise facade, the testing utilities, React 19
 support, provider conformance runner, and additive receipt-bound cleanup.
 
-Public material must not claim that `domain-kit.dev` is available until DNS and the deployed routes
-are verified. It must not describe uncommitted React lifecycle events as part of `0.3.1`, identify a
-consumer without approval, promise future providers or language SDKs, or imply that DomainKit makes
-provider writes transactional.
+The `domain-kit.dev` hostname and deployed documentation routes are verified. Public material must
+still not identify a consumer without approval, promise future providers or language SDKs, or imply
+that DomainKit makes provider writes transactional.
 
 ## Claim guardrails
 
@@ -171,7 +170,7 @@ primary-source review before publication.
 
 | Claim                                                                              | Evidence                                                               | Source                                                                                             | Observed date | Allowed surface                                | Confidence | Owner                    |
 | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------- | ---------- | ------------------------ |
-| `domainkit` and `@domainkit/react` latest npm versions are `0.3.1`                 | npm registry readback                                                  | `npm view domainkit`; `npm view @domainkit/react`                                                  | 2026-08-31    | Public web and package docs                    | high       | Maintainer               |
+| `domainkit` and `@domainkit/react` latest npm versions are `0.5.0`                 | npm registry readback                                                  | `npm view domainkit`; `npm view @domainkit/react`                                                  | 2026-08-31    | Public web and package docs                    | high       | Maintainer               |
 | DomainKit plans missing, exact, and incompatible DNS as create, noop, and conflict | Source, schemas, tracer tests                                          | `packages/domainkit/src/plan/`; `packages/domainkit/tests/tracer/`                                 | 2026-08-31    | All public technical surfaces                  | high       | Core package maintainer  |
 | Apply authorization is bound to an exact plan digest                               | Source, schemas, tests                                                 | `packages/domainkit/src/plan/types.ts`; `packages/domainkit/src/plan/plan.ts`                      | 2026-08-31    | All public technical surfaces                  | high       | Core package maintainer  |
 | Safe cleanup is separately planned and bound to a prior apply receipt              | Source and tests                                                       | `packages/domainkit/src/plan/deletion.ts`; `packages/domainkit/tests/tracer/plan-apply.test.ts`    | 2026-08-31    | All public technical surfaces                  | high       | Core package maintainer  |
@@ -179,9 +178,9 @@ primary-source review before publication.
 | Provider credentials and durable lifecycle storage remain host-owned               | Accepted architecture decision and interfaces                          | `packages/domainkit/docs/adr/0004-host-owned-credentials.md`                                       | 2026-08-31    | All public surfaces                            | high       | Core package maintainer  |
 | The package root is Effect-native and `domainkit/promise` is secondary             | Package exports, artifact tests, accepted ADR                          | `packages/domainkit/package.json`; `packages/domainkit/docs/adr/0006-effect-first-package-root.md` | 2026-08-31    | Public technical surfaces                      | high       | Core package maintainer  |
 | `@domainkit/react` provides React 19 flows over a host-owned transport             | Manifest, source, artifact tests                                       | `packages/react/package.json`; `packages/react/src/`                                               | 2026-08-31    | Public technical surfaces                      | high       | React package maintainer |
-| React lifecycle events are available in the current working tree                   | Uncommitted source and tests                                           | `packages/react/src/lifecycle.ts`; `packages/react/src/domain-kit.tsx`                             | 2026-08-31    | Internal and unreleased documentation only     | medium     | React package maintainer |
+| React lifecycle events are part of the current 0.5.0 package                       | Published package, source, and artifact tests                          | `packages/react/src/lifecycle.ts`; `packages/react/package.json`                                   | 2026-08-31    | Public technical surfaces                      | high       | React package maintainer |
 | DomainKit reduces customer setup friction                                          | Product intent and implemented flow; no current usability study        | Current landing page and React workshop                                                            | 2026-08-31    | Directional headline only; no quantified claim | medium     | Product owner            |
-| `domain-kit.dev` hosts public documentation                                        | DNS lookup currently fails                                             | `curl https://domain-kit.dev/`                                                                     | 2026-08-31    | Prohibited until live verification             | high       | Documentation owner      |
+| `domain-kit.dev` hosts public documentation                                        | HTTPS routes and registry endpoints return 200                         | `curl -I https://domain-kit.dev/`; `curl -I https://domain-kit.dev/docs`; registry endpoints       | 2026-08-31    | Public web and package docs                    | high       | Documentation owner      |
 | A named product uses DomainKit in production                                       | No public authorization or live acceptance evidence in this repository | Evidence gap                                                                                       | 2026-08-31    | Prohibited                                     | low        | Product owner            |
 
 ## Offer truth
@@ -191,13 +190,13 @@ no documented paid plan, hosted service, support SLA, warranty, guarantee, or sc
 
 ## Distribution truth
 
-| Channel            | Status                                  | Destination                                 | Allowed claim                                                  |
-| ------------------ | --------------------------------------- | ------------------------------------------- | -------------------------------------------------------------- |
-| npm core package   | active                                  | `domainkit@0.3.1`                           | Latest public core package                                     |
-| npm React package  | active                                  | `@domainkit/react@0.3.1`                    | Latest public React package                                    |
-| GitHub             | active                                  | `AryaLabsHQ/domainkit`                      | Public source repository                                       |
-| Documentation site | unavailable                             | `domain-kit.dev` does not currently resolve | Do not direct users there until verified                       |
-| Shadcn registry    | source present, public route unverified | `apps/docs/registry.json`                   | Describe repository source only until hosted route is verified |
+| Channel            | Status | Destination                       | Allowed claim                                |
+| ------------------ | ------ | --------------------------------- | -------------------------------------------- |
+| npm core package   | active | `domainkit@0.5.0`                 | Latest public core package                   |
+| npm React package  | active | `@domainkit/react@0.5.0`          | Latest public React package                  |
+| GitHub             | active | `AryaLabsHQ/domainkit`            | Public source repository                     |
+| Documentation site | live   | `https://domain-kit.dev`          | Hosted documentation and generated artifacts |
+| Shadcn registry    | live   | `https://domain-kit.dev/r/*.json` | Public registry components                   |
 
 ## PR truth
 
@@ -211,7 +210,7 @@ public distribution facts it authorizes.
 - Help a new user create and inspect a safe in-memory plan without credentials.
 - Help an integrating team identify every host-owned persistence and security responsibility before
   connecting a live provider.
-- Primary conversion actions while the docs host is unavailable: inspect the GitHub repository and
+- Primary conversion actions: read the hosted documentation, inspect the GitHub repository, and
   install the npm package.
 
 ## Evidence gaps and re-verification owners
