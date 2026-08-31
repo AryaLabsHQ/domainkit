@@ -11,6 +11,13 @@ export interface Aggregate {
   readonly credential: Connection.StoredCredential;
 }
 
+/** Serializable durable state. Credential material is deliberately sealed separately. */
+export const AggregateSchema = Schema.Struct({
+  authorization: ProviderAuthorization.Schema,
+  connections: Schema.Array(Connection.StoredConnection),
+  attachments: Schema.Array(Connection.DomainAttachment),
+});
+
 export interface ConnectInput {
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly connection: Connection.StoredConnection;

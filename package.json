@@ -16,7 +16,8 @@
     "format:check": "oxfmt --check .",
     "lint": "oxlint --deny-warnings .",
     "lint:rules": "node --test tools/oxlint/*.test.js",
-    "release:check": "bun run lint && bun run lint:rules && bun run format:check && bun run --filter domainkit release:check && bun run --filter @domainkit/react release:check",
+    "postinstall": "bun scripts/prepare-capsuledb-git-dependency.mts",
+    "release:check": "bun run lint && bun run lint:rules && bun run format:check && bun run --filter domainkit release:check && bun run --filter @domainkit/react release:check && bun run --filter @domainkit/capsuledb release:check",
     "tegami": "bun scripts/tegami.mts",
     "test": "bun run --filter './packages/*' test",
     "typecheck": "bun run --filter domainkit build && bun run --filter './packages/*' typecheck"
@@ -27,6 +28,9 @@
     "oxlint": "1.80.0",
     "semver": "^7.8.5",
     "tegami": "1.4.0"
+  },
+  "overrides": {
+    "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#561aa127b37055f885c703583c3c5e80b44395f3"
   },
   "packageManager": "bun@1.4.0"
 }

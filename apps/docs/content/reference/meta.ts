@@ -7,6 +7,7 @@ export default defineMeta({
     "core",
     "promise",
     "server",
+    "capsuledb",
     "testing",
     "transport",
     "react",

@@ -8,6 +8,7 @@ export {
   ProviderConnection,
   ProviderTarget,
   ProviderTargetEvidence,
+  project,
   validate,
 } from "./connection.ts";
 export { attach, detach, disconnect } from "./connection-lifecycle.ts";

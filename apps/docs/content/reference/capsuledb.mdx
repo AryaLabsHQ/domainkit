@@ -1,0 +1,60 @@
+---
+title: CapsuleDB persistence
+description: Provide PostgreSQL authorization persistence while retaining host ownership of clients, credentials, tenancy, and policy.
+---
+
+`@domainkit/capsuledb` is an optional PostgreSQL implementation of
+`ManagedDnsConnections.Service`. The package owns lifecycle migrations and concurrency semantics;
+your application owns the SQL client, credentials, tenant/domain bindings, startup, and policy.
+
+## Runtime composition
+
+Construct one Effect `PgClient` from your existing pool. Provide that exact instance to Effect
+Drizzle, CapsuleDB's registry preparation, and the capsule layer:
+
+```ts
+import { PgClient } from "@effect/sql-pg";
+import { CredentialCustody, HostBindings, capsule } from "@domainkit/capsuledb";
+import { Pg, makeRegistry, prepare } from "capsuledb";
+import { Effect } from "effect";
+
+const initialize = Effect.gen(function* () {
+  const authorizationCapsule = yield* capsule;
+  const registry = yield* makeRegistry({
+    capsules: [authorizationCapsule],
+    provider: Pg.profile,
+  });
+
+  yield* prepare(registry);
+  return authorizationCapsule.layer;
+});
+```
+
+Run preparation once per execution-environment startup before accepting API or workflow traffic.
+Do not prepare per request. If preparation fails, keep the entrypoint unready.
+
+`CredentialCustody.Service` seals and opens `StoredCredential` values. It must preserve your current
+ciphertext and rotation/recovery behavior; never give the package keys or plaintext persistence.
+
+`HostBindings.Service` resolves opaque owner and domain foreign-key references. Its methods execute
+inside the repository's active transaction, so implementations can query host tables through
+Effect Drizzle over the same `PgClient`. The service must remain stateless and must not capture a
+request's organization identity.
+
+## Ownership boundary
+
+| DomainKit package owns                                       | Host application owns                             |
+| ------------------------------------------------------------ | ------------------------------------------------- |
+| Authorization aggregate schema and migrations                | `PgClient`, pool, and connection lifetime         |
+| Atomic connect, attach, detach, rotate, and evidence updates | Identity, tenancy, authorization, and consent     |
+| Durable revocation preparation and recovery                  | Credential encryption, KMS keys, and audit policy |
+| Semantic `ManagedDnsConnections.Service`                     | Organization/domain tables and foreign-key policy |
+
+The package exports no tables, storage rows, Drizzle schema, or query handles. Promise consumers
+continue through `domainkit/promise`; persistence remains Effect-first.
+
+## Current provider scope
+
+The first tracer supports PostgreSQL only. Transactional Bun SQLite and libSQL support may follow
+after the PostgreSQL contract is proven. D1 is deferred because bounded `AtomicBatch` execution
+cannot yet express the lifecycle's locking and multi-phase revocation requirements.

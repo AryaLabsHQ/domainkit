@@ -1,0 +1,54 @@
+{
+  "name": "@domainkit/capsuledb",
+  "version": "0.0.0",
+  "description": "Optional CapsuleDB persistence for DomainKit",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AryaLabsHQ/domainkit.git",
+    "directory": "packages/capsuledb"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "release:check": "bun run typecheck && bun run test && bun run build && bun run test:artifact",
+    "test": "vitest run --exclude tests/artifact/**/*.test.ts",
+    "test:artifact": "vitest run tests/artifact",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "domainkit": "workspace:^0.5.0"
+  },
+  "devDependencies": {
+    "@effect/sql-pg": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.0-rc.112",
+    "@testcontainers/postgresql": "12.1.0",
+    "@types/bun": "1.4.0",
+    "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#561aa127b37055f885c703583c3c5e80b44395f3",
+    "drizzle-orm": "1.0.0-rc.5-ab785fc",
+    "effect": "4.0.0-rc.112",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "capsuledb": ">=0.1.0 <0.2.0",
+    "effect": ">=4.0.0-rc.112 <5.0.0"
+  },
+  "engines": {
+    "node": ">=24.10.0"
+  }
+}
