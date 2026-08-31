@@ -35,16 +35,21 @@ test("component detail pages include a focused preview and usage sections", asyn
 });
 
 test("focused previews support color modes and theme presets", async ({ page }) => {
-  await page.goto("/components/provider-mark");
+  await page.goto("/components/provider-mark?mode=light&theme=neutral");
   const preview = page.locator("[data-component-preview]");
   await expect(preview).toHaveAttribute("data-scheme", "light");
-  await preview.getByRole("button", { name: "Dark", exact: true }).click();
+  await preview.getByRole("button", { name: "Use dark mode", exact: true }).click();
   await expect(preview).toHaveAttribute("data-scheme", "dark");
-  await expect(preview.getByRole("button", { name: "Dark", exact: true })).toHaveAttribute(
+  await expect(preview.getByRole("button", { name: "Use dark mode", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
+  await preview.getByRole("button", { name: "Preview controls", exact: true }).click();
   await preview.getByRole("combobox", { name: "Theme preset" }).selectOption("samva");
+  await expect(preview).toHaveAttribute("data-theme", "samva");
+
+  await page.goto("/components/provider-mark");
+  await expect(preview).toHaveAttribute("data-scheme", "dark");
   await expect(preview).toHaveAttribute("data-theme", "samva");
 });
 
