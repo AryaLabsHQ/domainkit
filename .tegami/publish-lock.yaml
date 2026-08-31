@@ -1,28 +1,20 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Compose stable connected-domain actions\n\nCompose review, cleanup, and disconnect actions into a stable connected-provider surface with host-owned semantic tokens.\n"
-    filename: react-domain-actions.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Add host theme presets\n\nAdd seven theme presets and token-complete workshop coverage for light and dark host integrations.\n"
-    filename: react-workshop-themes.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Expose structured lifecycle events\n\nExpose structured lifecycle events from `DomainKit.Root` after successful user-triggered mutations.\n"
-    filename: react-lifecycle-events.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Adopt provider target attachments\n\nAdopt credential-scoped provider connections, explicit provider-target attachments, and detached-domain lifecycle state.\n"
+    filename: domainkit-react-provider-attachments.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
-  - id: npm:@domainkit/docs
-    updated: false
   - id: npm:domainkit
     updated: true
   - changelogIds:
-      - react-domain-actions.md
-      - react-workshop-themes.md
-      - react-lifecycle-events.md
+      - domainkit-react-provider-attachments.md
     id: npm:@domainkit/react
     updated: true
+  - id: npm:@domainkit/docs
+    updated: false
 npm:packages:
   - id: npm:domainkit-workspace
-  - id: npm:@domainkit/docs
   - id: npm:domainkit
   - id: npm:@domainkit/react
+  - id: npm:@domainkit/docs
