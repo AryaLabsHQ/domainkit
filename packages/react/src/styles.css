@@ -84,8 +84,9 @@
 
 :where(
   [data-domainkit-recipe="connect"],
+  [data-domainkit-part="integration-connect"],
   [data-domainkit-part="oauth-connect"],
-  [data-domainkit-part="reuse-connection"],
+  [data-domainkit-part="attach-target"],
   [data-domainkit-part="connection-retry"],
   [data-domainkit-part="plan-trigger"],
   [data-domainkit-part="plan-apply"],
@@ -125,6 +126,7 @@
 
 :where(
   [data-domainkit-recipe="connect"],
+  [data-domainkit-part="integration-connect"],
   [data-domainkit-part="oauth-connect"],
   [data-domainkit-part="plan-trigger"],
   [data-domainkit-part="plan-apply"]
@@ -147,6 +149,7 @@
 
 :where(
   [data-domainkit-recipe="connect"]:hover:not(:disabled),
+  [data-domainkit-part="integration-connect"]:hover:not(:disabled),
   [data-domainkit-part="oauth-connect"]:hover:not(:disabled),
   [data-domainkit-part="plan-trigger"]:hover:not(:disabled),
   [data-domainkit-part="plan-apply"]:hover:not(:disabled)
@@ -156,6 +159,7 @@
 
 :where(
   [data-domainkit-recipe="connect"]:active:not(:disabled),
+  [data-domainkit-part="integration-connect"]:active:not(:disabled),
   [data-domainkit-part="oauth-connect"]:active:not(:disabled),
   [data-domainkit-part="plan-trigger"]:active:not(:disabled),
   [data-domainkit-part="plan-apply"]:active:not(:disabled)
@@ -169,7 +173,7 @@
 }
 
 :where(
-  [data-domainkit-part="reuse-connection"],
+  [data-domainkit-part="attach-target"],
   [data-domainkit-part="connection-retry"],
   [data-domainkit-part="provisioning-retry"],
   [data-domainkit-part="cleanup-retry"],
@@ -188,7 +192,7 @@
 }
 
 :where(
-  [data-domainkit-part="reuse-connection"]:hover:not(:disabled),
+  [data-domainkit-part="attach-target"]:hover:not(:disabled),
   [data-domainkit-part="connection-retry"]:hover:not(:disabled),
   [data-domainkit-part="provisioning-retry"]:hover:not(:disabled),
   [data-domainkit-part="observe-action"]:hover:not(:disabled),
@@ -451,9 +455,49 @@
   min-height: 1.4em;
 }
 
-:where([data-domainkit-part="dialog-body"] [data-domainkit-part="oauth-connect"]),
-:where([data-domainkit-part="dialog-body"] [data-domainkit-part="reuse-connection"]) {
+:where(
+  [data-domainkit-part="dialog-body"] [data-domainkit-part="oauth-connect"],
+  [data-domainkit-part="dialog-body"] [data-domainkit-part="integration-connect"],
+  [data-domainkit-part="dialog-body"] [data-domainkit-part="attach-target"]
+) {
   width: 100%;
+}
+
+:where([data-domainkit-part="reusable-connection"]) {
+  background: var(--domainkit-fill);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-control-radius);
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.7rem;
+}
+
+:where([data-domainkit-part="reusable-connection-heading"]) {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+:where([data-domainkit-part="reusable-connection-heading"] strong) {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+:where([data-domainkit-part="reusable-connection-heading"] span) {
+  color: var(--domainkit-muted);
+  font-size: 0.6875rem;
+}
+
+:where([data-domainkit-part="target-list"]) {
+  display: grid;
+  gap: 0.45rem;
+}
+
+:where([data-domainkit-part="target-unavailable"]) {
+  color: var(--domainkit-muted);
+  font-size: 0.8125rem;
+  margin: 0;
 }
 
 :where([data-domainkit-part="dialog-footer"]) {

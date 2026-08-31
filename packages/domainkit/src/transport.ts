@@ -1,6 +1,14 @@
 import { Context, Data, Effect, Layer, Schema } from "effect";
 
+import * as Connection from "./auth/connection.ts";
 import type * as DomainDnsRecord from "./domain/dns-record.ts";
+
+export {
+  DomainAttachment,
+  ProviderConnection,
+  ProviderTarget,
+  ProviderTargetEvidence,
+} from "./auth/connection.ts";
 
 /** A user-presentable failure at the application transport boundary. */
 export class Failure extends Schema.TaggedError<Failure>()("Failure", {
@@ -19,6 +27,7 @@ export const AuthenticationParameter = Schema.Struct({
 export type AuthenticationParameter = typeof AuthenticationParameter.Type;
 
 export const AuthenticationMethod = Schema.TaggedUnion({
+  Integration: { label: Schema.String },
   OAuth: { label: Schema.String },
   Token: {
     label: Schema.String,
@@ -30,6 +39,7 @@ export type AuthenticationMethod = typeof AuthenticationMethod.Type;
 
 /** The authentication choice supplied to a connection request. */
 export type Method = Data.TaggedEnum<{
+  Integration: {};
   OAuth: {};
   Token: {
     readonly parameters?: Readonly<Record<string, string>>;
@@ -46,22 +56,22 @@ export const Provider = Schema.Struct({
 export type Provider = typeof Provider.Type;
 
 export const Connected = Schema.TaggedStruct("Connected", {
-  connectionId: Schema.String,
-  domain: Schema.String,
+  attachment: Connection.DomainAttachment,
+  connection: Connection.ProviderConnection,
   provider: Provider,
 });
 export type Connected = typeof Connected.Type;
 
 export const ReusableConnection = Schema.Struct({
-  connectionId: Schema.String,
-  label: Schema.String,
+  connection: Connection.ProviderConnection,
+  targets: Schema.Array(Connection.ProviderTarget),
 });
 export type ReusableConnection = typeof ReusableConnection.Type;
 
 export const Disconnected = Schema.TaggedStruct("Disconnected", {
   domain: Schema.String,
   provider: Provider,
-  reusableConnection: Schema.optionalKey(ReusableConnection),
+  reusableConnections: Schema.Array(ReusableConnection),
 });
 export type Disconnected = typeof Disconnected.Type;
 
@@ -81,12 +91,12 @@ export const ConnectionResult = Schema.Union([Connected, Redirect]).pipe(
 );
 export type ConnectionResult = typeof ConnectionResult.Type;
 
-export const RemoveDomainResult = Schema.TaggedStruct("Removed", {
-  connectionId: Schema.String,
-  domain: Schema.String,
-  remainingDomainCount: Schema.Int,
+export const DetachResult = Schema.TaggedStruct("Detached", {
+  attachment: Connection.DomainAttachment,
+  connection: Connection.ProviderConnection,
+  remainingAttachments: Schema.Int,
 });
-export type RemoveDomainResult = typeof RemoveDomainResult.Type;
+export type DetachResult = typeof DetachResult.Type;
 
 /** A presentation projection of a DNS requirement. */
 export const DnsRecord = Schema.Struct({
@@ -217,25 +227,31 @@ export interface InspectInput {
   readonly domain: string;
 }
 
-export interface ReuseInput {
+export interface AttachInput {
   readonly connectionId: string;
   readonly domain: string;
+  readonly target: Connection.ProviderTarget;
 }
 
-export interface RemoveDomainInput extends ReuseInput {
+export interface DetachInput {
+  readonly attachmentId: string;
   readonly preserveDns: true;
 }
 
-export interface ProvisioningPlanInput extends ReuseInput {
+export interface ProvisioningPlanInput {
+  readonly attachmentId: string;
+  readonly domain: string;
   readonly records: ReadonlyArray<DnsRecord>;
 }
 
-export interface ProvisioningApplyInput extends ReuseInput {
+export interface ProvisioningApplyInput {
+  readonly attachmentId: string;
+  readonly domain: string;
   readonly planDigest: string;
 }
 
 export interface ObserveInput {
-  readonly connectionId?: string;
+  readonly attachmentId?: string;
   readonly domain: string;
   readonly records: ReadonlyArray<DnsRecord>;
   readonly sources: {
@@ -244,7 +260,9 @@ export interface ObserveInput {
   };
 }
 
-export interface CleanupPlanInput extends ReuseInput {
+export interface CleanupPlanInput {
+  readonly attachmentId: string;
+  readonly domain: string;
   readonly receiptId: string;
 }
 
@@ -259,10 +277,10 @@ export interface Interface {
     readonly plan: (input: CleanupPlanInput) => Effect.Effect<CleanupPlan, Failure>;
   };
   readonly connection: {
+    readonly attach: (input: AttachInput) => Effect.Effect<Connected, Failure>;
     readonly connect: (input: ConnectInput) => Effect.Effect<ConnectionResult, Failure>;
     readonly inspect: (input: InspectInput) => Effect.Effect<ConnectionSnapshot, Failure>;
-    readonly removeDomain: (input: RemoveDomainInput) => Effect.Effect<RemoveDomainResult, Failure>;
-    readonly reuse: (input: ReuseInput) => Effect.Effect<Connected, Failure>;
+    readonly detach: (input: DetachInput) => Effect.Effect<DetachResult, Failure>;
   };
   readonly provisioning: {
     readonly apply: (input: ProvisioningApplyInput) => Effect.Effect<ApplyResult, Failure>;
@@ -282,10 +300,10 @@ export interface AsyncInterface {
     readonly plan: (input: CleanupPlanInput) => Promise<CleanupPlan>;
   };
   readonly connection: {
+    readonly attach: (input: AttachInput) => Promise<Connected>;
     readonly connect: (input: ConnectInput) => Promise<ConnectionResult>;
     readonly inspect: (input: InspectInput) => Promise<ConnectionSnapshot>;
-    readonly removeDomain: (input: RemoveDomainInput) => Promise<RemoveDomainResult>;
-    readonly reuse: (input: ReuseInput) => Promise<Connected>;
+    readonly detach: (input: DetachInput) => Promise<DetachResult>;
   };
   readonly provisioning: {
     readonly apply: (input: ProvisioningApplyInput) => Promise<ApplyResult>;
@@ -321,11 +339,10 @@ export const fromAsync = (transport: AsyncInterface, options: AsyncOptions = {})
       plan: (input) => attempt("cleanup.plan", () => transport.cleanup.plan(input)),
     },
     connection: {
+      attach: (input) => attempt("connection.attach", () => transport.connection.attach(input)),
       connect: (input) => attempt("connection.connect", () => transport.connection.connect(input)),
       inspect: (input) => attempt("connection.inspect", () => transport.connection.inspect(input)),
-      removeDomain: (input) =>
-        attempt("connection.removeDomain", () => transport.connection.removeDomain(input)),
-      reuse: (input) => attempt("connection.reuse", () => transport.connection.reuse(input)),
+      detach: (input) => attempt("connection.detach", () => transport.connection.detach(input)),
     },
     provisioning: {
       apply: (input) => attempt("provisioning.apply", () => transport.provisioning.apply(input)),
@@ -350,10 +367,10 @@ export const toAsync = (transport: Interface): AsyncInterface => ({
     plan: (input) => Effect.runPromise(transport.cleanup.plan(input)),
   },
   connection: {
+    attach: (input) => Effect.runPromise(transport.connection.attach(input)),
     connect: (input) => Effect.runPromise(transport.connection.connect(input)),
     inspect: (input) => Effect.runPromise(transport.connection.inspect(input)),
-    removeDomain: (input) => Effect.runPromise(transport.connection.removeDomain(input)),
-    reuse: (input) => Effect.runPromise(transport.connection.reuse(input)),
+    detach: (input) => Effect.runPromise(transport.connection.detach(input)),
   },
   provisioning: {
     apply: (input) => Effect.runPromise(transport.provisioning.apply(input)),

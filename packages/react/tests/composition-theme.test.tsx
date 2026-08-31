@@ -10,6 +10,7 @@ const disconnected = {
   _tag: "Disconnected" as const,
   domain: "mail.example.com",
   provider: Testing.provider(),
+  reusableConnections: [],
 };
 
 describe("composition and theme", () => {
@@ -63,12 +64,12 @@ describe("composition and theme", () => {
     const user = userEvent.setup();
     let calls = 0;
     const controller: Connection.Controller = {
+      attach: () => undefined,
       connect: async () => {
         calls += 1;
       },
-      disconnect: () => undefined,
+      detach: () => undefined,
       retry: () => undefined,
-      reuse: async () => undefined,
       state: disconnected,
     };
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
@@ -89,10 +90,10 @@ describe("composition and theme", () => {
 
   it("lets host props override component defaults", () => {
     const controller: Connection.Controller = {
+      attach: () => undefined,
       connect: async () => undefined,
-      disconnect: () => undefined,
+      detach: () => undefined,
       retry: () => undefined,
-      reuse: async () => undefined,
       state: disconnected,
     };
     const transport = Testing.makeFakeTransport({ inspect: disconnected });

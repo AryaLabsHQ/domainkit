@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { Transport } from "domainkit";
+import { DomainName, Transport } from "domainkit";
 
 import {
   Cleanup,
@@ -30,12 +30,9 @@ const replacementRecord: Transport.DnsRecord = {
   value: "v=spf1 -all",
 };
 
-const connection = {
-  _tag: "Connected" as const,
-  connectionId: "connection-1",
-  domain: "example.com",
-  provider: Testing.provider(),
-};
+const connection = Testing.connected({
+  attachment: Testing.attachment({ domain: DomainName.parse("example.com") }),
+});
 
 describe("provisioning lifecycle", () => {
   it("exposes a shared Atom model to custom provisioning UI", async () => {
@@ -93,7 +90,7 @@ describe("provisioning lifecycle", () => {
     expect(screen.queryByText("DNS changes applied")).toBeNull();
     expect(transport.calls.apply).toEqual([
       {
-        connectionId: "connection-1",
+        attachmentId: "attachment-1",
         domain: "example.com",
         planDigest: "plan-digest-1",
       },
@@ -271,7 +268,7 @@ describe("observation and cleanup", () => {
       const cleanupCommand = useAtomSet(cleanupModel.command);
       const verificationModel = Verification.useModel({
         connection,
-        domain: connection.domain,
+        domain: connection.attachment.domain,
         records: [record],
       });
       const verificationState = useAtomValue(verificationModel.state);
@@ -396,7 +393,7 @@ describe("observation and cleanup", () => {
     await waitFor(() =>
       expect(transport.calls.observe).toEqual([
         {
-          connectionId: "connection-1",
+          attachmentId: "attachment-1",
           domain: "example.com",
           records: [record],
           sources: { provider: true, publicDns: true },
@@ -422,11 +419,11 @@ describe("observation and cleanup", () => {
         ],
       },
       inspect: connection,
-      removeDomain: {
-        _tag: "Removed",
-        connectionId: "connection-1",
-        domain: "example.com",
-        remainingDomainCount: 1,
+      detach: {
+        _tag: "Detached",
+        attachment: connection.attachment,
+        connection: connection.connection,
+        remainingAttachments: 1,
       },
     });
     render(
@@ -435,16 +432,15 @@ describe("observation and cleanup", () => {
         <Connection.DisconnectDialog
           connection={connection}
           controller={{
+            attach: () => undefined,
             connect: () => undefined,
-            disconnect: () => {
-              void transport.connection.removeDomain({
-                connectionId: connection.connectionId,
-                domain: connection.domain,
+            detach: () => {
+              void transport.connection.detach({
+                attachmentId: connection.attachment.id,
                 preserveDns: true,
               });
             },
             retry: () => undefined,
-            reuse: () => undefined,
             state: connection,
           }}
         />
@@ -471,10 +467,9 @@ describe("observation and cleanup", () => {
       }),
     );
 
-    await waitFor(() => expect(transport.calls.removeDomain).toHaveLength(1));
-    expect(transport.calls.removeDomain[0]).toEqual({
-      connectionId: "connection-1",
-      domain: "example.com",
+    await waitFor(() => expect(transport.calls.detach).toHaveLength(1));
+    expect(transport.calls.detach[0]).toEqual({
+      attachmentId: "attachment-1",
       preserveDns: true,
     });
     expect(transport.calls.cleanupApply).toEqual([]);
@@ -545,12 +540,20 @@ describe("observation and cleanup", () => {
   it("keeps disconnect available without a receipt and hides remove records", async () => {
     const events: Array<Lifecycle.Event> = [];
     const transport = Testing.makeFakeTransport({
-      inspect: connection,
-      removeDomain: {
-        _tag: "Removed",
-        connectionId: connection.connectionId,
-        domain: connection.domain,
-        remainingDomainCount: 1,
+      inspect: [
+        connection,
+        {
+          _tag: "Disconnected",
+          domain: connection.attachment.domain,
+          provider: connection.provider,
+          reusableConnections: [],
+        },
+      ],
+      detach: {
+        _tag: "Detached",
+        attachment: connection.attachment,
+        connection: connection.connection,
+        remainingAttachments: 1,
       },
     });
     render(
@@ -580,7 +583,7 @@ describe("observation and cleanup", () => {
     expect(screen.getAllByRole("img", { name: "Cloudflare" })).toHaveLength(1);
     expect(screen.queryByText("Cloudflare connected")).toBeNull();
     expect(screen.getByRole("table")).toBeTruthy();
-    expect(events.map((event) => event._tag)).toEqual(["DomainDisconnected"]);
+    expect(events.map((event) => event._tag)).toEqual(["DomainDetached"]);
   });
 
   it("fails closed when custom UI dispatches Apply for a blocked cleanup plan", async () => {
