@@ -11,6 +11,7 @@
     "docs:audit": "bun run --filter @domainkit/docs audit",
     "docs:build": "bun run --filter @domainkit/docs build",
     "docs:dev": "bun run --filter @domainkit/docs dev",
+    "docs:deploy": "bun run --filter @domainkit/docs deploy",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --deny-warnings .",
