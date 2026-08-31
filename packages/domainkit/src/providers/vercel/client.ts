@@ -422,6 +422,12 @@ function makeClient(options: InternalOptions): Interface {
             reason: "authorization",
           }),
         );
+      } else if (target.accountKind === "account") {
+        return yield* Effect.fail(
+          failure("forTarget", "Vercel does not support account-kind targets", {
+            reason: "unsupported",
+          }),
+        );
       } else if (target.accountKind === null) {
         return yield* Effect.fail(
           failure("forTarget", "Vercel targets must identify a personal or team account", {
