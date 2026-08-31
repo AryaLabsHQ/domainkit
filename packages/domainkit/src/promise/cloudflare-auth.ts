@@ -3,11 +3,18 @@ import { Effect } from "effect";
 
 import type * as ProviderAuth from "../auth/manifest.ts";
 import type * as Secret from "../auth/secret.ts";
+import type * as Client from "../providers/cloudflare/client.ts";
 import * as EffectAuth from "../providers/cloudflare/auth.ts";
+import type * as ProviderSession from "../provider/session.ts";
 import * as Connection from "./connection.ts";
 
 export const manifest = EffectAuth.manifest;
 export const oauthMethod = EffectAuth.oauthMethod;
+export function restore(
+  options: ProviderSession.RestoreInput & Pick<Client.Options, "baseUrl" | "fetch">,
+): Promise<Client.Interface> {
+  return Effect.runPromise(EffectAuth.restore(options));
+}
 export const tokenMethod = EffectAuth.tokenMethod;
 export type {
   CredentialTarget,

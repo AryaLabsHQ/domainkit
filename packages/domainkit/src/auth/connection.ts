@@ -7,9 +7,21 @@ import type * as ProviderAuthorization from "./authorization.ts";
 import type { Value as Secret } from "./secret.ts";
 
 /** A provider account and authoritative zone selected for one domain attachment. */
+export const ProviderTargetEvidence = S.Struct({
+  /** The account display name observed during discovery, when the provider exposes one. */
+  accountName: S.optionalKey(S.String),
+  /** Nameserver and provider-state evidence observed during discovery. */
+  nameservers: S.Array(DomainName.Schema),
+  status: S.String,
+  /** Provider-specific authoritative-zone type, such as Cloudflare's `full` or Vercel's `external`. */
+  zoneType: S.String,
+});
+export interface ProviderTargetEvidence extends S.Schema.Type<typeof ProviderTargetEvidence> {}
+
 export const ProviderTarget = S.Struct({
   accountId: S.String,
   accountKind: S.NullOr(S.Literals(["account", "personal", "team"])),
+  evidence: S.optionalKey(ProviderTargetEvidence),
   zoneId: S.String,
   zoneName: DomainName.Schema,
 });

@@ -34,6 +34,7 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof effectApi.Connection.disconnect, "function");
     assert.strictEqual(typeof effectApi.ManagedDnsConnections.Service, "function");
     assert.strictEqual(typeof effectApi.DnsProvider.Service, "function");
+    assert.strictEqual(typeof effectApi.ProviderSession.Resolution.Resolved, "function");
     assert.strictEqual(typeof effectApi.Transport.Service, "function");
     assert.strictEqual(typeof effectApi.Transport.Method.OAuth, "function");
     assert.strictEqual(typeof effectApi.ZoneDiscovery.Service, "function");
@@ -44,6 +45,7 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof effectApi.Verification.observe, "function");
     assert.strictEqual(typeof effectApi.DnsOverHttps.make, "function");
     assert.strictEqual(typeof promiseApi.DnsOverHttps.make, "function");
+    assert.strictEqual(typeof promiseApi.ProviderSession.fromEffect, "function");
     assert.strictEqual(typeof promiseApi.GoogleDnsOverHttps.make, "function");
     assert.strictEqual(typeof promiseApi.DnsResolverPool.defaultMake, "function");
     assert.strictEqual(typeof promiseApi.Verification.observe, "function");
