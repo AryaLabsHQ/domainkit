@@ -1,0 +1,143 @@
+---
+title: DomainKit and Domain Connect
+description: Understand when template-based Domain Connect is enough and when DomainKit's provider API lifecycle is a better fit for SaaS domain setup.
+sidebar:
+  label: DomainKit and Domain Connect
+seo:
+  title: DomainKit and Domain Connect
+---
+
+Domain Connect and DomainKit make the same customer-facing problem easier: setting up DNS for a
+service. They solve it at different layers.
+
+**Domain Connect is a protocol. DomainKit is an application library.** Domain Connect standardizes
+how a service provider requests a predefined DNS template from a compatible DNS provider. DomainKit
+gives a SaaS application a provider API lifecycle for connecting, planning, applying, observing, and
+cleaning up DNS changes.
+
+## The short answer
+
+Use Domain Connect when the DNS provider already supports the protocol and has your service template.
+It can provide an excellent one-click setup experience with provider-managed consent and a tightly
+constrained set of DNS changes.
+
+Use DomainKit when your product needs to continuously reason about DNS state: reuse provider access,
+discover an account and authoritative zone, review exact changes, detect conflicts, observe provider
+and public-DNS state, preserve apply receipts, or perform separately authorized cleanup.
+
+DomainKit is not a Domain Connect successor, and it does not currently implement Domain Connect as a
+provider adapter. It is an API-native path for the providers your product chooses to support.
+
+## What Domain Connect does well
+
+Domain Connect puts the DNS-provider interaction behind a standard protocol:
+
+- Your service describes the required DNS changes in a template.
+- The DNS provider presents its own authorization and consent experience.
+- The provider applies the template to the user's zone.
+- The template constrains the service to a known set of records rather than arbitrary DNS access.
+
+That model has an important security property: your service does not need to become the custodian of
+the customer's DNS-provider credential. The provider owns the write boundary and can show the user
+exactly which service template is being applied.
+
+For a one-time setup flow, this is a very good design. If the customer's provider supports Domain
+Connect and already recognizes your template, it may be the simplest path available.
+
+## The practical dependency: provider participation
+
+Domain Connect standardizes the protocol and template format. It does not guarantee that every DNS
+provider will support the protocol, accept every service template, or update an existing template
+quickly.
+
+The specification leaves template onboarding terms outside the protocol. A DNS provider may choose
+which templates it supports, require a relationship, or charge for onboarding. The public service
+provider directory reflects this operational model: service providers are commonly directed to
+contact individual DNS providers about working together.
+
+That creates a difference between **protocol interoperability** and **available integrations**. A
+service can publish a valid template and still be unable to offer the flow to a customer because the
+customer's DNS provider has not implemented Domain Connect or has not onboarded that template.
+
+Template maintenance has a similar dependency. When a service changes its DNS requirements, the
+updated template still needs to be accepted and supported by the relevant DNS providers. Provider
+implementations can also support different Domain Connect flows and template properties. For example,
+Cloudflare documents provider-specific restrictions and supports only its synchronous flow.
+
+See the [Domain Connect specification](https://github.com/Domain-Connect/spec/blob/master/Domain%20Connect%20Spec%20Draft.adoc),
+the [Domain Connect service-provider directory](https://www.domainconnect.org/service-providers/),
+and [Cloudflare's Domain Connect documentation](https://developers.cloudflare.com/dns/reference/domain-connect/).
+
+## What DomainKit changes
+
+DomainKit makes provider integration an explicit part of the SaaS application. The host connects to
+a supported provider API, keeps the credential and durable lifecycle state behind its own boundaries,
+and uses DomainKit for the portable DNS semantics around that connection.
+
+| | Domain Connect | DomainKit |
+| --- | --- | --- |
+| Primary unit | A provider-supported service template | A provider connection, target, and DNS lifecycle |
+| DNS write path | The DNS provider applies the template | The host server calls a provider adapter |
+| Provider onboarding | Provider participation and template onboarding are required | The host integrates the provider API through an adapter |
+| Main scope | A constrained setup operation | Connection, planning, authorization, apply, observation, and cleanup |
+| State model | Protocol and provider flow state | Plans, digests, domain attachments, receipts, and observations |
+| Portability | Broad in principle when providers participate | Adapter-dependent, with behavior the host can exercise and test |
+| Credential boundary | Provider owns the provider credential flow | The host owns credential custody, routes, consent, and persistence |
+
+The adapter model does not eliminate provider-specific work. You still need an adapter for each
+provider you support. It does remove the requirement that every provider accept your service template
+before your product can build a supported API integration.
+
+## The security tradeoff
+
+Domain Connect and DomainKit place responsibility in different places.
+
+With Domain Connect, the DNS provider owns the authorization UX and applies a constrained template.
+Your service avoids storing a provider credential, but it depends on the provider's implementation,
+supported flow, and template onboarding process.
+
+With DomainKit, your application can own a consistent product experience across its supported
+providers, but the host must securely provide:
+
+- credential encryption or vault storage;
+- authenticated start, callback, token, and lifecycle routes;
+- user, tenant, and domain authorization policy;
+- durable authorization, attachment, plan, and receipt storage; and
+- consent and audit records.
+
+DomainKit does not provide a hosted control plane or make those responsibilities disappear. The
+[host integration guide](/docs/guides/host-integration) and [connections and grants guide](/docs/core/connections)
+describe that boundary in detail.
+
+## Which should a SaaS choose?
+
+Choose Domain Connect when:
+
+- the customer's DNS provider supports the protocol;
+- your service template is already onboarded;
+- the primary job is one-time or occasional setup; and
+- provider-managed authorization is more valuable than application-owned lifecycle state.
+
+Choose DomainKit when:
+
+- you need direct support for specific provider APIs such as Cloudflare or Vercel;
+- your product needs to inspect and reuse provider access over time;
+- DNS requirements can produce creates, no-ops, or conflicts;
+- you need provider and public-DNS observation; or
+- cleanup must be tied to a prior apply receipt and separately authorized.
+
+For many products, the practical order is DomainKit for the providers you actively support, Domain
+Connect where an existing provider/template path is already excellent, and manual DNS instructions
+as the universal fallback.
+
+## Can they coexist?
+
+Yes, conceptually. DomainKit owns the SaaS application's domain lifecycle, while Domain Connect could
+be one provider strategy for a setup operation. The application would still decide how to represent
+the resulting attachment, observe readiness, and handle later changes or cleanup.
+
+That would be a future integration surface, not a capability this package currently advertises. Today,
+DomainKit's first-party provider path is its direct Cloudflare and Vercel API adapters.
+
+Continue with [connections and grants](/docs/core/connections), [plans and receipts](/docs/core/plans),
+or [DNS verification](/docs/core/verification).
