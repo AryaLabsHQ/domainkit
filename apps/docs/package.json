@@ -21,9 +21,11 @@
     "@hugeicons/core-free-icons": "4.3.0",
     "@hugeicons/react": "1.1.10",
     "blume": "1.5.3",
+    "dialkit": "1.4.3",
     "domainkit": "workspace:^0.5.0",
     "effect": "4.0.0-rc.112",
     "lucide-react": "0.474.0",
+    "motion": "13.1.1",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

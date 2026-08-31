@@ -1,5 +1,9 @@
 import { nextRecordId } from "../../../apps/docs/islands/react-catalog/records.ts";
 import {
+  previewDialConfig,
+  stateFromDials,
+} from "../../../apps/docs/islands/react-catalog/preview-dials.ts";
+import {
   isWorkshopThemeId,
   workshopTheme,
   workshopThemePresets,
@@ -51,5 +55,52 @@ describe("component catalog themes", () => {
     expect(stateFromSearch("?targets=ambiguous").targetState).toBe("ambiguous");
     expect(stateFromSearch("?targets=unavailable").targetState).toBe("unavailable");
     expect(stateFromSearch("?targets=unknown").targetState).toBe("unique");
+  });
+});
+
+describe("component catalog prop controls", () => {
+  it("offers controls relevant to the active story", () => {
+    const connection = stateFromSearch("?story=connection");
+    expect(previewDialConfig(connection)).toMatchObject({
+      domain: expect.any(Object),
+      provider: expect.any(Object),
+      targetState: expect.any(Object),
+    });
+    expect(previewDialConfig(connection)).not.toHaveProperty("records");
+
+    const records = stateFromSearch("?story=records");
+    expect(previewDialConfig(records)).toHaveProperty("records");
+    expect(previewDialConfig(records)).not.toHaveProperty("targetState");
+  });
+
+  it("maps dial values into safe preview props", () => {
+    const initial = stateFromSearch("?story=domain");
+    const state = stateFromDials(initial, {
+      domain: "custom.example.com",
+      hasReceipt: false,
+      provider: "vercel",
+      records: {
+        primary: {
+          name: "custom.example.com",
+          priority: 20,
+          value: "mx.example.net",
+        },
+      },
+    });
+
+    expect(state.domain).toBe("custom.example.com");
+    expect(state.providerId).toBe("vercel");
+    expect(state.providerName).toBe("Vercel");
+    expect(state.receipt).toBe(false);
+    expect(state.records[0]).toMatchObject({
+      name: "custom.example.com",
+      priority: 20,
+      value: "mx.example.net",
+    });
+  });
+
+  it("keeps the last valid domain when a dial value is invalid", () => {
+    const initial = stateFromSearch("?story=records");
+    expect(stateFromDials(initial, { domain: "not a domain" }).domain).toBe(initial.domain);
   });
 });

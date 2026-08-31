@@ -166,14 +166,23 @@ function HostConnectionRow({ domain }: { readonly domain: string }) {
 
 function HostLifecycleRow({
   domain,
+  hasReceipt,
   records,
 }: {
   readonly domain: string;
+  readonly hasReceipt: boolean;
   readonly records: ReadonlyArray<Transport.DnsRecord>;
 }) {
   const controller = Connection.useController(domain);
   const connection = controller.state;
-  const [appliedReceiptId, setAppliedReceiptId] = useState<string>("receipt-1");
+  const [appliedReceiptId, setAppliedReceiptId] = useState<string | undefined>(() =>
+    hasReceipt ? "receipt-1" : undefined,
+  );
+  useEffect(() => {
+    setAppliedReceiptId((current: string | undefined) =>
+      hasReceipt ? (current ?? "receipt-1") : undefined,
+    );
+  }, [hasReceipt]);
   if (connection._tag !== "Connected") {
     return <Connection.Status state={connection} />;
   }
@@ -188,11 +197,13 @@ function HostLifecycleRow({
           </div>
         </div>
         <div data-preview-host-actions="">
-          <Cleanup.Flow
-            connection={connection}
-            receiptId={appliedReceiptId}
-            style={{ display: "contents" }}
-          />
+          {appliedReceiptId === undefined ? null : (
+            <Cleanup.Flow
+              connection={connection}
+              receiptId={appliedReceiptId}
+              style={{ display: "contents" }}
+            />
+          )}
           <Connection.DisconnectDialog connection={connection} controller={controller} />
           <Provisioning.Flow
             connection={connection}
@@ -236,12 +247,22 @@ export function Preview({ state }: { readonly state: PreviewState }) {
       );
       break;
     case "host-lifecycle":
-      children = <HostLifecycleRow domain={state.domain} records={state.records} />;
+      children = (
+        <HostLifecycleRow
+          domain={state.domain}
+          hasReceipt={state.receipt}
+          records={state.records}
+        />
+      );
       break;
     case "domain":
     case "lifecycle":
       children = (
-        <Domain.Flow domain={state.domain} receiptId="receipt-1" records={state.records} />
+        <Domain.Flow
+          domain={state.domain}
+          receiptId={state.receipt ? "receipt-1" : undefined}
+          records={state.records}
+        />
       );
       break;
     case "provider":
