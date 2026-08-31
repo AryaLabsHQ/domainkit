@@ -9,6 +9,7 @@ export interface ProviderMarkProps extends ComponentProps<"span"> {
 export function ProviderMark({ children, className, label, ...props }: ProviderMarkProps) {
   return (
     <span
+      {...props}
       aria-label={label}
       className={cn(
         "inline-flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md [&_img]:size-full [&_img]:object-contain [&_svg]:size-full",
@@ -16,7 +17,6 @@ export function ProviderMark({ children, className, label, ...props }: ProviderM
       )}
       data-slot="provider-mark"
       role="img"
-      {...props}
     >
       {children}
     </span>
