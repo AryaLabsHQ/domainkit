@@ -132,6 +132,34 @@ describe("ProviderSession", () => {
     });
   });
 
+  it.effect("restores legacy Cloudflare account-token context for target discovery", () => {
+    const recording = {
+      fetch: async () =>
+        new Response(JSON.stringify(page([zone])), {
+          headers: { "content-type": "application/json" },
+        }),
+    };
+    return Effect.gen(function* () {
+      const session = yield* CloudflareAuth.restore({
+        authorization: cloudflareAuthorization({
+          method: "token",
+          providerContext: {
+            value: { tokenKind: "account" },
+            version: "cloudflare.v1",
+          },
+        }),
+        credential: {
+          accessToken: Secret.make("cloudflare-token"),
+          refreshToken: null,
+          tokenType: "bearer",
+        },
+        fetch: recording.fetch,
+      });
+      const targets = yield* session.listTargets();
+      assert.strictEqual(targets[0]?.accountId, "account-1");
+    });
+  });
+
   it.effect(
     "restores Vercel installation context and keeps target discovery credential-scoped",
     () => {

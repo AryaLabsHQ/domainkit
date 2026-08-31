@@ -430,7 +430,33 @@ function makeClient(options: InternalOptions): Interface {
           }),
         );
       }
-      const client = makeClient({ ...options, accountId: target.accountId, target });
+      const discovered = yield* listTargets({
+        accountId: target.accountId,
+        domain: target.zoneName,
+      });
+      const selected = discovered.find(
+        (candidate) =>
+          candidate.accountId === target.accountId &&
+          candidate.zoneId === target.zoneId &&
+          candidate.zoneName === target.zoneName,
+      );
+      if (selected === undefined) {
+        return yield* Effect.fail(
+          failure(
+            "forTarget",
+            `Cloudflare target ${target.zoneName} is not visible to this credential`,
+            { reason: "authorization" },
+          ),
+        );
+      }
+      if (selected.evidence?.zoneType === "internal") {
+        return yield* Effect.fail(
+          failure("forTarget", "Cloudflare internal zones cannot host managed DNS records", {
+            reason: "unsupported",
+          }),
+        );
+      }
+      const client = makeClient({ ...options, accountId: selected.accountId, target: selected });
       return {
         id: client.id,
         createRecord: client.createRecord,
