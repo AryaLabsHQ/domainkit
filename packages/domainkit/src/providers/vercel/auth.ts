@@ -6,6 +6,7 @@ import type * as ProviderAuth from "../../auth/manifest.ts";
 import * as ProviderContext from "../../auth/provider-context.ts";
 import * as Secret from "../../auth/secret.ts";
 import * as DnsProvider from "../../provider/provider.ts";
+import * as ProviderSession from "../../provider/session.ts";
 import * as Client from "./client.ts";
 import * as Protocol from "./protocol.ts";
 
@@ -40,7 +41,7 @@ export function integrationMethod(
     _tag: "integration",
     capabilities: [...options.capabilities],
     installUrl: `https://vercel.com/integrations/${encodeURIComponent(options.slug)}/new`,
-    tokenEndpoint: "https://api.vercel.com/oauth/access_token",
+    tokenEndpoint: "https://api.vercel.com/v2/oauth/access_token",
   };
 }
 
@@ -57,6 +58,8 @@ export interface ExchangeCodeOptions {
   readonly clientId: string;
   readonly clientSecret: Secret.Value;
   readonly code: Secret.Value;
+  /** Configuration ID returned by Vercel's integration callback, when available. */
+  readonly configurationId?: string;
   readonly fetch?: Client.Fetch;
   readonly redirectUri: string;
 }
@@ -81,7 +84,7 @@ export const exchangeCode = Effect.fn("VercelAuth.exchangeCode")((options: Excha
     });
     const response = yield* Effect.tryPromise({
       try: () =>
-        fetch(`${baseUrl}/oauth/access_token`, {
+        fetch(`${baseUrl}/v2/oauth/access_token`, {
           body,
           headers: {
             Accept: "application/json",
@@ -133,7 +136,7 @@ export const exchangeCode = Effect.fn("VercelAuth.exchangeCode")((options: Excha
         token.team_id === null
           ? ({ _tag: "personal" } as const)
           : ({ _tag: "team", teamId: token.team_id } as const),
-      installationId: token.installation_id ?? null,
+      installationId: token.installation_id ?? options.configurationId ?? null,
       userId: token.user_id,
     };
   }),
@@ -210,6 +213,57 @@ export const integrationAuthentication = Effect.fn("VercelAuth.integrationAuthen
   },
 );
 
+/** Restore a credential-scoped Vercel session from persisted authorization state. */
+export function restore(
+  options: ProviderSession.RestoreInput & Pick<Client.Options, "baseUrl" | "fetch">,
+): Effect.Effect<Client.Interface, DnsProvider.Error> {
+  return Effect.gen(function* () {
+    if (options.authorization.providerId !== "vercel") {
+      return yield* Effect.fail(
+        failure("restore", "Provider authorization belongs to another provider", "authorization"),
+      );
+    }
+    if (options.authorization.revocation._tag !== "Active") {
+      return yield* Effect.fail(
+        failure("restore", "Vercel authorization is pending revocation", "authorization"),
+      );
+    }
+    const missingCapability = options.authorization.requiredCapabilities.find(
+      (capability) =>
+        !options.authorization.capabilityEvidence.some((item) => item.capability === capability),
+    );
+    if (missingCapability !== undefined) {
+      return yield* Effect.fail(
+        failure(
+          "restore",
+          `Vercel authorization lacks evidence for ${missingCapability}`,
+          "authorization",
+        ),
+      );
+    }
+    if (
+      options.authorization.expiresAt !== null &&
+      (Number.isNaN(options.authorization.expiresAt.valueOf()) ||
+        options.authorization.expiresAt <= new Date())
+    ) {
+      return yield* Effect.fail(
+        failure("restore", "Vercel authorization has expired", "authentication"),
+      );
+    }
+    const context = yield* contextCodec
+      .decode(options.authorization.providerContext)
+      .pipe(Effect.mapError((cause) => failure("restore", cause.message, "response")));
+    return Client.make({
+      ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
+      capabilities: options.authorization.capabilityEvidence.map(({ capability }) => capability),
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+      context:
+        context._tag === "team" ? { _tag: "team", teamId: context.teamId } : { _tag: "personal" },
+      token: options.credential.accessToken,
+    });
+  });
+}
+
 export interface IntegrationFlowOptions
   extends Omit<ExchangeCodeOptions, "code">, IntegrationMethodOptions {}
 
@@ -231,7 +285,12 @@ export function integrationFlow(options: IntegrationFlowOptions): Connection.Int
         ),
       );
       const code = callbackUrl.searchParams.get("code");
-      if (callbackUrl.searchParams.get("state") !== continuation.state || code === null) {
+      const configurationId = callbackUrl.searchParams.get("configurationId");
+      if (
+        callbackUrl.searchParams.get("state") !== continuation.state ||
+        code === null ||
+        configurationId === null
+      ) {
         return yield* new Connection.Error({
           category: "authorization",
           message: "Vercel Integration callback does not match its continuation",
@@ -239,15 +298,39 @@ export function integrationFlow(options: IntegrationFlowOptions): Connection.Int
           retry: "after-user-action",
         });
       }
-      return yield* integrationAuthentication({
+      const authentication = yield* integrationAuthentication({
         ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
         capabilities: options.capabilities,
         clientId: options.clientId,
         clientSecret: options.clientSecret,
         code: Secret.make(code),
+        configurationId,
         ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
         redirectUri: options.redirectUri,
       });
+      const callbackTeamId = callbackUrl.searchParams.get("teamId");
+      if (callbackTeamId !== null) {
+        const context = yield* contextCodec.decode(authentication.providerContext).pipe(
+          Effect.mapError(
+            (cause) =>
+              new Connection.Error({
+                category: "provider",
+                message: cause.message,
+                operation: "VercelAuth.integrationFlow.complete",
+                retry: "unknown",
+              }),
+          ),
+        );
+        if (context._tag !== "team" || context.teamId !== callbackTeamId) {
+          return yield* new Connection.Error({
+            category: "authorization",
+            message: "Vercel Integration callback team does not match the exchanged installation",
+            operation: "VercelAuth.integrationFlow.complete",
+            retry: "after-user-action",
+          });
+        }
+      }
+      return authentication;
     }),
     method: "integration",
     providerId: "vercel",

@@ -175,7 +175,7 @@ describe("Cloudflare authentication", () => {
       const authentication = yield* method.authenticate(method.token);
       assert.strictEqual(authentication.providerAccountId, "account-1");
       assert.deepStrictEqual(authentication.providerContext, {
-        value: { tokenKind: "account" },
+        value: { accountId: "account-1", tokenKind: "account" },
         version: "cloudflare.v1",
       });
       assert.ok(
