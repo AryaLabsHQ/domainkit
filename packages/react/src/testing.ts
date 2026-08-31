@@ -1,4 +1,4 @@
-import { Transport } from "domainkit";
+import { DomainName, Transport } from "domainkit";
 import type * as Layer from "effect/Layer";
 
 export interface FakeOptions {
@@ -7,8 +7,8 @@ export interface FakeOptions {
     | Transport.ConnectionSnapshot
     | FakeFailure
     | ReadonlyArray<Transport.ConnectionSnapshot | FakeFailure>;
-  readonly reuse?: Transport.Connected;
-  readonly removeDomain?: Transport.RemoveDomainResult;
+  readonly attach?: Transport.Connected;
+  readonly detach?: Transport.DetachResult;
   readonly plan?: Transport.ProvisioningPlan;
   readonly apply?: Transport.ApplyResult;
   readonly observe?: Transport.Observation;
@@ -25,10 +25,10 @@ interface FakeFailure {
 
 export interface FakeTransport extends Transport.AsyncInterface, Layer.Layer<Transport.Service> {
   readonly calls: {
+    readonly attach: Array<Transport.AttachInput>;
     readonly connect: Array<Transport.ConnectInput>;
+    readonly detach: Array<Transport.DetachInput>;
     readonly inspect: Array<Transport.InspectInput>;
-    readonly reuse: Array<Transport.ReuseInput>;
-    readonly removeDomain: Array<Transport.RemoveDomainInput>;
     readonly plan: Array<Transport.ProvisioningPlanInput>;
     readonly apply: Array<Transport.ProvisioningApplyInput>;
     readonly observe: Array<Transport.ObserveInput>;
@@ -47,17 +47,58 @@ export const provider = (overrides: Partial<Transport.Provider> = {}): Transport
   ...overrides,
 });
 
+export const target = (
+  overrides: Partial<Transport.ProviderTarget> = {},
+): Transport.ProviderTarget => ({
+  accountId: "account-1",
+  accountKind: "account",
+  zoneId: "zone-1",
+  zoneName: DomainName.parse("example.com"),
+  ...overrides,
+});
+
+export const connection = (
+  overrides: Partial<Transport.ProviderConnection> = {},
+): Transport.ProviderConnection => ({
+  createdAt: new Date("2026-08-30T00:00:00.000Z"),
+  id: "connection-1",
+  method: "oauth2",
+  ownerId: "organization-1",
+  providerId: "cloudflare",
+  status: "active",
+  ...overrides,
+});
+
+export const attachment = (
+  overrides: Partial<Transport.DomainAttachment> = {},
+): Transport.DomainAttachment => ({
+  connectionId: "connection-1",
+  createdAt: new Date("2026-08-30T00:00:00.000Z"),
+  domain: DomainName.parse("mail.example.com"),
+  id: "attachment-1",
+  target: target(),
+  ...overrides,
+});
+
+export const connected = (overrides: Partial<Transport.Connected> = {}): Transport.Connected => ({
+  _tag: "Connected",
+  attachment: attachment(),
+  connection: connection(),
+  provider: provider(),
+  ...overrides,
+});
+
 export function makeFakeTransport(options: FakeOptions): FakeTransport {
   const calls: FakeTransport["calls"] = {
     apply: [],
+    attach: [],
     cleanupApply: [],
     cleanupPlan: [],
     connect: [],
+    detach: [],
     inspect: [],
     observe: [],
     plan: [],
-    removeDomain: [],
-    reuse: [],
   };
   const inspections = Array.isArray(options.inspect) ? [...options.inspect] : [options.inspect];
   const transport: Transport.AsyncInterface = {
@@ -90,8 +131,8 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
         return (
           options.connect ?? {
             _tag: "Connected",
-            connectionId: "connection-1",
-            domain: input.domain,
+            attachment: attachment({ domain: DomainName.parse(input.domain) }),
+            connection: connection(),
             provider: provider(),
           }
         );
@@ -108,25 +149,29 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
           });
         return snapshot;
       },
-      reuse: async (input) => {
-        calls.reuse.push(input);
+      attach: async (input) => {
+        calls.attach.push(input);
         return (
-          options.reuse ?? {
+          options.attach ?? {
             _tag: "Connected",
-            connectionId: input.connectionId,
-            domain: input.domain,
+            attachment: attachment({
+              connectionId: input.connectionId,
+              domain: DomainName.parse(input.domain),
+              target: input.target,
+            }),
+            connection: connection({ id: input.connectionId }),
             provider: provider(),
           }
         );
       },
-      removeDomain: async (input) => {
-        calls.removeDomain.push(input);
+      detach: async (input) => {
+        calls.detach.push(input);
         return (
-          options.removeDomain ?? {
-            _tag: "Removed",
-            connectionId: input.connectionId,
-            domain: input.domain,
-            remainingDomainCount: 0,
+          options.detach ?? {
+            _tag: "Detached",
+            attachment: attachment(),
+            connection: connection(),
+            remainingAttachments: 0,
           }
         );
       },

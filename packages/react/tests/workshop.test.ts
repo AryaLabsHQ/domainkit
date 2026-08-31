@@ -46,4 +46,10 @@ describe("workshop themes", () => {
     expect(stateFromSearch("?theme=brand").theme).toBe("neutral");
     expect(stateFromSearch("?theme=unknown").theme).toBe("neutral");
   });
+
+  it("reads target-selection states from URLs and defaults to unique", () => {
+    expect(stateFromSearch("?targets=ambiguous").targetState).toBe("ambiguous");
+    expect(stateFromSearch("?targets=unavailable").targetState).toBe("unavailable");
+    expect(stateFromSearch("?targets=unknown").targetState).toBe("unique");
+  });
 });

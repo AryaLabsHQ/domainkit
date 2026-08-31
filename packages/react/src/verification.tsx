@@ -72,7 +72,7 @@ export function useModel(config: ObserveConfig): Model {
         transport.verification.observe({
           ...(config.connection === undefined
             ? {}
-            : { connectionId: config.connection.connectionId }),
+            : { attachmentId: config.connection.attachment.id }),
           domain: config.domain,
           records: config.records,
           sources: { provider, publicDns },
@@ -94,7 +94,7 @@ export function useModel(config: ObserveConfig): Model {
       );
     });
     return { command: observe, state };
-  }, [config.connection?.connectionId, config.domain, provider, publicDns, recordKey, runtime]);
+  }, [config.connection?.attachment.id, config.domain, provider, publicDns, recordKey, runtime]);
 }
 
 export function useController(config: ObserveConfig): Controller {

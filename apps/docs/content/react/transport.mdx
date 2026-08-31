@@ -18,8 +18,8 @@ const service = Transport.Service.of({
   connection: {
     inspect: (input) => api.connections.inspect(input),
     connect: (input) => api.connections.connect(input),
-    reuse: (input) => api.connections.reuse(input),
-    removeDomain: (input) => api.connections.removeDomain(input),
+    attach: (input) => api.connections.attach(input),
+    detach: (input) => api.connections.detach(input),
   },
   provisioning: {
     plan: (input) => api.provisioning.plan(input),
@@ -61,8 +61,15 @@ export const transport = Transport.layerFromAsync({
 Successful outcomes use schema-backed tagged models. Failures use `Transport.Failure` in the Effect error channel. Decode untrusted request, database, and provider data at your server boundary before mapping it into these browser-safe wire types.
 
 Custom UI can consume `Connection.useModel(domain)` with `useAtomValue(model.state)` and
-`useAtomSet(model.command)`. Dispatch commands with `Connection.Command.Connect`, `Reuse`, and
-`Retry`; the packaged controller and flow use the same atoms.
+`useAtomSet(model.command)`. Dispatch `Connection.Command.Connect`, `Attach`, `Detach`, and `Retry`;
+the packaged controller and flow use the same atoms. A reusable connection contains its
+credential-scoped provider connection and the discovered targets it can attach. Selecting a target
+attaches that existing connection to the domain without reconnecting.
+
+`ProviderTarget` is an exact account-and-authoritative-zone choice. Keep target discovery and
+selection on the server, and return an unavailable or ambiguous target state when the credential
+cannot produce one safe choice. Integration authentication is a separate method from OAuth and
+should be exposed as `AuthenticationMethod.Integration` when the provider supports it.
 
 ## Correlate browser operations with durable attempts
 

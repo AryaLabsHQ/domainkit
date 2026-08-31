@@ -21,14 +21,10 @@ export function Flow({ domain, receiptId, records }: FlowProps) {
   const controller = Connection.useController(domain);
   const state = controller.state;
   const connected =
-    state._tag === "Connected"
-      ? state
-      : state._tag === "Disconnecting"
-        ? state.snapshot
-        : undefined;
+    state._tag === "Connected" ? state : state._tag === "Detaching" ? state.snapshot : undefined;
   return (
     <Connection.Root status={state._tag}>
-      {state._tag === "Connected" || state._tag === "Disconnecting" ? (
+      {state._tag === "Connected" || state._tag === "Detaching" ? (
         <ConnectedCard
           connection={state._tag === "Connected" ? state : state.snapshot}
           controller={controller}
@@ -111,7 +107,7 @@ function ConnectedCard({
   readonly controller: Connection.Controller;
   readonly initialReceiptId?: string;
   readonly records: ReadonlyArray<Transport.DnsRecord>;
-  readonly status: "Connected" | "Disconnecting";
+  readonly status: "Connected" | "Detaching";
 }) {
   const [receipt, setReceipt] = useState({
     host: initialReceiptId,
@@ -121,7 +117,7 @@ function ConnectedCard({
     setReceipt({ host: initialReceiptId, value: initialReceiptId });
   }
   const receiptId = receipt.host === initialReceiptId ? receipt.value : initialReceiptId;
-  const disabled = status === "Disconnecting";
+  const disabled = status === "Detaching";
   const actionsTriggerRef = useRef<HTMLButtonElement>(null);
   return (
     <Connection.Card status={status}>

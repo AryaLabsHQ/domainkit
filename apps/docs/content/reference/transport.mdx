@@ -13,17 +13,17 @@ endpoints.
 
 ## Service methods
 
-| Method                    | Input                    | Result               |
-| ------------------------- | ------------------------ | -------------------- |
-| `connection.inspect`      | `InspectInput`           | `ConnectionSnapshot` |
-| `connection.connect`      | `ConnectInput`           | `ConnectionResult`   |
-| `connection.reuse`        | `ReuseInput`             | `Connected`          |
-| `connection.removeDomain` | `RemoveDomainInput`      | `RemoveDomainResult` |
-| `provisioning.plan`       | `ProvisioningPlanInput`  | `ProvisioningPlan`   |
-| `provisioning.apply`      | `ProvisioningApplyInput` | `ApplyResult`        |
-| `verification.observe`    | `ObserveInput`           | `Observation`        |
-| `cleanup.plan`            | `CleanupPlanInput`       | `CleanupPlan`        |
-| `cleanup.apply`           | `CleanupApplyInput`      | `CleanupResult`      |
+| Method                 | Input                    | Result               |
+| ---------------------- | ------------------------ | -------------------- |
+| `connection.inspect`   | `InspectInput`           | `ConnectionSnapshot` |
+| `connection.connect`   | `ConnectInput`           | `ConnectionResult`   |
+| `connection.attach`    | `AttachInput`            | `Connected`          |
+| `connection.detach`    | `DetachInput`            | `DetachResult`       |
+| `provisioning.plan`    | `ProvisioningPlanInput`  | `ProvisioningPlan`   |
+| `provisioning.apply`   | `ProvisioningApplyInput` | `ApplyResult`        |
+| `verification.observe` | `ObserveInput`           | `Observation`        |
+| `cleanup.plan`         | `CleanupPlanInput`       | `CleanupPlan`        |
+| `cleanup.apply`        | `CleanupApplyInput`      | `CleanupResult`      |
 
 The canonical `Interface` returns Effect values with `Failure` in the error channel. `Service` is
 the Effect context service accepted by the React root.
@@ -31,9 +31,15 @@ the Effect context service accepted by the React root.
 ## Connection wire models
 
 - `Provider` describes display-safe provider identity and authentication methods.
+- `ProviderConnection` describes a credential-scoped connection; `ProviderTarget` describes an
+  exact provider account and authoritative zone; `DomainAttachment` binds the two to one domain.
 - `Connected`, `Disconnected`, and `Unsupported` form `ConnectionSnapshot`.
 - `ConnectionResult` is either `Connected` or `Redirect`.
-- `RemoveDomainInput` requires `preserveDns: true`; DNS deletion is the independent cleanup flow.
+- `Disconnected.reusableConnections` lists existing provider connections and their discovered
+  targets. `AttachInput` requires an explicit target and attaches without reconnecting.
+- `DetachInput` identifies a `DomainAttachment` and requires `preserveDns: true`; DNS deletion is
+  the independent cleanup flow. `DetachResult` retains the connection and reports the remaining
+  attachment count, including zero for a final attachment.
 
 ## Plan and result wire models
 

@@ -5,11 +5,11 @@ import * as Data from "effect/Data";
 export type Event = Data.TaggedEnum<{
   ConnectionEstablished: {
     readonly connection: Transport.Connected;
-    readonly source: "connect" | "reuse";
+    readonly source: "attach" | "connect";
   };
-  DomainDisconnected: {
+  DomainDetached: {
     readonly connection: Transport.Connected;
-    readonly result: Transport.RemoveDomainResult;
+    readonly result: Transport.DetachResult;
   };
   RecordsApplied: {
     readonly connection: Transport.Connected;
