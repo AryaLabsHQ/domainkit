@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { Transport } from "domainkit";
+import { DomainName, Transport } from "domainkit";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { renderToString } from "react-dom/server";
@@ -233,6 +233,108 @@ describe("Connection.Flow", () => {
       target: { accountId: "account-1", zoneId: "zone-1" },
     });
     expect(transport.calls.connect).toEqual([]);
+  });
+
+  it("restores all discovered targets after detaching an attached target", async () => {
+    const user = userEvent.setup();
+    const initial = disconnected(true);
+    const reusableConnection = initial.reusableConnections[0];
+    if (reusableConnection === undefined) throw new Error("Reusable fixture is missing");
+    const firstTarget = reusableConnection.targets[0];
+    if (firstTarget === undefined) throw new Error("Reusable target fixture is missing");
+    const secondTarget = Testing.target({
+      accountId: "team-2",
+      accountKind: "team",
+      evidence: {
+        accountName: "Samva Team",
+        nameservers: [],
+        status: "active",
+        zoneType: "full",
+      },
+      zoneId: "zone-2",
+    });
+    const snapshot = {
+      ...initial,
+      reusableConnections: [{ ...reusableConnection, targets: [firstTarget, secondTarget] }],
+    };
+    const reusableWithTargets = snapshot.reusableConnections[0];
+    if (reusableWithTargets === undefined) throw new Error("Reusable fixture is missing");
+    const connection = Testing.connected({
+      attachment: Testing.attachment({ target: firstTarget }),
+    });
+    const transport = Testing.makeFakeTransport({
+      inspect: snapshot,
+      detach: {
+        _tag: "Detached",
+        attachment: connection.attachment,
+        connection: connection.connection,
+        remainingAttachments: 0,
+      },
+    });
+    const Harness = () => {
+      const controller = Connection.useController("mail.example.com");
+      const state = controller.state;
+      return (
+        <>
+          <span>{state._tag}</span>
+          {state._tag === "Disconnected" ? (
+            <>
+              <button onClick={() => controller.attach(reusableWithTargets, firstTarget)}>
+                Attach target
+              </button>
+              {state.reusableConnections.flatMap(({ targets }) =>
+                targets.map((target) => <span key={target.zoneId}>{target.zoneId}</span>),
+              )}
+            </>
+          ) : state._tag === "Connected" ? (
+            <button onClick={controller.detach}>Detach target</button>
+          ) : null}
+        </>
+      );
+    };
+    render(
+      <DomainKit.Root transport={transport}>
+        <Harness />
+      </DomainKit.Root>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Attach target" }));
+    await user.click(await screen.findByRole("button", { name: "Detach target" }));
+
+    expect(await screen.findByText("Disconnected")).toBeTruthy();
+    expect(screen.getAllByText("zone-1")).toHaveLength(1);
+    expect(screen.getAllByText("zone-2")).toHaveLength(1);
+    expect(transport.calls.attach[0]?.target).toBe(firstTarget);
+  });
+
+  it("rejects a target whose identity differs from the discovered target", async () => {
+    const user = userEvent.setup();
+    const snapshot = disconnected(true);
+    const reusableConnection = snapshot.reusableConnections[0];
+    if (reusableConnection === undefined) throw new Error("Reusable fixture is missing");
+    const discoveredTarget = reusableConnection.targets[0];
+    if (discoveredTarget === undefined) throw new Error("Reusable target fixture is missing");
+    const mismatchedTarget = {
+      ...discoveredTarget,
+      zoneName: DomainName.parse("other.example.com"),
+    };
+    const transport = Testing.makeFakeTransport({ inspect: snapshot });
+    const Harness = () => {
+      const controller = Connection.useController("mail.example.com");
+      return (
+        <button onClick={() => controller.attach(reusableConnection, mismatchedTarget)}>
+          Attach mismatched target
+        </button>
+      );
+    };
+    render(
+      <DomainKit.Root transport={transport}>
+        <Harness />
+      </DomainKit.Root>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Attach mismatched target" }));
+    expect(transport.calls.attach).toEqual([]);
   });
 
   it("shows unique, ambiguous, and unavailable target states", async () => {
