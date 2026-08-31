@@ -59,8 +59,8 @@ export const transport = Transport.layerFromAsync({
 
 The stylesheet is opt-in. `DomainKit.Root` accepts host messages, provider marks, icons, design
 tokens, color scheme, and portal container, so product branding remains outside the package.
-Cloudflare and Vercel use bundled, theme-aware marks sourced from SVGL; hosts can replace either
-through the `marks` prop.
+Recognized provider marks load from `integrations.sh` and fall back to the provider's initial when
+the mark is unavailable; hosts can replace them through the `marks` prop.
 
 ## Learn more
 

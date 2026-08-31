@@ -204,7 +204,7 @@ describe("composition and theme", () => {
     });
   });
 
-  it("uses bundled marks before the local letter fallback", () => {
+  it("uses integrations.sh marks before the local letter fallback", () => {
     const transport = Testing.makeFakeTransport({ inspect: disconnected });
     const { rerender } = render(
       <DomainKit.Root transport={transport}>
@@ -212,22 +212,47 @@ describe("composition and theme", () => {
       </DomainKit.Root>,
     );
     const vercel = screen.getByRole("img", { name: "Vercel" });
-    expect(vercel.querySelector("svg")).toBeTruthy();
-    expect(vercel.querySelector("img")).toBeNull();
+    expect(vercel.querySelector("img")?.getAttribute("src")).toBe(
+      "https://integrations.sh/logo/vercel.com?sz=64",
+    );
     rerender(
       <DomainKit.Root transport={transport}>
-        <Provider.Mark provider={Testing.provider({ id: "cloudflare", name: "Cloudflare" })} />
+        <Provider.Mark provider={Testing.provider({ id: "namecheap", name: "Namecheap" })} />
       </DomainKit.Root>,
     );
-    const cloudflare = screen.getByRole("img", { name: "Cloudflare" });
-    expect(cloudflare.querySelector("svg")).toBeTruthy();
-    expect(cloudflare.querySelector("img")).toBeNull();
+    const namecheap = screen.getByRole("img", { name: "Namecheap" });
+    expect(namecheap.querySelector("img")?.getAttribute("src")).toBe(
+      "https://integrations.sh/logo/namecheap.com?sz=64",
+    );
+    rerender(
+      <DomainKit.Root transport={transport}>
+        <Provider.Mark provider={Testing.provider({ id: "route53", name: "Amazon Route 53" })} />
+      </DomainKit.Root>,
+    );
+    const route53 = screen.getByRole("img", { name: "Amazon Route 53" });
+    expect(route53.querySelector("img")?.getAttribute("src")).toBe(
+      "https://integrations.sh/logo/route53.com?sz=64",
+    );
     rerender(
       <DomainKit.Root transport={transport}>
         <Provider.Mark provider={Testing.provider({ id: "other", name: "Other" })} />
       </DomainKit.Root>,
     );
     expect(screen.getByRole("img", { name: "Other" }).textContent).toBe("O");
+  });
+
+  it("falls back to the provider initial when a remote mark fails", () => {
+    const transport = Testing.makeFakeTransport({ inspect: disconnected });
+    render(
+      <DomainKit.Root transport={transport}>
+        <Provider.Mark provider={Testing.provider({ id: "namecheap", name: "Namecheap" })} />
+      </DomainKit.Root>,
+    );
+    const mark = screen.getByRole("img", { name: "Namecheap" });
+    const image = mark.querySelector("img");
+    expect(image).toBeTruthy();
+    fireEvent.error(image!);
+    expect(mark.textContent).toBe("N");
   });
 
   it("lets Trigger children replace the default label without injecting a mark", () => {

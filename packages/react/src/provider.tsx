@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import type { Transport } from "domainkit";
 
 import type { PartProps } from "./composition.tsx";
@@ -19,43 +19,61 @@ export interface MarkProps extends PartProps<"span", MarkState> {
   readonly provider: ProviderDescriptor;
 }
 
+const logoHosts: Readonly<Record<string, string>> = {
+  amazonroute53: "route53.com",
+  aws: "amazonaws.com",
+  bluehost: "bluehost.com",
+  cloudflare: "cloudflare.com",
+  digitalocean: "digitalocean.com",
+  dnsimple: "dnsimple.com",
+  dreamhost: "dreamhost.com",
+  dynadot: "dynadot.com",
+  gandi: "gandi.net",
+  godaddy: "godaddy.com",
+  google: "cloud.google.com",
+  googlecloud: "cloud.google.com",
+  googleclouddns: "cloud.google.com",
+  hostgator: "hostgator.com",
+  hostinger: "hostinger.com",
+  hover: "hover.com",
+  ionos: "ionos.com",
+  namecheap: "namecheap.com",
+  namecom: "name.com",
+  netlify: "netlify.com",
+  ns1: "ns1.com",
+  ovh: "ovh.com",
+  porkbun: "porkbun.com",
+  route53: "route53.com",
+  spaceship: "spaceship.com",
+  squarespace: "squarespace.com",
+  vercel: "vercel.com",
+};
+
 const logoKey = (providerId: string): string =>
   providerId
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 
+const logoHost = (providerId: string): string | undefined => logoHosts[logoKey(providerId)];
+
 const letterMark = (provider: ProviderDescriptor): string =>
   provider.name.trim().charAt(0).toUpperCase() || "?";
 
-function CloudflareMark() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 48 32">
-      <path
-        d="M30.2 24.6H7.7a6.2 6.2 0 0 1 .5-12.4 9.7 9.7 0 0 1 18.5-2.8 7.7 7.7 0 0 1 3.5 15.2Z"
-        fill="#f48120"
-      />
-      <path d="M33.1 16.2h1.3a5.2 5.2 0 0 1 .3 10.4H18.2l1.2-3.4h12.9l.8-7Z" fill="#faad3d" />
-    </svg>
-  );
-}
-
-function VercelMark() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 32 32">
-      <path d="m16 5 13 22H3L16 5Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-const builtInMarks: Readonly<Record<string, () => ReactNode>> = {
-  cloudflare: CloudflareMark,
-  vercel: VercelMark,
-};
-
 function DefaultMark({ provider }: { readonly provider: ProviderDescriptor }) {
-  const BuiltIn = builtInMarks[logoKey(provider.id)];
-  return BuiltIn === undefined ? letterMark(provider) : <BuiltIn />;
+  const host = logoHost(provider.id);
+  const [failed, setFailed] = useState(false);
+  if (host === undefined || failed) return letterMark(provider);
+  return (
+    <img
+      alt=""
+      height={32}
+      onError={() => setFailed(true)}
+      referrerPolicy="no-referrer"
+      src={`https://integrations.sh/logo/${host}?sz=64`}
+      width={32}
+    />
+  );
 }
 
 export function Mark({ provider, ...props }: MarkProps) {
@@ -64,7 +82,7 @@ export function Mark({ provider, ...props }: MarkProps) {
   const content =
     typeof replacement === "function"
       ? replacement(provider)
-      : (replacement ?? <DefaultMark provider={provider} />);
+      : (replacement ?? <DefaultMark key={provider.id} provider={provider} />);
   return usePart(
     "span",
     props,
