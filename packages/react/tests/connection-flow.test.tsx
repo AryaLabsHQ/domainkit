@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { renderToString } from "react-dom/server";
 
-import { Connection, DomainKit, Testing } from "../src/index.ts";
+import { Connection, DomainKit, Lifecycle, Testing } from "../src/index.ts";
 
 afterEach(cleanup);
 
@@ -366,6 +366,53 @@ describe("Connection.Flow", () => {
 
     expect(await screen.findByText("zone-1")).toBeTruthy();
     expect(screen.getByText("zone-2")).toBeTruthy();
+    expect(transport.calls.inspect).toHaveLength(2);
+  });
+
+  it("keeps a completed detach when target re-inspection fails", async () => {
+    const user = userEvent.setup();
+    const events: Array<Lifecycle.Event> = [];
+    const connected = Testing.connected();
+    const transport = Testing.makeFakeTransport({
+      inspect: [
+        connected,
+        {
+          _tag: "Failure",
+          message: "Target discovery is temporarily unavailable",
+          retry: "safe",
+        },
+      ],
+      detach: {
+        _tag: "Detached",
+        attachment: connected.attachment,
+        connection: connected.connection,
+        remainingAttachments: 0,
+      },
+    });
+    const Harness = () => {
+      const controller = Connection.useController("mail.example.com");
+      return (
+        <>
+          <span>{controller.state._tag}</span>
+          {controller.state._tag === "Connected" ? (
+            <button onClick={controller.detach}>Detach target</button>
+          ) : controller.state._tag === "Disconnected" ? (
+            <span>{controller.state.reusableConnections[0]?.targets[0]?.zoneId}</span>
+          ) : null}
+        </>
+      );
+    };
+    render(
+      <DomainKit.Root onEvent={(event) => events.push(event)} transport={transport}>
+        <Harness />
+      </DomainKit.Root>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Detach target" }));
+
+    expect(await screen.findByText("Disconnected")).toBeTruthy();
+    expect(screen.getByText("zone-1")).toBeTruthy();
+    expect(events.map((event) => event._tag)).toEqual(["DomainDetached"]);
     expect(transport.calls.inspect).toHaveLength(2);
   });
 
