@@ -1,20 +1,34 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Adopt provider target attachments\n\nAdopt credential-scoped provider connections, explicit provider-target attachments, and detached-domain lifecycle state.\n"
-    filename: domainkit-react-provider-attachments.md
+  - content: "---\npackages:\n  \"@domainkit/capsuledb\":\n    type: minor\n---\n\n## Add CapsuleDB persistence\n\nAdd optional PostgreSQL CapsuleDB persistence for the complete managed-DNS authorization lifecycle.\nHosts retain ownership of the exact SQL client, credential encryption, identity, tenancy, policy,\nroutes, audit, and consent.\n"
+    filename: domainkit-capsuledb.md
+    v: 0.0.0
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Add Effect-native server integration\n\nAdd `domainkit/server`, with Effect-native `make` and Layer APIs plus `createDomainKit` for async\nhosts. Both paths mount the same Web handler for provider connection start and callback completion;\nasync hosts supply and own their persistence implementation.\n"
+    filename: domainkit-effect-native-server.md
+    v: 0.0.0
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Refresh Cloudflare OAuth credentials\n\nAdd provider-owned Cloudflare OAuth credential refresh with refresh-token rotation, typed terminal\ngrant failures, and credential-scoped access-token expiry.\n"
+    filename: domainkit-cloudflare-oauth-refresh.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
-  - id: npm:domainkit
-    updated: true
   - changelogIds:
-      - domainkit-react-provider-attachments.md
-    id: npm:@domainkit/react
+      - domainkit-capsuledb.md
+    id: npm:@domainkit/capsuledb
     updated: true
   - id: npm:@domainkit/docs
     updated: false
+  - changelogIds:
+      - domainkit-effect-native-server.md
+      - domainkit-cloudflare-oauth-refresh.md
+    id: npm:domainkit
+    updated: true
+  - id: npm:@domainkit/react
+    updated: true
+npm:mark-latest:
+  - id: npm:@domainkit/capsuledb
 npm:packages:
   - id: npm:domainkit-workspace
+  - id: npm:@domainkit/capsuledb
+  - id: npm:@domainkit/docs
   - id: npm:domainkit
   - id: npm:@domainkit/react
-  - id: npm:@domainkit/docs

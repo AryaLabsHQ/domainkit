@@ -1,3 +1,16 @@
+## domainkit@0.6.0
+
+### Add Effect-native server integration
+
+Add `domainkit/server`, with Effect-native `make` and Layer APIs plus `createDomainKit` for async
+hosts. Both paths mount the same Web handler for provider connection start and callback completion;
+async hosts supply and own their persistence implementation.
+
+### Refresh Cloudflare OAuth credentials
+
+Add provider-owned Cloudflare OAuth credential refresh with refresh-token rotation, typed terminal
+grant failures, and credential-scoped access-token expiry.
+
 ## domainkit@0.3.0
 
 ### Make Effect the canonical DomainKit API
