@@ -36,5 +36,6 @@ surfaces instead of provider SDKs when that keeps the runtime boundary smaller.
 
 - `package.json`
 - `src/discovery/zones.ts`
-- `src/auth/oauth.ts`
+- `src/auth/authorization-code.ts`
+- `src/providers/cloudflare/auth.ts`
 - `src/provider/provider.ts`

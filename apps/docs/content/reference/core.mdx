@@ -80,16 +80,17 @@ at call sites and keeps upgrades source-checkable.
 
 ## Lifecycle map
 
-| Job                | Start with               | Persist before continuing                  |
-| ------------------ | ------------------------ | ------------------------------------------ |
-| Connect a provider | `Connection.start`       | authorization attempt and provider context |
-| Complete OAuth     | `Connection.complete`    | resulting connection and grant             |
-| Plan records       | `Provisioning.create`    | plan, digest, and attempt identity         |
-| Approve changes    | `Provisioning.authorize` | digest-bound authorization                 |
-| Apply records      | `Provisioning.apply`     | receipt, including partial results         |
-| Observe records    | `Verification.observe`   | evidence useful to your product state      |
-| Plan cleanup       | `Deletion.create`        | receipt-bound deletion plan                |
-| Apply cleanup      | `Deletion.apply`         | cleanup result before removing the grant   |
+| Job                | Start with                          | Persist before continuing                       |
+| ------------------ | ----------------------------------- | ----------------------------------------------- |
+| Connect a provider | `Connection.start`                  | authorization attempt and provider context      |
+| Complete OAuth     | `Connection.complete`               | resulting connection and grant                  |
+| Refresh Cloudflare | `Cloudflare.Auth.refreshCredential` | complete rotated credential before provider use |
+| Plan records       | `Provisioning.create`               | plan, digest, and attempt identity              |
+| Approve changes    | `Provisioning.authorize`            | digest-bound authorization                      |
+| Apply records      | `Provisioning.apply`                | receipt, including partial results              |
+| Observe records    | `Verification.observe`              | evidence useful to your product state           |
+| Plan cleanup       | `Deletion.create`                   | receipt-bound deletion plan                     |
+| Apply cleanup      | `Deletion.apply`                    | cleanup result before removing the grant        |
 
 See [Plans and receipts](/docs/core/plans) and
 [Provision and clean up DNS](/docs/guides/provision-and-clean-up) for lifecycle semantics. See

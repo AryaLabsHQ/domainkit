@@ -16,6 +16,7 @@ interface StoredAggregate {
   readonly authorization: Authorization;
   readonly connections: ReadonlyArray<StoredConnection>;
   readonly credentialCiphertext: string;
+  readonly credentialExpiresAt: Date | null;
 }
 
 interface AuthorizationRow {
@@ -124,7 +125,6 @@ const decodeAuthorization = Effect.fn("CapsuleManagedDnsConnections.decodeAuthor
       authorizedById: row.subject_id,
       capabilityEvidence: row.capability_evidence,
       createdAt: row.created_at.toISOString(),
-      expiresAt: row.expires_at?.toISOString() ?? null,
       id: row.id,
       method: row.kind,
       providerContext: row.provider_context,
@@ -137,7 +137,11 @@ const decodeAuthorization = Effect.fn("CapsuleManagedDnsConnections.decodeAuthor
         missing("decodeAuthorization", `Authorization ${row.id} is invalid: ${error.message}`),
       ),
     );
-    return { authorization, credentialCiphertext: row.credential_ciphertext };
+    return {
+      authorization,
+      credentialCiphertext: row.credential_ciphertext,
+      credentialExpiresAt: row.expires_at,
+    };
   },
 );
 
@@ -229,6 +233,7 @@ const loadAggregate = Effect.fn("CapsuleManagedDnsConnections.loadAggregate")(fu
     authorization: decoded.authorization,
     connections,
     credentialCiphertext: decoded.credentialCiphertext,
+    credentialExpiresAt: decoded.credentialExpiresAt,
   } satisfies StoredAggregate;
 });
 
@@ -254,9 +259,10 @@ const openAggregate = Effect.fn("CapsuleManagedDnsConnections.openAggregate")(fu
   custody: CredentialCustody.Interface,
   aggregate: StoredAggregate,
 ) {
-  const credential = yield* custody
+  const opened = yield* custody
     .open(aggregate.credentialCiphertext)
     .pipe(Effect.mapError((error) => mapCapabilityError("openCredential", error)));
+  const credential = { ...opened, expiresAt: aggregate.credentialExpiresAt };
   return {
     attachments: aggregate.attachments,
     authorization: aggregate.authorization,
@@ -265,10 +271,21 @@ const openAggregate = Effect.fn("CapsuleManagedDnsConnections.openAggregate")(fu
   } satisfies ManagedDnsConnections.Aggregate;
 });
 
+const projectConnection = Effect.fn("CapsuleManagedDnsConnections.projectConnection")(function* (
+  custody: CredentialCustody.Interface,
+  aggregate: StoredAggregate,
+  connection: StoredConnection,
+  authorization: Authorization = aggregate.authorization,
+) {
+  const opened = yield* openAggregate(custody, aggregate);
+  return Connection.project(connection, authorization, opened.credential);
+});
+
 const writeAuthorization = Effect.fn("CapsuleManagedDnsConnections.writeAuthorization")(function* (
   sql: SqlClient.SqlClient,
   authorization: Authorization,
   credentialCiphertext: string,
+  credentialExpiresAt: Date | null,
 ) {
   const encoded = yield* encodeAuthorization(authorization);
   yield* sql`INSERT INTO domain_provider_authorizations (
@@ -280,7 +297,7 @@ const writeAuthorization = Effect.fn("CapsuleManagedDnsConnections.writeAuthoriz
         ${JSON.stringify(encoded.capabilityEvidence)}::jsonb,
         ${JSON.stringify(encoded.scopes)}::jsonb, ${JSON.stringify(encoded.providerContext)}::jsonb,
         ${JSON.stringify(encoded.revocation)}::jsonb,
-        ${credentialCiphertext}, ${authorization.expiresAt}, ${authorization.createdAt}, NOW()
+        ${credentialCiphertext}, ${credentialExpiresAt}, ${authorization.createdAt}, NOW()
       ) ON CONFLICT (id) DO UPDATE SET
         provider_id = EXCLUDED.provider_id,
         subject_id = EXCLUDED.subject_id,
@@ -392,7 +409,7 @@ const makeRepository = Effect.gen(function* () {
                 );
               return {
                 attachment: existing,
-                connection: Connection.project(connection, aggregate.authorization),
+                connection: yield* projectConnection(custody, aggregate, connection),
               };
             }
             const reference = yield* bindings
@@ -420,7 +437,7 @@ const makeRepository = Effect.gen(function* () {
               )`;
             return {
               attachment: input.attachment,
-              connection: Connection.project(connection, aggregate.authorization),
+              connection: yield* projectConnection(custody, aggregate, connection),
             };
           }),
         ),
@@ -465,7 +482,12 @@ const makeRepository = Effect.gen(function* () {
                   return yield* Effect.fail(
                     conflict("connect", "Organization connection changed during reconnect"),
                   );
-                yield* writeAuthorization(sql, input.authorization, credentialCiphertext);
+                yield* writeAuthorization(
+                  sql,
+                  input.authorization,
+                  credentialCiphertext,
+                  input.credential.expiresAt,
+                );
                 if (existingConnection === undefined) {
                   const reference = yield* bindings
                     .owner(input.connection.ownerId)
@@ -510,7 +532,7 @@ const makeRepository = Effect.gen(function* () {
             yield* sql`DELETE FROM domain_provider_attachments WHERE id = ${attachmentId}`;
             return {
               attachment,
-              connection: Connection.project(connection, aggregate.authorization),
+              connection: yield* projectConnection(custody, aggregate, connection),
               remainingAttachments: aggregate.attachments.filter(
                 ({ connectionId, id }) => connectionId === connection.id && id !== attachmentId,
               ).length,
@@ -557,7 +579,7 @@ const makeRepository = Effect.gen(function* () {
                   WHERE id = ${connectionId}`;
                 return {
                   _tag: "Disconnected" as const,
-                  connection: Connection.project(connection, aggregate.authorization),
+                  connection: yield* projectConnection(custody, aggregate, connection),
                   remainingConnections: aggregate.connections.length - 1,
                 };
               }
@@ -569,11 +591,16 @@ const makeRepository = Effect.gen(function* () {
                 ...aggregate.authorization,
                 revocation: { _tag: "Pending", requestedAt: new Date() },
               };
-              yield* writeAuthorization(sql, pending, aggregate.credentialCiphertext);
+              yield* writeAuthorization(
+                sql,
+                pending,
+                aggregate.credentialCiphertext,
+                aggregate.credentialExpiresAt,
+              );
               return {
                 _tag: "Prepared" as const,
                 authorization: pending,
-                connection: Connection.project(connection, pending),
+                connection: yield* projectConnection(custody, aggregate, connection, pending),
               };
             }),
           )
@@ -686,6 +713,7 @@ const makeRepository = Effect.gen(function* () {
                 capabilityEvidence: [...byCapability.values()],
               },
               aggregate.credentialCiphertext,
+              aggregate.credentialExpiresAt,
             );
             return (
               (yield* getStored(authorizationId, "update")) ??
@@ -701,43 +729,50 @@ const makeRepository = Effect.gen(function* () {
           "recover",
           authorizationId,
           getStored(authorizationId, "update").pipe(
-            Effect.flatMap((aggregate) => {
-              if (aggregate === null)
-                return Effect.fail(missing("recover", "Provider authorization does not exist"));
-              if (aggregate.authorization.revocation._tag !== "Pending")
-                return Effect.fail(
-                  missing("recover", "Provider authorization is not awaiting revocation"),
-                );
-              const connection = aggregate.connections[0];
-              if (connection === undefined)
-                return Effect.fail(missing("recover", "Pending authorization has no connection"));
-              return revoke(aggregate.authorization).pipe(
-                Effect.andThen(
-                  Effect.gen(function* () {
-                    const current = yield* getStored(authorizationId, "update");
-                    if (current?.authorization.revocation._tag !== "Pending")
-                      return yield* Effect.fail(
-                        conflict("recover", "Revocation state changed before completion"),
-                      );
-                    yield* sql`DELETE FROM domain_provider_attachments WHERE connection_id IN
-                        (SELECT id FROM organization_domain_provider_connections
-                         WHERE authorization_id = ${authorizationId})`;
-                    yield* sql`DELETE FROM organization_domain_provider_connections
-                        WHERE authorization_id = ${authorizationId}`;
-                    yield* sql`DELETE FROM domain_provider_authorizations WHERE id = ${authorizationId}`;
+            Effect.flatMap((aggregate) =>
+              Effect.gen(function* () {
+                if (aggregate === null)
+                  return yield* Effect.fail(
+                    missing("recover", "Provider authorization does not exist"),
+                  );
+                if (aggregate.authorization.revocation._tag !== "Pending")
+                  return yield* Effect.fail(
+                    missing("recover", "Provider authorization is not awaiting revocation"),
+                  );
+                const connection = aggregate.connections[0];
+                if (connection === undefined)
+                  return yield* Effect.fail(
+                    missing("recover", "Pending authorization has no connection"),
+                  );
+                const projected = yield* projectConnection(custody, aggregate, connection);
+                return yield* revoke(aggregate.authorization).pipe(
+                  Effect.andThen(
+                    Effect.gen(function* () {
+                      const current = yield* getStored(authorizationId, "update");
+                      if (current?.authorization.revocation._tag !== "Pending")
+                        return yield* Effect.fail(
+                          conflict("recover", "Revocation state changed before completion"),
+                        );
+                      yield* sql`DELETE FROM domain_provider_attachments WHERE connection_id IN
+                         (SELECT id FROM organization_domain_provider_connections
+                          WHERE authorization_id = ${authorizationId})`;
+                      yield* sql`DELETE FROM organization_domain_provider_connections
+                         WHERE authorization_id = ${authorizationId}`;
+                      yield* sql`DELETE FROM domain_provider_authorizations WHERE id = ${authorizationId}`;
+                    }),
+                  ),
+                  Effect.as({
+                    connection: projected,
+                    remainingConnections: 0,
+                    revokedAuthorization: true as const,
                   }),
-                ),
-                Effect.as({
-                  connection: Connection.project(connection, aggregate.authorization),
-                  remainingConnections: 0,
-                  revokedAuthorization: true,
-                }),
-              );
-            }),
+                );
+              }),
+            ),
           ),
         ),
       ),
-    rotate: (authorizationId, credential, expiresAt) =>
+    rotate: (authorizationId, credential) =>
       custody.seal(credential).pipe(
         Effect.mapError((error) => mapCapabilityError("rotate", error)),
         Effect.flatMap((credentialCiphertext) =>
@@ -752,8 +787,9 @@ const makeRepository = Effect.gen(function* () {
                   );
                 yield* writeAuthorization(
                   sql,
-                  { ...aggregate.authorization, expiresAt },
+                  aggregate.authorization,
                   credentialCiphertext,
+                  credential.expiresAt,
                 );
                 return (
                   (yield* getStored(authorizationId, "update")) ??

@@ -37,7 +37,7 @@ Provider credentials never cross into the browser transport.
 | --------------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
 | OAuth or integration continuation | Short-lived and one-time | Store until callback consumption; loss may require restarting consent             |
 | Provider authorization            | Durable                  | Persist account context, capabilities, credential reference, and revocation state |
-| Encrypted credential              | Durable and secret       | Encrypt at rest, restrict access, rotate, and audit use                           |
+| Encrypted credential              | Durable and secret       | Encrypt tokens and access-token expiry, restrict access, rotate, and audit use    |
 | Owner binding and domain grant    | Durable                  | Bind provider authority to your tenant and permitted domains                      |
 | Plan attempt and authorization    | Durable through apply    | Correlate a server-owned plan with the digest the user reviewed                   |
 | Apply receipt                     | Durable                  | Preserve confirmed writes and partial outcomes for later cleanup                  |
@@ -144,6 +144,13 @@ The callback redirects to a previously validated same-origin path. After connect
 the provider client from the stored credential and non-secret provider context. Do not ask the
 browser to retain the provider token or account client.
 
+Before each OAuth-backed provider operation, load the credential and refresh within a short expiry
+skew. Serialize refresh per authorization, reload after acquiring the lock, then persist the entire
+rotated credential before restoring the provider session. Terminal OAuth grant failures should
+return a reconnect-required product state; transient provider failures should remain retryable.
+DomainKit's provider helper performs the exchange, but the host owns this lock-and-persist call
+stack.
+
 ## 4. Persist plan attempts before approval
 
 When the user asks to review DNS changes:
@@ -199,6 +206,7 @@ flattening it into DomainKit's observation result.
 - Every connection, reuse, plan, apply, cleanup, and disconnect route rechecks tenant authority.
 - Domain grants are checked in addition to provider scopes.
 - Interactive continuations are single-use and bound to the initiating flow.
+- OAuth refresh is serialized, persisted before use, and falls back to reconnect only for terminal grants.
 - Plans and cleanup plans are authorized by exact digest.
 - Partial receipts are stored before a retry or remediation path begins.
 - Removing one domain grant does not imply deleting DNS records.

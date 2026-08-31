@@ -59,7 +59,8 @@ and incompatible state becomes a conflict. DomainKit never silently overwrites D
 
 Provider credentials, OAuth state, durable connections, plans, receipts, authorization, and audit
 history remain owned by your application. DomainKit supplies the domain model and operations, not a
-hosted control plane.
+hosted control plane. Cloudflare's provider namespace includes credential refresh, while the host
+owns refresh locking, encrypted rotation, retry policy, and reconnect UX.
 
 ## Learn more
 

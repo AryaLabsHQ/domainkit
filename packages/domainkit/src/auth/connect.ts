@@ -12,7 +12,6 @@ import type * as Secret from "./secret.ts";
 export interface Authentication {
   readonly capabilityEvidence: ReadonlyArray<ProviderAuthorization.CapabilityEvidence>;
   readonly credential: Connection.StoredCredential;
-  readonly expiresAt: Date | null;
   /** Provider-specific subject identity used only during authentication; targets are selected later. */
   readonly providerAccountId: string;
   readonly providerContext: ProviderContext.Envelope;
@@ -181,7 +180,6 @@ export const connect = Effect.fn("Connection.connect")(function* (input: Connect
           authorizedById: input.authorizedById,
           capabilityEvidence: [...input.authentication.capabilityEvidence],
           createdAt: now,
-          expiresAt: input.authentication.expiresAt,
           id: authorizationId,
           method: input.method,
           providerContext: input.authentication.providerContext,
@@ -196,7 +194,6 @@ export const connect = Effect.fn("Connection.connect")(function* (input: Connect
             existing.authorization.capabilityEvidence,
             input.authentication.capabilityEvidence,
           ),
-          expiresAt: input.authentication.expiresAt,
           method: input.method,
           providerContext: input.authentication.providerContext,
           requiredCapabilities: [...input.requiredCapabilities],
@@ -275,7 +272,7 @@ export const start = Effect.fn("Connection.start")(function* (
     });
   }
   return StartResult.Connected({
-    connection: Connection.project(storedConnection, aggregate.authorization),
+    connection: Connection.project(storedConnection, aggregate.authorization, aggregate.credential),
   });
 });
 
@@ -326,7 +323,7 @@ export const complete = Effect.fn("Connection.complete")(function* (input: Compl
       retry: "safe",
     });
   }
-  return Connection.project(storedConnection, aggregate.authorization);
+  return Connection.project(storedConnection, aggregate.authorization, aggregate.credential);
 });
 
 function mergeEvidence(

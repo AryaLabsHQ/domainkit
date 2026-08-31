@@ -36,7 +36,6 @@ export const Schema = S.Struct({
   authorizedById: S.String,
   capabilityEvidence: S.Array(CapabilityEvidence),
   createdAt: S.DateFromString,
-  expiresAt: S.NullOr(S.DateFromString),
   id: S.String,
   method: S.Literals(["integration", "oauth2", "token"]),
   providerContext: ProviderContext.Envelope,

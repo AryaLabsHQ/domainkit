@@ -10,6 +10,11 @@ import * as Connection from "./connection.ts";
 
 export const manifest = EffectAuth.manifest;
 export const oauthMethod = EffectAuth.oauthMethod;
+export function refreshCredential(
+  options: EffectAuth.RefreshCredentialOptions,
+): Promise<ProviderSession.Credential> {
+  return Effect.runPromise(EffectAuth.refreshCredential(options));
+}
 export function restore(
   options: ProviderSession.RestoreInput & Pick<Client.Options, "baseUrl" | "fetch">,
 ): Promise<Client.Interface> {
@@ -20,6 +25,7 @@ export type {
   CredentialTarget,
   OAuthFlowOptions,
   OAuthMethodOptions,
+  RefreshCredentialOptions,
   SubjectResolverOptions,
   TokenValidatorOptions,
 } from "../providers/cloudflare/auth.ts";

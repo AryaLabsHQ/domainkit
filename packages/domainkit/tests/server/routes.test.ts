@@ -77,10 +77,10 @@ const providerLayer = Server.providersLayer([
             ],
             credential: {
               accessToken: Secret.make("provider-token"),
+              expiresAt: null,
               refreshToken: null,
               tokenType: "bearer",
             },
-            expiresAt: null,
             providerAccountId: "account-1",
             providerContext: { value: { domain }, version: "test.v1" },
             scopes: [],
@@ -221,10 +221,10 @@ const makeAsyncHandler = async () => {
               ],
               credential: {
                 accessToken: Secret.make("provider-token"),
+                expiresAt: null,
                 refreshToken: null,
                 tokenType: "bearer" as const,
               },
-              expiresAt: null,
               providerAccountId: "account-1",
               providerContext: {
                 value: { domain: domain ?? null },

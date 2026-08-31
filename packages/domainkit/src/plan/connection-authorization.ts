@@ -43,6 +43,7 @@ export const authorize = Effect.fn("ConnectionAuthorization.authorize")(function
         capability: "dns:write",
         authorization: aggregate.authorization,
         connection: storedConnection,
+        credential: aggregate.credential,
         domain: input.domain,
         providerId: input.plan.providerId,
       }),

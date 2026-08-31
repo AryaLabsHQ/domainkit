@@ -19,7 +19,6 @@ const authorization: ProviderAuthorization.ProviderAuthorization = {
     { capability: "dns:write", evidence: ProviderAuthorization.Evidence.Declared() },
   ],
   createdAt: new Date("2026-08-27T00:00:00.000Z"),
-  expiresAt: null,
   id: "authorization-1",
   method: "token",
   providerContext: { value: {}, version: "cloudflare.v1" },

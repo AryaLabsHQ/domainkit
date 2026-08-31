@@ -46,7 +46,7 @@ tester.run("domainkit/no-foreign-promise-outside-boundary", noForeignPromiseOuts
       code: "Effect.tryPromise(() => request());",
     },
     {
-      filename: path.join(process.cwd(), "packages/domainkit/src/auth/oauth.ts"),
+      filename: path.join(process.cwd(), "packages/domainkit/src/providers/cloudflare/auth.ts"),
       code: "Effect.tryPromise(() => request());",
     },
     {

@@ -104,7 +104,6 @@ export interface Interface {
   readonly rotate: (
     authorizationId: string,
     credential: Connection.StoredCredential,
-    expiresAt: Date | null,
   ) => Effect.Effect<Aggregate, Error>;
 }
 

@@ -58,7 +58,9 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof testingApi.ProviderConformance.run, "function");
     assert.strictEqual(typeof testingApi.ProviderConformance.fromAsync, "function");
     assert.strictEqual(typeof effectApi.Cloudflare.make, "function");
+    assert.strictEqual(typeof effectApi.Cloudflare.Auth.refreshCredential, "function");
     assert.strictEqual(typeof promiseApi.Cloudflare.make, "function");
+    assert.strictEqual(typeof promiseApi.Cloudflare.Auth.refreshCredential, "function");
     assert.strictEqual(typeof effectApi.Vercel.make, "function");
     assert.strictEqual(typeof promiseApi.Vercel.make, "function");
   });

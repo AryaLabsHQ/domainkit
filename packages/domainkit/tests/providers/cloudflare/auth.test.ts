@@ -23,6 +23,103 @@ describe("Cloudflare authentication", () => {
     assert.strictEqual(method.clientAuth, "none");
   });
 
+  it.effect("refreshes Cloudflare credentials and preserves an unrotated refresh token", () => {
+    const requests: Array<URLSearchParams> = [];
+    const fetch = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      requests.push(new URLSearchParams(String(init?.body ?? "")));
+      return Response.json({
+        access_token: "new-access-token",
+        expires_in: 3_600,
+        token_type: "bearer",
+      });
+    };
+    return Effect.gen(function* () {
+      const credential = yield* Cloudflare.Auth.refreshCredential({
+        client: { clientId: "client-1" },
+        clientAuth: "none",
+        credential: {
+          accessToken: Secret.make("old-access-token"),
+          expiresAt: new Date("2020-01-01T00:00:00.000Z"),
+          refreshToken: Secret.make("refresh-token"),
+          tokenType: "bearer",
+        },
+        fetch,
+      });
+      assert.strictEqual(credential.accessToken.expose(), "new-access-token");
+      assert.strictEqual(credential.refreshToken?.expose(), "refresh-token");
+      assert.ok(credential.expiresAt instanceof Date);
+      assert.strictEqual(requests[0]?.get("grant_type"), "refresh_token");
+      assert.strictEqual(requests[0]?.get("refresh_token"), "refresh-token");
+    });
+  });
+
+  it.effect("adopts a rotated Cloudflare refresh token", () =>
+    Effect.gen(function* () {
+      const credential = yield* Cloudflare.Auth.refreshCredential({
+        client: { clientId: "client-1" },
+        clientAuth: "none",
+        credential: {
+          accessToken: Secret.make("old-access-token"),
+          expiresAt: null,
+          refreshToken: Secret.make("old-refresh-token"),
+          tokenType: "bearer",
+        },
+        fetch: async () =>
+          Response.json({
+            access_token: "new-access-token",
+            refresh_token: "new-refresh-token",
+            token_type: "bearer",
+          }),
+      });
+      assert.strictEqual(credential.refreshToken?.expose(), "new-refresh-token");
+      assert.strictEqual(credential.expiresAt, null);
+    }),
+  );
+
+  it.effect("classifies terminal Cloudflare refresh failures as reconnect-required", () =>
+    Effect.gen(function* () {
+      const failure = yield* Cloudflare.Auth.refreshCredential({
+        client: { clientId: "client-1" },
+        clientAuth: "none",
+        credential: {
+          accessToken: Secret.make("old-access-token"),
+          expiresAt: new Date("2020-01-01T00:00:00.000Z"),
+          refreshToken: Secret.make("revoked-refresh-token"),
+          tokenType: "bearer",
+        },
+        fetch: async () =>
+          Response.json(
+            { error: "invalid_grant", error_description: "Refresh token revoked" },
+            { status: 400 },
+          ),
+      }).pipe(Effect.flip);
+      assert.strictEqual(failure._tag, "ConnectionError");
+      if (failure._tag === "ConnectionError") {
+        assert.strictEqual(failure.retry, "after-user-action");
+      }
+    }),
+  );
+
+  it.effect("keeps transient Cloudflare refresh failures retryable by the host", () =>
+    Effect.gen(function* () {
+      const failure = yield* Cloudflare.Auth.refreshCredential({
+        client: { clientId: "client-1" },
+        clientAuth: "none",
+        credential: {
+          accessToken: Secret.make("old-access-token"),
+          expiresAt: new Date("2020-01-01T00:00:00.000Z"),
+          refreshToken: Secret.make("refresh-token"),
+          tokenType: "bearer",
+        },
+        fetch: async () => {
+          throw new Error("network unavailable");
+        },
+      }).pipe(Effect.flip);
+      assert.strictEqual(failure._tag, "ProviderError");
+      if (failure._tag === "ProviderError") assert.strictEqual(failure.reason, "transport");
+    }),
+  );
+
   it.effect("validates an active token and probes selected-account zone access", () => {
     const recording = recordedFetch([
       {

@@ -17,15 +17,14 @@ const runtimeExitFiles = new Set([
 
 const foreignPromiseFiles = new Set([
   `${coreSource}auth/authorization-code.ts`,
-  `${coreSource}auth/oauth.ts`,
   `${coreSource}plan/canonical-json.ts`,
   `${coreSource}provider/provider.ts`,
   `${coreSource}provider/session.ts`,
   `${coreSource}server/index.ts`,
   `${coreSource}providers/cloudflare/client.ts`,
+  `${coreSource}providers/cloudflare/auth.ts`,
   `${coreSource}providers/vercel/auth.ts`,
   `${coreSource}providers/vercel/client.ts`,
-  `${coreSource}promise/oauth.ts`,
   `${coreSource}promise/connection-lifecycle.ts`,
   `${coreSource}promise/token.ts`,
   `${coreSource}stores/connection.ts`,

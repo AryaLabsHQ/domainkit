@@ -19,7 +19,7 @@ A durable provider authorization contains:
 - non-secret provider context needed to reconstruct the correct client;
 - a reference to the host-stored credential;
 - required capabilities and their evidence;
-- expiry and revocation state;
+- revocation state, plus credential expiry and refresh material behind the secret boundary;
 - one or more host-owner bindings and grants.
 
 The credential is part of one logical aggregate, but DomainKit does not choose how the host encrypts
@@ -37,6 +37,11 @@ not automatically authorize every host tenant or every visible zone.
 
 This separation allows one valid provider authorization to serve another domain for the same owner
 without repeating provider consent.
+
+An expired access token does not expire the provider authorization when a refresh token remains
+available. The host refreshes and atomically rotates the credential before a provider operation. A
+credential whose access token has expired and has no refresh token projects as an expired
+connection; pending revocation projects separately.
 
 ## Starting and completing a connection
 
