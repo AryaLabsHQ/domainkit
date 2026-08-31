@@ -175,11 +175,11 @@ body,
 }
 
 [data-workshop-select-popup] {
-  background: #ffffff;
-  border: 1px solid #e4e4e7;
+  background: var(--workshop-fill);
+  border: 1px solid var(--workshop-border);
   border-radius: 0.5rem;
-  box-shadow: 0 12px 32px rgb(15 23 42 / 14%);
-  color: #18181b;
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--workshop-text) 14%, transparent);
+  color: var(--workshop-text);
   min-width: var(--anchor-width);
   padding: 0.25rem;
   transform-origin: var(--transform-origin);
@@ -199,11 +199,11 @@ body,
 }
 
 [data-workshop-select-item][data-highlighted] {
-  background: #f4f4f5;
+  background: var(--workshop-bg);
 }
 
 [data-workshop-select-indicator] {
-  color: #2563eb;
+  color: var(--workshop-control);
   display: inline-flex;
 }
 

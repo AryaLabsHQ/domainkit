@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 
+import * as DomainName from "../src/domain/domain-name.ts";
 import * as DnsRecord from "../src/domain/dns-record.ts";
 import * as Transport from "../src/transport.ts";
 
@@ -10,9 +11,34 @@ const provider: Transport.Provider = {
   name: "Cloudflare",
 };
 
+const target: Transport.ProviderTarget = {
+  accountId: "account-1",
+  accountKind: "account",
+  zoneId: "zone-1",
+  zoneName: DomainName.parse("example.com"),
+};
+
+const connection: Transport.ProviderConnection = {
+  createdAt: new Date("2026-08-30T00:00:00.000Z"),
+  id: "connection-1",
+  method: "oauth2",
+  ownerId: "organization-1",
+  providerId: "cloudflare",
+  status: "active",
+};
+
+const attachment: Transport.DomainAttachment = {
+  connectionId: connection.id,
+  createdAt: new Date("2026-08-30T00:00:00.000Z"),
+  domain: DomainName.parse("example.com"),
+  id: "attachment-1",
+  target,
+};
+
 describe("application transport", () => {
   it("constructs connection methods without hand-authored tags", () => {
     assert.deepStrictEqual(Transport.Method.OAuth(), { _tag: "OAuth" });
+    assert.deepStrictEqual(Transport.Method.Integration(), { _tag: "Integration" });
     assert.deepStrictEqual(
       Transport.Method.Token({ parameters: { accountId: "account-1" }, token: "secret" }),
       {
@@ -29,11 +55,13 @@ describe("application transport", () => {
         _tag: "Disconnected",
         domain: "example.com",
         provider,
+        reusableConnections: [],
       }),
       {
         _tag: "Disconnected",
         domain: "example.com",
         provider,
+        reusableConnections: [],
       },
     );
   });
@@ -70,24 +98,24 @@ describe("application transport", () => {
         }),
       },
       connection: {
+        attach: async (input) => ({
+          _tag: "Connected",
+          attachment: { ...attachment, connectionId: input.connectionId, target: input.target },
+          connection: { ...connection, id: input.connectionId },
+          provider,
+        }),
         connect: async (input) => ({
           _tag: "Connected",
-          connectionId: "connection-1",
-          domain: input.domain,
+          attachment: { ...attachment, domain: DomainName.parse(input.domain) },
+          connection,
           provider,
         }),
         inspect: async (input) => ({ _tag: "Unsupported", domain: input.domain }),
-        removeDomain: async (input) => ({
-          _tag: "Removed",
-          connectionId: input.connectionId,
-          domain: input.domain,
-          remainingDomainCount: 0,
-        }),
-        reuse: async (input) => ({
-          _tag: "Connected",
-          connectionId: input.connectionId,
-          domain: input.domain,
-          provider,
+        detach: async () => ({
+          _tag: "Detached",
+          attachment,
+          connection,
+          remainingAttachments: 0,
         }),
       },
       provisioning: {
@@ -117,7 +145,7 @@ describe("application transport", () => {
         providerId: "cloudflare",
       });
       assert.strictEqual(result._tag, "Connected");
-      if (result._tag === "Connected") assert.strictEqual(result.connectionId, "connection-1");
+      if (result._tag === "Connected") assert.strictEqual(result.connection.id, "connection-1");
     }).pipe(Effect.provide(layer));
   });
 
@@ -133,10 +161,10 @@ describe("application transport", () => {
         plan: async () => Promise.reject(failure),
       },
       connection: {
+        attach: async () => Promise.reject(failure),
         connect: async () => Promise.reject(failure),
         inspect: async () => Promise.reject(failure),
-        removeDomain: async () => Promise.reject(failure),
-        reuse: async () => Promise.reject(failure),
+        detach: async () => Promise.reject(failure),
       },
       provisioning: {
         apply: async () => Promise.reject(failure),

@@ -71,8 +71,8 @@ export function useModel(
         get.set(state, State.Planning());
         return Effect.flatMap(Transport.Service, (transport) =>
           transport.cleanup.plan({
-            connectionId: connection.connectionId,
-            domain: connection.domain,
+            attachmentId: connection.attachment.id,
+            domain: connection.attachment.domain,
             receiptId,
           }),
         ).pipe(
@@ -90,8 +90,8 @@ export function useModel(
       get.set(state, State.Cleaning({ plan }));
       return Effect.flatMap(Transport.Service, (transport) =>
         transport.cleanup.apply({
-          connectionId: connection.connectionId,
-          domain: connection.domain,
+          attachmentId: connection.attachment.id,
+          domain: connection.attachment.domain,
           planDigest: plan.digest,
           receiptId,
         }),
@@ -116,7 +116,7 @@ export function useModel(
       );
     });
     return { command: execute, state };
-  }, [connection.connectionId, connection.domain, emit, receiptId, runtime]);
+  }, [connection.attachment.domain, connection.attachment.id, emit, receiptId, runtime]);
 }
 
 export function useController(
