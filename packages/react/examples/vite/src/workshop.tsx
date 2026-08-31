@@ -393,6 +393,17 @@ function makeTransport(
               ]
             : []),
         ];
+  const disconnected = {
+    _tag: "Disconnected" as const,
+    domain: state.domain,
+    provider,
+    reusableConnections: [
+      {
+        connection: Testing.connection({ providerId: state.providerId }),
+        targets,
+      },
+    ],
+  };
   const transport = Testing.makeFakeTransport({
     cleanupPlan: {
       _tag: "CleanupPlan",
@@ -422,18 +433,9 @@ function makeTransport(
             }),
             provider,
           }
-        : {
-            _tag: "Disconnected",
-            domain: state.domain,
-            provider,
-            reusableConnections: [
-              {
-                connection: Testing.connection({ providerId: state.providerId }),
-                targets,
-              },
-            ],
-          },
+        : disconnected,
   });
+  let detached = false;
   return Transport.layerFromAsync({
     ...transport,
     cleanup: {
@@ -450,6 +452,16 @@ function makeTransport(
           })),
         };
       },
+    },
+    connection: {
+      ...transport.connection,
+      detach: async (input) => {
+        const result = await transport.connection.detach(input);
+        detached = true;
+        return result;
+      },
+      inspect: (input) =>
+        detached ? Promise.resolve(disconnected) : transport.connection.inspect(input),
     },
   });
 }

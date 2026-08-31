@@ -43,7 +43,17 @@ describe("host lifecycle events", () => {
 
   it("commits disconnect state before notifying a throwing listener", async () => {
     const user = userEvent.setup();
-    const transport = Testing.makeFakeTransport({ inspect: connection });
+    const transport = Testing.makeFakeTransport({
+      inspect: [
+        connection,
+        {
+          _tag: "Disconnected",
+          domain: connection.attachment.domain,
+          provider: connection.provider,
+          reusableConnections: [],
+        },
+      ],
+    });
     const DisconnectHarness = () => {
       const controller = Connection.useController(connection.attachment.domain);
       return (

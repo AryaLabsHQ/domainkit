@@ -39,25 +39,6 @@ const sameTarget = (left: Transport.ProviderTarget, right: Transport.ProviderTar
   left.zoneId === right.zoneId &&
   left.zoneName === right.zoneName;
 
-const reusableConnectionsAfterDetach = (
-  reusableConnections: ReadonlyArray<Transport.ReusableConnection>,
-  result: Transport.DetachResult,
-): ReadonlyArray<Transport.ReusableConnection> => {
-  const existing = reusableConnections.find(
-    ({ connection }) => connection.id === result.connection.id,
-  );
-  const targets =
-    existing === undefined
-      ? [result.attachment.target]
-      : existing.targets.some((target) => sameTarget(target, result.attachment.target))
-        ? existing.targets
-        : [...existing.targets, result.attachment.target];
-  return [
-    ...reusableConnections.filter(({ connection }) => connection.id !== result.connection.id),
-    { connection: result.connection, targets },
-  ];
-};
-
 export interface Controller {
   readonly attach: (
     connection: Transport.ReusableConnection,
@@ -86,7 +67,6 @@ export function useModel(domain: string): Model {
   const { emit, navigate, runtime } = useDomainKit();
   return useMemo(() => {
     const actionState = Atom.make<State | undefined>(undefined);
-    let reusableConnections: ReadonlyArray<Transport.ReusableConnection> = [];
     const inspect = runtime.atom(
       Effect.flatMap(Transport.Service, (transport) => transport.connection.inspect({ domain })),
     );
@@ -103,7 +83,6 @@ export function useModel(domain: string): Model {
     });
     const command = runtime.fn<Command>()((input, get) => {
       if (input._tag === "Retry") {
-        reusableConnections = [];
         get.set(actionState, undefined);
         get.refresh(inspect);
         return Effect.void;
@@ -113,19 +92,21 @@ export function useModel(domain: string): Model {
         if (snapshot._tag !== "Connected") return Effect.void;
         get.set(actionState, State.Detaching({ snapshot }));
         return Effect.flatMap(Transport.Service, (transport) =>
-          transport.connection.detach({
-            attachmentId: snapshot.attachment.id,
-            preserveDns: true,
-          }),
+          Effect.flatMap(
+            transport.connection.detach({
+              attachmentId: snapshot.attachment.id,
+              preserveDns: true,
+            }),
+            (result) =>
+              Effect.map(transport.connection.inspect({ domain }), (refreshed) => ({
+                refreshed,
+                result,
+              })),
+          ),
         ).pipe(
-          Effect.tap((result) =>
+          Effect.tap(({ refreshed, result }) =>
             Effect.sync(() => {
-              get.set(actionState, {
-                _tag: "Disconnected",
-                domain: snapshot.attachment.domain,
-                provider: snapshot.provider,
-                reusableConnections: reusableConnectionsAfterDetach(reusableConnections, result),
-              });
+              get.set(actionState, refreshed);
               emit(
                 LifecycleEvent.DomainDetached({
                   connection: snapshot,
@@ -172,7 +153,6 @@ export function useModel(domain: string): Model {
           sameTarget(candidate, input.target),
         );
         if (target === undefined) return Effect.void;
-        reusableConnections = snapshot.reusableConnections;
         get.set(actionState, State.Submitting({ snapshot }));
         return complete(
           Effect.flatMap(Transport.Service, (transport) =>
@@ -185,7 +165,6 @@ export function useModel(domain: string): Model {
           "attach",
         );
       }
-      reusableConnections = snapshot.reusableConnections;
       get.set(actionState, State.Submitting({ snapshot }));
       if (input._tag === "Connect") {
         return complete(
