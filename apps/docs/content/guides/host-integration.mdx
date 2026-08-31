@@ -81,6 +81,10 @@ recoverable saga behind the same interface.
 Use `domainkit/testing`'s in-memory repository in tests only. It does not encrypt credentials or
 provide production durability.
 
+PostgreSQL hosts may instead use [`@domainkit/capsuledb`](/docs/reference/capsuledb). The optional
+package owns the lifecycle schema and repository while your application supplies its existing
+`PgClient`, encrypted credential custody, and tenant/domain binding capability.
+
 ## 3. Mount provider connection routes
 
 `domainkit/server` supplies one catch-all route program for the shared connection mechanics. In an
