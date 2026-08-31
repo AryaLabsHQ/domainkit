@@ -1,6 +1,12 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: patch\n---\n\n## Keep the React package aligned with DomainKit core\n\nValidate the packed React artifact against the current core version so releases cannot publish an\nincompatible stale dependency range.\n"
-    filename: 2026-08-30-a1f3-react-core-release-alignment.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Compose stable connected-domain actions\n\nCompose review, cleanup, and disconnect actions into a stable connected-provider surface with host-owned semantic tokens.\n"
+    filename: react-domain-actions.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Add host theme presets\n\nAdd seven theme presets and token-complete workshop coverage for light and dark host integrations.\n"
+    filename: react-workshop-themes.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Expose structured lifecycle events\n\nExpose structured lifecycle events from `DomainKit.Root` after successful user-triggered mutations.\n"
+    filename: react-lifecycle-events.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
@@ -10,7 +16,9 @@ core:packages:
   - id: npm:domainkit
     updated: true
   - changelogIds:
-      - 2026-08-30-a1f3-react-core-release-alignment.md
+      - react-domain-actions.md
+      - react-workshop-themes.md
+      - react-lifecycle-events.md
     id: npm:@domainkit/react
     updated: true
 npm:packages:
