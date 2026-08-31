@@ -21,10 +21,10 @@ const authentication = (token = "token"): Connection.Authentication => ({
   ],
   credential: {
     accessToken: Secret.make(token),
+    expiresAt: null,
     refreshToken: null,
     tokenType: "bearer",
   },
-  expiresAt: null,
   providerAccountId: "account-1",
   providerContext: { value: {}, version: "example.v1" },
   scopes: ["dns:write"],

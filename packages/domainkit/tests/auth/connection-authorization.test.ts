@@ -23,7 +23,6 @@ const authorization: ProviderAuthorization.ProviderAuthorization = {
     { capability: "dns:write", evidence: ProviderAuthorization.Evidence.Declared() },
   ],
   createdAt: new Date("2026-08-28T00:00:00.000Z"),
-  expiresAt: null,
   id: "authorization-1",
   method: "oauth2",
   providerContext: { value: {}, version: "test.v1" },
@@ -84,6 +83,7 @@ describe("connection authorization", () => {
         connection: { ...connection, authorizationId: authorization.id },
         credential: {
           accessToken: Secret.make("token"),
+          expiresAt: null,
           refreshToken: null,
           tokenType: "bearer",
         },
@@ -118,6 +118,7 @@ describe("connection authorization", () => {
         connection: { ...connection, authorizationId: authorization.id },
         credential: {
           accessToken: Secret.make("token"),
+          expiresAt: null,
           refreshToken: null,
           tokenType: "bearer",
         },
@@ -154,6 +155,7 @@ describe("connection authorization", () => {
         connection: { ...connection, authorizationId: authorization.id },
         credential: {
           accessToken: Secret.make("token"),
+          expiresAt: null,
           refreshToken: null,
           tokenType: "bearer",
         },

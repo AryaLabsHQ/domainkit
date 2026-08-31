@@ -54,7 +54,6 @@ const authorization = (
     },
   ],
   createdAt: new Date("2026-08-31T00:00:00.000Z"),
-  expiresAt: null,
   id,
   method: "token",
   providerContext: { value: {}, version: "test.v1" },
@@ -78,6 +77,7 @@ const connection = (
 
 const credential = (token: string): ManagedDnsConnections.StoredCredential => ({
   accessToken: Secret.make(token),
+  expiresAt: null,
   refreshToken: null,
   tokenType: "bearer",
 });

@@ -160,8 +160,12 @@ export function tokenConnectionMethod(
           capability,
           evidence: ProviderAuthorization.Evidence.Introspected({ observedAt }),
         })),
-        credential: { accessToken: token, refreshToken: null, tokenType: "bearer" },
-        expiresAt: validated.expiresAt,
+        credential: {
+          accessToken: token,
+          expiresAt: validated.expiresAt,
+          refreshToken: null,
+          tokenType: "bearer",
+        },
         providerAccountId: validated.accountId,
         providerContext: yield* contextCodec.encode(
           options.context._tag === "team"
@@ -193,10 +197,10 @@ export const integrationAuthentication = Effect.fn("VercelAuth.integrationAuthen
       })),
       credential: {
         accessToken: exchanged.accessToken,
+        expiresAt: null,
         refreshToken: null,
         tokenType: "bearer",
       },
-      expiresAt: null,
       providerAccountId:
         exchanged.context._tag === "team" ? exchanged.context.teamId : exchanged.userId,
       providerContext: yield* contextCodec.encode(
@@ -242,9 +246,9 @@ export function restore(
       );
     }
     if (
-      options.authorization.expiresAt !== null &&
-      (Number.isNaN(options.authorization.expiresAt.valueOf()) ||
-        options.authorization.expiresAt <= new Date())
+      options.credential.expiresAt !== null &&
+      (Number.isNaN(options.credential.expiresAt.valueOf()) ||
+        options.credential.expiresAt <= new Date())
     ) {
       return yield* Effect.fail(
         failure("restore", "Vercel authorization has expired", "authentication"),

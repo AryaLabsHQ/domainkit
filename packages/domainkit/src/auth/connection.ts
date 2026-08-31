@@ -66,6 +66,7 @@ export interface StoredConnection extends S.Schema.Type<typeof StoredConnection>
 /** Internal credential material retained by the host's persistence implementation. */
 export interface StoredCredential {
   readonly accessToken: Secret;
+  readonly expiresAt: Date | null;
   readonly refreshToken: Secret | null;
   readonly tokenType: string;
 }
@@ -117,12 +118,15 @@ export const encode = S.encodeSync(ProviderConnection);
 export function project(
   connection: StoredConnection,
   authorization: ProviderAuthorization.ProviderAuthorization,
+  credential: StoredCredential,
   now = new Date(),
 ): ProviderConnection {
   const status: ConnectionStatus =
     authorization.revocation._tag === "Pending"
       ? "revocation-pending"
-      : authorization.expiresAt !== null && authorization.expiresAt <= now
+      : credential.refreshToken === null &&
+          credential.expiresAt !== null &&
+          (Number.isNaN(credential.expiresAt.valueOf()) || credential.expiresAt <= now)
         ? "expired"
         : "active";
   return {
@@ -141,31 +145,28 @@ export function assertAttachment(input: {
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly capability: ProviderAuthorization.Capability;
   readonly connection: StoredConnection | ProviderConnection;
+  readonly credential?: StoredCredential;
   readonly domain: string;
   readonly now?: Date;
   readonly providerId: string;
 }): DomainName.DomainName {
+  const credentialStatus =
+    "status" in input.connection
+      ? input.connection.status
+      : input.credential === undefined
+        ? null
+        : project(input.connection, input.authorization, input.credential, input.now).status;
   if (
     input.connection.providerId !== input.providerId ||
     input.authorization.providerId !== input.providerId ||
     input.authorization.revocation._tag !== "Active" ||
-    input.attachment.connectionId !== input.connection.id
+    input.attachment.connectionId !== input.connection.id ||
+    credentialStatus !== "active"
   ) {
     throw authorizationError(
       "Domain attachment is not active for this provider",
       "Connection.assertAttachment",
     );
-  }
-  if (input.authorization.expiresAt !== null) {
-    if (Number.isNaN(input.authorization.expiresAt.getTime())) {
-      throw authorizationError(
-        "Provider authorization expiration is invalid",
-        "Connection.assertAttachment",
-      );
-    }
-    if (input.authorization.expiresAt <= (input.now ?? new Date())) {
-      throw authorizationError("Provider authorization has expired", "Connection.assertAttachment");
-    }
   }
   if (!input.authorization.requiredCapabilities.includes(input.capability)) {
     throw authorizationError(

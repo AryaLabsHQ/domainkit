@@ -1,4 +1,4 @@
-import type * as oauth from "oauth4webapi";
+import * as oauth from "oauth4webapi";
 import { Clock, Effect, Schema } from "effect";
 
 import * as AuthorizationCode from "../../auth/authorization-code.ts";
@@ -169,8 +169,12 @@ export function tokenConnectionMethod(
           capability,
           evidence: ProviderAuthorization.Evidence.Introspected({ observedAt }),
         })),
-        credential: { accessToken: token, refreshToken: null, tokenType: "bearer" },
-        expiresAt: validated.expiresAt,
+        credential: {
+          accessToken: token,
+          expiresAt: validated.expiresAt,
+          refreshToken: null,
+          tokenType: "bearer",
+        },
         providerAccountId: validated.accountId,
         providerContext: yield* contextCodec.encode(
           options.tokenKind === "account"
@@ -202,13 +206,13 @@ export const oauthAuthentication = Effect.fn("CloudflareAuth.oauthAuthentication
     })),
     credential: {
       accessToken: options.accessToken,
+      expiresAt: resolved.expiresAt,
       refreshToken:
         options.tokens.refresh_token === undefined
           ? null
           : Secret.Value.from(options.tokens.refresh_token),
       tokenType: options.tokens.token_type,
     },
-    expiresAt: resolved.expiresAt,
     providerAccountId: resolved.accountId,
     providerContext: yield* contextCodec.encode({ tokenKind: "user" }),
     scopes: (options.tokens.scope ?? "").split(" ").filter(Boolean),
@@ -249,9 +253,9 @@ export function restore(
       );
     }
     if (
-      options.authorization.expiresAt !== null &&
-      (Number.isNaN(options.authorization.expiresAt.valueOf()) ||
-        options.authorization.expiresAt <= new Date())
+      options.credential.expiresAt !== null &&
+      (Number.isNaN(options.credential.expiresAt.valueOf()) ||
+        options.credential.expiresAt <= new Date())
     ) {
       return yield* Effect.fail(
         failure("restore", "Cloudflare authorization has expired", "authentication"),
@@ -270,6 +274,67 @@ export function restore(
     });
   });
 }
+
+export interface RefreshCredentialOptions {
+  readonly client: ProviderAuth.OAuthClientConfiguration;
+  readonly clientAuth: ProviderAuth.OAuthMethod["clientAuth"];
+  readonly credential: ProviderSession.Credential;
+  readonly fetch?: Client.Fetch;
+}
+
+/** Exchanges a Cloudflare refresh token for a fresh provider credential. */
+export const refreshCredential = Effect.fn("CloudflareAuth.refreshCredential")(function* (
+  options: RefreshCredentialOptions,
+) {
+  if (options.credential.refreshToken === null) {
+    return yield* new Connection.Error({
+      category: "authorization",
+      message: "Cloudflare credential has no refresh token",
+      operation: "CloudflareAuth.refreshCredential",
+      retry: "after-user-action",
+    });
+  }
+  const refreshToken = options.credential.refreshToken;
+  const client: oauth.Client = { client_id: options.client.clientId };
+  const authentication = yield* Effect.try({
+    try: () => clientAuthentication(options.clientAuth, options.client),
+    catch: () =>
+      new Connection.Error({
+        category: "authorization",
+        message: "Cloudflare OAuth client authentication is invalid",
+        operation: "CloudflareAuth.refreshCredential",
+        retry: "never",
+      }),
+  });
+  const fetch = options.fetch;
+  const tokens = yield* Effect.tryPromise({
+    try: async (signal) => {
+      const request = await oauth.refreshTokenGrantRequest(
+        authorizationServer,
+        client,
+        authentication,
+        refreshToken.expose(),
+        fetch === undefined
+          ? { signal }
+          : {
+              signal,
+              [oauth.customFetch]: (url, init) => fetch(url, { ...init, body: init.body }),
+            },
+      );
+      return oauth.processRefreshTokenResponse(authorizationServer, client, request);
+    },
+    catch: (cause) => refreshFailure(cause),
+  });
+  const now = yield* Clock.currentTimeMillis;
+  return {
+    accessToken: Secret.Value.from(tokens.access_token),
+    expiresAt:
+      typeof tokens.expires_in === "number" ? new Date(now + tokens.expires_in * 1_000) : null,
+    refreshToken:
+      tokens.refresh_token === undefined ? refreshToken : Secret.Value.from(tokens.refresh_token),
+    tokenType: tokens.token_type,
+  } satisfies ProviderSession.Credential;
+});
 
 export type OAuthFlowOptions = SubjectResolverOptions & {
   readonly client: ProviderAuth.OAuthClientConfiguration;
@@ -325,4 +390,34 @@ function failure(
   reason: DnsProvider.ErrorReason,
 ): DnsProvider.Error {
   return new DnsProvider.Error({ message, operation, providerId: "cloudflare", reason });
+}
+
+function clientAuthentication(
+  method: ProviderAuth.OAuthMethod["clientAuth"],
+  client: ProviderAuth.OAuthClientConfiguration,
+): oauth.ClientAuth {
+  if (method === "none") return oauth.None();
+  if (client.clientSecret === undefined) throw new Error("Client secret is required");
+  return method === "client_secret_basic"
+    ? oauth.ClientSecretBasic(client.clientSecret.expose())
+    : oauth.ClientSecretPost(client.clientSecret.expose());
+}
+
+function refreshFailure(cause: unknown): Connection.Error | DnsProvider.Error {
+  if (
+    cause instanceof oauth.ResponseBodyError &&
+    ["invalid_client", "invalid_grant"].includes(cause.error)
+  ) {
+    return new Connection.Error({
+      category: "authorization",
+      message: "Cloudflare authorization can no longer be refreshed",
+      operation: "CloudflareAuth.refreshCredential",
+      retry: "after-user-action",
+    });
+  }
+  return failure(
+    "refreshCredential",
+    cause instanceof Error ? cause.message : "Cloudflare token refresh failed",
+    cause instanceof oauth.ResponseBodyError ? "response" : "transport",
+  );
 }

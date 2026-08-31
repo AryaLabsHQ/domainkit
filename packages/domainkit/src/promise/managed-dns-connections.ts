@@ -42,7 +42,6 @@ export interface AsyncInterface {
   readonly rotate: (
     authorizationId: string,
     credential: Connection.StoredCredential,
-    expiresAt: Date | null,
   ) => Promise<Lifecycle.Aggregate>;
 }
 
@@ -122,9 +121,9 @@ export const layerFromAsync = (repository: AsyncInterface): Layer.Layer<Lifecycl
           }),
         catch: (cause) => failure("ManagedDnsConnections.recover", cause),
       }),
-    rotate: (authorizationId, credential, expiresAt) =>
+    rotate: (authorizationId, credential) =>
       Effect.tryPromise({
-        try: () => repository.rotate(authorizationId, credential, expiresAt),
+        try: () => repository.rotate(authorizationId, credential),
         catch: (cause) => failure("ManagedDnsConnections.rotate", cause),
       }),
   });
@@ -157,8 +156,8 @@ export const toAsync = (service: Lifecycle.Interface): AsyncInterface => ({
         revoke: (authorization) => Effect.promise(() => revoke(authorization)),
       }),
     ),
-  rotate: (authorizationId, credential, expiresAt) =>
-    Effect.runPromise(service.rotate(authorizationId, credential, expiresAt)),
+  rotate: (authorizationId, credential) =>
+    Effect.runPromise(service.rotate(authorizationId, credential)),
 });
 
 export const from = (repository: AsyncInterface): AsyncInterface => repository;

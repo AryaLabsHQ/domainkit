@@ -28,6 +28,12 @@ bindings. SQL hosts may transact it; hosts that split database and vault storage
 idempotent recoverable saga behind the same seam. Interactive continuations are short-lived and
 one-time, but Redis or another cache is never authoritative for the durable authorization.
 
+Access-token expiry is credential metadata rather than provider-authorization expiry. A credential
+whose access token has expired remains refreshable when it retains a refresh token. Provider
+adapters may implement the protocol-specific exchange and classify terminal grant failures, while
+the host serializes concurrent attempts, persists the complete rotated credential before use, and
+decides when to present reconnect UX.
+
 Connection grants remain explicit and are enforced by DomainKit in addition to provider scopes.
 Capability evidence records whether access was declared, introspected, or exercised. Final-binding
 revocation retains durable retry state until the provider confirms revocation. The package contains
@@ -39,6 +45,7 @@ encryption system.
 - Hosts can integrate DomainKit with their existing security and tenancy model.
 - The core package never chooses plaintext credential persistence or a cache as durable truth.
 - Hosts are responsible for encryption, access control, rotation, audit logging, and consent UX.
+- Provider authorization remains durable across ordinary access-token refreshes.
 - DomainKit can test lifecycle semantics without claiming to supply production secret storage.
 
 ## Alternatives considered

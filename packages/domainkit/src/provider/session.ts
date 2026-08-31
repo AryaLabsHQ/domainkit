@@ -41,6 +41,7 @@ export const Resolution = Data.taggedEnum<Resolution>();
 /** The credential material a provider adapter needs to restore a session. */
 export interface Credential {
   readonly accessToken: Secret.Value;
+  readonly expiresAt: Date | null;
   readonly refreshToken: Secret.Value | null;
   readonly tokenType: string;
 }
@@ -49,7 +50,6 @@ export interface Credential {
 export type Authorization = Pick<
   ProviderAuthorization.ProviderAuthorization,
   | "capabilityEvidence"
-  | "expiresAt"
   | "method"
   | "providerContext"
   | "providerId"

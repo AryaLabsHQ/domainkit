@@ -42,8 +42,9 @@ function ownerConnection(
 function publicConnection(
   connection: Connection.StoredConnection,
   authorization: ProviderAuthorization.ProviderAuthorization,
+  credential: Connection.StoredCredential,
 ): Connection.ProviderConnection {
-  return Connection.project(connection, authorization);
+  return Connection.project(connection, authorization, credential);
 }
 
 export function make(options: Options = {}): Lifecycle.Interface {
@@ -112,7 +113,7 @@ export function make(options: Options = {}): Lifecycle.Interface {
     yield* revoke(pending.authorization);
     yield* remove("completeRevocation", pending.authorization.id);
     return {
-      connection: publicConnection(connection, pending.authorization),
+      connection: publicConnection(connection, pending.authorization, pending.credential),
       remainingConnections: 0,
       revokedAuthorization: true,
     } satisfies Lifecycle.DisconnectResult;
@@ -147,7 +148,11 @@ export function make(options: Options = {}): Lifecycle.Interface {
             }
             return {
               attachment: existing,
-              connection: publicConnection(connection, aggregate.authorization),
+              connection: publicConnection(
+                connection,
+                aggregate.authorization,
+                aggregate.credential,
+              ),
             };
           }
           const duplicateId = [...(yield* Ref.get(state)).values()].some((candidate) =>
@@ -180,7 +185,7 @@ export function make(options: Options = {}): Lifecycle.Interface {
           yield* commit("attach", next);
           return {
             attachment,
-            connection: publicConnection(connection, aggregate.authorization),
+            connection: publicConnection(connection, aggregate.authorization, aggregate.credential),
           };
         }),
       ),
@@ -253,7 +258,11 @@ export function make(options: Options = {}): Lifecycle.Interface {
             yield* commit("detach", next);
             return {
               attachment,
-              connection: publicConnection(connection, aggregate.authorization),
+              connection: publicConnection(
+                connection,
+                aggregate.authorization,
+                aggregate.credential,
+              ),
               remainingAttachments: next.attachments.filter(
                 ({ connectionId }) => connectionId === connection.id,
               ).length,
@@ -289,7 +298,11 @@ export function make(options: Options = {}): Lifecycle.Interface {
             const next: Lifecycle.Aggregate = { ...aggregate, connections: remainingConnections };
             yield* commit("disconnectConnection", next);
             return {
-              connection: publicConnection(connection, aggregate.authorization),
+              connection: publicConnection(
+                connection,
+                aggregate.authorization,
+                aggregate.credential,
+              ),
               remainingConnections: remainingConnections.length,
               revokedAuthorization: false,
             };
@@ -369,7 +382,7 @@ export function make(options: Options = {}): Lifecycle.Interface {
           return yield* finishRevocation(aggregate, connection, revoke);
         }).pipe(Effect.withSpan("ManagedDnsConnections.recover")),
       ),
-    rotate: (authorizationId, credential, expiresAt) =>
+    rotate: (authorizationId, credential) =>
       serialize(
         Effect.gen(function* () {
           const aggregate = yield* get(authorizationId);
@@ -378,7 +391,6 @@ export function make(options: Options = {}): Lifecycle.Interface {
           }
           const next = {
             ...aggregate,
-            authorization: { ...aggregate.authorization, expiresAt },
             credential,
           };
           yield* commit("rotate", next);

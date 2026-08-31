@@ -85,6 +85,35 @@ discovers the account from the known zone, and commits the provider authorizatio
 non-secret provider context in ordinary application records; the credential belongs behind the
 repository's secret-storage boundary.
 
+## Refresh an OAuth credential
+
+OAuth access-token expiry belongs to the stored credential, not the durable provider authorization.
+Before reconstructing a Cloudflare session, compare `credential.expiresAt` with a short host-defined
+skew and refresh when needed:
+
+```ts
+const freshCredential = await Cloudflare.Auth.refreshCredential({
+  client: {
+    clientId,
+    clientSecret: Secret.make(clientSecret),
+  },
+  clientAuth: "client_secret_basic",
+  credential,
+});
+
+await repository.rotate(authorization.id, freshCredential);
+```
+
+`refreshCredential` preserves the existing refresh token when Cloudflare omits one and adopts a
+rotated token when Cloudflare returns one. Persist the complete returned credential before using it.
+An `invalid_grant` or `invalid_client` response is a terminal `Connection.Error` with
+`retry: "after-user-action"`; send the customer through connection again. Transport and other
+provider failures remain `DnsProvider.Error` values so the host can retry without pretending that
+consent was revoked.
+
+Serialize concurrent refresh attempts in the host. DomainKit performs the provider exchange, while
+your application owns the lock, encrypted write, retry policy, and reconnect UX.
+
 ## Connect an API token
 
 Use a token route when the customer supplies a scoped Cloudflare API token:
@@ -112,20 +141,19 @@ visible zone.
 
 ## Reconstruct the provider
 
-After loading and decoding the stored credential and provider context, construct the account-scoped
-provider on the server:
+After loading and, when necessary, refreshing the stored credential, restore the credential-scoped
+session on the server:
 
 ```ts
-const provider = Cloudflare.make({
-  accountId: authorization.providerAccountId,
-  capabilities: authorization.requiredCapabilities,
-  token: credential.accessToken,
-  tokenKind: context.tokenKind,
+const session = await Cloudflare.Auth.restore({
+  authorization,
+  credential,
 });
 ```
 
-Pass that provider directly through the Promise APIs' `provider` fields for planning, apply, and
-receipt-bound cleanup. Authoritative observation also needs the zone-tagged verification wrapper:
+Resolve an exact provider target through the session, then pass the resulting provider through the
+Promise APIs' `provider` fields for planning, apply, and receipt-bound cleanup. Authoritative
+observation also needs the zone-tagged verification wrapper:
 
 ```ts
 const zone = DomainName.parse("example.com");

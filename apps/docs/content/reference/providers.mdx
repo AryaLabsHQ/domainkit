@@ -44,7 +44,9 @@ Your host owns those stores and reconstructs a provider service for each authori
 
 `Cloudflare` supports OAuth and API-token authentication, account discovery from an authorized
 zone, zone discovery, and provider reconstruction from a stored non-secret account context plus a
-host-held credential.
+host-held credential. `Cloudflare.Auth.refreshCredential` exchanges a host-held refresh token,
+preserves or adopts refresh-token rotation, and returns the complete credential the host must
+persist. The host owns refresh serialization and reconnect policy.
 
 ### Vercel
 

@@ -84,6 +84,7 @@ describe("ProviderSession", () => {
     const authorization = cloudflareAuthorization();
     const credential = {
       accessToken: Secret.make("cloudflare-token"),
+      expiresAt: null,
       refreshToken: null,
       tokenType: "bearer",
     } as const;
@@ -111,7 +112,6 @@ describe("ProviderSession", () => {
           "pending revocation",
           { ...authorization, revocation: { _tag: "Pending", requestedAt: new Date() } },
         ],
-        ["expired", { ...authorization, expiresAt: new Date("2020-01-01T00:00:00.000Z") }],
         [
           "insufficient capability",
           {
@@ -129,6 +129,11 @@ describe("ProviderSession", () => {
         assert.strictEqual(failure.operation, "restore");
         assert.ok(failure.message.length > 0, name);
       }
+      const expired = yield* CloudflareAuth.restore({
+        authorization,
+        credential: { ...credential, expiresAt: new Date("2020-01-01T00:00:00.000Z") },
+      }).pipe(Effect.flip);
+      assert.strictEqual(expired.reason, "authentication");
     });
   });
 
@@ -150,6 +155,7 @@ describe("ProviderSession", () => {
         }),
         credential: {
           accessToken: Secret.make("cloudflare-token"),
+          expiresAt: null,
           refreshToken: null,
           tokenType: "bearer",
         },
@@ -177,6 +183,7 @@ describe("ProviderSession", () => {
           authorization: vercelAuthorization(),
           credential: {
             accessToken: Secret.make("vercel-token"),
+            expiresAt: null,
             refreshToken: null,
             tokenType: "bearer",
           },
@@ -208,7 +215,6 @@ function cloudflareAuthorization(
         evidence: ProviderAuthorization.Evidence.Introspected({ observedAt: new Date() }),
       },
     ],
-    expiresAt: null,
     method: "oauth2",
     providerContext: { value: { tokenKind: "user" }, version: "cloudflare.v1" },
     providerId: "cloudflare",
@@ -230,7 +236,6 @@ function vercelAuthorization(): ProviderSession.Authorization {
         evidence: ProviderAuthorization.Evidence.Introspected({ observedAt: new Date() }),
       },
     ],
-    expiresAt: null,
     method: "integration",
     providerContext: {
       value: { _tag: "team", installationId: "icfg-1", teamId: "team-1" },
