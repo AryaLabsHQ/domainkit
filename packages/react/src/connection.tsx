@@ -97,24 +97,37 @@ export function useModel(domain: string): Model {
               attachmentId: snapshot.attachment.id,
               preserveDns: true,
             }),
-            (result) =>
-              Effect.map(transport.connection.inspect({ domain }), (refreshed) => ({
-                refreshed,
-                result,
-              })),
+            (result) => {
+              const fallback: Disconnected = {
+                _tag: "Disconnected",
+                domain: snapshot.attachment.domain,
+                provider: snapshot.provider,
+                reusableConnections: [
+                  {
+                    connection: result.connection,
+                    targets: [result.attachment.target],
+                  },
+                ],
+              };
+              return Effect.flatMap(
+                Effect.sync(() => {
+                  get.set(actionState, fallback);
+                  emit(
+                    LifecycleEvent.DomainDetached({
+                      connection: snapshot,
+                      result,
+                    }),
+                  );
+                }),
+                () =>
+                  transport.connection.inspect({ domain }).pipe(
+                    Effect.catch(() => Effect.succeed(fallback)),
+                    Effect.tap((refreshed) => Effect.sync(() => get.set(actionState, refreshed))),
+                  ),
+              );
+            },
           ),
         ).pipe(
-          Effect.tap(({ refreshed, result }) =>
-            Effect.sync(() => {
-              get.set(actionState, refreshed);
-              emit(
-                LifecycleEvent.DomainDetached({
-                  connection: snapshot,
-                  result,
-                }),
-              );
-            }),
-          ),
           Effect.catch((error) => Effect.sync(() => get.set(actionState, failureFromError(error)))),
           Effect.asVoid,
         );
