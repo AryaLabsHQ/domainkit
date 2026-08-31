@@ -31,7 +31,7 @@ export const Revocation = S.TaggedUnion({
 });
 export type Revocation = typeof Revocation.Type;
 
-/** A provider credential authorization shared by one or more owner connections. */
+/** A provider credential authorization shared by one or more organization connections. */
 export const Schema = S.Struct({
   authorizedById: S.String,
   capabilityEvidence: S.Array(CapabilityEvidence),
@@ -39,7 +39,6 @@ export const Schema = S.Struct({
   expiresAt: S.NullOr(S.DateFromString),
   id: S.String,
   method: S.Literals(["integration", "oauth2", "token"]),
-  providerAccountId: S.String,
   providerContext: ProviderContext.Envelope,
   providerId: S.String,
   requiredCapabilities: S.Array(Capability),

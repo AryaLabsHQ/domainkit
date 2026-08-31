@@ -55,17 +55,16 @@ import {
   VERSION,
 } from "domainkit";
 import {
-  AuthorizationLifecycle,
   Cloudflare as PromiseCloudflare,
   Connection,
-  ProviderAuthorization,
+  ManagedDnsConnections,
   Provisioning,
   Secret,
   Vercel as PromiseVercel,
   Verification,
   VERSION as PROMISE_VERSION,
 } from "domainkit/promise";
-import { InMemoryAuthorizationLifecycle } from "domainkit/testing";
+import { InMemoryManagedDnsConnections } from "domainkit/testing";
 import { Effect, Layer } from "effect";
 
 const provider = {
@@ -100,15 +99,14 @@ const discovered = await Provisioning.create({
   target: Provisioning.Target.DiscoverFromDomain({ domain: "mail.example.com" }),
 });
 if (discovered._tag !== "Resolved") throw new Error("Packed discovery did not resolve");
-const repository = AuthorizationLifecycle.toAsync(InMemoryAuthorizationLifecycle.make());
+const repository = ManagedDnsConnections.toAsync(InMemoryManagedDnsConnections.make());
 const connected = await Connection.start({
   authorizedById: "packed-user",
-  grant: { _tag: "account", excludedDomains: [] },
   method: Connection.Method.Token({
     authenticate: async () => ({
       capabilityEvidence: [
-        { capability: "dns:read", evidence: ProviderAuthorization.Evidence.Declared() },
-        { capability: "dns:write", evidence: ProviderAuthorization.Evidence.Declared() },
+        { capability: "dns:read", evidence: { _tag: "Declared" } },
+        { capability: "dns:write", evidence: { _tag: "Declared" } },
       ],
       credential: { accessToken: Secret.make("packed-token"), refreshToken: null, tokenType: "bearer" },
       expiresAt: null,
@@ -124,11 +122,26 @@ const connected = await Connection.start({
   repository,
 });
 if (connected._tag !== "Connected") throw new Error("Packed connection did not complete");
-const binding = connected.aggregate.bindings[0];
-if (binding === undefined) throw new Error("Packed connection has no owner binding");
-const removed = await Connection.removeDomain({
-  connectionId: binding.id,
+const attachment = {
+  connectionId: connected.connection.id,
+  createdAt: new Date(),
   domain: "mail.example.com",
+  id: "packed-attachment",
+  target: {
+    accountId: "packed-account",
+    accountKind: "account",
+    zoneId: "packed-zone",
+    zoneName: "example.com",
+  },
+};
+await Connection.attach({
+  attachment,
+  connectionId: connected.connection.id,
+  ownerId: "packed-owner",
+  repository,
+});
+const removed = await Connection.detach({
+  attachmentId: attachment.id,
   ownerId: "packed-owner",
   repository,
 });
@@ -174,7 +187,7 @@ if (
   VERSION.length === 0 ||
   VERSION !== PROMISE_VERSION ||
   connected._tag !== "Connected" ||
-  removed._tag !== "Removed" ||
+  removed.remainingAttachments !== 0 ||
   discovered.plan.digest !== promisePlan.digest ||
   observed._tag !== "Verified" ||
   promisePlan.digest !== effectPlan.digest ||

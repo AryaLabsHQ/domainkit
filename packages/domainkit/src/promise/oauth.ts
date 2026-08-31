@@ -1,16 +1,13 @@
 import { Effect, Layer } from "effect";
 
-import * as Connection from "../auth/connection.ts";
-import * as ProviderAuthorization from "../auth/authorization.ts";
 import * as OAuthEffect from "../auth/oauth.ts";
-import type * as ProviderAuth from "../auth/manifest.ts";
 import { Error as InvalidInputError } from "../invalid-input.ts";
 import { webCryptoLayer } from "../plan/canonical-json.ts";
 import * as DnsProvider from "../provider/provider.ts";
-import * as ConnectionStore from "../stores/connection.ts";
-import * as CredentialStore from "../stores/credential.ts";
-import * as ProviderAuthorizationStore from "../stores/authorization.ts";
 import * as OAuthStateStore from "../stores/oauth-state.ts";
+import * as Lifecycle from "./managed-dns-connections.ts";
+import type * as ProviderAuth from "../auth/manifest.ts";
+import type * as ProviderAuthorization from "../auth/authorization.ts";
 
 export interface BeginInput extends OAuthEffect.BeginInput {
   readonly stateStore: OAuthStateStore.AsyncInterface;
@@ -28,17 +25,12 @@ export function begin(input: BeginInput): Promise<{ readonly authorizationUrl: U
 export function complete(input: {
   readonly callbackUrl: URL;
   readonly client: ProviderAuth.OAuthClientConfiguration;
-  readonly connectionStore: ConnectionStore.AsyncInterface;
-  readonly credentialStore: CredentialStore.AsyncInterface;
-  readonly authorizationStore: ProviderAuthorizationStore.AsyncInterface;
   readonly fetch?: OAuthEffect.Fetch;
   readonly providerId: string;
+  readonly repository: Lifecycle.AsyncInterface;
   readonly resolveSubject: ProviderAuth.AsyncOAuthSubjectResolver;
   readonly stateStore: OAuthStateStore.AsyncInterface;
-}): Promise<{
-  readonly authorization: ProviderAuthorization.ProviderAuthorization;
-  readonly connection: Connection.Connection;
-}> {
+}): Promise<{ readonly connection: import("../auth/connection.ts").ProviderConnection }> {
   return Effect.runPromise(
     OAuthEffect.complete({
       callbackUrl: input.callbackUrl,
@@ -52,12 +44,9 @@ export function complete(input: {
         }),
     }).pipe(
       Effect.provide(
-        Layer.mergeAll(
+        Layer.merge(
           OAuthStateStore.layerFromAsync(input.stateStore),
-          ProviderAuthorizationStore.layerFromAsync(input.authorizationStore),
-          ConnectionStore.layerFromAsync(input.connectionStore),
-          CredentialStore.layerFromAsync(input.credentialStore),
-          webCryptoLayer,
+          Layer.merge(Lifecycle.layerFromAsync(input.repository), webCryptoLayer),
         ),
       ),
     ),
@@ -67,9 +56,9 @@ export function complete(input: {
 export function refresh(input: {
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly client: ProviderAuth.OAuthClientConfiguration;
-  readonly credentialStore: CredentialStore.AsyncInterface;
   readonly fetch?: OAuthEffect.Fetch;
   readonly method: ProviderAuth.OAuthMethod;
+  readonly repository: Lifecycle.AsyncInterface;
 }): Promise<void> {
   return Effect.runPromise(
     OAuthEffect.refresh({
@@ -77,16 +66,16 @@ export function refresh(input: {
       authorization: input.authorization,
       ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
       method: input.method,
-    }).pipe(Effect.provide(CredentialStore.layerFromAsync(input.credentialStore))),
+    }).pipe(Effect.provide(Lifecycle.layerFromAsync(input.repository))),
   );
 }
 
 export function revoke(input: {
   readonly authorization: ProviderAuthorization.ProviderAuthorization;
   readonly client: ProviderAuth.OAuthClientConfiguration;
-  readonly credentialStore: CredentialStore.AsyncInterface;
   readonly fetch?: OAuthEffect.Fetch;
   readonly method: ProviderAuth.OAuthMethod;
+  readonly repository: Lifecycle.AsyncInterface;
 }): Promise<void> {
   return Effect.runPromise(
     OAuthEffect.revoke({
@@ -94,7 +83,7 @@ export function revoke(input: {
       authorization: input.authorization,
       ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
       method: input.method,
-    }).pipe(Effect.provide(CredentialStore.layerFromAsync(input.credentialStore))),
+    }).pipe(Effect.provide(Lifecycle.layerFromAsync(input.repository))),
   );
 }
 
@@ -107,7 +96,7 @@ function providerFailure(
     ? cause
     : new DnsProvider.Error({
         cause,
-        message: cause instanceof Error ? cause.message : "Provider callback failed",
+        message: cause instanceof globalThis.Error ? cause.message : "Provider callback failed",
         operation,
         providerId,
       });

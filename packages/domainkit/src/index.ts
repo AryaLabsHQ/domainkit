@@ -4,10 +4,9 @@ import packageJson from "../package.json" with { type: "json" };
 export const VERSION = packageJson.version;
 
 export * as Connection from "./auth/connection-api.ts";
-export * as AuthorizationLifecycle from "./auth/lifecycle-repository.ts";
+export * as ManagedDnsConnections from "./auth/lifecycle-api.ts";
 export * as Diagnostic from "./auth/diagnostic.ts";
 export * as ProviderAuth from "./auth/manifest.ts";
-export * as ProviderAuthorization from "./auth/authorization.ts";
 export * as ProviderContext from "./auth/provider-context.ts";
 export * as Secret from "./auth/secret.ts";
 export * as ProviderDiscovery from "./discovery/selection.ts";

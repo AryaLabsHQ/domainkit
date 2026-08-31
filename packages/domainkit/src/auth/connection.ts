@@ -2,109 +2,73 @@ import { Effect, Schema as S } from "effect";
 
 import * as DomainName from "../domain/domain-name.ts";
 import { Error as InvalidInputError } from "../invalid-input.ts";
-import type { Value as Secret } from "./secret.ts";
 import type { OAuthMethod } from "./manifest.ts";
-import * as ProviderAuthorization from "./authorization.ts";
+import type * as ProviderAuthorization from "./authorization.ts";
+import type { Value as Secret } from "./secret.ts";
 
-export const Grant = S.TaggedUnion({
-  account: { excludedDomains: S.Array(DomainName.Schema) },
-  domains: { domains: S.Array(DomainName.Schema) },
+/** A provider account and authoritative zone selected for one domain attachment. */
+export const ProviderTarget = S.Struct({
+  accountId: S.String,
+  accountKind: S.NullOr(S.Literals(["account", "personal", "team"])),
+  zoneId: S.String,
+  zoneName: DomainName.Schema,
 });
-export type Grant = typeof Grant.Type;
+export interface ProviderTarget extends S.Schema.Type<typeof ProviderTarget> {}
 
-/** Returns whether a grant includes one parsed domain. */
-export const coversDomain = (grant: Grant, domain: DomainName.DomainName): boolean =>
-  grant._tag === "account"
-    ? !grant.excludedDomains.includes(domain)
-    : grant.domains.includes(domain);
+/** The lifecycle state visible to a host for an organization connection. */
+export const ConnectionStatus = S.Literals(["active", "expired", "revocation-pending"]);
+export type ConnectionStatus = typeof ConnectionStatus.Type;
 
-/** Expands a grant to include the requested domains. */
-export const includeDomains = (current: Grant | undefined, requested: Grant): Grant => {
-  if (current === undefined) return requested;
-  if (current._tag === "account" && requested._tag === "account") {
-    return {
-      _tag: "account",
-      excludedDomains: current.excludedDomains.filter((domain) =>
-        requested.excludedDomains.includes(domain),
-      ),
-    };
-  }
-  if (current._tag === "account" && requested._tag === "domains") {
-    return {
-      _tag: "account",
-      excludedDomains: current.excludedDomains.filter(
-        (domain) => !requested.domains.includes(domain),
-      ),
-    };
-  }
-  if (requested._tag === "account") {
-    const includedDomains = current._tag === "domains" ? current.domains : [];
-    return {
-      _tag: "account",
-      excludedDomains: requested.excludedDomains.filter(
-        (domain) => !includedDomains.includes(domain),
-      ),
-    };
-  }
-  if (current._tag === "account") return current;
-  return {
-    _tag: "domains",
-    domains: [...new Set([...current.domains, ...requested.domains])],
-  };
-};
+/** An organization-scoped provider connection. */
+export const ProviderConnection = S.Struct({
+  createdAt: S.DateFromString,
+  id: S.String,
+  method: S.Literals(["integration", "oauth2", "token"]),
+  ownerId: S.String,
+  providerId: S.String,
+  status: ConnectionStatus,
+});
+export interface ProviderConnection extends S.Schema.Type<typeof ProviderConnection> {}
 
-/** Contracts a grant so it no longer includes one parsed domain. */
-export const removeDomain = (grant: Grant, domain: DomainName.DomainName): Grant =>
-  grant._tag === "account"
-    ? {
-        _tag: "account",
-        excludedDomains: [...new Set([...grant.excludedDomains, domain])],
-      }
-    : {
-        _tag: "domains",
-        domains: grant.domains.filter((candidate) => candidate !== domain),
-      };
+/** An exact provider target attached to one organization domain. */
+export const DomainAttachment = S.Struct({
+  connectionId: S.String,
+  createdAt: S.DateFromString,
+  domain: DomainName.Schema,
+  id: S.String,
+  target: ProviderTarget,
+});
+export interface DomainAttachment extends S.Schema.Type<typeof DomainAttachment> {}
 
-/** An owner-scoped grant bound to one provider authorization. */
-export const Schema = S.Struct({
+/** Internal connection row; the authorization id is intentionally not part of the public shape. */
+export const StoredConnection = S.Struct({
   authorizationId: S.String,
   createdAt: S.DateFromString,
-  grant: Grant,
   id: S.String,
+  method: S.Literals(["integration", "oauth2", "token"]),
   ownerId: S.String,
+  providerId: S.String,
 });
-export interface Connection extends S.Schema.Type<typeof Schema> {}
+export interface StoredConnection extends S.Schema.Type<typeof StoredConnection> {}
 
-export const decode = Effect.fn("Connection.decode")((input: unknown) =>
-  S.decodeUnknownEffect(Schema)(input).pipe(
-    Effect.mapError((cause) => new InvalidInputError({ message: cause.message })),
-  ),
-);
+/** Internal credential material retained by the host's persistence implementation. */
+export interface StoredCredential {
+  readonly accessToken: Secret;
+  readonly refreshToken: Secret | null;
+  readonly tokenType: string;
+}
 
-export const validate = Effect.fn("Connection.validate")((input: unknown) =>
-  S.decodeUnknownEffect(S.toType(Schema))(input).pipe(
-    Effect.mapError((cause) => new InvalidInputError({ message: cause.message })),
-  ),
-);
-
-export const encode = S.encodeSync(Schema);
-
+/** The provider context carried through an interactive connection continuation. */
 export interface OAuthContinuation {
   readonly clientId: string;
   readonly codeVerifier: Secret;
   readonly expiresAt: Date;
-  readonly grant: Grant;
+  readonly authorizationId?: string;
   readonly method: OAuthMethod;
   readonly ownerId: string;
   readonly redirectUri: string;
   readonly stateHash: string;
   readonly authorizedById: string;
-}
-
-export interface StoredCredential {
-  readonly accessToken: Secret;
-  readonly refreshToken: Secret | null;
-  readonly tokenType: string;
 }
 
 export class AuthorizationError extends S.TaggedError<AuthorizationError>()("AuthorizationError", {
@@ -122,57 +86,103 @@ export const authorizationError = (message: string, operation: string): Authoriz
     retry: "after-user-action",
   });
 
-export function assertGrant(
-  connection: Connection,
+/** Decode a public connection snapshot returned by a host. */
+export const decode = Effect.fn("ProviderConnection.decode")((input: unknown) =>
+  S.decodeUnknownEffect(ProviderConnection)(input).pipe(
+    Effect.mapError((cause) => new InvalidInputError({ message: cause.message })),
+  ),
+);
+
+export const validate = Effect.fn("ProviderConnection.validate")((input: unknown) =>
+  S.decodeUnknownEffect(S.toType(ProviderConnection))(input).pipe(
+    Effect.mapError((cause) => new InvalidInputError({ message: cause.message })),
+  ),
+);
+
+export const encode = S.encodeSync(ProviderConnection);
+
+/** Derive a public connection projection from its private authorization state. */
+export function project(
+  connection: StoredConnection,
   authorization: ProviderAuthorization.ProviderAuthorization,
-  request: {
-    readonly capability: ProviderAuthorization.Capability;
-    readonly domain: string;
-    readonly now?: Date;
-    readonly providerId: string;
-  },
-): DomainName.DomainName {
+  now = new Date(),
+): ProviderConnection {
+  const status: ConnectionStatus =
+    authorization.revocation._tag === "Pending"
+      ? "revocation-pending"
+      : authorization.expiresAt !== null && authorization.expiresAt <= now
+        ? "expired"
+        : "active";
+  return {
+    createdAt: connection.createdAt,
+    id: connection.id,
+    method: connection.method,
+    ownerId: connection.ownerId,
+    providerId: connection.providerId,
+    status,
+  };
+}
+
+/** Assert that an exact attachment is usable for one DNS operation. */
+export function assertAttachment(input: {
+  readonly attachment: DomainAttachment;
+  readonly authorization: ProviderAuthorization.ProviderAuthorization;
+  readonly capability: ProviderAuthorization.Capability;
+  readonly connection: StoredConnection | ProviderConnection;
+  readonly domain: string;
+  readonly now?: Date;
+  readonly providerId: string;
+}): DomainName.DomainName {
   if (
-    connection.authorizationId !== authorization.id ||
-    authorization.providerId !== request.providerId ||
-    authorization.revocation._tag !== "Active"
+    input.connection.providerId !== input.providerId ||
+    input.authorization.providerId !== input.providerId ||
+    input.authorization.revocation._tag !== "Active" ||
+    input.attachment.connectionId !== input.connection.id
   ) {
     throw authorizationError(
-      "Connection does not grant this provider account",
-      "Connection.assertGrant",
+      "Domain attachment is not active for this provider",
+      "Connection.assertAttachment",
     );
   }
-  if (authorization.expiresAt !== null) {
-    if (Number.isNaN(authorization.expiresAt.getTime())) {
-      throw authorizationError("Connection expiration is invalid", "Connection.assertGrant");
+  if (input.authorization.expiresAt !== null) {
+    if (Number.isNaN(input.authorization.expiresAt.getTime())) {
+      throw authorizationError(
+        "Provider authorization expiration is invalid",
+        "Connection.assertAttachment",
+      );
     }
-    if (authorization.expiresAt <= (request.now ?? new Date())) {
-      throw authorizationError("Connection has expired", "Connection.assertGrant");
+    if (input.authorization.expiresAt <= (input.now ?? new Date())) {
+      throw authorizationError("Provider authorization has expired", "Connection.assertAttachment");
     }
   }
-  if (!authorization.requiredCapabilities.includes(request.capability)) {
+  if (!input.authorization.requiredCapabilities.includes(input.capability)) {
     throw authorizationError(
-      `Connection lacks the ${request.capability} capability`,
-      "Connection.assertGrant",
+      `Provider authorization lacks the ${input.capability} capability`,
+      "Connection.assertAttachment",
     );
   }
-  if (ProviderAuthorization.evidenceFor(authorization, request.capability) === undefined) {
+  if (
+    !input.authorization.capabilityEvidence.some((item) => item.capability === input.capability)
+  ) {
     throw authorizationError(
-      `Connection has no evidence for the ${request.capability} capability`,
-      "Connection.assertGrant",
+      `Provider authorization has no evidence for the ${input.capability} capability`,
+      "Connection.assertAttachment",
     );
   }
   let domain: DomainName.DomainName;
   try {
-    domain = DomainName.parse(request.domain);
+    domain = DomainName.parse(input.domain);
   } catch (cause) {
     if (cause instanceof InvalidInputError) throw cause;
     throw new InvalidInputError({
       message: cause instanceof Error ? cause.message : String(cause),
     });
   }
-  if (!coversDomain(connection.grant, domain)) {
-    throw authorizationError("Connection does not grant this domain", "Connection.assertGrant");
+  if (input.attachment.domain !== domain && !domain.endsWith(`.${input.attachment.domain}`)) {
+    throw authorizationError(
+      "Domain attachment does not match the requested domain",
+      "Connection.assertAttachment",
+    );
   }
   return domain;
 }

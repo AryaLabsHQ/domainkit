@@ -1,27 +1,17 @@
 export {
-  assertGrant,
-  authorizationError,
   AuthorizationError,
+  authorizationError,
+  ConnectionStatus,
   decode,
+  DomainAttachment,
   encode,
-  coversDomain,
-  Grant,
-  includeDomains,
-  removeDomain as removeDomainFromGrant,
-  Schema,
+  ProviderConnection,
+  ProviderTarget,
   validate,
 } from "./connection.ts";
-export type { Connection, StoredCredential } from "./connection.ts";
-export {
-  complete,
-  Error,
-  extend,
-  Method,
-  removeDomain,
-  RemoveDomainResult,
-  start,
-  StartResult,
-} from "./connect.ts";
+export { attach, detach, disconnect } from "./connection-lifecycle.ts";
+export type { AttachmentResult, DetachResult, DisconnectResult } from "./lifecycle-repository.ts";
+export { complete, Error, Method, start, StartResult } from "./connect.ts";
 export type {
   Authentication,
   AuthenticationFailure,
@@ -32,10 +22,6 @@ export type {
   Failure,
   InteractiveFlow,
   InteractiveStart,
-  ExtendInput,
   Method as ConnectionMethod,
-  Requirements,
-  RemoveDomainInput,
-  RemoveDomainResult as ConnectionRemoveDomainResult,
   StartResult as ConnectionStartResult,
 } from "./connect.ts";

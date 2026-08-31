@@ -1,5 +1,5 @@
 import {
-  type AuthorizationLifecycle,
+  type ManagedDnsConnections,
   Cloudflare,
   Connection,
   DomainName,
@@ -16,7 +16,7 @@ export interface CloudflareOAuthInput {
   readonly domain: string;
   readonly ownerId: string;
   readonly redirectUri: string;
-  readonly repository: AuthorizationLifecycle.Repository;
+  readonly repository: ManagedDnsConnections.AsyncInterface;
   readonly scopeIds: ReadonlyArray<string>;
 }
 
@@ -38,7 +38,6 @@ export function beginCloudflareOAuth(input: CloudflareOAuthInput) {
   const oauth = flow(input);
   return Connection.start({
     authorizedById: input.authorizedById,
-    grant: { _tag: "account", excludedDomains: [] },
     method: Connection.Method.Interactive({
       continuations: input.continuations,
       flow: oauth,

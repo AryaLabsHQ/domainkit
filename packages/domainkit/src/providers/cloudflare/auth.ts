@@ -89,7 +89,7 @@ export type TokenValidatorOptions = CredentialOptions &
       }
   );
 
-/** Resolves the Cloudflare account selected by a completed OAuth grant. */
+/** Resolves the Cloudflare account selected by a completed OAuth authorization. */
 export function subjectResolver(
   options: SubjectResolverOptions,
 ): ProviderAuth.OAuthSubjectResolver {
@@ -177,7 +177,7 @@ export function tokenConnectionMethod(
   });
 }
 
-/** Converts a completed Cloudflare OAuth grant into the canonical connection authentication. */
+/** Converts a completed Cloudflare OAuth authorization into canonical connection authentication. */
 export const oauthAuthentication = Effect.fn("CloudflareAuth.oauthAuthentication")(function* (
   options: SubjectResolverOptions & {
     readonly accessToken: Secret.Value;
