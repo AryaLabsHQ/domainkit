@@ -115,6 +115,31 @@ describe("Vercel Effect client", () => {
     });
   });
 
+  it.effect("does not expose a fallback domain from a different requested account", () => {
+    const otherAccountDomain = { ...domain, teamId: "team-2" };
+    const recording = recordedFetch([
+      { body: domainPage([]), expect: { pathname: "/v5/domains" } },
+      {
+        body: authoritativeConfig,
+        expect: { pathname: "/v6/domains/example.com/config" },
+      },
+      {
+        body: { domain: otherAccountDomain },
+        expect: { pathname: "/v5/domains/example.com" },
+      },
+    ]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      assert.deepStrictEqual(
+        yield* client.listTargets({
+          accountId: "team-1",
+          domain: DomainName.parse("example.com"),
+        }),
+        [],
+      );
+    });
+  });
+
   it.effect("binds Vercel writes to a selected domain without re-discovering it", () => {
     const selected: Connection.ProviderTarget = {
       accountId: "team-1",

@@ -377,7 +377,13 @@ function makeClient(options: InternalOptions): Interface {
         }
         for (const name of Zones.candidates(input.domain)) {
           const discovered = yield* discoverZone(name);
-          if (discovered !== null) return [yield* targetFromDomain(discovered)];
+          if (
+            discovered !== null &&
+            (input.accountId === undefined ||
+              (discovered.teamId ?? discovered.userId) === input.accountId)
+          ) {
+            return [yield* targetFromDomain(discovered)];
+          }
         }
         return [];
       }),

@@ -124,6 +124,7 @@ describe("Cloudflare Effect client", () => {
     };
     const created = record("TXT", "_probe.example.com", { content: "domainkit" });
     const recording = recordedFetch([
+      { body: page([zone]), expect: { pathname: "/client/v4/zones" } },
       {
         body: single(created),
         expect: { method: "POST", pathname: "/client/v4/zones/zone-1/dns_records" },
@@ -148,6 +149,27 @@ describe("Cloudflare Effect client", () => {
         }),
       );
       assert.strictEqual(result.providerRecordId, "record-txt");
+      assert.strictEqual(recording.requests.length, 2);
+    });
+  });
+
+  it.effect("rejects a target whose identifiers were not discovered for the credential", () => {
+    const recording = recordedFetch([{ body: page([zone]) }]);
+    const client = Cloudflare.make({
+      capabilities,
+      fetch: recording.fetch,
+      token,
+    });
+    return Effect.gen(function* () {
+      const failure = yield* client
+        .forTarget({
+          accountId: "account-1",
+          accountKind: "account",
+          zoneId: "forged-zone",
+          zoneName: DomainName.parse("example.com"),
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(failure.reason, "authorization");
       assert.strictEqual(recording.requests.length, 1);
     });
   });

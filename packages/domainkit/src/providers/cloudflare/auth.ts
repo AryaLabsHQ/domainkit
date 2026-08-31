@@ -260,11 +260,6 @@ export function restore(
     const context = yield* contextCodec
       .decode(options.authorization.providerContext)
       .pipe(Effect.mapError((cause) => failure("restore", cause.message, "response")));
-    if (context.tokenKind === "account" && context.accountId === undefined) {
-      return yield* Effect.fail(
-        failure("restore", "Cloudflare account authorization has no account ID", "response"),
-      );
-    }
     return Client.make({
       ...(context.accountId === undefined ? {} : { accountId: context.accountId }),
       ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
