@@ -263,7 +263,7 @@ describe("Connection.Flow", () => {
       attachment: Testing.attachment({ target: firstTarget }),
     });
     const transport = Testing.makeFakeTransport({
-      inspect: snapshot,
+      inspect: [snapshot, snapshot],
       detach: {
         _tag: "Detached",
         attachment: connection.attachment,
@@ -305,6 +305,68 @@ describe("Connection.Flow", () => {
     expect(screen.getAllByText("zone-1")).toHaveLength(1);
     expect(screen.getAllByText("zone-2")).toHaveLength(1);
     expect(transport.calls.attach[0]?.target).toBe(firstTarget);
+  });
+
+  it("re-inspects all targets after detaching an initially connected domain", async () => {
+    const user = userEvent.setup();
+    const firstTarget = Testing.target();
+    const secondTarget = Testing.target({
+      accountId: "team-2",
+      accountKind: "team",
+      evidence: {
+        accountName: "Samva Team",
+        nameservers: [],
+        status: "active",
+        zoneType: "full",
+      },
+      zoneId: "zone-2",
+    });
+    const connected = Testing.connected({
+      attachment: Testing.attachment({ target: firstTarget }),
+    });
+    const disconnected = {
+      _tag: "Disconnected" as const,
+      domain: "mail.example.com",
+      provider: connected.provider,
+      reusableConnections: [
+        {
+          connection: connected.connection,
+          targets: [firstTarget, secondTarget],
+        },
+      ],
+    };
+    const transport = Testing.makeFakeTransport({
+      inspect: [connected, disconnected],
+      detach: {
+        _tag: "Detached",
+        attachment: connected.attachment,
+        connection: connected.connection,
+        remainingAttachments: 0,
+      },
+    });
+    const Harness = () => {
+      const controller = Connection.useController("mail.example.com");
+      return controller.state._tag === "Connected" ? (
+        <button onClick={controller.detach}>Detach target</button>
+      ) : controller.state._tag === "Disconnected" ? (
+        <>
+          {controller.state.reusableConnections.flatMap(({ targets }) =>
+            targets.map((target) => <span key={target.zoneId}>{target.zoneId}</span>),
+          )}
+        </>
+      ) : null;
+    };
+    render(
+      <DomainKit.Root transport={transport}>
+        <Harness />
+      </DomainKit.Root>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Detach target" }));
+
+    expect(await screen.findByText("zone-1")).toBeTruthy();
+    expect(screen.getByText("zone-2")).toBeTruthy();
+    expect(transport.calls.inspect).toHaveLength(2);
   });
 
   it("rejects a target whose identity differs from the discovered target", async () => {

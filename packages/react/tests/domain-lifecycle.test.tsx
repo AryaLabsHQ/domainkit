@@ -540,7 +540,15 @@ describe("observation and cleanup", () => {
   it("keeps disconnect available without a receipt and hides remove records", async () => {
     const events: Array<Lifecycle.Event> = [];
     const transport = Testing.makeFakeTransport({
-      inspect: connection,
+      inspect: [
+        connection,
+        {
+          _tag: "Disconnected",
+          domain: connection.attachment.domain,
+          provider: connection.provider,
+          reusableConnections: [],
+        },
+      ],
       detach: {
         _tag: "Detached",
         attachment: connection.attachment,
