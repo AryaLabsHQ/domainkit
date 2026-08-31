@@ -140,7 +140,7 @@ describe("Vercel Effect client", () => {
     });
   });
 
-  it.effect("binds Vercel writes to a selected domain without re-discovering it", () => {
+  it.effect("revalidates a selected domain before binding Vercel writes", () => {
     const selected: Connection.ProviderTarget = {
       accountId: "team-1",
       accountKind: "team",
@@ -153,6 +153,7 @@ describe("Vercel Effect client", () => {
       zoneName: DomainName.parse("example.com"),
     };
     const recording = recordedFetch([
+      { body: domainPage([domain]), expect: { pathname: "/v5/domains" } },
       {
         body: { uid: "selected-record" },
         expect: { method: "POST", pathname: "/v2/domains/example.com/records" },
@@ -173,6 +174,23 @@ describe("Vercel Effect client", () => {
         }),
       );
       assert.deepStrictEqual(result, { providerRecordId: "selected-record" });
+      assert.strictEqual(recording.requests.length, 2);
+    });
+  });
+
+  it.effect("rejects a target whose identifiers were not discovered for the installation", () => {
+    const recording = recordedFetch([{ body: domainPage([domain]) }]);
+    const client = make(recording.fetch, { _tag: "team", teamId: "team-1" });
+    return Effect.gen(function* () {
+      const failure = yield* client
+        .forTarget({
+          accountId: "team-1",
+          accountKind: "team",
+          zoneId: "forged-domain",
+          zoneName: DomainName.parse("example.com"),
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(failure.reason, "authorization");
       assert.strictEqual(recording.requests.length, 1);
     });
   });

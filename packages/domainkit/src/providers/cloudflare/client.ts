@@ -390,7 +390,9 @@ function makeClient(options: InternalOptions): Interface {
             : new Set(Zones.candidates(input.domain).map((name) => String(name)));
         const zones = yield* allZones(input.accountId ?? options.accountId);
         return yield* Effect.forEach(
-          zones.filter((zone) => names === undefined || names.has(zone.name)),
+          zones.filter(
+            (zone) => zone.type !== "internal" && (names === undefined || names.has(zone.name)),
+          ),
           targetFromZone,
         );
       }),

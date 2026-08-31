@@ -435,7 +435,27 @@ function makeClient(options: InternalOptions): Interface {
           }),
         );
       }
-      const client = makeClient({ ...options, target });
+      const discovered = yield* listTargets({
+        accountId: target.accountId,
+        domain: target.zoneName,
+      });
+      const selected = discovered.find(
+        (candidate) =>
+          candidate.accountId === target.accountId &&
+          candidate.accountKind === target.accountKind &&
+          candidate.zoneId === target.zoneId &&
+          candidate.zoneName === target.zoneName,
+      );
+      if (selected === undefined) {
+        return yield* Effect.fail(
+          failure(
+            "forTarget",
+            `Vercel target ${target.zoneName} is not visible to this installation`,
+            { reason: "authorization" },
+          ),
+        );
+      }
+      const client = makeClient({ ...options, target: selected });
       return {
         id: client.id,
         createRecord: client.createRecord,

@@ -109,6 +109,28 @@ describe("Cloudflare Effect client", () => {
     },
   );
 
+  it.effect("skips internal child zones when resolving a managed DNS target", () => {
+    const internalChild = {
+      ...zone,
+      id: "zone-internal",
+      name: "mail.example.com",
+      type: "internal" as const,
+    };
+    const client = Cloudflare.make({
+      capabilities,
+      fetch: recordedFetch([{ body: page([internalChild, zone]) }]).fetch,
+      token,
+    });
+    return Effect.gen(function* () {
+      const resolution = yield* client.resolveTarget(DomainName.parse("mail.example.com"));
+      assert.strictEqual(resolution._tag, "Resolved");
+      if (resolution._tag === "Resolved") {
+        assert.strictEqual(resolution.target.zoneId, "zone-1");
+        assert.strictEqual(resolution.target.zoneName, "example.com");
+      }
+    });
+  });
+
   it.effect("binds record operations to the selected zone without re-discovering it", () => {
     const selected: Connection.ProviderTarget = {
       accountId: "account-1",
