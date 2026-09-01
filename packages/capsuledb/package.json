@@ -1,6 +1,6 @@
 {
   "name": "@domainkit/capsuledb",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Optional PostgreSQL storage for DomainKit's Effect apps",
   "keywords": [
     "dns",
@@ -45,7 +45,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "domainkit": "workspace:^0.7.0"
+    "domainkit": "workspace:^0.8.0"
   },
   "devDependencies": {
     "@effect/sql-pg": "4.0.0-rc.112",

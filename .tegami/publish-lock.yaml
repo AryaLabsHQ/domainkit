@@ -1,28 +1,25 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Expose callable constructors\n\nExpose callable constructors for tagged DomainKit values. Effect and Promise integrations can\ncreate plan operations, revocation states, and resolver outcomes without manually writing `_tag`\nfields, while schemas remain available for validation and persistence.\n"
-    filename: domainkit-callable-constructors.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: patch\n---\n\n## Make no-op provisioning explicit\n\nMake provisioning review actions reflect no-op DNS plans and soften dialog focus styling.\n"
-    filename: react-noop-plan-cta.md
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Standardize callable constructors\n\nStandardize trusted tagged-value construction on callable case constructors across the core and\nReact transport APIs. Aggregate schemas remain available for decoding serialized values.\n"
+    filename: domainkit-callable-constructor-consistency.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
-  - changelogIds:
-      - domainkit-callable-constructors.md
-    id: npm:domainkit
-    updated: true
-  - changelogIds:
-      - react-noop-plan-cta.md
-    id: npm:@domainkit/react
-    updated: true
   - id: npm:@domainkit/docs
     updated: false
+  - changelogIds:
+      - domainkit-callable-constructor-consistency.md
+    id: npm:domainkit
+    updated: true
   - id: npm:@domainkit/capsuledb
+    updated: true
+  - changelogIds:
+      - domainkit-callable-constructor-consistency.md
+    id: npm:@domainkit/react
     updated: true
 npm:packages:
   - id: npm:domainkit-workspace
-  - id: npm:domainkit
-  - id: npm:@domainkit/react
   - id: npm:@domainkit/docs
+  - id: npm:domainkit
   - id: npm:@domainkit/capsuledb
+  - id: npm:@domainkit/react

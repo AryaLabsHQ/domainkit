@@ -1,3 +1,10 @@
+## @domainkit/react@0.8.0
+
+### Standardize callable constructors
+
+Standardize trusted tagged-value construction on callable case constructors across the core and
+React transport APIs. Aggregate schemas remain available for decoding serialized values.
+
 ## @domainkit/react@0.7.0
 
 ### Make no-op provisioning explicit

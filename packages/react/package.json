@@ -1,6 +1,6 @@
 {
   "name": "@domainkit/react",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "React flows and UI parts for custom-domain setup",
   "keywords": [
     "custom-domains",
@@ -47,7 +47,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
-    "domainkit": "workspace:^0.7.0",
+    "domainkit": "workspace:^0.8.0",
     "scheduler": "0.27.0"
   },
   "devDependencies": {
