@@ -7,8 +7,9 @@ seo:
 
 <ProviderLogo provider="cloudflare" size={48} />
 
-Cloudflare supports OAuth and API-token connections. Both produce the same saved DomainKit
-authorization and provider context.
+Cloudflare supports OAuth and API-token connections. Both produce the same saved provider
+authorization and organization connection; attaching a domain to the exact provider zone is a
+separate step.
 
 Run every step in this guide on a trusted server. Do not build a Cloudflare client or keep the token
 in browser code.
@@ -31,14 +32,7 @@ import { type ManagedDnsConnections } from "domainkit/promise";
 ## Start OAuth
 
 ```ts
-import {
-  Cloudflare,
-  Connection,
-  DnsRecord,
-  DomainName,
-  Secret,
-  Verification,
-} from "domainkit/promise";
+import { Cloudflare, Connection, DnsRecord, DomainName, Secret } from "domainkit/promise";
 
 const capabilities = ["dns:read", "dns:write"] as const;
 
@@ -56,10 +50,6 @@ const flow = Cloudflare.Auth.oauthFlow({
 
 const result = await Connection.start({
   authorizedById,
-  grant: {
-    _tag: "domains",
-    domains: [DomainName.parse("example.com")],
-  },
   method: Connection.Method.Interactive({ continuations, flow }),
   ownerId,
   repository,
@@ -87,7 +77,8 @@ const connected = await Connection.complete({
 ```
 
 `Connection.complete` consumes the continuation once, validates the OAuth response, finds the account
-from the known zone, and saves the provider authorization. Store only non-secret provider context in
+from the known zone, and saves the provider authorization and organization connection. It returns a
+public `ProviderConnection`; it does not attach a domain. Store only non-secret provider context in
 ordinary records; keep the credential behind the repository's secret-storage boundary.
 
 ## Refresh an OAuth credential
@@ -133,7 +124,6 @@ const method = Cloudflare.Auth.tokenConnectionMethod({
 
 const connected = await Connection.start({
   authorizedById,
-  grant: { _tag: "domains", domains: [domain] },
   method,
   ownerId,
   repository,
@@ -144,10 +134,54 @@ Ask for the narrowest token that covers the intended zones and DNS permissions. 
 validation supports user-owned and account-owned API tokens and finds the account from the visible
 zone.
 
+## Attach the discovered provider target
+
+After either OAuth completion or token connection, restore the credential-scoped session, resolve the
+customer domain, and attach the exact target returned by the provider. `Cloudflare.Auth.restore`
+returns the Effect-native client; adapt it once with `ProviderSession.fromEffect` before using the
+Promise-shaped session methods:
+
+```ts
+import { Cloudflare, Connection, DomainName, ProviderSession } from "domainkit/promise";
+
+const aggregate = await repository.getByConnectionId(connection.id);
+if (aggregate === null) throw new Error("Connection was not persisted");
+
+const session = await Cloudflare.Auth.restore({
+  authorization: aggregate.authorization,
+  credential: aggregate.credential,
+});
+const domain = DomainName.parse("example.com");
+const asyncSession = ProviderSession.fromEffect(session);
+const resolution = await asyncSession.resolveTarget(domain);
+if (resolution._tag !== "Resolved") {
+  throw new Error("Cloudflare returned no unique authoritative target");
+}
+
+const attached = await Connection.attach({
+  attachment: {
+    connectionId: connection.id,
+    createdAt: new Date(),
+    domain,
+    id: crypto.randomUUID(), // a host-owned durable attachment id
+    target: resolution.target,
+  },
+  connectionId: connection.id,
+  ownerId,
+  repository,
+});
+```
+
+`Connection.attach` checks the owner and connection in the repository and records the exact account,
+zone, and discovery evidence. Do not accept a target chosen by the browser. If the session returns
+`SelectionRequired`, ask the user to choose among the candidates and validate that choice on the
+server before attaching it.
+
 ## Reconstruct the provider
 
 After loading and, when necessary, refreshing the stored credential, restore the credential-scoped
-session on the server:
+session on the server. Load the private aggregate through the host repository; the public connection
+projection does not contain the authorization or credential:
 
 ```ts
 const session = await Cloudflare.Auth.restore({
@@ -156,25 +190,27 @@ const session = await Cloudflare.Auth.restore({
 });
 ```
 
-Resolve an exact provider target through the session, then pass the resulting provider through the
-Promise APIs' `provider` fields for planning, apply, and receipt-bound cleanup. Authoritative
-observation also needs the zone-tagged verification wrapper:
+Resolve an exact provider target through the session, call `Connection.attach`, and bind DNS operations
+to the focused provider returned by `asyncSession.forTarget(attachment.target)`. The adapter keeps the
+Promise boundary explicit before passing the provider to Promise APIs:
 
 ```ts
+import { Verification } from "domainkit/promise";
+
 const zone = DomainName.parse("example.com");
-const record = DnsRecord.parse({
-  _tag: "TXT",
+const record = DnsRecord.Txt.make({
   metadata: {
     ownership: "customer",
     provenance: "example",
     purpose: "domain verification",
   },
-  name: "_verify.example.com",
+  name: DomainName.parse("_verify.example.com"),
   policy: "append",
   ttl: 300,
   value: "verification-value",
 });
 
+const provider = await asyncSession.forTarget(attachment.target);
 await Verification.observe({
   provider: Verification.Provider.Enabled({ provider, zone }),
   record,

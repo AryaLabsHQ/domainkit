@@ -64,20 +64,34 @@ Both paths use the same route program. `Server.make` leaves Effect requirements 
 
 ## Mount the handler
 
-The returned `fetch(Request)` works directly with Web-standard server frameworks.
+The returned `WebHandler` exposes `fetch(Request)` and `dispose()`. Create one handler during host
+startup and pass each framework's standard `Request` through unchanged; do not construct a handler
+for every request. The examples below assume the initialized `domainKit` is exported by the host
+composition module.
 
 ```ts title="Hono"
+import { Hono } from "hono";
+import { domainKit } from "./domainkit";
+
+const app = new Hono();
 app.all("/api/domainkit/*", (context) => domainKit.fetch(context.req.raw));
+
+export default app;
 ```
 
 ```ts title="Next.js App Router"
 // app/api/domainkit/[...path]/route.ts
-export const GET = domainKit.fetch;
-export const POST = domainKit.fetch;
+import { domainKit } from "@/server/domainkit";
+
+export const GET = (request: Request) => domainKit.fetch(request);
+export const POST = (request: Request) => domainKit.fetch(request);
 ```
 
 ```ts title="TanStack Start"
 // routes/api/domainkit/$.ts
+import { createFileRoute } from "@tanstack/react-router";
+import { domainKit } from "~/server/domainkit";
+
 export const Route = createFileRoute("/api/domainkit/$")({
   server: {
     handlers: {
@@ -88,12 +102,16 @@ export const Route = createFileRoute("/api/domainkit/$")({
 });
 ```
 
-Dispose the DomainKit handler during a long-lived host's shutdown. This releases only the runtime
-created by DomainKit; the host still owns its persistence lifecycle. The default base path is
-`/api/domainkit`. When `baseURL` is omitted, the start request's origin constructs the callback URL;
-configure it explicitly behind a reverse proxy or custom domain.
+Use your host's module path in the imports above. Dispose the handler once during a long-lived
+host's shutdown: this closes the ManagedRuntime created by `toWebHandler` or `createDomainKit`.
+`createDomainKit` does not initialize or dispose the host-provided `persistence`; keep shared host
+resources available until the handler is disposed, then complete the host's own shutdown sequence.
+The default base path is `/api/domainkit`. When `baseURL` is omitted, the start request's origin
+constructs the callback URL; configure it explicitly behind a reverse proxy or custom domain.
 
 ## Routes
+
+With the default `basePath`, the handler serves these routes:
 
 | Method | Path                                  | Behavior                                                          |
 | ------ | ------------------------------------- | ----------------------------------------------------------------- |

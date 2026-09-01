@@ -33,15 +33,15 @@ Provider credentials never cross into the browser transport.
 
 ## Decide what is durable
 
-| State                             | Lifetime                 | Host responsibility                                                               |
-| --------------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| OAuth or integration continuation | Short-lived and one-time | Store until callback consumption; loss may require restarting consent             |
-| Provider authorization            | Durable                  | Persist account context, capabilities, credential reference, and revocation state |
-| Encrypted credential              | Durable and secret       | Encrypt tokens and access-token expiry, restrict access, rotate, and audit use    |
-| Owner binding and domain grant    | Durable                  | Bind provider authority to your tenant and permitted domains                      |
-| Plan attempt and authorization    | Durable through apply    | Correlate a server-owned plan with the digest the user reviewed                   |
-| Apply receipt                     | Durable                  | Preserve confirmed writes and partial outcomes for later cleanup                  |
-| Public-DNS observation            | Evidence, not authority  | Persist only if your product needs history, polling, or readiness state           |
+| State                                         | Lifetime                 | Host responsibility                                                               |
+| --------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
+| OAuth or integration continuation             | Short-lived and one-time | Store until callback consumption; loss may require restarting consent             |
+| Provider authorization                        | Durable                  | Persist account context, capabilities, credential reference, and revocation state |
+| Encrypted credential                          | Durable and secret       | Encrypt tokens and access-token expiry, restrict access, rotate, and audit use    |
+| Organization connection and domain attachment | Durable                  | Bind provider authority to your tenant and an exact discovered provider target    |
+| Plan attempt and authorization                | Durable through apply    | Correlate a server-owned plan with the digest the user reviewed                   |
+| Apply receipt                                 | Durable                  | Preserve confirmed writes and partial outcomes for later cleanup                  |
+| Public-DNS observation                        | Evidence, not authority  | Persist only if your product needs history, polling, or readiness state           |
 
 Do not use a browser store or short-lived cache as the source of truth for provider authorizations,
 plans, or receipts.
@@ -51,16 +51,15 @@ plans, or receipts.
 Your product decides which DNS records it needs and why. Check those requirements on the server:
 
 ```ts
-import { DnsRecord } from "domainkit";
+import { DnsRecord, DomainName } from "domainkit";
 
-const requirement = DnsRecord.parse({
-  _tag: "TXT",
+const requirement = DnsRecord.Txt.make({
   metadata: {
     ownership: "product",
     provenance: "domain-onboarding",
     purpose: "domain-verification",
   },
-  name: "_verify.example.com",
+  name: DomainName.parse("_verify.example.com"),
   policy: "append",
   ttl: 300,
   value: "verification-value",
@@ -73,7 +72,7 @@ authority.
 ## 2. Implement authorization storage
 
 For an Effect host, provide one `ManagedDnsConnections.Service` for the provider authorization,
-encrypted credential reference, and owner bindings. An async host implements
+encrypted credential reference, organization connections, and domain attachments. An async host implements
 `ManagedDnsConnections.AsyncInterface` from the Promise entry point and passes it to
 `createDomainKit`:
 
@@ -87,9 +86,13 @@ the save recoverable behind the same interface.
 Use `domainkit/testing`'s in-memory repository in tests only. It does not encrypt credentials or
 provide production durability.
 
-PostgreSQL hosts may instead use [`@domainkit/capsuledb`](/docs/reference/capsuledb). The optional
-package owns the lifecycle schema and repository while your application supplies its existing
-`PgClient`, encrypted credential custody, and tenant/domain binding capability.
+PostgreSQL Effect hosts may instead use [`@domainkit/capsuledb`](/docs/reference/capsuledb). The
+optional package owns the lifecycle schema and `ManagedDnsConnections.Service`; your application
+supplies its existing `PgClient`, calls `Registry.prepare` once at startup, and provides encrypted
+credential custody plus tenant/domain bindings. It is intentionally Effect-native: `createDomainKit`
+does not initialize CapsuleDB or provide async persistence. An async host must implement
+`ManagedDnsConnections.AsyncInterface` (or adapt an Effect service with
+`ManagedDnsConnections.toAsync`) and own database startup and disposal.
 
 ## 3. Mount provider connection routes
 
@@ -103,7 +106,8 @@ export const domainKit = await createDomainKit({
   baseURL: "https://app.example.com",
   identity: HostIdentity,
   connectionPolicy: HostConnectionPolicy,
-  providers: [CloudflareProvider],
+  // Each entry implements AsyncInteractiveProvider for one provider/method pair.
+  providers: [cloudflareProvider],
   pendingAuthorizations: RedisPendingAuthorizations,
   persistence: ManagedDnsConnections,
 });
@@ -146,7 +150,8 @@ interactive provider connection has two server routes:
    aggregate.
 
 A token route validates the submitted credential on the server and commits the same durable
-aggregate without a redirect.
+authorization and organization connection without a redirect. Connection start/complete does not
+create a domain attachment.
 
 The callback redirects to a previously validated same-origin path. After connection, reconstruct
 the provider client from the stored credential and non-secret provider context. Do not ask the
@@ -159,11 +164,47 @@ return a reconnect-required product state; transient provider failures should re
 DomainKit's provider helper performs the exchange, but the host owns this lock-and-persist call
 stack.
 
+## Attach an exact provider target
+
+After a connection is returned, load its private aggregate, restore the credential-scoped provider
+session, and resolve the requested domain. Persist the selected target with `Connection.attach`:
+
+```ts
+import { Connection, DomainName } from "domainkit/promise";
+
+const aggregate = await repository.getByConnectionId(connection.id);
+if (aggregate === null) throw new Error("Connection was not persisted");
+
+// Adapt the provider-specific restore helper to your host's ProviderSession.AsyncInterface.
+const domainName = DomainName.parse("example.com");
+const resolution = await providerSession.resolveTarget(domainName);
+if (resolution._tag !== "Resolved") {
+  throw new Error("The domain needs an explicit provider-target selection");
+}
+
+const attached = await Connection.attach({
+  attachment: {
+    connectionId: connection.id,
+    createdAt: new Date(),
+    domain: domainName,
+    id: crypto.randomUUID(),
+    target: resolution.target,
+  },
+  connectionId: connection.id,
+  ownerId,
+  repository,
+});
+```
+
+The target must come from provider-backed discovery, not browser input. If the result is
+`SelectionRequired`, return candidates to the product UI and validate the selected candidate on the
+server. Use the focused provider for planning, apply, observation, and receipt-bound cleanup.
+
 ## 4. Persist plan attempts before approval
 
 When the user asks to review DNS changes:
 
-1. Load the authorized connection and assert its owner/domain grant.
+1. Load the authorized connection and assert its owner and domain attachment.
 2. Reconstruct the provider.
 3. Create the plan against an exact zone or a discovered zone.
 4. Persist the complete encoded plan, digest, connection, tenant, domain, and expiry as one attempt.
@@ -209,17 +250,17 @@ phase. Keep that product state in the host instead of folding it into DomainKit'
 
 - Provider credentials are accepted and used only on trusted server boundaries.
 - Every connection, reuse, plan, apply, cleanup, and disconnect route rechecks tenant authority.
-- Domain grants are checked in addition to provider scopes.
+- Domain attachments are checked in addition to provider scopes.
 - Interactive continuations are single-use and bound to the initiating flow.
 - OAuth refresh is serialized, persisted before use, and falls back to reconnect only for terminal grants.
 - Plans and cleanup plans are authorized by exact digest.
 - Partial receipts are stored before a retry or remediation path begins.
-- Removing one domain grant does not imply deleting DNS records.
+- Detaching one domain does not imply deleting DNS records.
 - Final-binding revocation remains retryable until the provider confirms it.
 
 ## Next steps
 
 - [Provision and clean up records](/docs/guides/provision-and-clean-up)
 - [Choose a React integration level](/docs/react/integration-levels)
-- [Understand provider authorization and grants](/docs/core/connections)
+- [Understand provider authorization and domain attachments](/docs/core/connections)
 - [Review the transport reference](/docs/reference/transport)

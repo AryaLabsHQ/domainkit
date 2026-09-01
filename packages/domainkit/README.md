@@ -21,16 +21,15 @@ import { Digest, DnsRecord, DomainName, Provisioning } from "domainkit";
 import { InMemoryDnsProvider } from "domainkit/testing";
 import { Effect, Layer } from "effect";
 
-const requirement = DnsRecord.parse({
-  _tag: "CNAME",
+const requirement = DnsRecord.Cname.make({
   metadata: {
     ownership: "customer",
     provenance: "product-onboarding",
     purpose: "tracking",
   },
-  name: "track.example.com",
+  name: DomainName.parse("track.example.com"),
   policy: "exclusive",
-  target: "tracking.example.net",
+  target: DomainName.parse("tracking.example.net"),
   ttl: 300,
 });
 

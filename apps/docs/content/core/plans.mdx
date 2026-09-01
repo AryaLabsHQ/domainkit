@@ -76,9 +76,9 @@ An apply receipt shows which provider record IDs came from a reviewed create pla
 uses that plan and receipt, then reads every record again. Drift, missing identity, or changed
 provider state blocks automatic deletion.
 
-The resulting cleanup plan has a new digest and requires a new authorization. Disconnecting a
-domain grant can therefore preserve DNS, while removing records remains a separately reviewed
-destructive action.
+The resulting cleanup plan has a new digest and requires a new authorization. Detaching a domain
+from a provider connection can therefore preserve DNS, while removing records remains a separately
+reviewed destructive action.
 
 ## What the host still decides
 
