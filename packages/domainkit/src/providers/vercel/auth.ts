@@ -134,8 +134,8 @@ export const exchangeCode = Effect.fn("VercelAuth.exchangeCode")((options: Excha
       accessToken: Secret.make(token.access_token),
       context:
         token.team_id === null
-          ? ({ _tag: "personal" } as const)
-          : ({ _tag: "team", teamId: token.team_id } as const),
+          ? Client.AccountContext.personal()
+          : Client.AccountContext.team({ teamId: token.team_id }),
       installationId: token.installation_id ?? options.configurationId ?? null,
       userId: token.user_id,
     };
@@ -262,7 +262,9 @@ export function restore(
       capabilities: options.authorization.capabilityEvidence.map(({ capability }) => capability),
       ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
       context:
-        context._tag === "team" ? { _tag: "team", teamId: context.teamId } : { _tag: "personal" },
+        context._tag === "team"
+          ? Client.AccountContext.team({ teamId: context.teamId })
+          : Client.AccountContext.personal(),
       token: options.credential.accessToken,
     });
   });

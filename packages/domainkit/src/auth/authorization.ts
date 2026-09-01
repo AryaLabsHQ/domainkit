@@ -25,11 +25,18 @@ export const CapabilityEvidence = S.Struct({
 });
 export interface CapabilityEvidence extends S.Schema.Type<typeof CapabilityEvidence> {}
 
-export const Revocation = S.TaggedUnion({
+const RevocationSchema = S.TaggedUnion({
   Active: {},
   Pending: { requestedAt: S.DateFromString },
 });
-export type Revocation = typeof Revocation.Type;
+/** Revocation state schema and callable constructors for trusted lifecycle values. */
+export const Revocation = {
+  Schema: RevocationSchema,
+  Active: () => RevocationSchema.cases.Active.make({}),
+  Pending: (input: Parameters<typeof RevocationSchema.cases.Pending.make>[0]) =>
+    RevocationSchema.cases.Pending.make(input),
+};
+export type Revocation = typeof RevocationSchema.Type;
 
 /** A provider credential authorization shared by one or more organization connections. */
 export const Schema = S.Struct({
@@ -41,7 +48,7 @@ export const Schema = S.Struct({
   providerContext: ProviderContext.Envelope,
   providerId: S.String,
   requiredCapabilities: S.Array(Capability),
-  revocation: Revocation,
+  revocation: Revocation.Schema,
   scopes: S.Array(S.String),
 });
 export interface ProviderAuthorization extends S.Schema.Type<typeof Schema> {}

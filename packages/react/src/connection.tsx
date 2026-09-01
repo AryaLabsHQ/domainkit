@@ -98,12 +98,11 @@ export function useModel(domain: string): Model {
               preserveDns: true,
             }),
             (result) => {
-              const detached: Disconnected = {
-                _tag: "Disconnected",
+              const detached: Disconnected = Transport.Disconnected.make({
                 domain: snapshot.attachment.domain,
                 provider: snapshot.provider,
                 reusableConnections: [],
-              };
+              });
               return Effect.flatMap(
                 Effect.sync(() => {
                   get.set(actionState, detached);
