@@ -1,15 +1,17 @@
 {
+  "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
-    "baseUrl": ".",
     "jsx": "react-jsx",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
     "paths": {
-      "@/components/ui/*": ["preview/ui/*"],
-      "@/lib/*": ["preview/lib/*"]
+      "@/components/ui/*": ["./preview/ui/*"],
+      "@/lib/*": ["./preview/lib/*"]
     },
     "strict": true,
-    "target": "ES2023"
+    "target": "ES2023",
+    "types": ["bun"]
   },
-  "include": ["**/*"]
+  "include": [".blume/.astro/types.d.ts", ".blume/src/env.d.ts", "**/*"]
 }
