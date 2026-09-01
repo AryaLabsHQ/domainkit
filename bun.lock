@@ -38,7 +38,7 @@
       "name": "@domainkit/capsuledb",
       "version": "0.1.0",
       "dependencies": {
-        "domainkit": "workspace:^0.5.0",
+        "domainkit": "workspace:^0.6.0",
       },
       "devDependencies": {
         "@effect/sql-pg": "4.0.0-rc.112",

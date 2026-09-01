@@ -36,7 +36,8 @@ credentials, and the server-side `Transport` implementation.
 ## Choose the parts you need
 
 - `Domain.Flow` — the full lifecycle;
-- `Connection.Flow`, `Provisioning.Flow`, `Verification.Flow`, and `Cleanup.Flow` — focused flows;
+- `Connection.Flow`, `Provisioning.Flow`, and `Cleanup.Flow` — focused flows;
+- `Verification`'s model and parts — provider and public-DNS evidence with an observe action;
 - `useModel` hooks and parts — your own layout and controls;
 - `Records.Table`, `Records.Card`, and record parts — DNS display without a root or transport.
 
@@ -63,9 +64,9 @@ is unavailable. Replace them through the `marks` prop when your app owns the art
 
 ## Learn more
 
-- [React source and examples](https://github.com/AryaLabsHQ/domainkit/tree/main/packages/react)
+- [React source](https://github.com/AryaLabsHQ/domainkit/tree/main/packages/react)
 - [React component catalog](https://domain-kit.dev/components)
-- [Application transport contract](https://github.com/AryaLabsHQ/domainkit/blob/main/packages/domainkit/src/Transport.ts)
+- [Application transport contract](https://github.com/AryaLabsHQ/domainkit/blob/main/packages/domainkit/src/transport.ts)
 - [Issues](https://github.com/AryaLabsHQ/domainkit/issues)
 
 ## License

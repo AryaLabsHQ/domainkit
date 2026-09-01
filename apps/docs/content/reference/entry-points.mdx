@@ -7,8 +7,8 @@ seo:
   title: DomainKit entry points
 ---
 
-DomainKit publishes core imports and a React package. Use the public names below; internal source
-paths are not part of the API.
+DomainKit publishes core imports, an optional CapsuleDB package, and a React package. Use the public
+names below; internal source paths are not part of the API.
 
 ## Install
 
@@ -32,6 +32,7 @@ Add the React package when your product needs ready-made flows or UI parts:
 | `domainkit/testing`           | In-memory services and provider tests                         |
 | `@domainkit/react`            | React flows, models, UI parts, messages, and themes           |
 | `@domainkit/react/styles.css` | Optional default styles for the React package                 |
+| `@domainkit/capsuledb`        | Optional PostgreSQL persistence for Effect hosts              |
 
 The Promise and Web handler boundaries adapt the same Effect-native lifecycle. They do not define
 second lifecycles or wire protocols. Prefer Layers inside Effect applications and adapt only where

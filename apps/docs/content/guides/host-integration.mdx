@@ -72,9 +72,17 @@ authority.
 
 ## 2. Implement authorization storage
 
-Give DomainKit one `AuthorizationLifecycle.Repository` for the provider authorization, encrypted
-credential reference, and owner bindings. A SQL host can save them in one transaction. If database
-and vault storage are split, make the save recoverable behind the same interface.
+For an Effect host, provide one `ManagedDnsConnections.Service` for the provider authorization,
+encrypted credential reference, and owner bindings. An async host implements
+`ManagedDnsConnections.AsyncInterface` from the Promise entry point and passes it to
+`createDomainKit`:
+
+```ts
+import { type ManagedDnsConnections } from "domainkit/promise";
+```
+
+A SQL host can save these records in one transaction. If database and vault storage are split, make
+the save recoverable behind the same interface.
 
 Use `domainkit/testing`'s in-memory repository in tests only. It does not encrypt credentials or
 provide production durability.
@@ -126,7 +134,9 @@ const DomainKitServerLive = Server.layer({
 
 Mount `Server.toWebHandler(DomainKitServerLive).fetch` at `/api/domainkit/*`, or run
 `Server.Handler` directly inside an Effect HTTP host. Async frameworks mount `domainKit.fetch` at
-the same catch-all route. An interactive provider connection has two server routes:
+the same catch-all route. This handler currently serves only the connection start and callback
+routes below; expose provisioning, verification, and cleanup endpoints separately in your app. An
+interactive provider connection has two server routes:
 
 1. The start route checks the current user and tenant, asks the host policy to authorize any
    requested existing authorization aggregate, creates a short-lived continuation, and returns a

@@ -12,17 +12,21 @@ seo:
 `DnsProvider.Interface` is the provider capability used for planning, apply, delete, and provider
 checks.
 
-| Member         | Purpose                                                                         |
-| -------------- | ------------------------------------------------------------------------------- |
-| `id`           | Stable provider identity embedded in plans and checked before apply.            |
-| `listRecords`  | Read all records in an authoritative zone, including opaque records.            |
-| `getRecord`    | Read one record by provider record ID.                                          |
-| `createRecord` | Create a normalized DomainKit record and return its provider ID when available. |
-| `deleteRecord` | Delete a record by the ID captured in an application receipt.                   |
+| Member         | Purpose                                                               |
+| -------------- | --------------------------------------------------------------------- |
+| `id`           | Stable provider identity embedded in plans and checked before apply.  |
+| `listRecords`  | Read all records in an authoritative zone, including opaque records.  |
+| `getRecord`    | Read one record by provider record ID.                                |
+| `createRecord` | Create a normalized DomainKit record and return a stable provider ID. |
+| `deleteRecord` | Delete a record by the ID captured in an application receipt.         |
 
 Provider failures use `DnsProvider.Error` with the operation, provider ID, optional status/code,
 reason, and optional retry delay. Keep the original cause for diagnostics, but do not send secrets or
 raw provider responses to the browser.
+
+`CreateResult.providerRecordId` may be `null` when a provider cannot return a record identifier.
+Receipt-bound deletion requires a stable, non-null ID, so the conformance cases that read back and
+clean up created records require adapters to return one for those writes.
 
 Promise-first adapters can implement `DnsProvider.AsyncInterface` and use `fromAsync` or
 `layerFromAsync`. `toAsync` adapts an environment-free Effect provider in the opposite direction.

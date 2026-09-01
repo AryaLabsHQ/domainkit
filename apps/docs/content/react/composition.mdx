@@ -7,8 +7,9 @@ seo:
 
 Complete flows are built from smaller parts. Every public part accepts Base UI's `render` prop plus
 state-aware `className` and `style` values. `Connection.Flow` and `Connection.ConnectTrigger` are
-ready-made styles. `Connection.Trigger` only opens the dialog; its `children` supply the label and
-`render` lets you use your own button.
+ready-made styles. `Connection.Trigger` is the unstyled trigger primitive; its `children` supply
+the label and `render` lets you use your own button. Use `ConnectTrigger` when you want the
+provider-marked trigger that opens the dialog.
 
 ```tsx
 <Connection.OAuthAction
@@ -94,12 +95,18 @@ const state = useAtomValue(model.state);
 const command = useAtomSet(model.command);
 
 if (state._tag === "Review") {
+  const isNoopOnly = state.plan.operations.every((operation) => operation._tag === "noop");
+
   return (
     <Operations.Root lifecycle="provisioning">
       {state.plan.operations.map((operation) => (
         <Operations.Item key={operation.id} operation={operation} />
       ))}
-      <button onClick={() => command(Provisioning.Command.Apply())}>Apply approved plan</button>
+      {isNoopOnly ? (
+        <p>No changes needed</p>
+      ) : (
+        <button onClick={() => command(Provisioning.Command.Apply())}>Apply approved plan</button>
+      )}
     </Operations.Root>
   );
 }

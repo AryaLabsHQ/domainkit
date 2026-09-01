@@ -16,9 +16,15 @@ connection outcome.
 ## Prerequisites
 
 - A Vercel Integration with a slug, client ID, client secret, and registered redirect URI.
-- A durable `AuthorizationLifecycle.Repository`.
+- A durable `ManagedDnsConnections.AsyncInterface`.
 - A short-lived, one-time continuation store.
 - Authenticated start and callback routes tied to the current host owner.
+
+Import the async repository type from the Promise entry point:
+
+```ts
+import { type ManagedDnsConnections } from "domainkit/promise";
+```
 
 ## Start an Integration installation
 

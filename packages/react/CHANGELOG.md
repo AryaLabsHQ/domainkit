@@ -1,3 +1,15 @@
+## @domainkit/react@0.6.0
+
+### Attach provider targets to domains
+
+Keep provider account and zone targets explicit when one connection serves more than one customer
+domain, so each attachment can be discovered and detached on its own.
+
+### Load provider marks from integrations.sh
+
+Use the shared integrations endpoint for known provider artwork and fall back to the provider's
+initial when an image is unavailable. Hosts can still replace a mark through `DomainKit.Root`.
+
 ## @domainkit/react@0.5.0
 
 ### Adopt provider target attachments

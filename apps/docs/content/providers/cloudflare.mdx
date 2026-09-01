@@ -15,12 +15,18 @@ in browser code.
 
 ## Prerequisites
 
-- A durable `AuthorizationLifecycle.Repository` for authorizations and credentials.
+- A durable `ManagedDnsConnections.AsyncInterface` for authorizations and credentials.
 - A short-lived, one-time continuation store for OAuth.
 - Authenticated start and callback routes bound to your host user and tenant.
 - A known customer domain whose authoritative zone the credential must be able to read.
 - For OAuth, a registered Cloudflare client, redirect URI, client secret, and the scope IDs assigned
   to that client.
+
+Import the async repository type from the Promise entry point:
+
+```ts
+import { type ManagedDnsConnections } from "domainkit/promise";
+```
 
 ## Start OAuth
 
