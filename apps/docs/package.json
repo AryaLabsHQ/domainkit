@@ -26,6 +26,7 @@
     "registry:build": "shadcn build registry.json --output public/r",
     "registry:check": "bun run registry:build && bun scripts/test-registry.mts",
     "registry:validate": "shadcn registry validate registry.json",
+    "check": "blume check",
     "typecheck": "blume check"
   },
   "dependencies": {
@@ -44,6 +45,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "astro": "7.2.9",
     "shadcn": "4.17.0",
     "wrangler": "4.127.1"
   }

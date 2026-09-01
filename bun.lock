@@ -16,13 +16,13 @@
       "name": "@domainkit/docs",
       "dependencies": {
         "@base-ui/react": "^1.7.0",
-        "@domainkit/react": "workspace:^0.7.0",
+        "@domainkit/react": "workspace:^0.8.0",
         "@effect/atom-react": "4.0.0-rc.112",
         "@hugeicons/core-free-icons": "4.3.0",
         "@hugeicons/react": "1.1.10",
         "blume": "1.5.3",
         "dialkit": "1.4.3",
-        "domainkit": "workspace:^0.7.0",
+        "domainkit": "workspace:^0.8.0",
         "effect": "4.0.0-rc.112",
         "lucide-react": "0.474.0",
         "motion": "13.1.1",
@@ -30,15 +30,16 @@
         "react-dom": "19.2.4",
       },
       "devDependencies": {
+        "astro": "7.2.9",
         "shadcn": "4.17.0",
         "wrangler": "4.127.1",
       },
     },
     "packages/capsuledb": {
       "name": "@domainkit/capsuledb",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
-        "domainkit": "workspace:^0.7.0",
+        "domainkit": "workspace:^0.8.0",
       },
       "devDependencies": {
         "@effect/sql-pg": "4.0.0-rc.112",
@@ -59,7 +60,7 @@
     },
     "packages/domainkit": {
       "name": "domainkit",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "dependencies": {
         "@leichtgewicht/dns-packet": "6.0.3",
         "oauth4webapi": "^3.8.7",
@@ -80,10 +81,10 @@
     },
     "packages/react": {
       "name": "@domainkit/react",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "dependencies": {
         "@base-ui/react": "^1.7.0",
-        "domainkit": "workspace:^0.7.0",
+        "domainkit": "workspace:^0.8.0",
         "scheduler": "0.27.0",
       },
       "devDependencies": {
@@ -114,6 +115,9 @@
         "react-dom": ">=19.0.0 <20.0.0",
       },
     },
+  },
+  "patchedDependencies": {
+    "blume@1.5.3": "patches/blume@1.5.3.patch",
   },
   "overrides": {
     "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#561aa127b37055f885c703583c3c5e80b44395f3",
