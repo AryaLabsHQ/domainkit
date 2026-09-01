@@ -1,10 +1,10 @@
 ---
 title: Host connection
-description: Compose DomainKit connection state into an existing product surface while retaining the packaged controller and dialog.
+description: Put DomainKit connection controls in your own product screen and keep your card, provider copy, and server transport around the flow.
 ---
 
-Use the connection controller and semantic parts when your application already owns the surrounding
-card, navigation, provider copy, or action layout.
+Use the connection controller and parts when your app already owns the card, navigation, provider
+copy, or action layout.
 
 <ReactExample story="host-connection" />
 
@@ -16,9 +16,8 @@ card, navigation, provider copy, or action layout.
 
 ## Usage
 
-Create one controller for the domain and derive the visible surface from its tagged state. Keep the
-controller and the rendered dialog together so pending OAuth or token submissions cannot diverge
-from the displayed state.
+Create one controller for the domain and render from its state. Keep the controller and dialog
+together so a pending OAuth or token submission stays in sync with the screen.
 
 ```tsx
 const controller = Connection.useController(domain);
@@ -32,10 +31,10 @@ return (
 
 ## Composition contract
 
-- `useController` owns the connection model and commands for one domain.
+- `useController` owns the connection state and commands for one domain.
 - `Root` exposes the state through `data-state` and accepts host styling.
 - `Status` renders the current human-readable outcome.
-- `ConnectTrigger` and `Dialog` compose with Base UI dialog state.
+- `ConnectTrigger` and `Dialog` use Base UI dialog state.
 - `RetryAction` follows the failure’s explicit retry policy.
 
 The host still owns authenticated endpoints, tenant checks, credential storage, connection
@@ -56,7 +55,7 @@ submission or redirect is pending.
     status: {
       type: 'Connection.State["_tag"]',
       default: '"Loading"',
-      description: "State tag exposed through data-state and state-aware styling.",
+      description: "State tag exposed through data-state for styling.",
     },
   }}
 />
@@ -68,7 +67,7 @@ submission or redirect is pending.
     state: {
       type: "Connection.State",
       required: true,
-      description: "Connection state used to derive the visible status message.",
+      description: "Connection state used to show the status message.",
     },
   }}
 />
@@ -79,13 +78,12 @@ submission or redirect is pending.
   type={{
     children: {
       type: "ReactNode",
-      description:
-        "Optional custom trigger content; the default includes the provider mark and label.",
+      description: "Optional trigger content; the default includes the provider mark and label.",
     },
     provider: {
       type: "Provider.Provider",
       required: true,
-      description: "Provider descriptor whose authentication dialog the trigger opens.",
+      description: "Provider whose authentication dialog the trigger opens.",
     },
   }}
 />
@@ -97,12 +95,12 @@ submission or redirect is pending.
     controller: {
       type: "Connection.Controller",
       required: true,
-      description: "Controller that owns connection commands and state.",
+      description: "Controller that stores connection state and runs its commands.",
     },
     snapshot: {
       type: "Disconnected",
       required: true,
-      description: "Disconnected provider snapshot used to render authorization options.",
+      description: "Disconnected provider data used to show authorization options.",
     },
   }}
 />

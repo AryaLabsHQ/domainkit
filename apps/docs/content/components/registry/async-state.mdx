@@ -1,10 +1,10 @@
 ---
 title: Async state
-description: Present loading, empty, and error states with simple children and Tailwind tokens, keeping asynchronous data fetching and retry policy in your host application.
+description: Show loading, empty, and error states with simple children while your app owns fetching, retries, and the message shown to users.
 ---
 
-`async-state` contains three presentation-only components for common asynchronous surfaces. They do
-not fetch data, retry requests, or own a transport.
+`async-state` contains three display components for common async states. They do not fetch data,
+retry requests, or own a transport.
 
 <Component path="registry/async-state" />
 
@@ -35,6 +35,6 @@ Each component also has a useful default message when no children are supplied.
 All three components also accept the native props and `className` supported by the shadcn `Empty`
 root.
 
-Keep retry actions, error details, and loading ownership in the host application. If an error is
-related to provider authorization or DNS observation, pair visible context with the relevant
-packaged flow rather than treating this component as a lifecycle state machine.
+Keep retry actions, error details, and loading ownership in your app. If an error is related to
+provider authorization or DNS checks, show that context with the relevant packaged flow instead of
+using this component to run the lifecycle.

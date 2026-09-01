@@ -1,17 +1,16 @@
 ---
 title: Connections and grants
-description: Understand how provider credentials, account context, host owners, domain grants, reusable connections, continuations, and revocation fit together.
+description: See how provider accounts, users, domains, and reusable connections fit together while your app keeps credentials and policy.
 sidebar:
   label: Connections and grants
 seo:
   title: DomainKit connections and grants
 ---
 
-Connecting a DNS provider crosses two authority systems: the provider's account and scopes, and the
-host application's users, tenants, and domains. DomainKit keeps those systems explicit instead of
-equating one provider token with one product domain.
+A provider account and your app's users, tenants, and domains are different things. DomainKit keeps
+them separate: one provider token does not automatically grant access to one product domain.
 
-## The authorization aggregate
+## The authorization record
 
 A durable provider authorization contains:
 
@@ -22,8 +21,7 @@ A durable provider authorization contains:
 - revocation state, plus credential expiry and refresh material behind the secret boundary;
 - one or more host-owner bindings and grants.
 
-The credential is part of one logical aggregate, but DomainKit does not choose how the host encrypts
-or persists it.
+The credential belongs to this record, but your app decides how to encrypt and store it.
 
 ## Owner bindings and grants
 
@@ -32,11 +30,11 @@ A provider authorization can be bound to a host owner with:
 - an account-wide grant, optionally excluding domains; or
 - an explicit set of domain grants.
 
-The grant is enforced in addition to provider scopes. A broad Cloudflare or Vercel credential does
-not automatically authorize every host tenant or every visible zone.
+Your app checks the grant in addition to the provider scopes. A broad Cloudflare or Vercel credential
+does not automatically authorize every tenant or every visible zone.
 
-This separation allows one valid provider authorization to serve another domain for the same owner
-without repeating provider consent.
+This lets the same owner use one valid provider authorization for another domain without asking for
+provider consent again.
 
 An expired access token does not expire the provider authorization when a refresh token remains
 available. The host refreshes and atomically rotates the credential before a provider operation. A
@@ -50,19 +48,19 @@ connection; pending revocation projects separately.
 ```text
 token
   -> validate provider authority
-  -> commit authorization aggregate
+  -> save authorization
 
 interactive
   -> create one-time continuation
   -> redirect to provider
   -> consume callback continuation
   -> exchange code
-  -> commit authorization aggregate
+  -> save authorization
 ```
 
-Cloudflare implements standards-based OAuth and scoped API tokens. Vercel implements its
-provider-specific Integration installation flow and tokens. DomainKit does not label every
-redirect/code exchange as generic OAuth.
+Cloudflare supports OAuth and scoped API tokens. Vercel supports its Integration installation flow
+and tokens. DomainKit keeps those provider flows distinct instead of calling every redirect a
+generic OAuth flow.
 
 ## Reusing provider authority
 
@@ -72,14 +70,14 @@ redirect/code exchange as generic OAuth.
 2. proves the provider authorization can serve the requested domain;
 3. obtains the owner's consent for the new grant.
 
-Reuse preserves earlier grants. It rejects cross-owner, expired, insufficient, or revoking
-authorizations.
+Reuse keeps earlier grants. It rejects authorizations that belong to another owner, have expired,
+lack a needed capability, or are being revoked.
 
 ## Removing a domain
 
 Removing one domain binding preserves the other bindings and normally preserves DNS. If the removed
 binding was the last one, the authorization lifecycle attempts provider revocation before deleting
-the durable authorization and credential state.
+the saved authorization and credential state.
 
 Revocation is fail-closed. Durable retry state remains until the provider confirms the outcome.
 
@@ -94,13 +92,13 @@ The host supplies:
 - a short-lived, one-time continuation store;
 - consent records and audit history.
 
-A SQL application can implement the aggregate commit as one transaction. A split database/vault
-application must implement a recoverable saga behind the same repository boundary.
+A SQL application can save the record in one transaction. If database and vault storage are split,
+the app must make the save recoverable behind the same repository boundary.
 
 ## Capability evidence
 
-Provider scope strings are not treated as complete proof. Required capabilities record one of three
-evidence levels:
+Provider scope strings are not complete proof. Each required capability records one of three evidence
+levels:
 
 - `Declared` — the host or provider flow claims the capability;
 - `Introspected` — a provider response reported it;

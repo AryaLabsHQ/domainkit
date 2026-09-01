@@ -1,14 +1,14 @@
 ---
 title: Entry points
-description: Choose the DomainKit public entry point that matches your runtime, programming model, and React integration layer.
+description: Choose the public DomainKit import that fits your app and see what each entry point provides for your runtime and integration.
 sidebar:
   label: Entry points
 seo:
   title: DomainKit entry points
 ---
 
-DomainKit publishes provider-independent core entry points and an optional React package. Public
-imports come from the entry points below; internal source paths are not supported API.
+DomainKit publishes core imports and a React package. Use the public names below; internal source
+paths are not part of the API.
 
 ## Install
 
@@ -16,7 +16,7 @@ imports come from the entry points below; internal source paths are not supporte
 domainkit effect@rc
 ```
 
-Add the React package when your product needs packaged flows or semantic parts:
+Add the React package when your product needs ready-made flows or UI parts:
 
 ```package-install
 @domainkit/react @effect/atom-react@rc react react-dom
@@ -27,10 +27,10 @@ Add the React package when your product needs packaged flows or semantic parts:
 | Import                        | Purpose                                                       |
 | ----------------------------- | ------------------------------------------------------------- |
 | `domainkit`                   | Canonical Effect services, schemas, plans, providers, and DNS |
-| `domainkit/promise`           | Promise adapters for hosts that do not expose Effect directly |
-| `domainkit/server`            | Effect-first routes and an async Web handler factory          |
-| `domainkit/testing`           | In-memory services and provider conformance helpers           |
-| `@domainkit/react`            | React flows, models, semantic parts, messages, and theme      |
+| `domainkit/promise`           | Promise API for apps that do not use Effect                   |
+| `domainkit/server`            | Provider connection routes and an async Web handler           |
+| `domainkit/testing`           | In-memory services and provider tests                         |
+| `@domainkit/react`            | React flows, models, UI parts, messages, and themes           |
 | `@domainkit/react/styles.css` | Optional default styles for the React package                 |
 
 The Promise and Web handler boundaries adapt the same Effect-native lifecycle. They do not define
@@ -41,13 +41,12 @@ the host framework requires a standard Web handler.
 
 - `domainkit` requires Node.js 24.10 or newer and Effect 4.
 - `@domainkit/react` requires React 19, React DOM 19, Effect 4, and Effect Atom React 4.
-- Provider credentials, OAuth state, connections, plans, and receipts remain on the server.
+- Provider credentials, OAuth state, connections, plans, and receipts stay on the server.
 
 ## Version alignment
 
-Install `domainkit` and `@domainkit/react` at the same release version. The React transport imports
-wire models from the core package, so mixed versions can disagree about schemas and lifecycle
-outcomes.
+Install `domainkit` and `@domainkit/react` at the same release version. The React transport uses
+models from the core package, so mixed versions can disagree about schemas and results.
 
 Continue with the [Core API](/docs/reference/core), [Promise API](/docs/reference/promise),
 [Server API](/docs/reference/server), [Testing API](/docs/reference/testing), or

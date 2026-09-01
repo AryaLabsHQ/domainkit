@@ -1,13 +1,13 @@
 ---
 title: React API
-description: Reference the namespaces exported by @domainkit/react, including complete flows, semantic parts, transport, and theming.
+description: Reference the namespaces exported by `@domainkit/react`, including flows, UI parts, transport, themes, messages, and events.
 sidebar:
   label: React API
 seo:
   title: DomainKit React API reference
 ---
 
-Import React surfaces from `@domainkit/react` and opt in to the default stylesheet separately.
+Import React APIs from `@domainkit/react` and opt in to the default stylesheet separately.
 
 ```tsx
 import { Domain, DomainKit } from "@domainkit/react";
@@ -33,34 +33,33 @@ import "@domainkit/react/styles.css";
 | `Verification` | Evidence refresh, result presentation, and model hook.           |
 | `Cleanup`      | Receipt-bound cleanup review, application, and model hook.       |
 
-Each focused namespace exposes its packaged `Flow`, a `Controller`, `useModel`, state and command
-constructors, and semantic parts where the lifecycle needs custom composition.
+Each focused namespace exposes its `Flow`, a `Controller`, `useModel`, state and command
+constructors, and UI parts for custom screens.
 
 ## Presentation and customization
 
 | Namespace    | Purpose                                                                 |
 | ------------ | ----------------------------------------------------------------------- |
-| `Records`    | Model-free record table, card, rows, cells, and copy controls.          |
-| `Operations` | Neutral plan and cleanup operation list with semantic parts.            |
+| `Records`    | Record table, card, rows, cells, and copy controls.                     |
+| `Operations` | Neutral plan and cleanup operation list with reusable parts.            |
 | `Provider`   | Provider marks, labels, authentication controls, and composition parts. |
-| `Messages`   | Default copy and host-owned message overrides.                          |
+| `Messages`   | Default copy and app-owned message overrides.                           |
 | `Theme`      | Typed tokens and theme recipes applied at `DomainKit.Root`.             |
 | `Testing`    | React fixtures and helpers for package consumers.                       |
 
 {/* reference-inventory:end */}
 
 All interactive parts forward refs and expose state-aware attributes or classes for host styling.
-Complete flows use the same models and parts exported for custom composition.
+Complete flows use the same models and parts that are available for custom screens.
 
-Component-specific props, examples, installation commands, states, and accessibility guidance live
-on each page in the [React component catalog](/components). This page remains the package-level
-namespace and runtime reference.
+Component props, examples, install commands, states, and accessibility guidance live on each page
+in the [React component catalog](/components). This page covers the package namespaces and runtime.
 
 ## Server rendering
 
 Components can render on the server. Browser-only behaviors such as clipboard writes, file
 downloads, and navigation run from user interactions. Provider credentials are never part of the
-React API; all stateful operations cross the host-owned `Transport`.
+React API; all stateful operations cross your app's `Transport`.
 
 See [Choose an integration level](/docs/react/integration-levels) and
-[Composition](/docs/react/composition) before selecting the lowest-level surface.
+[Composition](/docs/react/composition) before choosing a smaller part.

@@ -1,22 +1,21 @@
 ---
 title: Shadcn registry
-description: Copy model-free DNS presentation components into your application through the DomainKit Shadcn registry without installing its managed runtime.
+description: Copy DNS display components into your application through the DomainKit Shadcn registry and keep your own styles, data, and state.
 ---
 
-The registry is a source-distribution channel for presentation-only DNS components. These copied
-files use plain props and Tailwind tokens; they do not import `domainkit`, Effect, Atom, transports,
-or provider clients.
+The registry distributes source files for DNS display components. These copied files use plain props
+and Tailwind tokens; they do not import `domainkit`, Effect, Atom, transports, or provider clients.
 
 ```package-install
 npx shadcn@latest add https://domain-kit.dev/r/dns-table.json https://domain-kit.dev/r/dns-operation.json https://domain-kit.dev/r/dns-status.json https://domain-kit.dev/r/provider-mark.json https://domain-kit.dev/r/copy-value.json https://domain-kit.dev/r/async-state.json
 ```
 
 Use `@domainkit/react` for connection, OAuth, provisioning, verification, cleanup, and shared Effect
-Atom state. The registry deliberately contains no lifecycle behavior and is not an alternative
-transport implementation.
+Atom state. Registry components only render the data you pass to them; they do not run the lifecycle
+or replace the transport.
 
 `provider-mark` provides the generic `ProviderMark` wrapper. Pass an image from
 `https://integrations.sh/logo/{domain}?sz=64` when the copied component needs a provider logo.
 
-Browse the [Registry component catalog](/components/registry) for a live preview, source view,
-installation command, usage example, and API reference for every shipped item.
+Browse the [Registry component catalog](/components/registry) for a preview, source view, install
+command, usage example, and API reference for every shipped item.

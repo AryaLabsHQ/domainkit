@@ -1,11 +1,14 @@
 ---
 title: Composition
-description: Compose DomainKit React parts with Base UI render props, built-in provider marks, host overrides, and CSS tokens that match your product.
+description: Build DomainKit React screens with Base UI render props, provider marks, host overrides, and CSS tokens while keeping your own layout.
 seo:
   title: Theme DomainKit React parts in your product
 ---
 
-Complete flows are conveniences over semantic parts. Every public part accepts Base UI's `render` prop plus state-aware `className` and `style` values. `Connection.Flow` and `Connection.ConnectTrigger` are the styled recipes. `Connection.Trigger` only opens the dialog; its required `children` supply the label and `render` uses a host button.
+Complete flows are built from smaller parts. Every public part accepts Base UI's `render` prop plus
+state-aware `className` and `style` values. `Connection.Flow` and `Connection.ConnectTrigger` are
+ready-made styles. `Connection.Trigger` only opens the dialog; its `children` supply the label and
+`render` lets you use your own button.
 
 ```tsx
 <Connection.OAuthAction
@@ -33,7 +36,8 @@ dialog example together with its API tables.
 </DomainKit.Root>
 ```
 
-The opt-in stylesheet reads `--domainkit-*` variables. Theme props set those variables without replacing the host font, palette, or icon system.
+The opt-in stylesheet reads `--domainkit-*` variables. Theme props set those variables without
+replacing the host font, colors, or icons.
 
 Recognized provider marks load from `integrations.sh` and fall back to the provider's first letter
 when unavailable. Use `marks` when your product needs to replace a remote mark or supply branding
@@ -41,7 +45,8 @@ for a private provider.
 
 ## Host notifications
 
-DomainKit emits structured lifecycle events after user-initiated mutations. Keep notification UI in the host application and map the events to Sonner, another toast system, telemetry, or nothing at all:
+DomainKit emits lifecycle events after user-initiated changes. Keep notification UI in the host app
+and map the events to Sonner, another toast system, telemetry, or nothing:
 
 ```tsx
 <DomainKit.Root
@@ -67,19 +72,21 @@ DomainKit emits structured lifecycle events after user-initiated mutations. Keep
 </DomainKit.Root>
 ```
 
-Partial apply and cleanup results have their own events, so hosts can use warning notifications instead of reporting partial work as success. Initial inspection and passive verification do not emit notification events.
+Partial apply and cleanup results have their own events, so hosts can show a warning instead of
+reporting partial work as success. Initial inspection and passive verification do not emit events.
 
-The default mutation dialogs close immediately after a complete success. Partial results and failures remain in context because they require user attention; transient success feedback belongs to the host notification surface.
+The default dialogs close after a complete success. Partial results and failures stay visible because
+they need user attention; short success messages belong to the host.
 
 ## Records from parts
 
-Presentational record parts accept browser-safe records directly and do not require
+Record parts accept browser-safe records directly and do not require
 `DomainKit.Root` or a transport. The [Records](/components/records) page owns the table, zone-file,
 copy-control, and API examples.
 
-## Effect Atom lifecycle models
+## Effect Atom models
 
-Every stateful lifecycle exposes the atoms used by its packaged controller and flow:
+Every stateful lifecycle exposes the atoms used by its controller and flow:
 
 ```tsx
 const model = Provisioning.useModel(connection, records);
@@ -98,9 +105,9 @@ if (state._tag === "Review") {
 }
 ```
 
-The same model seam is available as `Connection.useModel`, `Verification.useModel`, and
-`Cleanup.useModel`. `Operations.List` is the complete neutral operation recipe; its exported parts
-support Base UI render elements, forwarded refs, state-aware classes, and host event handlers.
+The same model interface is available as `Connection.useModel`, `Verification.useModel`, and
+`Cleanup.useModel`. `Operations.List` is the full neutral operation view; its parts support Base UI
+render elements, forwarded refs, state-aware classes, and host event handlers.
 
 ## Related docs
 

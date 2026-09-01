@@ -1,12 +1,12 @@
 ---
 title: Troubleshooting
-description: Diagnose installation, provider connection, zone discovery, stale plans, partial applies, cleanup blocks, observation, and React transport failures.
+description: Find and fix installation, connection, plan, cleanup, DNS, and React transport problems by checking one boundary at a time.
 seo:
   title: Troubleshoot DomainKit integrations
 ---
 
-Start with the tagged failure or outcome. Do not replace distinct authorization, provider, stale,
-conflict, propagation, and transport failures with one generic retry state.
+Start with the tagged failure or outcome. Do not turn different authorization, provider, stale,
+conflict, propagation, and transport failures into one generic retry state.
 
 ## Installation and exports
 
@@ -19,12 +19,11 @@ canonical roots.
 ### Core and React declarations disagree
 
 Install matching `domainkit` and `@domainkit/react` versions. Remove lockfile overrides or packed
-artifacts that resolve the two packages to different public transport contracts, then rebuild the
-consumer from a clean dependency install.
+artifacts that resolve the packages to different transport types, then rebuild after a clean install.
 
 ### React or Effect peer errors appear
 
-Check the current package manifests. DomainKit 0.5.0 expects Effect 4 RC; `@domainkit/react` expects
+Check the current package manifests. DomainKit 0.6.0 expects Effect 4 RC; `@domainkit/react` expects
 React and ReactDOM 19 plus `@effect/atom-react` 4 RC.
 
 ## Connections
@@ -46,8 +45,8 @@ React and ReactDOM 19 plus `@effect/atom-react` 4 RC.
 ### Reuse is rejected
 
 The existing authorization must belong to the same host owner, remain active, cover the requested
-provider capability, and prove authority for the new domain. Cross-owner, expired, or revoking
-authorizations fail closed.
+provider capability, and prove authority for the new domain. Authorizations from another owner,
+expired authorizations, and authorizations being revoked stop without a write.
 
 ## Plans and apply
 
@@ -59,13 +58,13 @@ the incompatible state, change the product requirement, or continue through a ma
 ### Apply reports a stale plan
 
 Provider state changed after review. Discard the attempt, create a fresh plan, show the new
-operations, and require a new digest authorization.
+operations, and ask for approval again.
 
 ### Apply completed partially
 
-Persist the receipt carried by `PartialApplyError` before doing anything else. Report the confirmed
-writes separately from the failed operation. Do not describe the provider sequence as rolled back or
-atomic.
+Save the receipt carried by `PartialApplyError` before doing anything else. Report the writes that
+finished separately from the failed operation. Do not describe the provider sequence as rolled back
+or atomic.
 
 ## Cleanup
 
@@ -83,18 +82,18 @@ your expiry model, authorize the remaining operations, and pass the prior receip
 
 ### Provider state matches but public DNS is pending
 
-The authoritative write exists, but recursive resolvers have not observed it. Preserve the source
-distinction and continue your host's propagation polling policy.
+The provider write exists, but public resolvers have not seen it. Keep the two results separate and
+continue your host's propagation policy.
 
 ### Observation is unavailable
 
-Inspect the resolver evidence for timeouts and failures. `Unavailable` is not proof that the record
-is missing and should not be presented as propagation delay.
+Inspect resolver evidence for timeouts and failures. `Unavailable` does not prove that the record is
+missing and should not be shown as propagation delay.
 
 ### Observation is a mismatch
 
-Compare normalized values, record type, name, priority, and provider/public evidence. A mismatch
-means DNS answered with different data; waiting alone may not fix it.
+Compare normalized values, record type, name, priority, and provider/public evidence. A mismatch means
+DNS returned different data; waiting alone may not fix it.
 
 ## Providers
 
@@ -106,7 +105,7 @@ observations so they can still participate in name conflicts.
 ### Conformance fails after a successful create
 
 Verify that `createRecord` returns a stable record ID and that a fresh `listRecords` and `getRecord`
-can read the exact normalized record. The conformance contract expects complete readback, not a local
+can read the exact normalized record. The conformance tests expect complete readback, not a local
 write-through cache.
 
 ## React transport
@@ -118,7 +117,7 @@ leave an HTTP client Promise pending after navigation or component disposal.
 
 ### A stale request replaces newer state
 
-Use the packaged models and one stable `DomainKit.Root` transport Layer for the mounted lifecycle.
+Use the packaged models and one stable `DomainKit.Root` transport Layer for the mounted flow.
 Avoid recreating transport identity during an active session.
 
 ### OAuth navigation does not match the host router

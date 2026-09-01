@@ -1,24 +1,24 @@
 ---
 title: Testing API
-description: Reference DomainKit's in-memory services and provider conformance helpers for deterministic lifecycle and adapter tests.
+description: Reference DomainKit's in-memory services and provider tests for plans, connections, verification, and cleanup without credentials.
 sidebar:
   label: Testing API
 seo:
   title: DomainKit testing API reference
 ---
 
-Import deterministic test support from `domainkit/testing`. This entry point is public, but it is
-intended for tests, examples, local development, and provider contract validation.
+Import test support from `domainkit/testing`. This public entry point is for tests, examples, local
+development, and provider checks.
 
 {/* reference-inventory:start */}
 
-| Namespace                         | Purpose                                                                                  |
-| --------------------------------- | ---------------------------------------------------------------------------------------- |
-| `InMemoryDnsProvider`             | Stateful DNS provider layer for planning, application, deletion, and verification tests. |
-| `InMemoryDnsResolver`             | Resolver layer with controlled answers and failures.                                     |
-| `InMemoryManagedDnsConnections`   | Durable-in-process managed connection repository for lifecycle tests.                    |
-| `InMemoryConnectionContinuations` | In-process continuation storage for connection flows.                                    |
-| `ProviderConformance`             | Shared contract suite for any `DnsProvider` implementation.                              |
+| Namespace                         | Purpose                                                                    |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| `InMemoryDnsProvider`             | Stateful DNS provider for planning, apply, delete, and verification tests. |
+| `InMemoryDnsResolver`             | Resolver with controlled answers and failures.                             |
+| `InMemoryManagedDnsConnections`   | In-process saved connection store for lifecycle tests.                     |
+| `InMemoryConnectionContinuations` | In-process continuation store for connection flows.                        |
+| `ProviderConformance`             | Shared test suite for any `DnsProvider` implementation.                    |
 
 {/* reference-inventory:end */}
 
@@ -43,13 +43,13 @@ const program = Provisioning.create({
 }).pipe(Effect.provide(InMemoryDnsProvider.layer()));
 ```
 
-The executable [quickstart](/docs/quickstart) follows this path through plan, authorize, apply, and
-idempotent re-plan.
+The executable [quickstart](/docs/quickstart) follows this path through plan, approval, apply, and a
+second plan that makes no changes.
 
 ## Validate a provider adapter
 
 Run `ProviderConformance` against a fresh isolated provider instance. The suite checks create, read,
-list, delete, opaque-record preservation, error normalization, and idempotency expectations. Add
+list, delete, opaque-record preservation, error handling, and repeatability. Add
 provider-specific tests for authentication, discovery, pagination, rate limits, and live API
 behavior; the shared suite cannot prove those concerns.
 

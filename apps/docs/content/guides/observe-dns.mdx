@@ -1,12 +1,12 @@
 ---
 title: Observe DNS
-description: Observe a requirement through public DNS, provider readback, or both without collapsing propagation, mismatch, and transport failure into a Boolean.
+description: Check a DNS requirement through public DNS, provider readback, or both and keep each result separate so users see what is known.
 seo:
   title: Observe public DNS and provider evidence
 ---
 
-`Verification.observe` is DomainKit's only DNS observation operation. Choose evidence sources based
-on the question your product is asking.
+`Verification.observe` is DomainKit's DNS check. Choose the source based on the question your product
+needs to answer.
 
 ## Observe public DNS
 
@@ -19,12 +19,12 @@ import { Verification } from "domainkit";
 const result = await Effect.runPromise(Verification.observe({ record }));
 ```
 
-The default resolver pool queries Cloudflare and Google concurrently with RFC wire-format DNS over
-HTTPS. The default `AnyMatch` policy treats one matching resolver as sufficient.
+The default resolver pool asks Cloudflare and Google over DNS over HTTPS at the same time. The default
+`AnyMatch` policy accepts one matching resolver.
 
 ## Observe the authoritative provider
 
-Provider readback asks whether the connected account currently contains the desired record:
+Provider readback asks whether the connected account contains the desired record:
 
 ```ts
 const result = await Verification.observe({
@@ -34,8 +34,7 @@ const result = await Verification.observe({
 }).pipe(Effect.provideService(DnsProvider.Service, provider), Effect.runPromise);
 ```
 
-This is useful immediately after apply, but it does not prove that public resolvers can answer with
-the record.
+This is useful after apply, but it does not prove that public resolvers can answer with the record.
 
 ## Require both sources
 
@@ -49,7 +48,7 @@ const result = await Verification.observe({
 }).pipe(Effect.provideService(DnsProvider.Service, provider), Effect.runPromise);
 ```
 
-The aggregate is `Verified` only when every requested source matches.
+The result is `Verified` only when every requested source matches.
 
 ## Handle every outcome
 
@@ -74,8 +73,8 @@ switch (result._tag) {
 - `NotObserved` means no evidence source was requested.
 - `Verified` means every requested source matched.
 
-Do not turn `Unavailable` into `Pending`: retrying a timeout and waiting for propagation are
-different product experiences.
+Do not turn `Unavailable` into `Pending`: a timeout and propagation delay need different product
+responses.
 
 ## Choose a resolver policy
 
@@ -85,14 +84,14 @@ Provide a custom `DnsResolverPool.Service` when your reliability model needs:
 - `AllMatch` — every configured resolver must match;
 - `Quorum({ minimum })` — at least the selected number must match.
 
-Each public-DNS result preserves the named answer, no-data response, timeout, or failure from every
-resolver so the host can diagnose disagreement.
+Each public-DNS result keeps the answer, no-data response, timeout, or failure from every resolver so
+the host can explain disagreement.
 
 ## Keep product state in the host
 
-DNS observation answers a DNS question. It does not replace certificate issuance, email-provider
-readiness, application verification, background polling, or your onboarding state machine. Map the
-tagged evidence into that host-owned lifecycle.
+DNS observation answers a DNS question. It does not replace certificates, email-provider readiness,
+application checks, background polling, or your onboarding state. Map the tagged evidence into that
+host-owned lifecycle.
 
 ## Related documentation
 

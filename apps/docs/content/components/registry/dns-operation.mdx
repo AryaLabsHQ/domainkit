@@ -1,10 +1,10 @@
 ---
 title: DNS operation
-description: Show a single planned DNS operation with its action, record identity, value, priority, and optional reason in a compact neutral surface.
+description: Show one planned DNS operation with its action, record, value, priority, and reason before your app applies the plan.
 ---
 
-`dns-operation` is a presentational row for a DNS operation. It can display the `create`, `noop`,
-or `conflict` result from a plan, but it does not create a plan or authorize a mutation.
+`dns-operation` is a display row for a DNS operation. It can show `create`, `noop`, or `conflict`
+from a plan, but it does not create a plan or approve a write.
 
 <Component path="registry/dns-operation" />
 
@@ -16,8 +16,8 @@ npx shadcn@latest add https://domain-kit.dev/r/dns-operation.json
 
 ## Usage
 
-Supply the action as your own text, badge, or icon. Keep the action and any conflict reason
-understandable without relying on color.
+Pass the action as text, a badge, or an icon. Keep the action and any conflict reason clear without
+relying on color.
 
 ```tsx
 <DnsOperation
@@ -44,6 +44,6 @@ understandable without relying on color.
 
 ## Boundary
 
-DomainKit plans remain immutable and digest-bound: `dns-operation` only renders the operation your
-host has already selected. Use [Plans, authorization, and receipts](/docs/core/plans) for the
-review and apply lifecycle.
+DomainKit plans remain immutable and tied to a digest: `dns-operation` only renders the operation
+your host has already selected. Use [Plans, authorization, and receipts](/docs/core/plans) for the
+review and apply steps.

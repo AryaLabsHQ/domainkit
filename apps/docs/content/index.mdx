@@ -1,21 +1,20 @@
 ---
-title: Domain setup infrastructure
-description: Build provider-connected domain setup into your SaaS with exact DNS plans, host-owned credentials, and React flows you control.
+title: Add custom domains to your app
+description: Connect a DNS provider, apply the records your product needs, and keep control in your app from the first request to cleanup.
 sidebar:
   label: Overview
   order: 1
 seo:
-  title: Domain setup infrastructure for SaaS
+  title: Add custom domains to your app
 ---
 
-DomainKit is a TypeScript toolkit for building provider-connected domain setup into a SaaS product.
-Your application defines the DNS requirements and owns the customer, credential, persistence, and
-policy boundaries. DomainKit supplies the portable connection, planning, authorization,
-verification, and cleanup lifecycle.
+DomainKit helps you add custom domains to a SaaS product. Your app says which DNS records it needs.
+DomainKit connects a supported provider, builds a plan you can review, applies the approved changes,
+checks DNS, and records what happened.
 
-The package root is Effect-native. A secondary Promise facade is available for foreign runtime
-boundaries. `@domainkit/react` provides browser-safe connection, provisioning, verification,
-cleanup, and DNS record interfaces over a transport owned by the host application.
+Your app keeps control of users, credentials, storage, routes, and product rules. Use the Effect API
+at the core, the Promise API when your app uses async/await, and `@domainkit/react` for browser-safe
+flows over your server.
 
 ```package-install
 domainkit
@@ -23,53 +22,53 @@ domainkit
 
 <CardGroup cols={2}>
   <Card title="Quickstart" href="/docs/quickstart" icon="rocket">
-    Install DomainKit and build your first reviewable DNS plan.
+    Build and inspect your first DNS plan without credentials.
   </Card>
   <Card title="Plans" href="/docs/core/plans" icon="file">
-    Understand the immutable plan, authorization, apply, and cleanup lifecycle.
+    See how review, apply, receipts, and cleanup work.
   </Card>
   <Card title="Connect providers" href="/docs/core/connections" icon="link">
-    Add OAuth, integration, or API-token authorization without exposing credentials to the browser.
+    Connect a provider without putting credentials in the browser.
   </Card>
   <Card title="DomainKit and Domain Connect" href="/docs/core/domain-connect" icon="link">
-    Understand when provider templates are enough and when your SaaS needs an owned DNS lifecycle.
+    Compare a provider template with a full app-owned setup.
   </Card>
   <Card title="React UI" href="/docs/react" icon="component">
-    Use complete flows or compose semantic parts into your own product.
+    Use ready-made flows or build your own screen from parts.
   </Card>
   <ProviderCard title="Cloudflare" href="/docs/providers/cloudflare" provider="cloudflare">
-    Connect with OAuth or scoped API tokens and discover the owning account.
+    Connect Cloudflare with OAuth or a scoped API token.
   </ProviderCard>
   <ProviderCard title="Vercel" href="/docs/providers/vercel" provider="vercel">
-    Preserve personal or team context from a Vercel Integration installation.
+    Connect Vercel with an Integration or personal access token.
   </ProviderCard>
 </CardGroup>
 
 ## Product boundary
 
-| DomainKit owns                              | Your application owns                                  |
-| ------------------------------------------- | ------------------------------------------------------ |
-| Provider-neutral DNS requirements and plans | Product-specific DNS requirements                      |
-| Digest-bound plan authorization             | Identity, tenancy, consent, and audit policy           |
-| Cloudflare and Vercel provider integrations | Credential encryption and durable persistence          |
-| Provider and public-DNS observation         | Authenticated routes and product readiness state       |
-| Receipt-bound cleanup                       | When and how users may remove records                  |
-| Browser-safe React lifecycle contracts      | Branding, surrounding UI, notifications, and telemetry |
+| DomainKit owns                       | Your application owns                      |
+| ------------------------------------ | ------------------------------------------ |
+| DNS requirements and plans           | Your product's DNS requirements            |
+| Approval for an exact plan           | Users, tenants, consent, and audit policy  |
+| Cloudflare and Vercel integrations   | Credential encryption and storage          |
+| Provider and public DNS checks       | Authenticated routes and product readiness |
+| Cleanup plans tied to apply receipts | When and how users may remove records      |
+| React lifecycle contracts            | Branding, layout, messages, and telemetry  |
 
 ## Safety model
 
-- **Review before mutation.** A plan lists creates, exact no-ops, and conflicts before any write.
-- **Authorize the digest.** Apply accepts the reviewed plan plus authorization for that exact digest.
-- **Fail closed.** DomainKit never silently overwrites incompatible DNS state.
-- **Keep the host in control.** Your application owns credential storage, consent, callback routes, persistence, and audit history.
-- **One implementation.** The Effect API is canonical; the Promise API delegates to it.
+- **Review before a write.** A plan lists creates, exact no-ops, and conflicts before anything changes.
+- **Approve the exact plan.** Apply accepts the reviewed plan and approval for its digest.
+- **Stop on conflicts.** DomainKit never silently overwrites incompatible DNS state.
+- **Keep control in your app.** Your application owns credentials, consent, routes, storage, and audit history.
+- **One implementation.** The Effect API is canonical; the Promise API uses it.
 
 ## Entry points
 
-| Package             | Use it for                                                               |
-| ------------------- | ------------------------------------------------------------------------ |
-| `domainkit`         | Effect services, programs, schemas, typed failures, and provider modules |
-| `domainkit/promise` | Promise facade for foreign runtime boundaries                            |
-| `domainkit/server`  | Mountable routes for Effect-native and async hosts                       |
-| `domainkit/testing` | In-memory capabilities and provider conformance tests                    |
-| `@domainkit/react`  | Browser-safe flows and DNS record primitives over a host-owned transport |
+| Package             | Use it for                                                     |
+| ------------------- | -------------------------------------------------------------- |
+| `domainkit`         | Effect services, schemas, plans, providers, and typed failures |
+| `domainkit/promise` | Promise API for apps that use async/await                      |
+| `domainkit/server`  | Provider connection routes and an async Web handler            |
+| `domainkit/testing` | In-memory services and provider tests                          |
+| `@domainkit/react`  | React flows and DNS record UI over your server                 |

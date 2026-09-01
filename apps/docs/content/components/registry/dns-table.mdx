@@ -1,10 +1,10 @@
 ---
 title: DNS table
-description: Render plain DNS records in a responsive table with optional priority and status cells, while your application owns the data and observation policy.
+description: Show plain DNS records in a responsive table with optional priority and status cells for setup screens and review steps.
 ---
 
-`dns-table` is a model-free table for record data your application already has. It renders values;
-it does not fetch DNS, interpret evidence, or decide whether a domain is ready.
+`dns-table` is a table for record data your app already has. It renders values; it does not fetch
+DNS, interpret evidence, or decide whether a domain is ready.
 
 <Component path="registry/dns-table" />
 
@@ -16,8 +16,8 @@ npx shadcn@latest add https://domain-kit.dev/r/dns-table.json
 
 ## Usage
 
-Pass records with stable `id` values. Status content is rendered as provided, so you can compose
-it with `dns-status` or your own status component.
+Pass records with stable `id` values. Status content is rendered as provided, so you can use
+`dns-status` or your own status component.
 
 ```tsx
 <DnsTable
@@ -64,5 +64,5 @@ It also accepts native `tr` props and `className`.
 ## Composition
 
 Use [DNS status](/components/registry/dns-status) for status content and [Copy value](/components/registry/copy-value)
-for value-level clipboard actions. For provider readback and public-DNS observation semantics, use
-the packaged [Records](/components/records) component instead.
+for copy actions. For provider readback and public-DNS checks, use the packaged [Records](/components/records)
+component instead.

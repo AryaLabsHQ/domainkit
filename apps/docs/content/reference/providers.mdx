@@ -1,6 +1,6 @@
 ---
 title: Provider APIs
-description: Reference the provider contract, Cloudflare and Vercel adapters, opaque records, and conformance requirements.
+description: Reference the provider contract, Cloudflare and Vercel adapters, opaque records, and provider tests for new integrations.
 sidebar:
   label: Provider APIs
 seo:
@@ -9,8 +9,8 @@ seo:
 
 ## Provider contract
 
-`DnsProvider.Interface` is the capability required by planning, application, deletion, and
-provider-backed verification.
+`DnsProvider.Interface` is the provider capability used for planning, apply, delete, and provider
+checks.
 
 | Member         | Purpose                                                                         |
 | -------------- | ------------------------------------------------------------------------------- |
@@ -20,9 +20,9 @@ provider-backed verification.
 | `createRecord` | Create a normalized DomainKit record and return its provider ID when available. |
 | `deleteRecord` | Delete a record by the ID captured in an application receipt.                   |
 
-Provider failures use `DnsProvider.Error` with operation, provider ID, optional status/code,
-normalized reason, and optional retry delay. Preserve the original cause for diagnostics, but do not
-send secrets or raw provider responses to the browser.
+Provider failures use `DnsProvider.Error` with the operation, provider ID, optional status/code,
+reason, and optional retry delay. Keep the original cause for diagnostics, but do not send secrets or
+raw provider responses to the browser.
 
 Promise-first adapters can implement `DnsProvider.AsyncInterface` and use `fromAsync` or
 `layerFromAsync`. `toAsync` adapts an environment-free Effect provider in the opposite direction.
@@ -37,8 +37,8 @@ Promise-first adapters can implement `DnsProvider.AsyncInterface` and use `fromA
 - zone discovery; and
 - a `DnsProvider` implementation.
 
-The provider namespaces do not persist OAuth state, credentials, connections, plans, or receipts.
-Your host owns those stores and reconstructs a provider service for each authorized operation.
+The provider namespaces do not store OAuth state, credentials, connections, plans, or receipts. Your
+host owns those stores and builds a provider service for each approved operation.
 
 ### Cloudflare
 
@@ -55,14 +55,14 @@ zone discovery, and provider reconstruction from the stored context plus a host-
 
 ## Opaque records
 
-An adapter must return unsupported provider records as `DnsRecord.Opaque` values rather than
-dropping them. Planning preserves opaque records and refuses unsafe assumptions about data it cannot
-model. Deletion targets only provider record IDs captured by a DomainKit receipt.
+An adapter must return unsupported provider records as `DnsRecord.Opaque` values instead of dropping
+them. Planning keeps opaque records and avoids assumptions about data it cannot model. Deletion
+targets only provider record IDs captured by a DomainKit receipt.
 
 ## Acceptance
 
 Run the public `ProviderConformance` suite against a fresh isolated instance, then add adapter tests
-for authentication, discovery, pagination, provider error bodies, rate limits, and live API behavior.
+for authentication, discovery, pagination, provider errors, rate limits, and live API behavior.
 
 Continue with [Implement a DNS provider](/docs/guides/implement-provider),
 [Cloudflare](/docs/providers/cloudflare), or [Vercel](/docs/providers/vercel).

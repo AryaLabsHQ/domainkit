@@ -1,9 +1,9 @@
 ---
 title: Records
-description: Render product-owned DNS requirements as a readable table with observation evidence or as a copyable and downloadable zone file.
+description: Show your DNS records in a table, or let users copy and download a zone file for setup screens, support, or export.
 ---
 
-The records namespace presents product-owned DNS requirements and optional observation evidence. It
+The records namespace shows the DNS requirements from your app and any evidence you pass to it. It
 does not read DNS or decide whether the product is ready.
 
 <ReactExample story="records" />
@@ -16,7 +16,7 @@ Install the packaged React components:
 @domainkit/react domainkit effect @effect/atom-react react react-dom
 ```
 
-For model-free, copied presentation components, install the matching registry items:
+For standalone, copied display components, install the matching registry items:
 
 ```package-install
 npx shadcn@latest add https://domain-kit.dev/r/dns-table.json https://domain-kit.dev/r/copy-value.json https://domain-kit.dev/r/dns-status.json
@@ -27,9 +27,8 @@ observation models.
 
 ## Table
 
-`Records.Table` renders type, name, value, priority, and—when supplied—matching evidence. Evidence
-is grouped by `recordId`; provider and public-DNS observations can therefore be shown without
-collapsing them into one readiness boolean.
+`Records.Table` renders type, name, value, priority, and any evidence you pass in. Evidence is
+grouped by `recordId`, so provider and public-DNS results can stay separate.
 
 ```tsx
 <Records.Table records={records} evidence={observation.publicDns} />
@@ -37,9 +36,8 @@ collapsing them into one readiness boolean.
 
 ## Zone file
 
-`Records.ZoneFile` serializes the same records for clipboard and download actions. Browser-only
-clipboard and download behavior runs from user interaction, so the component can still render on
-the server.
+`Records.ZoneFile` turns the same records into a zone file for copy and download actions. Clipboard
+and download behavior starts only after a user action, so the component can render on the server.
 
 ```tsx
 <Records.ZoneFile domain={domain} records={records} />
@@ -88,7 +86,7 @@ level record parts.
     copiedLabel: {
       type: "string",
       default: '"Copied"',
-      description: "Accessible label shown after copying the zone file.",
+      description: "Label shown after copying the zone file.",
     },
     copyIcon: {
       type: "ReactNode",
@@ -97,12 +95,12 @@ level record parts.
     copyLabel: {
       type: "string",
       default: '"Copy zone"',
-      description: "Visible and accessible label for copying the zone file.",
+      description: "Label for the copy action.",
     },
     domain: {
       type: "string",
       required: true,
-      description: "Domain used to name the downloaded zone file.",
+      description: "Domain used in the downloaded zone file name.",
     },
     downloadIcon: {
       type: "ReactNode",
@@ -111,12 +109,12 @@ level record parts.
     downloadLabel: {
       type: "string",
       default: '"Download"',
-      description: "Visible and accessible label for downloading the zone file.",
+      description: "Label for the download action.",
     },
     records: {
       type: "ReadonlyArray<Transport.DnsRecord>",
       required: true,
-      description: "DNS records serialized into the zone file.",
+      description: "DNS records written to the zone file.",
     },
   }}
 />
@@ -132,7 +130,7 @@ level record parts.
     copiedLabel: {
       type: "string",
       default: '"Copied"',
-      description: "Accessible action label shown after copying.",
+      description: "Action label shown after copying.",
     },
     copyIcon: {
       type: "ReactNode",
@@ -141,12 +139,12 @@ level record parts.
     copyLabel: {
       type: "string",
       default: '"Copy"',
-      description: "Accessible action label shown before copying.",
+      description: "Action label shown before copying.",
     },
     value: {
       type: "string",
       required: true,
-      description: "Text displayed and copied after the user activates the action.",
+      description: "Text shown and copied after the user activates the action.",
     },
   }}
 />
