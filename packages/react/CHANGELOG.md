@@ -1,21 +1,8 @@
 ## @domainkit/react@0.7.0
 
-### Compose lifecycle models
-
-Expose Effect Atom models for every DNS lifecycle and add shared composable operation primitives.
-
 ### Make no-op provisioning explicit
 
 Make provisioning review actions reflect no-op DNS plans and soften dialog focus styling.
-
-### Align Effect package contracts
-
-Align the Effect and Effect Atom peer contract, public installation guidance, and packed consumer
-proof for the coordinated 0.3 release.
-
-### Publish Shadcn registry primitives
-
-Document the model-free DomainKit Shadcn registry alongside the installed lifecycle library.
 
 ## @domainkit/react@0.6.0
 

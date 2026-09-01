@@ -1,30 +1,10 @@
 ## domainkit@0.7.0
 
-### Model provider connections and domain attachments
-
-Replace the public domain-grant and provider-account deduplication model with
-`ProviderConnection`, `ProviderTarget`, and `DomainAttachment`. Provider credentials may back
-multiple explicitly linked organization connections, while exact domain attachments own DNS
-operation authorization and disconnects revoke the shared provider authorization only after the
-final organization connection is removed.
-
 ### Expose callable constructors
 
 Expose callable constructors for tagged DomainKit values. Effect and Promise integrations can
 create plan operations, revocation states, and resolver outcomes without manually writing `_tag`
 fields, while schemas remain available for validation and persistence.
-
-### Add provider target discovery
-
-Add credential-scoped provider sessions for Cloudflare and Vercel. Providers can discover multiple
-accounts and authoritative zones, report explicit target-selection outcomes, preserve provider
-evidence, and bind DNS operations to an explicitly selected target. Vercel integrations use the
-current `/v2/oauth/access_token` exchange and preserve configuration and personal/team context.
-
-### Align Effect package contracts
-
-Align the Effect and Effect Atom peer contract, public installation guidance, and packed consumer
-proof for the coordinated 0.3 release.
 
 ## domainkit@0.6.0
 
