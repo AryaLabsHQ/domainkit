@@ -106,7 +106,7 @@ export function make(options: Options = {}): Lifecycle.Interface {
         revocation:
           aggregate.authorization.revocation._tag === "Pending"
             ? aggregate.authorization.revocation
-            : { _tag: "Pending", requestedAt: new Date() },
+            : ProviderAuthorization.Revocation.Pending.make({ requestedAt: new Date() }),
       },
     };
     yield* commit("prepareRevocation", pending);

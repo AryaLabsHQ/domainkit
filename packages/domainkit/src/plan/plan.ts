@@ -363,38 +363,35 @@ function reconcileRequirement(
     const exact = sameSet.find((record) => DnsRecord.equals(record, requirement));
     const id = yield* sha256Encoded(RequirementDigest, { requirement });
     if (exact !== undefined) {
-      return {
-        _tag: "noop",
+      return DnsPlan.Operation.noop.make({
         id,
         requirement,
         ttlDrift: exact.ttl !== requirement.ttl,
-      };
+      });
     }
     const cnameConflict =
       sameName.length > 0 &&
       (requirement._tag === "CNAME" || sameName.some((record) => record._tag === "CNAME"));
     if (cnameConflict) {
-      return {
-        _tag: "conflict",
+      return DnsPlan.Operation.conflict.make({
         existing: sameName,
         id,
         reason: "CNAME records cannot coexist with other records at the same name",
         requirement,
-      };
+      });
     }
     if (
       sameSet.length > 0 &&
       (requirement.policy === "exclusive" || sameSet.some(({ policy }) => policy === "exclusive"))
     ) {
-      return {
-        _tag: "conflict",
+      return DnsPlan.Operation.conflict.make({
         existing: sameSet,
         id,
         reason: "The exclusive record set already contains incompatible data",
         requirement,
-      };
+      });
     }
-    return { _tag: "create", id, requirement };
+    return DnsPlan.Operation.create.make({ id, requirement });
   });
 }
 

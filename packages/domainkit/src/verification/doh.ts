@@ -63,7 +63,7 @@ function decodePacket(
   packet: DnsPacket.Packet,
 ): Effect.Effect<DnsResolver.Resolution, DnsResolver.Error> {
   if (packet.rcode === "NXDOMAIN") {
-    return Effect.succeed({ _tag: "nodata" });
+    return Effect.succeed(DnsResolver.Resolution.nodata.make({}));
   }
   if (packet.rcode !== "NOERROR") {
     return Effect.fail(
@@ -74,14 +74,14 @@ function decodePacket(
     );
   }
   if (packet.answers === undefined || packet.answers.length === 0) {
-    return Effect.succeed({ _tag: "nodata" });
+    return Effect.succeed(DnsResolver.Resolution.nodata.make({}));
   }
   return Effect.forEach(packet.answers, decodeAnswer, { concurrency: "unbounded" }).pipe(
     Effect.map((answers): DnsResolver.Resolution => {
       const supportedAnswers = answers.filter((answer) => answer !== null);
       return supportedAnswers.length === 0
-        ? { _tag: "nodata" }
-        : { _tag: "answer", answers: supportedAnswers };
+        ? DnsResolver.Resolution.nodata.make({})
+        : DnsResolver.Resolution.answer.make({ answers: supportedAnswers });
     }),
   );
 }

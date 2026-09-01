@@ -57,6 +57,7 @@ import {
 import {
   Cloudflare as PromiseCloudflare,
   Connection,
+  DnsResolver,
   ManagedDnsConnections,
   Provisioning,
   Secret,
@@ -149,15 +150,16 @@ const observed = await Verification.observe({
   record: input.requirements[0],
   resolvers: [{
     id: "packed-resolver",
-    resolver: { resolve: async () => ({
-      _tag: "answer",
-      answers: [{
-        data: "domainkit",
-        name: "_verify.example.com",
-        ttl: 60,
-        type: "TXT",
-      }],
-    }) },
+    resolver: {
+      resolve: async () => DnsResolver.Resolution.answer.make({
+        answers: [{
+          data: "domainkit",
+          name: "_verify.example.com",
+          ttl: 60,
+          type: "TXT",
+        }],
+      }),
+    },
   }],
 });
 const cloudflareOptions = {
@@ -170,7 +172,7 @@ const cloudflare = PromiseCloudflare.make(cloudflareOptions);
 const effectCloudflare = Cloudflare.make(cloudflareOptions);
 const vercelOptions = {
   capabilities: ["dns:read", "dns:write"],
-  context: { _tag: "personal" },
+  context: PromiseVercel.AccountContext.personal(),
   fetch: async () => { throw new Error("not called"); },
   token: Secret.make("packed-token"),
 };
