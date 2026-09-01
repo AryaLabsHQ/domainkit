@@ -51,8 +51,8 @@
   "overrides": {
     "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#561aa127b37055f885c703583c3c5e80b44395f3"
   },
+  "packageManager": "bun@1.4.0",
   "patchedDependencies": {
     "blume@1.5.3": "patches/blume@1.5.3.patch"
-  },
-  "packageManager": "bun@1.4.0"
+  }
 }
