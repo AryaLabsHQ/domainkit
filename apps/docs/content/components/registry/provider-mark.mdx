@@ -1,10 +1,10 @@
 ---
 title: Provider mark
-description: Wrap a provider logo or custom mark in an accessible, consistently sized surface without coupling copied UI to provider credentials or lifecycle state.
+description: Wrap a provider logo or custom mark with an accessible label and consistent size for provider pickers and connection cards.
 ---
 
-`provider-mark` is a model-free visual wrapper. It provides the accessible label and sizing surface;
-your application supplies the image, SVG, or other mark.
+`provider-mark` is a visual wrapper. It provides the accessible label and size; your app supplies the
+image, SVG, or other mark.
 
 <Component path="registry/provider-mark" />
 
@@ -16,8 +16,7 @@ npx shadcn@latest add https://domain-kit.dev/r/provider-mark.json
 
 ## Usage
 
-Use the `integrations.sh` endpoint for provider artwork, or pass a self-hosted asset owned by your
-application.
+Use the `integrations.sh` endpoint for provider artwork, or pass an asset hosted by your app.
 
 ```tsx
 <ProviderMark label="Cloudflare">
@@ -35,4 +34,4 @@ application.
 `ProviderMark` also accepts native `span` props and `className`.
 
 Decorative child images should use `alt=""`; the wrapper announces the provider once through its
-`role="img"` and label. Keep provider identity and asset policy in your host application.
+`role="img"` and label. Your app still controls provider identity and asset policy.

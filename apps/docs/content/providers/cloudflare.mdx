@@ -1,21 +1,21 @@
 ---
 title: Connect Cloudflare
-description: Connect a Cloudflare account with OAuth or a scoped API token, discover the account from a known zone, and persist the resulting authorization on your server.
+description: Connect Cloudflare with OAuth or a scoped API token, find the right account, and save the authorization on your server for later requests.
 seo:
   title: Connect Cloudflare DNS with OAuth or API tokens
 ---
 
 <ProviderLogo provider="cloudflare" size={48} />
 
-Cloudflare supports standards-based OAuth and API-token connection methods. Both produce the same
-durable DomainKit authorization aggregate and provider context.
+Cloudflare supports OAuth and API-token connections. Both produce the same saved DomainKit
+authorization and provider context.
 
-Run every step in this guide on a trusted server. Do not construct a Cloudflare provider client or
-retain the token in browser code.
+Run every step in this guide on a trusted server. Do not build a Cloudflare client or keep the token
+in browser code.
 
 ## Prerequisites
 
-- A durable `AuthorizationLifecycle.Repository` for authorization aggregates and credentials.
+- A durable `AuthorizationLifecycle.Repository` for authorizations and credentials.
 - A short-lived, one-time continuation store for OAuth.
 - Authenticated start and callback routes bound to your host user and tenant.
 - A known customer domain whose authoritative zone the credential must be able to read.
@@ -61,10 +61,10 @@ const result = await Connection.start({
 ```
 
 An interactive start returns `Redirect`. Send its `authorizationUrl` to the browser only after the
-host has checked the current session and tenant authority.
+host checks the current session and tenant authority.
 
-The flow uses the known domain to resolve the selected Cloudflare account after authorization. The
-customer does not need to find or type an account ID.
+The flow uses the known domain to find the Cloudflare account after authorization. The customer does
+not need to find or type an account ID.
 
 ## Complete the callback
 
@@ -80,10 +80,9 @@ const connected = await Connection.complete({
 });
 ```
 
-`Connection.complete` consumes the continuation exactly once, validates the OAuth response,
-discovers the account from the known zone, and commits the provider authorization. Persist only the
-non-secret provider context in ordinary application records; the credential belongs behind the
-repository's secret-storage boundary.
+`Connection.complete` consumes the continuation once, validates the OAuth response, finds the account
+from the known zone, and saves the provider authorization. Store only non-secret provider context in
+ordinary records; keep the credential behind the repository's secret-storage boundary.
 
 ## Refresh an OAuth credential
 
@@ -136,8 +135,8 @@ const connected = await Connection.start({
 ```
 
 Ask for the narrowest token that covers the intended zones and DNS permissions. Domain-targeted
-validation supports user-owned and account-owned API tokens and discovers the account from the
-visible zone.
+validation supports user-owned and account-owned API tokens and finds the account from the visible
+zone.
 
 ## Reconstruct the provider
 
@@ -183,9 +182,8 @@ await Verification.observe({
 - Ambiguous provider accounts require host/user selection; never choose an opaque account ID
   silently.
 
-Cloudflare's non-mutating token verification response does not always enumerate DNS permissions.
-DomainKit records declared, introspected, and exercised capability evidence instead of treating
-scope strings as complete proof.
+Cloudflare's read-only token check does not always list DNS permissions. DomainKit records declared,
+introspected, and exercised capability evidence instead of treating scope strings as complete proof.
 
 ## Next steps
 

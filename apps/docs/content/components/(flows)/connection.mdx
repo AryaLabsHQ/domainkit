@@ -1,10 +1,10 @@
 ---
 title: Connection
-description: Connect a customer domain to a supported DNS provider through your application’s authenticated, host-owned transport and persistence boundary.
+description: Connect a customer domain to a supported DNS provider through your app's server while keeping credentials and callback routes private.
 ---
 
 `Connection.Flow` renders provider discovery, authorization choices, retry states, and attachment
-over the host-owned `Transport`. It does not put provider credentials in the browser.
+through your app's `Transport`. Provider credentials never enter the browser.
 
 <ReactExample story="connection" />
 
@@ -33,9 +33,9 @@ import { Connection, DomainKit } from "@domainkit/react";
 </DomainKit.Root>;
 ```
 
-The transport endpoint must authenticate the user, resolve tenant policy, keep credentials on the
-server, and persist connection and domain-attachment state. See [Transport](/docs/react/transport)
-for the request boundary.
+The transport endpoint must authenticate the user, check tenant policy, keep credentials on the
+server, and save connection and domain-attachment state. See [Transport](/docs/react/transport) for
+the request boundary.
 
 ## States
 
@@ -50,7 +50,7 @@ for the request boundary.
 
 ## Composition
 
-Use `Connection.useController(domain)` when the packaged flow does not match your product surface.
+Use `Connection.useController(domain)` when the packaged flow does not match your product screen.
 Compose `Root`, `Status`, `ConnectTrigger`, `Dialog`, and `RetryAction` around the same controller.
 The [Host connection](/components/host-connection) page shows that integration level.
 
@@ -80,12 +80,12 @@ label that names the provider, and do not suppress failure text when applying cu
     controller: {
       type: "Connection.Controller",
       required: true,
-      description: "Controller that owns connection commands and state.",
+      description: "Controller that stores connection state and runs its commands.",
     },
     snapshot: {
       type: "Disconnected",
       required: true,
-      description: "Disconnected provider snapshot used to render authorization options.",
+      description: "Disconnected provider data used to show authorization options.",
     },
   }}
 />
@@ -102,15 +102,16 @@ label that names the provider, and do not suppress failure text when applying cu
     controller: {
       type: "Connection.Controller",
       required: true,
-      description: "Controller that performs the detach operation.",
+      description: "Controller that runs the detach operation.",
     },
     onOpenChange: {
       type: "(open: boolean) => void",
-      description: "Called when the dialog's open state changes.",
+      description: "Called when the dialog opens or closes.",
     },
     open: {
       type: "boolean",
-      description: "Controlled open state. Omit it to use the dialog's internal state.",
+      description:
+        "Set this to control the dialog; omit it to let the dialog manage its own state.",
     },
     trigger: {
       type: "ReactElement | null",

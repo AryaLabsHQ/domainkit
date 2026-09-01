@@ -1,22 +1,22 @@
 ---
 title: Choose an integration level
-description: Choose standalone DNS record primitives, a complete Domain flow, focused lifecycle flows, or direct Effect Atom models for an existing product screen.
+description: Choose DNS record UI, a complete Domain flow, a focused flow, or direct models for the product screen you are building.
 seo:
   title: Choose a DomainKit React integration level
 ---
 
-`@domainkit/react` is not one indivisible widget. Choose the smallest surface that matches the
-lifecycle and structure your product already owns.
+`@domainkit/react` is not one large widget. Choose the smallest part that matches the work and
+layout your product already owns.
 
-## Compare the surfaces
+## Compare the options
 
 | Surface                                           | Transport required | DomainKit owns                                                                  | Host owns                                                    |
 | ------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `Records.Table`, `Records.Card`, and record parts | No                 | DNS presentation, copy, status, zone-file output                                | Record data and surrounding product state                    |
-| Shadcn registry components                        | No                 | Source-distributed presentation recipes                                         | Copied source, styling, and all behavior                     |
+| `Records.Table`, `Records.Card`, and record parts | No                 | DNS display, copy, status, zone-file output                                     | Record data and surrounding product state                    |
+| Shadcn registry components                        | No                 | Copied presentation components                                                  | Copied source, styling, and all behavior                     |
 | `Domain.Flow`                                     | Yes                | Connection, plan review, apply, observation, cleanup entry, disconnect, records | Authenticated transport, persistence, requirements, branding |
-| Focused `Connection.Flow` or `Provisioning.Flow`  | Yes                | One packaged lifecycle recipe                                                   | Surrounding screen and other lifecycles                      |
-| `useModel` plus semantic parts                    | Yes                | Effect Atom state and command semantics                                         | Layout, interaction chrome, composition, product state       |
+| Focused `Connection.Flow` or `Provisioning.Flow`  | Yes                | One ready-made flow                                                             | Surrounding screen and other lifecycles                      |
+| `useModel` plus parts                             | Yes                | Effect Atom state and command behavior                                          | Layout, interaction chrome, composition, product state       |
 
 ## Present records without a transport
 
@@ -24,35 +24,35 @@ Choose record primitives when customers still configure DNS manually or your app
 owns connection and provisioning. See [Records](/components/records) and
 [Record Card](/components/record-card) for installation, examples, and API details.
 
-The transport record is a presentation projection with `id`, `name`, `type`, `value`, and optional
-`priority`. Keep requirement metadata and conflict policy on the server.
+The transport record is a display value with `id`, `name`, `type`, `value`, and optional `priority`.
+Keep requirement metadata and conflict policy on the server.
 
 ## Use the complete domain flow
 
-Choose `Domain.Flow` when one screen should coordinate the complete DomainKit lifecycle. See
+Choose `Domain.Flow` when one screen should handle the complete DomainKit lifecycle. See
 [Domain flow](/components/domain) for the component contract.
 
 Persist the `receiptId` in the host and supply it after reload so the cleanup entry remains
 available. `Domain.Flow` includes record presentation and DNS observation; use a more focused level
-when your product already owns either surface.
+when your product already owns either part of the screen.
 
 ## Compose focused flows
 
-An existing domain screen can use connection, provisioning, verification, and cleanup independently.
+An existing domain screen can use connection, provisioning, verification, and cleanup separately.
 See [Connection](/components/connection) and [Host lifecycle](/components/host-lifecycle).
 
-This is the right level when the host has its own DNS table, service-verification lifecycle, or
-cleanup placement. A transport operation may remain intentionally unused by the chosen screen, but
-`DomainKit.Root` still receives the complete transport contract.
+This is the right level when the host has its own DNS table, service checks, or cleanup placement. A
+transport operation may be unused by the chosen screen, but `DomainKit.Root` still receives the full
+transport contract.
 
 ## Compose models and parts
 
-Use the model seam when your design system owns the structure and interaction chrome. The
-[Composition](/docs/react/composition) guide covers models, commands, render props, and theming;
-[Host connection](/components/host-connection) shows a complete composed surface.
+Use models and parts when your design system owns the structure and interaction chrome. The
+[Composition](/docs/react/composition) guide covers models, commands, render props, and themes;
+[Host connection](/components/host-connection) shows a complete screen built from parts.
 
-Packaged flows and controllers consume the same models. Choosing direct models does not create a
-second client state machine.
+Packaged flows and controllers use the same models. Choosing direct models does not create a second
+client state machine.
 
 ## Keep these responsibilities in the host
 

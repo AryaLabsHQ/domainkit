@@ -1,10 +1,10 @@
 ---
 title: Provider Mark
-description: Render DNS provider identity with host overrides, integrations.sh logos for known providers, and an accessible text fallback for unknown providers.
+description: Show a DNS provider logo from integrations.sh, your own artwork, or a text fallback in a connection card or provider picker.
 ---
 
 `Provider.Mark` renders the provider identity returned by the host transport. Known providers use
-the `integrations.sh` logo endpoint; unknown or failed images fall back to the provider’s initial.
+the `integrations.sh` logo endpoint. Unknown or failed images fall back to the provider's initial.
 
 <ReactExample story="provider" />
 
@@ -16,13 +16,13 @@ Install the package component:
 @domainkit/react domainkit effect @effect/atom-react react react-dom
 ```
 
-Or copy the model-free wrapper through the DomainKit registry:
+Or copy the standalone wrapper through the DomainKit registry:
 
 ```package-install
 npx shadcn@latest add https://domain-kit.dev/r/provider-mark.json
 ```
 
-The copied `ProviderMark` only supplies the accessible visual wrapper. Pass your own image, such as
+The copied `ProviderMark` supplies only the accessible wrapper. Pass your own image, such as
 `https://integrations.sh/logo/cloudflare.com?sz=64`, as its child.
 
 ## Host overrides
@@ -40,8 +40,8 @@ Provide `marks` to `DomainKit.Root` when your application already owns provider 
 </DomainKit.Root>
 ```
 
-Marks are keyed by provider ID and may be a React node or a function of the provider descriptor.
-This keeps branding, asset policy, and self-hosted images under application control.
+Marks use provider IDs and may be a React node or a function of the provider descriptor. Your app
+still controls branding, asset policy, and self-hosted images.
 
 ## Accessibility
 
@@ -57,7 +57,7 @@ inside it should use an empty `alt` so the provider is announced once.
     provider: {
       type: "Provider.Provider",
       required: true,
-      description: "Provider descriptor whose identity and artwork are rendered.",
+      description: "Provider whose identity and artwork are shown.",
     },
   }}
 />

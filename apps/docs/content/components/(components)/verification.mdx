@@ -1,10 +1,10 @@
 ---
 title: Verification
-description: Observe provider and public-DNS evidence for each required record without collapsing propagation or product readiness into a single boolean.
+description: Show provider checks and public DNS for each record without hiding propagation or product readiness from the person setting it up.
 ---
 
-`Verification.Status` requests fresh observations through the host transport and presents provider
-readback separately from public DNS.
+`Verification.Status` requests fresh checks through the host transport and shows provider readback
+separately from public DNS.
 
 <ReactExample story="verification" />
 
@@ -14,26 +14,26 @@ readback separately from public DNS.
 @domainkit/react domainkit effect @effect/atom-react react react-dom
 ```
 
-For model-free status and asynchronous-state primitives, use the registry:
+For standalone status and async-state primitives, use the registry:
 
 ```package-install
 npx shadcn@latest add https://domain-kit.dev/r/dns-status.json https://domain-kit.dev/r/async-state.json
 ```
 
-Those copied components are presentation-only. They do not call the DomainKit transport or interpret
-observation evidence.
+Those copied components only render what you pass to them. They do not call the DomainKit transport
+or interpret observation evidence.
 
 ## Observation states
 
-| State         | Meaning                                                       |
-| ------------- | ------------------------------------------------------------- |
-| `Idle`        | No observation has been requested in this mounted controller. |
-| `Observing`   | The host is reading provider and public-DNS evidence.         |
-| `Observation` | Tagged evidence is available for the requested records.       |
-| `Failed`      | Observation failed; previous evidence may still be shown.     |
+| State         | Meaning                                                 |
+| ------------- | ------------------------------------------------------- |
+| `Idle`        | No check has been requested in this controller.         |
+| `Observing`   | The host is reading provider and public-DNS evidence.   |
+| `Observation` | Evidence is available for the requested records.        |
+| `Failed`      | The check failed; previous evidence may still be shown. |
 
-`Found`, `Missing`, `Mismatch`, and provider failures are evidence about individual records. Your
-application decides whether that evidence makes the product feature ready.
+`Found`, `Missing`, `Mismatch`, and provider failures describe individual records. Your app decides
+whether that evidence makes the product feature ready.
 
 ## Usage
 
@@ -58,7 +58,7 @@ failure messages visible; color alone cannot distinguish missing, mismatched, or
     config: {
       type: "Verification.ObserveConfig",
       required: true,
-      description: "Observation inputs used by the status controller.",
+      description: "Inputs used by the status controller.",
     },
   }}
 />
@@ -69,22 +69,22 @@ failure messages visible; color alone cannot distinguish missing, mismatched, or
   type={{
     connection: {
       type: "Transport.Connected",
-      description: "Optional connected attachment used for provider-side observation.",
+      description: "Optional connected attachment used for provider checks.",
     },
     domain: {
       type: "string",
       required: true,
-      description: "Customer domain whose records are observed.",
+      description: "Customer domain whose records are checked.",
     },
     records: {
       type: "ReadonlyArray<Transport.DnsRecord>",
       required: true,
-      description: "DNS records to compare against provider and public-DNS evidence.",
+      description: "DNS records to compare with provider and public-DNS evidence.",
     },
     sources: {
       type: "{ provider?: boolean; publicDns?: boolean }",
       description:
-        "Select observation sources; provider follows connection presence and public DNS defaults to true.",
+        "Select the checks to run; provider follows connection presence and public DNS is on by default.",
     },
   }}
 />
@@ -96,7 +96,7 @@ failure messages visible; color alone cannot distinguish missing, mismatched, or
     controller: {
       type: "Verification.Controller",
       required: true,
-      description: "Controller whose observe command the action invokes.",
+      description: "Controller whose observe command the action runs.",
     },
   }}
 />

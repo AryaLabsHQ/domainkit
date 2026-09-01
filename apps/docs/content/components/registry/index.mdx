@@ -1,44 +1,43 @@
 ---
 title: Registry
-description: Copy model-free DNS presentation components from the DomainKit registry and compose them with your own data, transport, and product state.
+description: Copy DNS display components from the DomainKit registry and use them with your own data, product state, styles, and layout.
 sidebar:
   label: Overview
 ---
 
-The DomainKit registry contains small, source-distributed React components for DNS interfaces. Add
-the files to your application with the shadcn CLI, then own their markup, styling, and behavior.
+The DomainKit registry contains small React components for DNS interfaces. Add the files to your
+application with the shadcn CLI, then own their markup, styling, and behavior.
 
-These components are intentionally model-free. They accept plain props and do not import
-`domainkit`, Effect, Atom, transports, provider clients, or persistence. Use the packaged
-`@domainkit/react` flows when you need connection, planning, authorization, apply, verification, or
-receipt-bound cleanup.
+These components take plain props. They do not import `domainkit`, Effect, Atom, transports, provider
+clients, or persistence. Use the packaged `@domainkit/react` flows when you need connection,
+planning, authorization, apply, verification, or cleanup tied to a receipt.
 
-The registry follows shadcn conventions: your project needs an initialized `components.json`, each
-item is installed into the configured `ui` alias, and required shadcn primitives are declared as
-`registryDependencies`. The CLI installs those primitives automatically. Components accept native
-element props and `className`, use `data-slot` attributes, and inherit the standard shadcn color,
-radius, and focus-ring tokens from your application.
+The registry follows shadcn conventions. Your project needs an initialized `components.json`; each
+item is installed into the configured `ui` alias, and required shadcn primitives are listed as
+`registryDependencies`. The CLI installs those primitives for you. Components accept native element
+props and `className`, use `data-slot` attributes, and inherit your shadcn color, radius, and
+focus-ring tokens.
 
 ## Registry items
 
 <CardGroup cols={2}>
   <Card title="DNS table" href="/components/registry/dns-table">
-    Render DNS records in a compact, responsive table.
+    Show DNS records in a compact, responsive table.
   </Card>
   <Card title="DNS operation" href="/components/registry/dns-operation">
-    Show one planned create, no-op, or conflict operation.
+    Show one planned create, no-op, or conflict.
   </Card>
   <Card title="DNS status" href="/components/registry/dns-status">
-    Style a visible status label with an explicit tone.
+    Show a status label with an explicit tone.
   </Card>
   <Card title="Provider mark" href="/components/registry/provider-mark">
-    Give a provider logo or mark an accessible visual wrapper.
+    Wrap a provider logo or mark with an accessible label.
   </Card>
   <Card title="Copy value" href="/components/registry/copy-value">
-    Add a copy action to a DNS value without a DomainKit dependency.
+    Add a copy action to a DNS value with no DomainKit dependency.
   </Card>
   <Card title="Async state" href="/components/registry/async-state">
-    Present loading, empty, and error states with simple children.
+    Show loading, empty, and error states with simple children.
   </Card>
 </CardGroup>
 
@@ -50,6 +49,6 @@ Install one item or several items directly into your application:
 npx shadcn@latest add https://domain-kit.dev/r/dns-table.json https://domain-kit.dev/r/dns-operation.json
 ```
 
-The source is the contract. After copying an item, change its classes, icons, and composition to
-fit your design system. Keep host-owned credential custody, authenticated routes, persistence, and
-readiness policy outside these presentation components.
+The source is yours after you copy it. Change its classes, icons, and layout to fit your design
+system. Keep credentials, authenticated routes, storage, and readiness rules outside these display
+components.

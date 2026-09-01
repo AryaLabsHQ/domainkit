@@ -1,14 +1,14 @@
 ---
 title: Promise API
-description: Reference the Promise facade for DomainKit plans, provider connections, DNS records, verification, and cleanup.
+description: Reference the Promise API for plans, provider connections, DNS records, verification, and cleanup in async applications.
 sidebar:
   label: Promise API
 seo:
   title: DomainKit Promise API reference
 ---
 
-Use `domainkit/promise` at framework actions, route handlers, or other boundaries that want Promises
-instead of Effect values.
+Use `domainkit/promise` in route handlers and other app code that uses Promises instead of Effect
+values.
 
 ```ts
 import { DnsRecord, DomainName, Provisioning } from "domainkit/promise";
@@ -46,16 +46,14 @@ const result = await Provisioning.create({
 
 {/* reference-inventory:end */}
 
-The Promise API accepts Promise-shaped provider and resolver interfaces where appropriate and runs
-the canonical Effect programs internally. Results, tagged outcomes, plan digests, and failure
-semantics remain aligned with the core entry point.
+The Promise API accepts Promise-based provider and resolver interfaces and runs the same Effect
+programs internally. Results, tagged outcomes, plan digests, and failures match the core package.
 
 ## Boundary rule
 
-Choose one internal programming model per application layer. Do not repeatedly convert Effect to
-Promise and back through the same lifecycle. If the application core uses Effect, keep the canonical
-entry point and call `Effect.runPromise` once at the framework boundary. If the host is Promise-first,
-use this entry point consistently.
+Choose one programming model per app layer. Do not convert Effect to Promise and back through the
+same lifecycle. If the app core uses Effect, call `Effect.runPromise` once at the framework boundary.
+If the host uses Promises, use this entry point consistently.
 
 For browser UI, implement the narrower [application transport](/docs/reference/transport) rather
 than sending the Promise provider object to the client.

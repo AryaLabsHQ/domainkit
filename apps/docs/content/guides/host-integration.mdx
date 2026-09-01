@@ -1,13 +1,13 @@
 ---
 title: Integrate a host application
-description: Place identity, authorization storage, provider credentials, plan attempts, receipts, authenticated endpoints, and React transport around DomainKit.
+description: Put users, credentials, storage, server routes, and React transport around DomainKit so the host app stays in control.
 seo:
   title: Integrate DomainKit into a SaaS application
 ---
 
-This guide describes the complete application boundary around DomainKit. The host application owns
-the security and durability model; DomainKit owns portable connection, planning, authorization,
-provider, verification, and cleanup semantics.
+This guide shows what belongs in your app and what DomainKit handles. Your app owns security,
+storage, and product rules. DomainKit handles connecting a provider, planning DNS changes, applying
+them, checking the result, and cleaning up.
 
 ## Architecture
 
@@ -43,13 +43,12 @@ Provider credentials never cross into the browser transport.
 | Apply receipt                     | Durable                  | Preserve confirmed writes and partial outcomes for later cleanup                  |
 | Public-DNS observation            | Evidence, not authority  | Persist only if your product needs history, polling, or readiness state           |
 
-Do not use a browser store or evictable cache as authoritative storage for provider authorizations,
+Do not use a browser store or short-lived cache as the source of truth for provider authorizations,
 plans, or receipts.
 
 ## 1. Define product requirements on the server
 
-Your product decides which DNS records it needs and why. Decode those requirements at a trusted
-boundary:
+Your product decides which DNS records it needs and why. Check those requirements on the server:
 
 ```ts
 import { DnsRecord } from "domainkit";
@@ -68,15 +67,14 @@ const requirement = DnsRecord.parse({
 });
 ```
 
-The browser may display a transport projection of these records, but it must not choose ownership,
-conflict policy, or provider authority.
+The browser may display these records, but it must not choose ownership, conflict policy, or provider
+authority.
 
 ## 2. Implement authorization storage
 
-Supply one `AuthorizationLifecycle.Repository` for the provider authorization aggregate, encrypted
-credential reference, and owner bindings. A SQL host can implement the repository as one
-transaction. A host that splits database and vault storage must implement an idempotent,
-recoverable saga behind the same interface.
+Give DomainKit one `AuthorizationLifecycle.Repository` for the provider authorization, encrypted
+credential reference, and owner bindings. A SQL host can save them in one transaction. If database
+and vault storage are split, make the save recoverable behind the same interface.
 
 Use `domainkit/testing`'s in-memory repository in tests only. It does not encrypt credentials or
 provide production durability.
@@ -161,22 +159,21 @@ When the user asks to review DNS changes:
 4. Persist the complete encoded plan, digest, connection, tenant, domain, and expiry as one attempt.
 5. Return a browser-safe projection for review.
 
-When the user approves, correlate the submitted digest with that server-owned attempt before calling
-`Provisioning.authorize`. Do not rebuild a plan from browser input and treat it as the reviewed
-artifact.
+When the user approves, match the submitted digest to that server-owned attempt before calling
+`Provisioning.authorize`. Do not rebuild a plan from browser input and treat it as the reviewed plan.
 
 ## 5. Apply once and persist the receipt
 
-Before apply, claim or otherwise serialize the plan attempt according to your host's request model.
-Pass the persisted plan and authorization to `Provisioning.apply`. Store complete and partial
-receipts before reporting the outcome.
+Before apply, claim or otherwise lock the plan attempt according to your host's request model. Pass
+the saved plan and authorization to `Provisioning.apply`. Store complete and partial receipts before
+reporting the outcome.
 
-An apply receipt is not merely UI progress. It is the proof needed to construct a future safe
+An apply receipt is more than UI progress. It proves which writes can be considered for a later
 cleanup plan.
 
 ## 6. Map authenticated endpoints into React
 
-Expose only application-facing operations to the browser, then adapt the client once:
+Expose only app-facing operations to the browser, then adapt the client once:
 
 ```ts
 import { Transport } from "domainkit";
@@ -189,16 +186,14 @@ export const transport = Transport.layerFromAsync({
 });
 ```
 
-The React transport carries a `planDigest`; your server can additionally correlate an opaque attempt
-identifier in its authenticated session, database, or API route. The transport is a browser-safe
-application contract, not a provider API.
+The React transport carries a `planDigest`; your server can also match an opaque attempt ID in its
+session, database, or API route. The transport is an app contract for the browser, not a provider API.
 
 ## 7. Keep product readiness separate
 
 `Verification.observe` reports provider and public-DNS evidence for DNS requirements. Your product
-may also need provider-specific service readiness, certificate status, email verification,
-polling/backoff, or a persisted onboarding phase. Keep that product lifecycle in the host instead of
-flattening it into DomainKit's observation result.
+may also need service readiness, certificate status, email checks, polling, or a saved onboarding
+phase. Keep that product state in the host instead of folding it into DomainKit's observation result.
 
 ## Security checklist
 

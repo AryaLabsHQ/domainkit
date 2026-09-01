@@ -1,6 +1,6 @@
 ---
 title: Your first safe DNS plan
-description: Create, review, authorize, and apply a DNS plan against an in-memory provider, then confirm that a second plan is an exact no-op.
+description: Build, review, approve, and apply your first DNS plan in memory, then see the next plan become a no-op without provider credentials.
 sidebar:
   label: Quickstart
   order: 2
@@ -8,9 +8,9 @@ seo:
   title: Create your first safe DNS plan with DomainKit
 ---
 
-In this tutorial, we will create one DNS requirement, review the resulting plan, authorize its exact
-digest, apply it to an in-memory provider, and plan the same requirement again. The second plan will
-show a no-op because the desired record already exists.
+In this tutorial, you will define one DNS requirement, review the plan, approve its exact digest,
+apply it to an in-memory provider, and plan the same requirement again. The second plan becomes a
+no-op because the record already exists.
 
 The exercise does not need a provider account, network request, database, or browser.
 
@@ -25,8 +25,8 @@ The exercise does not need a provider account, network request, database, or bro
 domainkit effect@rc
 ```
 
-`effect` is a peer dependency. The package root is the canonical Effect API; we will use it for the
-whole lifecycle.
+`effect` is a peer dependency. The package root uses Effect, and this tutorial uses it for every
+step.
 
 ## Create the exercise
 
@@ -86,13 +86,13 @@ const program = Effect.gen(function* () {
 await Effect.runPromise(program);
 ```
 
-Notice that the provider and Web Crypto capabilities are supplied once around the complete program.
-Every create, authorize, and apply operation participates in the same in-memory provider lifecycle.
+The provider and Web Crypto layers are set up once and shared by the program. The plan, approval,
+and apply calls all use the same in-memory provider.
 
 ## Run it
 
 ```sh
-npx tsx quickstart.ts
+bun run quickstart.ts
 ```
 
 The output should have this shape:
@@ -103,13 +103,13 @@ Receipt: complete
 Second plan: [ 'noop' ]
 ```
 
-The digest and operation identifiers are deterministic but intentionally omitted from this output.
-The important result is the state transition:
+The digest and operation IDs are left out of the output. The important part is the change from a
+missing record to an exact match:
 
 ```text
 missing record
   -> create plan
-  -> digest-bound authorization
+  -> approval for the exact plan
   -> apply receipt
   -> exact record
   -> noop plan
@@ -117,31 +117,28 @@ missing record
 
 ## What happened
 
-- `DnsRecord.parse` validated a complete requirement, including ownership, purpose, conflict policy,
-  and TTL.
-- `Provisioning.create` read the provider and produced an immutable plan containing one `create`.
-- `Provisioning.authorize` approved the exact plan digest and its create operation.
-- `Provisioning.apply` revalidated provider state, created the record, and returned a durable receipt.
-- The second `Provisioning.create` observed the exact record and produced a `noop` instead of writing
-  again.
+- `DnsRecord.parse` checked the requirement, including ownership, purpose, conflict policy, and TTL.
+- `Provisioning.create` read the provider and made a plan with one `create` operation.
+- `Provisioning.authorize` approved that exact plan.
+- `Provisioning.apply` checked provider state again, created the record, and returned a receipt.
+- The second `Provisioning.create` found the same record and returned `noop` instead of writing again.
 
-The in-memory provider follows the same portable contract as a live provider. It proves the
-DomainKit lifecycle without introducing credentials, callback routes, persistence, or provider
-account selection into the first lesson.
+The in-memory provider follows the same contract as a live provider. You can learn the DomainKit
+lifecycle without adding credentials, callback routes, storage, or provider account selection.
 
 ## Next steps
 
 <CardGroup cols={2}>
   <Card title="Understand plans and receipts" href="/docs/core/plans" icon="file">
-    Learn why authorization is digest-bound and cleanup is a separate lifecycle.
+    Learn why users approve an exact plan and cleanup is separate.
   </Card>
   <Card title="Integrate your application" href="/docs/guides/host-integration" icon="server">
-    Map host identity, persistence, endpoints, and credentials around the core lifecycle.
+    Put users, storage, endpoints, and credentials around the core lifecycle.
   </Card>
   <ProviderCard title="Connect Cloudflare" href="/docs/providers/cloudflare" provider="cloudflare">
     Replace the in-memory provider with server-side OAuth or a scoped API token.
   </ProviderCard>
   <Card title="Choose a React integration" href="/docs/react/integration-levels" icon="component">
-    Use record primitives, complete flows, or host-composed lifecycle models.
+    Choose record UI, complete flows, or smaller parts for your own screen.
   </Card>
 </CardGroup>

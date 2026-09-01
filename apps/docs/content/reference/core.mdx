@@ -1,19 +1,19 @@
 ---
 title: Core API
-description: Reference the namespaces exported by DomainKit's canonical Effect entry point, including plans, providers, transport, and DNS verification.
+description: Reference the namespaces exported by the `domainkit` package, including schemas, plans, providers, services, and typed failures.
 sidebar:
   label: Core API
 seo:
   title: DomainKit core API reference
 ---
 
-Import the canonical API from `domainkit`:
+Import the core API from `domainkit`:
 
 ```ts
 import { DnsRecord, Provisioning, Verification } from "domainkit";
 ```
 
-`VERSION` is the package version copied from the installed package manifest.
+`VERSION` is the version from the installed package manifest.
 
 {/* reference-inventory:start */}
 
@@ -74,9 +74,8 @@ import { DnsRecord, Provisioning, Verification } from "domainkit";
 
 {/* reference-inventory:end */}
 
-Every namespace groups its schemas, tagged constructors, services, layers, and failure types. Use
-the namespace rather than importing an internal module path; this makes the package boundary visible
-at call sites and keeps upgrades source-checkable.
+Each namespace groups its schemas, constructors, services, layers, and failure types. Import from the
+namespace instead of an internal module path so the public package boundary stays clear.
 
 ## Lifecycle map
 
@@ -93,5 +92,5 @@ at call sites and keeps upgrades source-checkable.
 | Apply cleanup      | `Deletion.apply`                    | cleanup result before removing the grant        |
 
 See [Plans and receipts](/docs/core/plans) and
-[Provision and clean up DNS](/docs/guides/provision-and-clean-up) for lifecycle semantics. See
-[Entry points](/docs/reference/entry-points) when choosing the runtime boundary.
+[Provision and clean up DNS](/docs/guides/provision-and-clean-up) for the lifecycle rules. See
+[Entry points](/docs/reference/entry-points) when choosing an import.

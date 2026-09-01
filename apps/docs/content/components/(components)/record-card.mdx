@@ -1,10 +1,10 @@
 ---
 title: Record Card
-description: Present one DNS record with accessible copy controls, optional priority metadata, and provider or public-DNS observation evidence.
+description: Show one DNS record with copy controls, priority, and provider or public-DNS evidence while keeping the result easy to scan.
 ---
 
-`Records.Card` is a focused alternative to the records table for setup steps, narrow layouts, and
-record-by-record progress surfaces.
+`Records.Card` is an alternative to the records table for setup steps, narrow layouts, and
+record-by-record progress.
 
 <ReactExample story="card" />
 
@@ -14,9 +14,8 @@ record-by-record progress surfaces.
 @domainkit/react domainkit effect @effect/atom-react react react-dom
 ```
 
-The [Registry](/components/registry) also provides model-free presentation primitives when you
-want to own the card markup and composition. Use the package component when you need DomainKit's
-record and observation types.
+The [Registry](/components/registry) also provides presentation parts when you want to own the card
+markup. Use the package component when you need DomainKit's record and observation types.
 
 ## Usage
 
@@ -29,13 +28,13 @@ Pass one `DnsRecord` and any evidence for its `id`:
 />
 ```
 
-The card renders the record type, name, value, optional priority, copy controls, and every matching
-evidence item. It does not reduce multiple observations into a single product status.
+The card renders the record type, name, value, optional priority, copy controls, and matching evidence.
+It does not turn several observations into one product status.
 
 ## Composition
 
 Use `CardHeader`, `CardTitle`, `CardContent`, `CopyValue`, `Priority`, and `Status` when you need a
-different structure but want the same semantic parts and state-aware styling contract.
+different structure but want the same parts and state-aware styling.
 
 ## Accessibility
 
@@ -75,7 +74,7 @@ the value. Do not communicate observation failures or pending propagation throug
     evidence: {
       type: "Transport.ObservationEvidence",
       required: true,
-      description: "Record evidence whose tagged status is rendered.",
+      description: "Record evidence whose status is shown.",
     },
   }}
 />
@@ -87,7 +86,7 @@ the value. Do not communicate observation failures or pending propagation throug
     priority: {
       type: "number",
       default: "0",
-      description: "Numeric record priority, such as an MX priority.",
+      description: "Numeric record priority, such as MX 10.",
     },
   }}
 />

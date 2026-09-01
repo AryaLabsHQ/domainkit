@@ -1,10 +1,10 @@
 ---
 title: Host lifecycle
-description: Compose connection, plan review, apply, receipt-bound cleanup, and disconnect actions into a host-owned domain row and product lifecycle.
+description: Put connection, review, apply, cleanup, and disconnect actions in your domain screen while your app keeps identity, storage, and policy.
 ---
 
-This integration level keeps DomainKit’s controllers and dialogs while your application owns the
-outer lifecycle row and decides when each action is available.
+This level keeps DomainKit's controllers and dialogs while your app owns the outer row and decides
+when each action is available.
 
 <ReactExample story="host-lifecycle" />
 
@@ -23,19 +23,19 @@ Provisioning and cleanup are separate reviewed operations:
 3. The host persists the returned receipt, including partial results.
 4. `Cleanup.Flow` plans deletion from that receipt and requests separate authorization.
 
-Do not treat disconnecting a provider as cleanup. Your product decides whether cleanup is required,
-whether a receipt remains valid, and whether a user may remove records.
+Do not treat disconnecting a provider as cleanup. Your product decides whether cleanup is needed,
+whether a receipt is still valid, and whether a user may remove records.
 
 ## Product readiness
 
-A completed provider write is not proof that public DNS has propagated. Use
+A completed provider write does not prove that public DNS has propagated. Use
 [Verification](/components/verification) and combine its provider/public-DNS observations with your
 own product readiness policy.
 
 ## Accessibility
 
-Keep destructive cleanup and disconnect actions distinguishable in text, not color alone. Preserve
-the confirmation dialogs, loading states, and failure outcomes supplied by the semantic parts.
+Keep destructive cleanup and disconnect actions distinct in text, not color alone. Preserve the
+confirmation dialogs, loading states, and failure outcomes supplied by the parts.
 
 ## API reference
 
@@ -55,16 +55,16 @@ the confirmation dialogs, loading states, and failure outcomes supplied by the s
     records: {
       type: "ReadonlyArray<Transport.DnsRecord>",
       required: true,
-      description: "Product-owned DNS requirements included in the immutable plan.",
+      description: "DNS requirements included in the plan.",
     },
     showRecords: {
       type: "boolean",
       default: "true",
-      description: "Whether the flow renders the records table alongside its review action.",
+      description: "Whether the flow shows the records table beside its review action.",
     },
     trigger: {
       type: "ReactElement",
-      description: "Optional element rendered as the review trigger.",
+      description: "Optional element used as the review trigger.",
     },
   }}
 />
@@ -85,11 +85,11 @@ the confirmation dialogs, loading states, and failure outcomes supplied by the s
     receiptId: {
       type: "string",
       required: true,
-      description: "Apply receipt that bounds the records eligible for cleanup.",
+      description: "Apply receipt that lists the records eligible for cleanup.",
     },
     trigger: {
       type: "ReactElement",
-      description: "Optional element rendered as the cleanup review trigger.",
+      description: "Optional element used as the cleanup review trigger.",
     },
   }}
 />
@@ -106,15 +106,15 @@ the confirmation dialogs, loading states, and failure outcomes supplied by the s
     controller: {
       type: "Connection.Controller",
       required: true,
-      description: "Controller that performs the detach operation.",
+      description: "Controller that runs the detach operation.",
     },
     onOpenChange: {
       type: "(open: boolean) => void",
-      description: "Called when the dialog's open state changes.",
+      description: "Called when the dialog opens or closes.",
     },
     open: {
       type: "boolean",
-      description: "Controlled open state. Omit it to use the dialog's internal state.",
+      description: "Set this to control the dialog; omit it to use its own state.",
     },
     trigger: {
       type: "ReactElement | null",

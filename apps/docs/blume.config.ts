@@ -24,7 +24,7 @@ export default defineConfig({
     output: "static",
     site: "https://domain-kit.dev",
   },
-  description: "Domain setup infrastructure for SaaS, with reviewable DNS plans and React flows.",
+  description: "Add custom domains to your app with reviewable DNS plans and React flows.",
   examples: {
     css: "examples/theme.css",
     source: "examples",
@@ -50,7 +50,7 @@ export default defineConfig({
   seo: {
     og: {
       titles: {
-        "/": "Build domain setup into your SaaS",
+        "/": "Add custom domains to your app",
         "/components": "DomainKit React components",
       },
     },

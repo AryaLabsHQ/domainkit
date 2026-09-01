@@ -1,10 +1,10 @@
 ---
 title: Copy value
-description: Display a compact DNS value with an accessible clipboard action and optional copied and copy icons that your application can customize.
+description: Show a DNS value with an accessible copy action and optional icons anywhere users need to copy a name, target, or token.
 ---
 
-`copy-value` displays a string and copies it after a user action. It is independent of DomainKit
-records, transport, and observation state.
+`copy-value` shows a string and copies it after a user action. It does not depend on DomainKit
+records, transport, or observation state.
 
 <Component path="registry/copy-value" />
 
@@ -21,7 +21,8 @@ npx shadcn@latest add https://domain-kit.dev/r/copy-value.json
 ```
 
 The component uses `navigator.clipboard` when available and reports its temporary copied state in
-the button label and `data-copied` attribute. Clipboard permission failures leave the value intact.
+the button label and `data-copied` attribute. If the browser blocks clipboard access, the value stays
+unchanged.
 
 ## API
 
@@ -31,8 +32,8 @@ the button label and `data-copied` attribute. Clipboard permission failures leav
 | `copyIcon`   | `ReactNode` | no       | Icon or content shown before copying. |
 | `copiedIcon` | `ReactNode` | no       | Icon or content shown after copying.  |
 
-`CopyValue` also accepts native `span` props and `className`. Its action composes the installed
-shadcn `Button` primitive.
+`CopyValue` also accepts native `span` props and `className`. Its action uses the installed shadcn
+`Button` primitive.
 
-The generated button is labeled with the action and value, so keep the value meaningful and do not
-replace the accessible label with an unlabeled icon-only control.
+The button label includes the action and value. Keep the value meaningful and do not replace the
+label with an unlabeled icon-only control.

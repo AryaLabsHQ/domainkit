@@ -1,10 +1,10 @@
 ---
 title: Domain flow
-description: Mount the complete connection, provisioning, verification, cleanup, and disconnect journey for one customer domain.
+description: Mount the full connection, DNS setup, verification, cleanup, and disconnect flow for one customer domain in a single screen.
 ---
 
-`Domain.Flow` is the highest-level React integration. It combines the same controllers and semantic
-parts exposed by the focused namespaces.
+`Domain.Flow` is the highest-level React integration. It combines the controllers and parts exposed
+by the focused namespaces.
 
 <ReactExample story="domain" />
 
@@ -16,8 +16,8 @@ parts exposed by the focused namespaces.
 
 ## Usage
 
-Place the flow inside `DomainKit.Root` and pass the DNS requirements produced by your product. The
-optional `receiptId` restores cleanup eligibility after the host reloads its durable state.
+Place the flow inside `DomainKit.Root` and pass the DNS requirements from your product. The optional
+`receiptId` restores cleanup after the host reloads saved state.
 
 ```tsx
 <DomainKit.Root transport={transportLayer}>
@@ -26,8 +26,7 @@ optional `receiptId` restores cleanup eligibility after the host reloads its dur
 ```
 
 The flow does not decide identity, tenancy, consent, audit policy, or product readiness. It renders
-the DomainKit lifecycle returned by the host transport and emits lifecycle events after completed
-user-triggered mutations.
+the state returned by the host transport and emits events after user-triggered changes finish.
 
 ## When to use it
 
@@ -38,8 +37,8 @@ action placement, or readiness rules.
 ## Accessibility
 
 The complete flow includes tables, dialogs, status text, and action labels. Keep the default
-semantics when styling parts, and ensure host-provided messages remain specific about the provider,
-record action, and failure outcome.
+semantics when styling parts, and keep host-provided messages specific about the provider, record
+action, and failure.
 
 ## API reference
 
@@ -50,16 +49,16 @@ record action, and failure outcome.
     domain: {
       type: "string",
       required: true,
-      description: "Customer domain whose complete setup lifecycle is rendered.",
+      description: "Customer domain whose full setup flow is shown.",
     },
     receiptId: {
       type: "string",
-      description: "Previously persisted apply receipt that enables receipt-bound cleanup.",
+      description: "Saved apply receipt that enables cleanup for its records.",
     },
     records: {
       type: "ReadonlyArray<Transport.DnsRecord>",
       required: true,
-      description: "Product-owned DNS requirements to plan, display, verify, and clean up.",
+      description: "DNS requirements to plan, display, check, and clean up.",
     },
   }}
 />
@@ -71,16 +70,16 @@ record action, and failure outcome.
     children: {
       type: "ReactNode",
       required: true,
-      description: "DomainKit components rendered inside the configured runtime boundary.",
+      description: "DomainKit components rendered inside the configured runtime.",
     },
     colorScheme: {
       type: '"dark" | "inherit" | "light"',
       default: '"inherit"',
-      description: "Color scheme applied to DomainKit-owned surfaces.",
+      description: "Color scheme used by DomainKit components.",
     },
     icons: {
       type: "Partial<Icons>",
-      description: "Optional replacements for the package's default action icons.",
+      description: "Optional replacements for the default action icons.",
     },
     marks: {
       type: "Provider.Marks",
@@ -89,16 +88,16 @@ record action, and failure outcome.
     },
     messages: {
       type: "Partial<Catalog>",
-      description: "Optional message overrides for labels, status text, and dialogs.",
+      description: "Optional replacements for labels, status text, and dialogs.",
     },
     navigate: {
       type: "(url: string) => void",
       default: "browser navigation",
-      description: "Navigation function used after an OAuth authorization URL is returned.",
+      description: "Navigation function used after an OAuth URL is returned.",
     },
     onEvent: {
       type: "Lifecycle.Listener",
-      description: "Optional listener for completed user-triggered lifecycle events.",
+      description: "Optional listener for lifecycle events after user actions finish.",
     },
     portalContainer: {
       type: "HTMLElement | null",
@@ -107,12 +106,12 @@ record action, and failure outcome.
     },
     theme: {
       type: "Theme",
-      description: "Optional token theme applied to DomainKit-owned surfaces.",
+      description: "Optional token theme used by DomainKit components.",
     },
     transport: {
       type: "Layer.Layer<Transport.Service>",
       required: true,
-      description: "Host-owned transport implementation for connection and DNS lifecycle calls.",
+      description: "Transport from your app for connection and DNS calls.",
     },
   }}
 />

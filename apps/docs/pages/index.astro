@@ -5,9 +5,9 @@ import data from "blume:data";
 import ProviderLogo from "../components/ProviderLogo.astro";
 
 const { config } = data;
-const pageTitle = "Domain setup infrastructure for SaaS | DomainKit";
+const pageTitle = "Add custom domains to your app | DomainKit";
 const pageDescription =
-  "Build domain setup into your SaaS. Connect DNS providers, review exact changes, and apply only an authorized plan while credentials stay on your server.";
+  "Connect a DNS provider, review the records your product needs, and apply the approved plan while your app keeps control of credentials.";
 ---
 
 <PageLayout
@@ -27,11 +27,11 @@ const pageDescription =
 >
   <main class="landing">
     <section class="hero">
-      <h1>Make domain setup frictionless</h1>
+      <h1>Add custom domains to your app</h1>
       <p class="lede">
-        DomainKit connects DNS providers, shows the exact changes, and applies
-        only an authorized plan. Your application keeps control of credentials,
-        persistence, policy, and the customer experience.
+        DomainKit connects a DNS provider, shows the exact changes, and applies
+        only the approved plan. Your app keeps control of credentials, storage,
+        policy, and the customer experience.
       </p>
       <div class="actions">
         <a class="primary" href="/docs">Read the docs</a>
@@ -43,20 +43,20 @@ const pageDescription =
       <article>
         <span>01</span>
         <h2>Review before writing</h2>
-        <p>Show exact creates, no-ops, and conflicts before authorization.</p>
+        <p>Show exact creates, no-ops, and conflicts before a user approves a write.</p>
       </article>
       <article>
         <div class="provider-pair">
           <ProviderLogo provider="cloudflare" size={24} />
           <ProviderLogo provider="vercel" size={20} />
         </div>
-        <h2>Keep authority in your app</h2>
+        <h2>Keep control in your app</h2>
         <p>Use Cloudflare or Vercel while your application owns consent, secrets, and storage.</p>
       </article>
       <article>
         <span>03</span>
         <h2>Choose your interface</h2>
-        <p>Adopt complete React flows, compose lifecycle models, or render DNS records directly.</p>
+        <p>Use ready-made React flows, build your own screen, or render DNS records directly.</p>
       </article>
     </section>
   </main>

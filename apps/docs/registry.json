@@ -7,7 +7,7 @@
       "name": "dns-table",
       "type": "registry:ui",
       "title": "DNS Table",
-      "description": "A model-free DNS record table with optional priority and status content.",
+      "description": "A DNS record table with optional priority and status content.",
       "registryDependencies": ["table"],
       "files": [{ "path": "registry/ui/dns-table.tsx", "type": "registry:ui" }]
     },
@@ -15,7 +15,7 @@
       "name": "dns-operation",
       "type": "registry:ui",
       "title": "DNS Operation",
-      "description": "A review card for one planned DNS operation.",
+      "description": "A card for one planned DNS operation.",
       "registryDependencies": ["badge", "card"],
       "files": [{ "path": "registry/ui/dns-operation.tsx", "type": "registry:ui" }]
     },
@@ -23,7 +23,7 @@
       "name": "dns-status",
       "type": "registry:ui",
       "title": "DNS Status",
-      "description": "A compact status badge for DNS observation states.",
+      "description": "A compact status badge for DNS states.",
       "registryDependencies": ["badge"],
       "files": [{ "path": "registry/ui/dns-status.tsx", "type": "registry:ui" }]
     },
@@ -31,14 +31,14 @@
       "name": "provider-mark",
       "type": "registry:ui",
       "title": "Provider Mark",
-      "description": "An accessible provider logo container for DNS integration surfaces.",
+      "description": "An accessible wrapper for a DNS provider logo.",
       "files": [{ "path": "registry/ui/provider-mark.tsx", "type": "registry:ui" }]
     },
     {
       "name": "copy-value",
       "type": "registry:ui",
       "title": "Copy Value",
-      "description": "A compact DNS value with an accessible clipboard action.",
+      "description": "A compact DNS value with a copy action.",
       "dependencies": ["lucide-react"],
       "registryDependencies": ["button"],
       "files": [{ "path": "registry/ui/copy-value.tsx", "type": "registry:ui" }]

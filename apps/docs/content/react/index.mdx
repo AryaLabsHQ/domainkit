@@ -1,16 +1,16 @@
 ---
 title: React
-description: Add DomainKit React flows for connection, provisioning, verification, and cleanup. The browser talks to your authenticated transport, never the provider.
+description: Add React flows for connection, DNS setup, verification, and cleanup while the browser talks to your server, never the provider.
 sidebar:
   label: Overview
 seo:
-  title: React DNS flows on a host-owned transport
+  title: React DNS flows for your app
 ---
 
-DomainKit React turns the core lifecycle into composable UI recipes. Start with the complete
-`Domain.Flow`, adopt one focused flow at a time, or build entirely from models and parts. The
-[integration levels guide](/docs/react/integration-levels) compares those paths and the host
-responsibilities that remain at each level.
+DomainKit React turns the core lifecycle into ready-made flows and smaller parts. Start with the
+complete `Domain.Flow`, use one focused flow, or build your own screen from models and parts. The
+[integration levels guide](/docs/react/integration-levels) compares these choices and the work your
+app still owns.
 
 Install the React package with its peer dependencies and opt in to the default stylesheet:
 
@@ -31,14 +31,14 @@ export function DomainSetup() {
 }
 ```
 
-`Domain.Flow` coordinates connection, plan review, apply, verification, receipt-bound cleanup, and
-removal of the current domain grant. `DomainKit.Root` runs the host transport layer through Effect
-Atom. The package never receives provider credentials in the browser; every operation goes through
-your authenticated transport.
+`Domain.Flow` handles connection, plan review, apply, verification, cleanup, and removal of the
+current domain grant. `DomainKit.Root` runs the host transport through Effect Atom. The package never
+receives provider credentials in the browser; every operation goes through your authenticated
+transport.
 
 React 19 is required.
 
-## Choose a surface
+## Choose a flow or part
 
 | Surface                          | Use it when                                              |
 | -------------------------------- | -------------------------------------------------------- |
@@ -46,12 +46,12 @@ React 19 is required.
 | `Connection.Flow`                | You only need provider connection and reuse              |
 | `Provisioning.Flow`              | Your product already owns the surrounding domain screen  |
 | `Records.Table` / `Records.Card` | You want presentational DNS records without a transport  |
-| Hooks and semantic parts         | Your design system owns structure and interaction chrome |
+| Hooks and parts                  | Your design system owns structure and interaction chrome |
 
 Server rendering is supported. Clipboard access, downloads, and navigation occur only from browser interactions.
 
-The [component catalog](/components) owns component installation, examples, states, accessibility,
-and API details. The pages here explain package-wide integration choices and the host transport.
+The [component catalog](/components) has installation, examples, states, accessibility, and API
+details for each component. These pages explain package-wide choices and the host transport.
 
 <CardGroup cols={2}>
   <Card title="Integration levels" href="/docs/react/integration-levels" icon="layers">
@@ -61,19 +61,19 @@ and API details. The pages here explain package-wide integration choices and the
     Explore every shipped React flow, presentation component, theme, and provider state.
   </Card>
   <Card title="Transport" href="/docs/react/transport" icon="arrow-right-left">
-    Map authenticated endpoints into the browser-safe transport contract.
+    Map authenticated endpoints into the browser-safe app transport.
   </Card>
   <Card title="Composition" href="/docs/react/composition" icon="palette">
     Bring your own components, icons, messages, provider marks, and design tokens.
   </Card>
   <Card title="Shadcn registry" href="/docs/react/registry" icon="copy">
-    Copy model-free DNS presentation components directly into your application.
+    Copy standalone DNS display components directly into your application.
   </Card>
 </CardGroup>
 
 ## Keep the host boundary explicit
 
-The React package owns interaction recipes and client-side orchestration. Your application still
-owns authentication, authorization, durable attempts, secrets, provider credentials, and the
-server-side `Transport` implementation. See
+The React package owns the UI flows and client-side state. Your app still owns authentication,
+authorization, saved attempts, secrets, provider credentials, and the server-side `Transport`
+implementation. See
 [Integrate with your host application](/docs/guides/host-integration) for the end-to-end boundary.

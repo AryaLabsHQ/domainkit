@@ -1,17 +1,17 @@
 ---
 title: Plans and receipts
-description: Understand why DomainKit separates DNS requirements, immutable plans, digest-bound authorization, apply receipts, and cleanup plans.
+description: See how DNS requirements become plans, approvals, receipts, and cleanup, and how conflicts stop an unsafe write.
 sidebar:
   label: Plans and receipts
 seo:
   title: DomainKit plans and receipts
 ---
 
-DNS provider APIs rarely offer conditional multi-record transactions. A sequence of successful API
-calls can stop halfway, and the provider state can change between review and apply. DomainKit models
-that reality instead of presenting a provider write sequence as atomic.
+Provider APIs do not usually offer one conditional operation for many records. Calls can stop
+halfway, and provider state can change after review. DomainKit makes those cases visible instead of
+pretending a series of writes is atomic.
 
-## The lifecycle artifacts
+## The plan and receipt data
 
 ```text
 requirements
@@ -26,16 +26,16 @@ source plan + apply receipt
   -> deletion receipt
 ```
 
-| Artifact         | Meaning                                                                             | Durable host use                      |
-| ---------------- | ----------------------------------------------------------------------------------- | ------------------------------------- |
-| Requirement      | DNS state the product needs, including ownership, purpose, and conflict policy      | Recreate from canonical product state |
-| Plan             | A provider and zone snapshot containing exact operations and a deterministic digest | Persist through review and apply      |
-| Authorization    | Approval for one plan digest and selected create operations                         | Persist with the plan attempt         |
-| Apply receipt    | Confirmed provider writes, including partial outcomes                               | Persist for recovery and cleanup      |
-| Cleanup plan     | A fresh review of receipt-owned records that remain exact                           | Persist through destructive review    |
-| Deletion receipt | Confirmed deletions, including partial outcomes                                     | Persist for recovery and audit        |
+| Artifact         | Meaning                                                                        | Durable host use                |
+| ---------------- | ------------------------------------------------------------------------------ | ------------------------------- |
+| Requirement      | DNS state the product needs, including ownership, purpose, and conflict policy | Recreate from product state     |
+| Plan             | A provider and zone snapshot with exact operations and a digest                | Save through review and apply   |
+| Authorization    | Approval for one plan digest and selected create operations                    | Save with the plan attempt      |
+| Apply receipt    | Provider writes that finished, including partial results                       | Save for recovery and cleanup   |
+| Cleanup plan     | A new review of receipt-owned records that are still exact                     | Save through destructive review |
+| Deletion receipt | Deletions that finished, including partial results                             | Save for recovery and audit     |
 
-The artifacts are versioned protocol values. They are not interchangeable UI states.
+These are versioned data types, not interchangeable UI states.
 
 ## Additive planning
 
@@ -51,30 +51,29 @@ requirements can coexist where DNS semantics permit it. CNAME requirements are a
 Planning never creates an implicit update or delete. The user can resolve a conflict outside the
 plan or continue through a manual path.
 
-## Digest-bound review
+## Review the exact plan
 
-The plan digest covers the portable provider, zone, and operation content. Authorization names that
-exact digest and the selected create operations. Changing the plan after review invalidates the
-authorization.
+The plan digest covers the provider, zone, and operations. Authorization names that exact digest and
+the selected creates. Changing the plan after review invalidates the authorization.
 
 Before writing, apply rebuilds the current provider view. A changed snapshot produces a stale error
 instead of applying the previously reviewed operations.
 
-This narrows the race between review and write, but it cannot make a provider API transactional.
-Each approved create is revalidated before its write.
+This reduces the gap between review and write, but it cannot make a provider API transactional. Each
+approved create is checked again before it is written.
 
 ## Partial apply is explicit
 
-Writes are sequential. If a later write fails after an earlier one succeeds, DomainKit returns a
-`PartialApplyError` carrying a receipt for the confirmed operations. It does not automatically roll
-those records back: rollback could also fail or remove state another actor now depends on.
+Writes happen one at a time. If a later write fails after an earlier one succeeds, DomainKit returns
+a `PartialApplyError` with a receipt for the writes that finished. It does not roll those records
+back automatically: a rollback could fail or remove a change another actor now needs.
 
 The host must store that receipt before retrying or offering remediation.
 
 ## Cleanup is a separate decision
 
-An apply receipt proves which provider record IDs came from a reviewed create plan. `Deletion.create`
-uses that source plan and receipt, then re-reads every record. Drift, missing identity, or mismatched
+An apply receipt shows which provider record IDs came from a reviewed create plan. `Deletion.create`
+uses that plan and receipt, then reads every record again. Drift, missing identity, or changed
 provider state blocks automatic deletion.
 
 The resulting cleanup plan has a new digest and requires a new authorization. Disconnecting a

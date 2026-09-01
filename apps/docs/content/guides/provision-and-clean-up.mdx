@@ -1,12 +1,12 @@
 ---
 title: Provision and clean up records
-description: Create and persist an exact DNS plan, authorize its digest, apply it, and later build a separately authorized cleanup plan from the receipt.
+description: Create a DNS plan, approve and apply it, then use its receipt to plan cleanup without removing records your app did not add.
 seo:
   title: Provision and safely clean up DNS records
 ---
 
-Use this guide after your application can reconstruct an authorized `DnsProvider.Service` and has
-durable storage for plan attempts and receipts.
+Use this guide after your app can rebuild an authorized `DnsProvider.Service` and save plan attempts
+and receipts.
 
 ## Create the plan
 
@@ -30,8 +30,8 @@ const result =
 - `SelectionRequired` when more than one authorized account can serve the domain;
 - `NotFound` when none of the authorized providers can resolve a zone.
 
-Do not guess when selection is required. Ask the user to choose a recognizable account or team, or
-narrow the authorized provider context on the server.
+If a choice is required, ask the user to choose a recognizable account or team. Do not guess or pick
+an account ID on the server.
 
 For a provider and zone your host already resolved, use `Provisioning.Target.ExactZone` instead.
 
@@ -43,16 +43,16 @@ Inspect every operation before requesting authorization:
 const conflicts = plan.operations.filter(({ _tag }) => _tag === "conflict");
 ```
 
-A `conflict` is an instruction to stop or ask the user to resolve existing DNS. DomainKit never
-converts it into an update or delete operation.
+A `conflict` means stop and ask the user to resolve the existing DNS. DomainKit never turns it into
+an update or delete operation.
 
 ## Persist the attempt
 
-Persist the encoded plan and its digest before the user approves it. Associate it with your tenant,
-domain, authorized connection, expiry, and an opaque attempt identifier.
+Save the encoded plan and its digest before the user approves it. Link it to your tenant, domain,
+authorized connection, expiry, and an opaque attempt ID.
 
-The browser should return only the digest and any operation selection the user reviewed. Reload the
-complete plan from durable server storage.
+The browser should return only the digest and any operation selection the user reviewed. Load the
+full plan from server storage.
 
 ## Authorize and apply
 
@@ -62,14 +62,14 @@ const receipt = yield * Provisioning.apply({ authorization, plan });
 ```
 
 `authorize` selects create operations; no-ops need no write authority. Partial selection requires
-`allowPartial: true`. `apply` validates the digest, provider, conflicts, and current provider state
-before writing. A changed provider snapshot fails as stale instead of applying the old review.
+`allowPartial: true`. `apply` checks the digest, provider, conflicts, and current provider state
+before writing. If the provider changed, it returns stale instead of applying the old review.
 
 Persist both complete receipts and the receipt carried by `PartialApplyError`.
 
 ## Build a cleanup plan
 
-Cleanup starts from the exact source plan and apply receipt:
+Cleanup starts from the original plan and its apply receipt:
 
 ```ts
 import { Deletion } from "domainkit";
@@ -82,10 +82,10 @@ const cleanupPlan =
   });
 ```
 
-`Deletion.create` re-reads each provider record by its receipt ID. It refuses to plan deletion when
-the record is missing, drifted, belongs to another plan, or cannot be proven.
+`Deletion.create` reads each provider record again by its receipt ID. It refuses to plan deletion when
+the record is missing, changed, belongs to another plan, or cannot be proven.
 
-Present the cleanup operations as a new destructive review, then authorize and apply that digest:
+Show the cleanup operations as a new destructive review, then approve and apply that digest:
 
 ```ts
 const cleanupAuthorization = yield * Deletion.authorize(cleanupPlan);
@@ -97,14 +97,14 @@ const cleanupReceipt =
   });
 ```
 
-Cleanup can also complete partially. Persist the partial deletion receipt and pass it as
-`priorReceipt` on a retry so DomainKit resumes only the remaining authorized operations.
+Cleanup can also finish partially. Save the partial deletion receipt and pass it as `priorReceipt` on
+a retry so DomainKit resumes only the remaining approved operations.
 
 ## Disconnect independently
 
-Removing a domain grant and removing DNS records are separate decisions. A domain-level disconnect
-normally preserves DNS. Offer cleanup only when a valid apply receipt exists and the user explicitly
-reviews the deletion plan.
+Removing a domain grant and removing DNS records are separate decisions. Disconnecting a domain
+normally preserves DNS. Offer cleanup only when a valid apply receipt exists and the user reviews the
+deletion plan.
 
 ## Related documentation
 

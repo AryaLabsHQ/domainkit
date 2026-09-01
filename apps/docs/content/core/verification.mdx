@@ -1,15 +1,15 @@
 ---
 title: Provider and public DNS
-description: Understand why authoritative-provider state, recursive public DNS, and product readiness are separate forms of evidence.
+description: See why provider state, public DNS, and product readiness are different checks and how to show each result clearly.
 sidebar:
   label: DNS verification
 seo:
   title: DomainKit provider and DNS evidence
 ---
 
-DNS can be present in a provider account before recursive resolvers return it. Resolvers can also
-disagree because of caching, propagation, outages, or provider behavior. DomainKit preserves those
-distinctions instead of reducing verification to one Boolean.
+DNS can be present in a provider account before public resolvers return it. Resolvers can also
+disagree because of caching, propagation, outages, or provider behavior. DomainKit keeps those
+results separate instead of reducing them to one yes-or-no value.
 
 ## Three different questions
 
@@ -19,18 +19,17 @@ distinctions instead of reducing verification to one Boolean.
 | Public-DNS observation | What do named recursive resolvers currently answer?                 | DomainKit resolver pool     |
 | Product readiness      | Is the domain ready for this application's complete feature?        | Host application            |
 
-Product readiness can include certificate issuance, email-provider verification, routing state,
-background polling, or business policy that is outside DNS observation.
+Product readiness can also include certificates, email-provider checks, routing, background polling,
+or business rules that DNS observation cannot answer.
 
 ## One observation operation
 
-`Verification.observe` accepts an explicit source configuration and returns one exhaustive tagged
-result. Public DNS is enabled by default; provider readback is opt-in and requires a provider and
-authoritative zone.
+`Verification.observe` takes a source configuration and returns one tagged result. Public DNS is on
+by default; provider readback is optional and needs a provider and zone.
 
-When both sources are requested, both must match before the aggregate is `Verified`.
+When both sources are requested, both must match before the result is `Verified`.
 
-## Aggregate outcomes
+## Result states
 
 | `_tag`        | Meaning                                                           |
 | ------------- | ----------------------------------------------------------------- |
@@ -40,8 +39,8 @@ When both sources are requested, both must match before the aggregate is `Verifi
 | `Unavailable` | A requested source could not produce trustworthy evidence         |
 | `NotObserved` | No evidence source was requested                                  |
 
-The result retains the source evidence. A host can say “the provider contains the record, but public
-DNS is still pending” without inventing that distinction after the fact.
+The result keeps each source's evidence. A host can say “the provider contains the record, but public
+DNS is still pending” without guessing.
 
 ## Resolver disagreement
 
@@ -56,10 +55,9 @@ policy, unavailable resolvers are not silently counted as mismatches.
 
 ## Why public DNS is the default
 
-Provider readback proves authoritative account state, not public visibility. Public resolvers are
-the closest portable evidence that another system can discover the record. The default therefore
-works without a provider credential and avoids making one provider account an accidental
-verification dependency.
+Provider readback proves account state, not public visibility. Public resolvers show what another
+system can discover. The default therefore works without a provider credential and does not depend on
+one provider account for verification.
 
 ## Put the concept to work
 

@@ -1,10 +1,10 @@
 ---
 title: DNS status
-description: Render an explicit DNS status tone for success, warning, danger, or neutral states while keeping evidence and policy in your application.
+description: Show a DNS status as success, warning, danger, or neutral while your app owns the evidence and the message behind each state.
 ---
 
-`dns-status` is a small status label with four explicit tones. It renders the meaning you provide;
-it does not infer status from provider responses or public DNS.
+`dns-status` is a small status label with four tones. It renders the meaning you provide; it does not
+infer status from provider responses or public DNS.
 
 <Component path="registry/dns-status" />
 
@@ -31,10 +31,10 @@ npx shadcn@latest add https://domain-kit.dev/r/dns-status.json
 | `tone`     | `"danger" \| "neutral" \| "success" \| "warning"` | no       | Visual status tone; defaults to `neutral`. |
 
 `DnsStatus` also accepts shadcn `Badge` props and `className`, except for `variant`, which the
-component owns so its tone remains legible.
+component controls so the tone stays legible.
 
-Keep the evidence or failure reason in visible text. Color is supplemental and must not be the only
-way your interface communicates whether a record is missing, mismatched, or still propagating.
+Keep the evidence or failure reason in visible text. Color is extra information and must not be the
+only way your interface says whether a record is missing, mismatched, or still propagating.
 
 For live provider and public-DNS observations, use the packaged [Verification](/components/verification)
 flow and keep your product readiness policy in the host application.

@@ -1,11 +1,13 @@
 ---
 title: Transport
-description: Implement the DomainKit React transport with authenticated app endpoints. Provider credentials and API clients stay on the server.
+description: Connect React to your authenticated app endpoints while provider credentials and API clients stay on the server where they belong.
 seo:
   title: Keep provider credentials off the React client
 ---
 
-`DomainKit.Root` receives a `Layer<Transport.Service>`. Its controllers run through Effect Atom, which owns request interruption, stale result suppression, and disposal for the React subtree. The service is intentionally application-facing rather than a browser wrapper around provider APIs.
+`DomainKit.Root` receives a `Layer<Transport.Service>`. Its controllers use Effect Atom to stop old
+requests, ignore stale results, and clean up when the React subtree closes. The service is for your
+app; it is not a browser wrapper around provider APIs.
 
 The [host integration guide](/docs/guides/host-integration) shows where the transport belongs in a
 complete browser, application server, and provider architecture.
@@ -37,7 +39,8 @@ const service = Transport.Service.of({
 export const transport = Layer.succeed(Transport.Service, service);
 ```
 
-When an authenticated client already returns Promises, adapt it at that foreign-runtime boundary rather than recreating a second React transport contract:
+When an authenticated client already returns Promises, adapt it at that boundary instead of creating
+a second React transport contract:
 
 ```ts
 import { Transport } from "domainkit";
@@ -58,7 +61,9 @@ export const transport = Transport.layerFromAsync({
   -> Cloudflare / Vercel
 ```
 
-Successful outcomes use schema-backed tagged models. Failures use `Transport.Failure` in the Effect error channel. Decode untrusted request, database, and provider data at your server boundary before mapping it into these browser-safe wire types.
+Successful outcomes use tagged models. Failures use `Transport.Failure` in the Effect error channel.
+Check untrusted request, database, and provider data at your server boundary before mapping it into
+these browser-safe types.
 
 Custom UI can consume `Connection.useModel(domain)` with `useAtomValue(model.state)` and
 `useAtomSet(model.command)`. Dispatch `Connection.Command.Connect`, `Attach`, `Detach`, and `Retry`;
@@ -66,14 +71,14 @@ the packaged controller and flow use the same atoms. A reusable connection conta
 credential-scoped provider connection and the discovered targets it can attach. Selecting a target
 attaches that existing connection to the domain without reconnecting.
 
-`ProviderTarget` is an exact account-and-authoritative-zone choice. Keep target discovery and
-selection on the server, and return an unavailable or ambiguous target state when the credential
-cannot produce one safe choice. Integration authentication is a separate method from OAuth and
-should be exposed as `AuthenticationMethod.Integration` when the provider supports it.
+`ProviderTarget` is an exact account-and-zone choice. Keep discovery and selection on the server, and
+return an unavailable or ambiguous target when the credential cannot produce one safe choice.
+Integration authentication is separate from OAuth and should use
+`AuthenticationMethod.Integration` when the provider supports it.
 
 ## Correlate browser operations with durable attempts
 
-Treat every plan application as a server-side attempt. Persist the plan and its digest before
+Treat every plan application as a server-side attempt. Save the plan and its digest before
 returning it to the browser, then require the browser to submit that digest when it asks the server
 to apply the plan.
 
@@ -86,15 +91,14 @@ browser requests plan
   -> server stores the receipt
 ```
 
-This keeps retries, authorization decisions, and support investigations attached to one durable
-record instead of trusting a mutable plan sent back by the browser.
+This keeps retries, approval decisions, and support investigations attached to one saved record
+instead of trusting a plan that the browser can change.
 
 ## Use product-owned verification when needed
 
-`Transport` exposes provider-backed operations. Public DNS verification is a separate product
-decision: your server can use `Verification.observe` with public resolvers, expose a dedicated
-endpoint, and map its result into your product state without giving the browser resolver or provider
-credentials.
+`Transport` exposes provider-backed operations. Public DNS verification is a separate product choice:
+your server can use `Verification.observe` with public resolvers, expose an endpoint, and map its
+result into product state without giving the browser resolver or provider credentials.
 
 <Callout type="warning" title="No browser credentials">
   A token input may collect a credential, but submit it directly to your authenticated server

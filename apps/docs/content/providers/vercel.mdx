@@ -1,17 +1,17 @@
 ---
 title: Connect Vercel
-description: Connect Vercel through an Integration installation or personal access token and preserve the personal or team context required for later DNS requests.
+description: Connect Vercel with an Integration or personal access token and keep the personal or team context for later DNS requests and cleanup.
 seo:
   title: Connect Vercel DNS
 ---
 
 <ProviderLogo provider="vercel" size={48} />
 
-Vercel's interactive method is an Integration installation-code flow. DomainKit models it as an
-integration rather than treating every redirect-based code exchange as generic OAuth.
+Vercel's interactive method is an Integration installation-code flow. DomainKit keeps it as an
+Integration instead of treating every redirect as generic OAuth.
 
-Run provider exchanges and token validation on a trusted server. The browser receives only your
-application's connection outcome.
+Run provider exchanges and token checks on a trusted server. The browser receives only your app's
+connection outcome.
 
 ## Prerequisites
 
@@ -62,8 +62,8 @@ const connected = await Connection.complete({
 ```
 
 The code exchange returns the personal account or team context and installation identity. DomainKit
-encodes that non-secret, versioned provider context with the authorization so later requests
-reconstruct the correct Vercel client without asking the customer to type a team ID.
+saves that non-secret provider context with the authorization so later requests build the correct
+Vercel client without asking the customer to type a team ID.
 
 ## Connect a personal access token
 
@@ -92,7 +92,7 @@ token behind the host's secret-storage boundary.
 
 ## Reconstruct the provider
 
-Decode the stored context and construct the correct server-side client:
+Decode the stored context and build the correct server-side client:
 
 ```ts
 const provider = Vercel.make({
@@ -103,16 +103,16 @@ const provider = Vercel.make({
 });
 ```
 
-Personal clients omit team context. Team clients attach `teamId` to Vercel resource requests.
+Personal clients omit team context. Team clients include `teamId` in Vercel resource requests.
 
 ## Zone discovery
 
 DomainKit treats a Vercel domain as DNS storage when Vercel reports its DNS service type, zone flag,
-or intended nameservers. Current or intended Vercel nameservers are provider evidence; they are not
-substituted for independent public-DNS observation.
+or intended nameservers. Current or intended Vercel nameservers are provider evidence; they do not
+replace an independent public-DNS check.
 
-When more than one authorized context can serve a requested domain, surface a recognizable
-personal/team choice instead of silently selecting a team ID.
+When more than one authorized context can serve a domain, show a recognizable personal/team choice
+instead of silently selecting a team ID.
 
 ## Next steps
 
