@@ -1,6 +1,20 @@
 {
   "name": "@domainkit/docs",
   "private": true,
+  "description": "DomainKit documentation and interactive React component catalog",
+  "keywords": [
+    "dns",
+    "documentation",
+    "domainkit",
+    "react"
+  ],
+  "license": "MIT",
+  "author": "Arya Labs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AryaLabsHQ/domainkit.git",
+    "directory": "apps/docs"
+  },
   "type": "module",
   "scripts": {
     "audit": "bun run reference:check && blume audit",

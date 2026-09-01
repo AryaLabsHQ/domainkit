@@ -1,8 +1,20 @@
 {
   "name": "@domainkit/capsuledb",
   "version": "0.1.0",
-  "description": "Optional CapsuleDB persistence for DomainKit",
+  "description": "Optional PostgreSQL storage for DomainKit's Effect apps",
+  "keywords": [
+    "dns",
+    "domainkit",
+    "effect",
+    "postgresql",
+    "typescript"
+  ],
+  "homepage": "https://github.com/AryaLabsHQ/domainkit#readme",
+  "bugs": {
+    "url": "https://github.com/AryaLabsHQ/domainkit/issues"
+  },
   "license": "MIT",
+  "author": "Arya Labs",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AryaLabsHQ/domainkit.git",

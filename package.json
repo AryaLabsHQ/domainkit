@@ -1,6 +1,25 @@
 {
   "name": "domainkit-workspace",
   "private": true,
+  "description": "DomainKit workspace for adding custom domains to apps with reviewable DNS plans.",
+  "keywords": [
+    "custom-domains",
+    "dns",
+    "domainkit",
+    "effect",
+    "react",
+    "typescript"
+  ],
+  "homepage": "https://github.com/AryaLabsHQ/domainkit#readme",
+  "bugs": {
+    "url": "https://github.com/AryaLabsHQ/domainkit/issues"
+  },
+  "license": "MIT",
+  "author": "Arya Labs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AryaLabsHQ/domainkit.git"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"

@@ -1,11 +1,10 @@
 # DomainKit
 
-Domain setup infrastructure for TypeScript SaaS applications.
+Add custom domains to a TypeScript SaaS application.
 
-DomainKit turns DNS requirements into reviewable plans, requires explicit digest-bound
-authorization before writes, records applied changes in receipts, and uses those receipts to plan
-safe cleanup. It supports Cloudflare and Vercel without making either provider's API your product
-architecture.
+DomainKit turns DNS requirements into plans you can review, requires approval for the exact plan
+before a write, records applied changes in receipts, and uses those receipts to plan cleanup. It
+supports Cloudflare and Vercel without making either provider's API your product architecture.
 
 ## Install
 
@@ -52,15 +51,15 @@ and incompatible state becomes a conflict. DomainKit never silently overwrites D
 
 ## Public entry points
 
-- `domainkit` — canonical Effect services, schemas, plans, providers, and verification;
-- `domainkit/promise` — Promise adapters for foreign-runtime boundaries;
-- `domainkit/server` — Effect-first provider connection routes with an async Web handler factory;
-- `domainkit/testing` — in-memory services and provider conformance helpers.
+- `domainkit` — Effect services, schemas, plans, providers, and verification;
+- `domainkit/promise` — Promise API for apps that use async/await;
+- `domainkit/server` — provider connection routes and an async Web handler factory;
+- `domainkit/testing` — in-memory services and provider tests.
 
-Provider credentials, OAuth state, durable connections, plans, receipts, authorization, and audit
-history remain owned by your application. DomainKit supplies the domain model and operations, not a
-hosted control plane. Cloudflare's provider namespace includes credential refresh, while the host
-owns refresh locking, encrypted rotation, retry policy, and reconnect UX.
+Your app owns provider credentials, OAuth state, saved connections, plans, receipts, authorization,
+and audit history. DomainKit supplies the domain model and operations, not a hosted control plane.
+Cloudflare's provider namespace includes credential refresh; the host owns refresh locking,
+encrypted rotation, retry policy, and reconnect UX.
 
 ## Learn more
 

@@ -1,11 +1,13 @@
 {
   "name": "domainkit",
   "version": "0.6.0",
-  "description": "Provider-independent DNS provisioning plans and authorization for TypeScript",
+  "description": "Build reviewable DNS plans for custom domains in TypeScript",
   "keywords": [
+    "custom-domains",
     "dns",
     "domain",
     "domain-connect",
+    "domainkit",
     "effect",
     "typescript"
   ],

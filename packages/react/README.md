@@ -1,10 +1,10 @@
 # @domainkit/react
 
-Accessible React flows and composable UI parts for DomainKit.
+React flows and UI parts for DomainKit.
 
-The package can render the complete domain lifecycle, one focused lifecycle, or model-free DNS
-records. Every stateful operation goes through your authenticated server transport; provider
-credentials never belong in the browser.
+The package can render the full domain flow, one focused flow, or DNS records. Every stateful
+operation goes through your authenticated server transport; provider credentials never belong in the
+browser.
 
 ## Install
 
@@ -29,17 +29,16 @@ export function DomainSetup() {
 }
 ```
 
-`Domain.Flow` coordinates connection, plan review, apply, verification, receipt-bound cleanup, and
-removing the domain grant. Your application still owns authentication, authorization, durable
-attempts, provider credentials, and the server-side `Transport` implementation.
+`Domain.Flow` handles connection, plan review, apply, verification, cleanup, and removal of the
+domain grant. Your app still owns authentication, authorization, saved attempts, provider
+credentials, and the server-side `Transport` implementation.
 
-## Adopt only the surface you need
+## Choose the parts you need
 
-- `Domain.Flow` — the complete lifecycle;
+- `Domain.Flow` — the full lifecycle;
 - `Connection.Flow`, `Provisioning.Flow`, `Verification.Flow`, and `Cleanup.Flow` — focused flows;
-- `useModel` hooks and semantic parts — host-owned composition and interaction chrome;
-- `Records.Table`, `Records.Card`, and record parts — model-free DNS presentation without a root or
-  transport.
+- `useModel` hooks and parts — your own layout and controls;
+- `Records.Table`, `Records.Card`, and record parts — DNS display without a root or transport.
 
 The packaged flows use the same exported models and parts. Components support server rendering;
 clipboard, download, and navigation behavior runs only from browser interactions.
@@ -57,10 +56,10 @@ export const transport = Transport.layerFromAsync({
 });
 ```
 
-The stylesheet is opt-in. `DomainKit.Root` accepts host messages, provider marks, icons, design
-tokens, color scheme, and portal container, so product branding remains outside the package.
-Recognized provider marks load from `integrations.sh` and fall back to the provider's initial when
-the mark is unavailable; hosts can replace them through the `marks` prop.
+The stylesheet is opt-in. `DomainKit.Root` accepts your messages, provider marks, icons, design
+tokens, color scheme, and portal container, so branding stays in your app.
+Known provider marks load from `integrations.sh` and fall back to the provider's initial when a mark
+is unavailable. Replace them through the `marks` prop when your app owns the artwork.
 
 ## Learn more
 

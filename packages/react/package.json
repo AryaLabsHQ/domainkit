@@ -1,8 +1,20 @@
 {
   "name": "@domainkit/react",
   "version": "0.6.0",
-  "description": "Accessible React flows for DomainKit",
+  "description": "React flows and UI parts for custom-domain setup",
+  "keywords": [
+    "custom-domains",
+    "dns",
+    "domainkit",
+    "react",
+    "typescript"
+  ],
+  "homepage": "https://github.com/AryaLabsHQ/domainkit#readme",
+  "bugs": {
+    "url": "https://github.com/AryaLabsHQ/domainkit/issues"
+  },
   "license": "MIT",
+  "author": "Arya Labs",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AryaLabsHQ/domainkit.git",
