@@ -74,9 +74,15 @@ authority.
 
 For an Effect host, provide one `ManagedDnsConnections.Service` for the provider authorization,
 encrypted credential reference, and owner bindings. An async host implements
-`ManagedDnsConnections.AsyncInterface` and passes it to `createDomainKit`. A SQL host can save these
-records in one transaction. If database and vault storage are split, make the save recoverable
-behind the same interface.
+`ManagedDnsConnections.AsyncInterface` from the Promise entry point and passes it to
+`createDomainKit`:
+
+```ts
+import { type ManagedDnsConnections } from "domainkit/promise";
+```
+
+A SQL host can save these records in one transaction. If database and vault storage are split, make
+the save recoverable behind the same interface.
 
 Use `domainkit/testing`'s in-memory repository in tests only. It does not encrypt credentials or
 provide production durability.

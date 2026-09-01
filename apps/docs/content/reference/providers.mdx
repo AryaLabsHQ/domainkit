@@ -24,8 +24,9 @@ Provider failures use `DnsProvider.Error` with the operation, provider ID, optio
 reason, and optional retry delay. Keep the original cause for diagnostics, but do not send secrets or
 raw provider responses to the browser.
 
-The interface type permits `null`, but the public conformance suite expects a stable, non-null ID for
-every successful create so receipt-bound cleanup can address it.
+`CreateResult.providerRecordId` may be `null` when a provider cannot return a record identifier.
+Receipt-bound deletion requires a stable, non-null ID, so the conformance cases that read back and
+clean up created records require adapters to return one for those writes.
 
 Promise-first adapters can implement `DnsProvider.AsyncInterface` and use `fromAsync` or
 `layerFromAsync`. `toAsync` adapts an environment-free Effect provider in the opposite direction.

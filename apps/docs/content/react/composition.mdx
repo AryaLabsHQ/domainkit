@@ -95,7 +95,7 @@ const state = useAtomValue(model.state);
 const command = useAtomSet(model.command);
 
 if (state._tag === "Review") {
-  const isNoopOnly = state.plan.operations.every((operation) => operation._tag === "Noop");
+  const isNoopOnly = state.plan.operations.every((operation) => operation._tag === "noop");
 
   return (
     <Operations.Root lifecycle="provisioning">
