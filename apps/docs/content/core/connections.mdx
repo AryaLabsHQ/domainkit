@@ -42,9 +42,10 @@ provider proof and policy approval, without asking for provider consent again. T
 requires explicit target discovery and a `Connection.attach` call.
 
 An expired access token does not expire the provider authorization when a refresh token remains
-available. The host refreshes and atomically rotates the credential before a provider operation. A
-credential whose access token has expired and has no refresh token projects as an expired
-connection; pending revocation projects separately.
+available. The host refreshes and persists the rotated credential before a provider operation. The
+repository contract does not make cross-store rotation atomic, so define locking and recovery in
+the host. A credential whose access token has expired and has no refresh token projects as an
+expired connection; pending revocation projects separately.
 
 ## Starting and completing a connection
 

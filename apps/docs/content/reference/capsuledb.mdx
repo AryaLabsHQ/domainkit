@@ -20,8 +20,10 @@ your application owns the SQL client, credentials, tenant/domain bindings, start
 
 ## Runtime composition
 
-Construct one Effect `PgClient` from your existing pool. Provide that exact instance to Effect
-Drizzle, CapsuleDB's registry preparation, and the capsule layer:
+Construct one Effect `PgClient` from your existing pool. Use the same SQL client for Effect Drizzle,
+CapsuleDB's registry preparation, and the capsule layer. The example below is a startup composition
+sketch; your host supplies the client, credential custody, and owner/domain binding services when it
+installs the returned layer.
 
 ```ts
 import { PgClient } from "@effect/sql-pg";
@@ -40,6 +42,11 @@ const initialize = Effect.gen(function* () {
   return authorizationCapsule.layer;
 });
 ```
+
+`initialize` is not a complete application entrypoint: it leaves the host-specific
+`PgClient.PgClient`, `CredentialCustody.Service`, and `HostBindings.Service` implementations to the
+caller. Provide those services when mounting `authorizationCapsule.layer`, and run the effect once
+at startup.
 
 Run preparation once per execution-environment startup before accepting API or workflow traffic.
 Do not prepare per request. If preparation fails, keep the entrypoint unready.

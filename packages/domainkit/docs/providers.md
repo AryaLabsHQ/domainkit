@@ -41,9 +41,9 @@ attached to the credential result.
 ## Portable behavior
 
 Both adapters support `A`, `AAAA`, `CAA`, `CNAME`, `MX`, `NS`, `SRV`, and `TXT`. Provider-only record
-types are ignored during portable reads, while provider APIs still enforce their native collision
-rules. Planning remains additive: exact records no-op, missing records create, and incompatible
-state conflicts without an automatic update or delete.
+types are retained as opaque observations during portable reads, while provider APIs still enforce
+their native collision rules. Planning remains additive: exact records no-op, missing records
+create, and incompatible state conflicts without an automatic update or delete.
 
 Provider errors are decoded at the HTTP boundary, classified into portable reasons, and stripped
 of request credentials. Provider status and error codes remain diagnostic metadata without leaking

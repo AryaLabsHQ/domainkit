@@ -37,6 +37,10 @@ Represent a provider record DomainKit cannot plan as `DnsRecord.Opaque({...})`. 
 completely can hide CNAME or name-set conflicts. Use `DnsRecord.Observed` when validating an
 untrusted provider response.
 
+The provider interface allows `providerRecordId: null` when an API cannot expose an identifier. A
+conformance-compatible adapter must return a stable, non-null ID for every record it creates so
+receipt-bound cleanup can find and remove that record.
+
 ## Keep credentials outside the interface
 
 Build the provider from a secret and non-secret context supplied by the host. The resulting

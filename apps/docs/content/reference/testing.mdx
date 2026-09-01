@@ -48,8 +48,9 @@ second plan that makes no changes.
 
 ## Validate a provider adapter
 
-Run `ProviderConformance` against a fresh isolated provider instance. The suite checks create, read,
-list, delete, opaque-record preservation, error handling, and repeatability. Add
+Run `ProviderConformance` against a fresh isolated provider instance. The suite checks create,
+readback and cleanup, exact no-op, conflict without mutation, stale-plan rejection, and partial
+apply cleanup. Add
 provider-specific tests for authentication, discovery, pagination, rate limits, and live API
 behavior; the shared suite cannot prove those concerns.
 

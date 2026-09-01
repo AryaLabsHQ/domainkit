@@ -8,6 +8,10 @@ seo:
 `Verification.observe` is DomainKit's DNS check. Choose the source based on the question your product
 needs to answer.
 
+The snippets below are continuations of your provisioning flow. They assume `record` is the
+requirement being checked, `zone` is the connected authoritative zone, and `provider` is the
+server-side `DnsProvider` service for that connection.
+
 ## Observe public DNS
 
 Public DNS is enabled by default:

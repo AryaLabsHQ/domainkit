@@ -39,14 +39,16 @@ the request boundary.
 
 ## States
 
-| State          | Meaning                                                                |
-| -------------- | ---------------------------------------------------------------------- |
-| `Disconnected` | A provider can be selected or an existing authorization can be reused. |
-| `Submitting`   | The host transport is processing a token or attachment request.        |
-| `Redirecting`  | The browser is leaving for provider authorization.                     |
-| `Connected`    | The host returned an active connection and domain attachment.          |
-| `Detaching`    | A disconnect request is in progress.                                   |
-| `Failure`      | The operation failed with an explicit retry policy.                    |
+| State          | Meaning                                                                 |
+| -------------- | ----------------------------------------------------------------------- |
+| `Loading`      | The flow is detecting the provider or restoring an existing connection. |
+| `Disconnected` | A provider can be selected or an existing authorization can be reused.  |
+| `Submitting`   | The host transport is processing a token or attachment request.         |
+| `Redirecting`  | The browser is leaving for provider authorization.                      |
+| `Connected`    | The host returned an active connection and domain attachment.           |
+| `Detaching`    | A disconnect request is in progress.                                    |
+| `Unsupported`  | The host cannot offer an automatic connection for this domain.          |
+| `Failure`      | The operation failed with an explicit retry policy.                     |
 
 ## Composition
 
