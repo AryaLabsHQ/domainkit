@@ -65,7 +65,7 @@ encrypted rotation, retry policy, and reconnect UX.
 
 - [Executable quickstart](https://github.com/AryaLabsHQ/domainkit/blob/main/packages/domainkit/examples/effect/quickstart.ts)
 - [Architecture decisions](https://github.com/AryaLabsHQ/domainkit/tree/main/docs/adr)
-- [Provider behavior](https://github.com/AryaLabsHQ/domainkit/blob/main/docs/providers.md)
+- [Provider behavior](https://domain-kit.dev/docs/reference/providers)
 - [Examples](https://github.com/AryaLabsHQ/domainkit/tree/main/packages/domainkit/examples)
 - [Issues](https://github.com/AryaLabsHQ/domainkit/issues)
 

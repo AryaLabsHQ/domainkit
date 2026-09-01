@@ -33,19 +33,21 @@ import "@domainkit/react/styles.css";
 | `Verification` | Evidence refresh, result presentation, and model hook.           |
 | `Cleanup`      | Receipt-bound cleanup review, application, and model hook.       |
 
-Each focused namespace exposes its `Flow`, a `Controller`, `useModel`, state and command
-constructors, and UI parts for custom screens.
+`Connection`, `Provisioning`, and `Cleanup` expose a `Flow`, a `Controller`, a `useModel` hook,
+state and command constructors, and UI parts for custom screens. `Verification` exposes a
+`Controller`, a `useModel` hook, and evidence, outcome, status, and observe-action parts; it does
+not expose a `Flow`.
 
 ## Presentation and customization
 
-| Namespace    | Purpose                                                                 |
-| ------------ | ----------------------------------------------------------------------- |
-| `Records`    | Record table, card, rows, cells, and copy controls.                     |
-| `Operations` | Neutral plan and cleanup operation list with reusable parts.            |
-| `Provider`   | Provider marks, labels, authentication controls, and composition parts. |
-| `Messages`   | Default copy and app-owned message overrides.                           |
-| `Theme`      | Typed tokens and theme recipes applied at `DomainKit.Root`.             |
-| `Testing`    | React fixtures and helpers for package consumers.                       |
+| Namespace    | Purpose                                                      |
+| ------------ | ------------------------------------------------------------ |
+| `Records`    | Record table, card, rows, cells, and copy controls.          |
+| `Operations` | Neutral plan and cleanup operation list with reusable parts. |
+| `Provider`   | Provider marks, provider descriptors, and mark overrides.    |
+| `Messages`   | Default copy and app-owned message overrides.                |
+| `Theme`      | Typed tokens and theme recipes applied at `DomainKit.Root`.  |
+| `Testing`    | React fixtures and helpers for package consumers.            |
 
 {/* reference-inventory:end */}
 

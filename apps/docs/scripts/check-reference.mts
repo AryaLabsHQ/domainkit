@@ -39,16 +39,32 @@ const entryPoints: ReadonlyArray<EntryPoint> = [
     source: "packages/react/src/index.ts",
     reference: "apps/docs/content/reference/react.mdx",
   },
+  {
+    inventoryColumn: 1,
+    label: "@domainkit/capsuledb",
+    source: "packages/capsuledb/src/index.ts",
+    reference: "apps/docs/content/reference/capsuledb.mdx",
+  },
 ];
 
 const exportedNames = (source: string): ReadonlyArray<string> => {
   const namespaces = [...source.matchAll(/export\s+(?:type\s+)?\*\s+as\s+(\w+)/g)].map(
     ([, name]) => name,
   );
-  const constants = [...source.matchAll(/export\s+const\s+([A-Z][A-Z0-9_]*)/g)].map(
+  const constants = [...source.matchAll(/export\s+const\s+([A-Za-z][A-Za-z0-9_]*)/g)].map(
     ([, name]) => name,
   );
-  return [...new Set([...constants, ...namespaces])].sort();
+  const named = [...source.matchAll(/export\s*\{([\s\S]*?)\}/g)].flatMap(([, block]) =>
+    block.split(",").flatMap((entry) => {
+      const match = entry
+        .trim()
+        .match(/^(?:type\s+)?([A-Za-z][A-Za-z0-9_]*)(?:\s+as\s+([A-Za-z][A-Za-z0-9_]*))?$/);
+      if (match === null) return [];
+      const name = match[2] ?? match[1];
+      return name === undefined ? [] : [name];
+    }),
+  );
+  return [...new Set([...constants, ...namespaces, ...named])].sort();
 };
 
 const documentedNames = (
