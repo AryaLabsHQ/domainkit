@@ -1,3 +1,9 @@
+## @domainkit/react@0.7.0
+
+### Make no-op provisioning explicit
+
+Make provisioning review actions reflect no-op DNS plans and soften dialog focus styling.
+
 ## @domainkit/react@0.6.0
 
 ### Attach provider targets to domains
@@ -49,6 +55,14 @@ can use their own buttons, labels, and row layout without rebuilding the connect
 Use the canonical `domainkit` transport service and an Effect layer at `DomainKit.Root`, replace
 duplicated Promise transport models and manual request tracking with Effect Atom, and require React
 19 for the 0.3 release.
+
+### Compose lifecycle models
+
+Expose Effect Atom models for every DNS lifecycle and add shared composable operation primitives.
+
+### Publish Shadcn registry primitives
+
+Document the model-free DomainKit Shadcn registry alongside the installed lifecycle library.
 
 ## @domainkit/react@0.1.1
 

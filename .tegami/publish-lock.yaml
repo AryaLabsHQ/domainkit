@@ -1,34 +1,28 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@domainkit/capsuledb\":\n    type: minor\n---\n\n## Add CapsuleDB persistence\n\nAdd optional PostgreSQL CapsuleDB persistence for the complete managed-DNS authorization lifecycle.\nHosts retain ownership of the exact SQL client, credential encryption, identity, tenancy, policy,\nroutes, audit, and consent.\n"
-    filename: domainkit-capsuledb.md
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Expose callable constructors\n\nExpose callable constructors for tagged DomainKit values. Effect and Promise integrations can\ncreate plan operations, revocation states, and resolver outcomes without manually writing `_tag`\nfields, while schemas remain available for validation and persistence.\n"
+    filename: domainkit-callable-constructors.md
     v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Add Effect-native server integration\n\nAdd `domainkit/server`, with Effect-native `make` and Layer APIs plus `createDomainKit` for async\nhosts. Both paths mount the same Web handler for provider connection start and callback completion;\nasync hosts supply and own their persistence implementation.\n"
-    filename: domainkit-effect-native-server.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Refresh Cloudflare OAuth credentials\n\nAdd provider-owned Cloudflare OAuth credential refresh with refresh-token rotation, typed terminal\ngrant failures, and credential-scoped access-token expiry.\n"
-    filename: domainkit-cloudflare-oauth-refresh.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: patch\n---\n\n## Make no-op provisioning explicit\n\nMake provisioning review actions reflect no-op DNS plans and soften dialog focus styling.\n"
+    filename: react-noop-plan-cta.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - changelogIds:
-      - domainkit-capsuledb.md
-    id: npm:@domainkit/capsuledb
+      - domainkit-callable-constructors.md
+    id: npm:domainkit
+    updated: true
+  - changelogIds:
+      - react-noop-plan-cta.md
+    id: npm:@domainkit/react
     updated: true
   - id: npm:@domainkit/docs
     updated: false
-  - changelogIds:
-      - domainkit-effect-native-server.md
-      - domainkit-cloudflare-oauth-refresh.md
-    id: npm:domainkit
-    updated: true
-  - id: npm:@domainkit/react
-    updated: true
-npm:mark-latest:
   - id: npm:@domainkit/capsuledb
+    updated: true
 npm:packages:
   - id: npm:domainkit-workspace
-  - id: npm:@domainkit/capsuledb
-  - id: npm:@domainkit/docs
   - id: npm:domainkit
   - id: npm:@domainkit/react
+  - id: npm:@domainkit/docs
+  - id: npm:@domainkit/capsuledb
