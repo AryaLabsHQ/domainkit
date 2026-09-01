@@ -3,6 +3,8 @@ packages:
   domainkit: minor
 ---
 
+## Add provider target discovery
+
 Add credential-scoped provider sessions for Cloudflare and Vercel. Providers can discover multiple
 accounts and authoritative zones, report explicit target-selection outcomes, preserve provider
 evidence, and bind DNS operations to an explicitly selected target. Vercel integrations use the

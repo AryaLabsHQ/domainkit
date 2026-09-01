@@ -3,6 +3,8 @@ packages:
   domainkit: minor
 ---
 
+## Model provider connections and domain attachments
+
 Replace the public domain-grant and provider-account deduplication model with
 `ProviderConnection`, `ProviderTarget`, and `DomainAttachment`. Provider credentials may back
 multiple explicitly linked organization connections, while exact domain attachments own DNS
