@@ -2,7 +2,7 @@ import { Clock, Effect, Schema as S } from "effect";
 
 import * as Connection from "../../auth/connect.ts";
 import * as ProviderAuthorization from "../../auth/authorization.ts";
-import type * as ProviderAuth from "../../auth/manifest.ts";
+import * as ProviderAuth from "../../auth/manifest.ts";
 import * as ProviderContext from "../../auth/provider-context.ts";
 import * as Secret from "../../auth/secret.ts";
 import * as DnsProvider from "../../provider/provider.ts";
@@ -21,11 +21,10 @@ export const contextCodec = ProviderContext.codec("vercel.v1", Context);
 export function tokenMethod(
   capabilities: ProviderAuth.TokenValidation["capabilities"],
 ): Extract<ProviderAuth.Manifest["methods"][number], { readonly _tag: "token" }> {
-  return {
-    _tag: "token",
+  return ProviderAuth.Method.token({
     capabilities: [...capabilities],
     instructionsUrl: "https://vercel.com/account/settings/tokens",
-  };
+  });
 }
 
 export interface IntegrationMethodOptions {
@@ -37,12 +36,11 @@ export interface IntegrationMethodOptions {
 export function integrationMethod(
   options: IntegrationMethodOptions,
 ): ProviderAuth.IntegrationMethod {
-  return {
-    _tag: "integration",
+  return ProviderAuth.Method.integration({
     capabilities: [...options.capabilities],
     installUrl: `https://vercel.com/integrations/${encodeURIComponent(options.slug)}/new`,
     tokenEndpoint: "https://api.vercel.com/v2/oauth/access_token",
-  };
+  });
 }
 
 /** Creates the Vercel token and integration authorization manifest. */

@@ -98,7 +98,7 @@ export function useModel(domain: string): Model {
               preserveDns: true,
             }),
             (result) => {
-              const detached: Disconnected = Transport.Disconnected.make({
+              const detached: Disconnected = Transport.Disconnected({
                 domain: snapshot.attachment.domain,
                 provider: snapshot.provider,
                 reusableConnections: [],

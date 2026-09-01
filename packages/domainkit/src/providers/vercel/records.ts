@@ -86,7 +86,7 @@ export const decode = Effect.fn("VercelRecords.decode")(
 
 const decodeOpaque = Effect.fn("VercelRecords.decodeOpaque")(
   (record: Protocol.Record, name: string) =>
-    S.decodeUnknownEffect(DnsRecord.Opaque)({
+    S.decodeUnknownEffect(DnsRecord.Opaque.Schema)({
       _tag: "Opaque",
       name,
       providerRecordId: record.id,

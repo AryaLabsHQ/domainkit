@@ -22,7 +22,7 @@ export const Evidence = Schema.Struct({
 });
 export interface Evidence extends Schema.Schema.Type<typeof Evidence> {}
 
-export const Selection = Schema.TaggedUnion({
+const SelectionSchema = Schema.TaggedUnion({
   selected: {
     candidate: Evidence,
     evidence: Schema.Array(Evidence),
@@ -33,7 +33,16 @@ export const Selection = Schema.TaggedUnion({
     reason: Schema.Literals(["ambiguous", "unsupported"]),
   },
 });
-export type Selection = typeof Selection.Type;
+
+/** Provider selection schema and constructors for trusted discovery results. */
+export const Selection = {
+  Schema: SelectionSchema,
+  manual: (input: Parameters<typeof SelectionSchema.cases.manual.make>[0]) =>
+    SelectionSchema.cases.manual.make(input),
+  selected: (input: Parameters<typeof SelectionSchema.cases.selected.make>[0]) =>
+    SelectionSchema.cases.selected.make(input),
+};
+export type Selection = typeof SelectionSchema.Type;
 
 export function select(input: {
   readonly authoritativeNameservers: ReadonlyArray<string>;
@@ -84,18 +93,17 @@ export function select(input: {
     }
     const candidate = evidence[index];
     if (candidate === undefined) throw new Error("Eligible provider evidence is missing");
-    return { _tag: "selected", candidate, evidence, reason: "explicit" };
+    return Selection.selected({ candidate, evidence, reason: "explicit" });
   }
 
   const decisive = evidence.filter(({ decisiveNameserverMatch }) => decisiveNameserverMatch);
   const candidate = decisive[0];
   return decisive.length === 1 && candidate !== undefined
-    ? { _tag: "selected", candidate, evidence, reason: "unique-nameserver-match" }
-    : {
-        _tag: "manual",
+    ? Selection.selected({ candidate, evidence, reason: "unique-nameserver-match" })
+    : Selection.manual({
         evidence,
         reason: decisive.length > 1 ? "ambiguous" : "unsupported",
-      };
+      });
 }
 
 function evidenceFor(

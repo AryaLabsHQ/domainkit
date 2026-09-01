@@ -33,8 +33,9 @@ The adapter must:
   bodies;
 - honor interruption and avoid hidden retry loops that outlive the caller.
 
-Represent a provider record DomainKit cannot plan as `DnsRecord.Opaque`. Ignoring it completely can
-hide CNAME or name-set conflicts.
+Represent a provider record DomainKit cannot plan as `DnsRecord.Opaque({...})`. Ignoring it
+completely can hide CNAME or name-set conflicts. Use `DnsRecord.Observed` when validating an
+untrusted provider response.
 
 ## Keep credentials outside the interface
 

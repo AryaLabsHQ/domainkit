@@ -6,7 +6,7 @@ import * as DnsRecord from "../src/domain/dns-record.ts";
 import * as Transport from "../src/transport.ts";
 
 const provider: Transport.Provider = {
-  authentication: [{ _tag: "OAuth", label: "Continue with Cloudflare" }],
+  authentication: [Transport.AuthenticationMethod.OAuth({ label: "Continue with Cloudflare" })],
   id: "cloudflare",
   name: "Cloudflare",
 };
@@ -89,52 +89,54 @@ describe("application transport", () => {
   it.effect("lifts an async host implementation into the Effect service", () => {
     const layer = Transport.layerFromAsync({
       cleanup: {
-        apply: async () => ({ _tag: "Cleaned", operationId: "cleanup-1", results: [] }),
-        plan: async () => ({
-          _tag: "CleanupPlan",
-          digest: "cleanup-digest",
-          expiresAt: "2026-08-30T00:15:00.000Z",
-          operations: [],
-        }),
+        apply: async () =>
+          Transport.CleanupResult.Cleaned({
+            operationId: "cleanup-1",
+            results: [],
+          }),
+        plan: async () =>
+          Transport.CleanupPlan({
+            digest: "cleanup-digest",
+            expiresAt: "2026-08-30T00:15:00.000Z",
+            operations: [],
+          }),
       },
       connection: {
-        attach: async (input) => ({
-          _tag: "Connected",
-          attachment: { ...attachment, connectionId: input.connectionId, target: input.target },
-          connection: { ...connection, id: input.connectionId },
-          provider,
-        }),
-        connect: async (input) => ({
-          _tag: "Connected",
-          attachment: { ...attachment, domain: DomainName.parse(input.domain) },
-          connection,
-          provider,
-        }),
-        inspect: async (input) => ({ _tag: "Unsupported", domain: input.domain }),
-        detach: async () => ({
-          _tag: "Detached",
-          attachment,
-          connection,
-          remainingAttachments: 0,
-        }),
+        attach: async (input) =>
+          Transport.Connected({
+            attachment: { ...attachment, connectionId: input.connectionId, target: input.target },
+            connection: { ...connection, id: input.connectionId },
+            provider,
+          }),
+        connect: async (input) =>
+          Transport.Connected({
+            attachment: { ...attachment, domain: DomainName.parse(input.domain) },
+            connection,
+            provider,
+          }),
+        inspect: async (input) => Transport.Unsupported({ domain: input.domain }),
+        detach: async () =>
+          Transport.DetachResult({
+            attachment,
+            connection,
+            remainingAttachments: 0,
+          }),
       },
       provisioning: {
-        apply: async () => ({
-          _tag: "Applied",
-          operationId: "apply-1",
-          receiptId: "receipt-1",
-          results: [],
-        }),
-        plan: async () => ({
-          _tag: "Plan",
-          digest: "plan-digest",
-          expiresAt: "2026-08-30T00:15:00.000Z",
-          operations: [],
-        }),
+        apply: async () =>
+          Transport.ApplyResult.Applied({
+            operationId: "apply-1",
+            receiptId: "receipt-1",
+            results: [],
+          }),
+        plan: async () =>
+          Transport.ProvisioningPlan({
+            digest: "plan-digest",
+            expiresAt: "2026-08-30T00:15:00.000Z",
+            operations: [],
+          }),
       },
-      verification: {
-        observe: async () => ({ _tag: "Observation", provider: [], publicDns: [] }),
-      },
+      verification: { observe: async () => Transport.Observation({ provider: [], publicDns: [] }) },
     });
 
     return Effect.gen(function* () {

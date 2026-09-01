@@ -2,7 +2,7 @@ import { Effect, Layer } from "effect";
 import { Digest, DnsRecord, DomainName, Provisioning } from "domainkit";
 import { InMemoryDnsProvider } from "domainkit/testing";
 
-const requirement = DnsRecord.Cname.make({
+const requirement = DnsRecord.Cname({
   metadata: {
     ownership: "customer",
     provenance: "product-onboarding",

@@ -85,7 +85,7 @@ export const decode = Effect.fn("CloudflareRecords.decode")((record: Protocol.Re
 );
 
 const decodeOpaque = Effect.fn("CloudflareRecords.decodeOpaque")((record: Protocol.Record) =>
-  S.decodeUnknownEffect(DnsRecord.Opaque)({
+  S.decodeUnknownEffect(DnsRecord.Opaque.Schema)({
     _tag: "Opaque",
     name: record.name,
     providerRecordId: record.id,

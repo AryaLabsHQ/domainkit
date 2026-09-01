@@ -1,6 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
 
 import * as ProviderAuthorization from "../src/auth/authorization.ts";
+import * as ProviderAuth from "../src/auth/manifest.ts";
+import * as ProviderDiscovery from "../src/discovery/selection.ts";
 import { DomainName, DnsPlan, DnsRecord, DnsResolver, Vercel } from "../src/index.ts";
 import * as PromiseDnsResolver from "../src/promise/dns-resolver.ts";
 import * as PromiseVercel from "../src/promise/vercel.ts";
@@ -8,7 +10,7 @@ import * as PromiseVercel from "../src/promise/vercel.ts";
 describe("public tagged-value constructors", () => {
   it("constructs schema-backed DNS records without handwritten tags", () => {
     assert.deepStrictEqual(
-      DnsRecord.Opaque.make({
+      DnsRecord.Opaque({
         name: DomainName.parse("mail.example.com"),
         providerRecordId: "record-1",
         providerType: "ALIAS",
@@ -23,7 +25,7 @@ describe("public tagged-value constructors", () => {
   });
 
   it("constructs plan, authorization, and resolver cases", () => {
-    const requirement = DnsRecord.Txt.make({
+    const requirement = DnsRecord.Txt({
       metadata: { ownership: "customer", provenance: "test", purpose: "verification" },
       name: DomainName.parse("_verify.example.com"),
       policy: "append",
@@ -44,6 +46,24 @@ describe("public tagged-value constructors", () => {
       _tag: "failure",
       message: "offline",
     });
+  });
+
+  it("constructs provider manifests and discovery outcomes without handwritten tags", () => {
+    assert.deepStrictEqual(
+      ProviderAuth.Method.token({
+        capabilities: ["dns:read"],
+        instructionsUrl: "https://example.com/token",
+      }),
+      {
+        _tag: "token",
+        capabilities: ["dns:read"],
+        instructionsUrl: "https://example.com/token",
+      },
+    );
+    assert.deepStrictEqual(
+      ProviderDiscovery.Selection.manual({ evidence: [], reason: "unsupported" }),
+      { _tag: "manual", evidence: [], reason: "unsupported" },
+    );
   });
 
   it("exports Vercel account-scope constructors from both entry points", () => {

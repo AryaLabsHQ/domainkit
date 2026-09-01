@@ -37,7 +37,7 @@ import { Effect, Layer } from "effect";
 import { Digest, DnsRecord, DomainName, Provisioning } from "domainkit";
 import { InMemoryDnsProvider } from "domainkit/testing";
 
-const requirement = DnsRecord.Cname.make({
+const requirement = DnsRecord.Cname({
   metadata: {
     ownership: "customer",
     provenance: "product-onboarding",
@@ -116,7 +116,7 @@ missing record
 
 ## What happened
 
-- `DnsRecord.Cname.make` constructs the trusted requirement, including ownership, purpose, conflict policy, and TTL.
+- `DnsRecord.Cname` constructs the trusted requirement, including ownership, purpose, conflict policy, and TTL.
 - `Provisioning.create` read the provider and made a plan with one `create` operation.
 - `Provisioning.authorize` approved that exact plan.
 - `Provisioning.apply` checked provider state again, created the record, and returned a receipt.

@@ -198,7 +198,7 @@ Promise boundary explicit before passing the provider to Promise APIs:
 import { Verification } from "domainkit/promise";
 
 const zone = DomainName.parse("example.com");
-const record = DnsRecord.Txt.make({
+const record = DnsRecord.Txt({
   metadata: {
     ownership: "customer",
     provenance: "example",

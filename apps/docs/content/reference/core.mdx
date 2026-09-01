@@ -77,6 +77,35 @@ import { DnsRecord, Provisioning, Verification } from "domainkit";
 Each namespace groups its schemas, constructors, services, layers, and failure types. Import from the
 namespace instead of an internal module path so the public package boundary stays clear.
 
+## Constructor and schema convention
+
+Use a callable case constructor when your application or adapter is creating a trusted DomainKit
+value. The aggregate `Schema` export, or a constructor's `.Schema` member, remains the decoding
+boundary for persisted or provider data.
+
+```ts
+import { DnsPlan, DnsRecord, DomainName } from "domainkit";
+
+const requirement = DnsRecord.Txt({
+  metadata: { ownership: "customer", provenance: "app", purpose: "verification" },
+  name: DomainName.parse("_verify.example.com"),
+  policy: "append",
+  ttl: 300,
+  value: "verification-value",
+});
+
+const operation = DnsPlan.Operation.create({
+  id: "operation-1",
+  requirement,
+});
+```
+
+Case constructors are available on `DnsRecord`, `DnsPlan.Operation`, `DnsResolver.Resolution`,
+`DnsResolver.AsyncResolution`, `ProviderAuth.Method`, and `ProviderDiscovery.Selection`. Provider
+adapters also expose constructors for provider-specific context values such as
+`Vercel.AccountContext`. Use `_tag` only to narrow or inspect an existing value; do not hand-write
+it when constructing one.
+
 ## Lifecycle map
 
 | Job                | Start with                          | Persist before continuing                        |

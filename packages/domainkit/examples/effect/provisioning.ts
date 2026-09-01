@@ -2,7 +2,7 @@ import { Effect, Layer } from "effect";
 import { Digest, DnsProvider, DnsRecord, DomainName, Provisioning } from "domainkit";
 
 export function createPlan(provider: DnsProvider.Interface) {
-  const requirement = DnsRecord.Cname.make({
+  const requirement = DnsRecord.Cname({
     metadata: { ownership: "customer", provenance: "example", purpose: "tracking" },
     name: DomainName.parse("track.example.com"),
     policy: "exclusive",

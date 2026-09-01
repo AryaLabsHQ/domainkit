@@ -5,7 +5,7 @@ import type * as DnsProvider from "../provider/provider.ts";
 import { Error as InvalidInputError } from "../invalid-input.ts";
 import type { Value as Secret } from "./secret.ts";
 
-export const Method = S.TaggedUnion({
+const MethodSchema = S.TaggedUnion({
   integration: {
     capabilities: S.Array(S.Literals(["dns:read", "dns:write"])),
     installUrl: S.String,
@@ -28,8 +28,20 @@ export const Method = S.TaggedUnion({
   },
 });
 
+/** Provider authentication method schema and constructors for trusted manifests. */
+export const Method = {
+  Schema: MethodSchema,
+  integration: (input: Parameters<typeof MethodSchema.cases.integration.make>[0]) =>
+    MethodSchema.cases.integration.make(input),
+  oauth2: (input: Parameters<typeof MethodSchema.cases.oauth2.make>[0]) =>
+    MethodSchema.cases.oauth2.make(input),
+  token: (input: Parameters<typeof MethodSchema.cases.token.make>[0]) =>
+    MethodSchema.cases.token.make(input),
+};
+export type Method = typeof MethodSchema.Type;
+
 export const Schema = S.Struct({
-  methods: S.Array(Method),
+  methods: S.Array(Method.Schema),
   providerId: S.String,
 });
 export interface Manifest extends S.Schema.Type<typeof Schema> {}
