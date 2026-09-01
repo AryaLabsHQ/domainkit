@@ -11,6 +11,35 @@ seo:
 method as a product operation, and give `DomainKit.Root` a layer that calls your authenticated
 endpoints.
 
+## Constructing responses
+
+Use the callable transport constructors when your host creates a response. Their `Schema` members
+and the aggregate `ConnectionSnapshot`/`ConnectionResult` schemas are for validating serialized
+wire data.
+
+```ts
+import { Transport } from "domainkit";
+
+const plan = Transport.ProvisioningPlan({
+  digest: "plan-digest",
+  expiresAt: "2026-09-01T00:15:00.000Z",
+  operations: [
+    Transport.PlanOperation.Create({
+      id: "record-1",
+      record: { id: "record-1", name: "mail.example.com", type: "TXT", value: "verified" },
+    }),
+  ],
+});
+
+const result = Transport.ApplyResult.Applied({
+  operationId: "apply-1",
+  receiptId: "receipt-1",
+  results: [],
+});
+```
+
+This keeps `_tag` available for narrowing while avoiding handwritten tags in host implementations.
+
 ## Service methods
 
 | Method                 | Input                    | Result               |

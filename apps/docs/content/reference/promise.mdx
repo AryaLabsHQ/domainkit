@@ -13,7 +13,7 @@ values.
 ```ts
 import { DnsRecord, DomainName, Provisioning } from "domainkit/promise";
 
-const requirement = DnsRecord.Cname.make({
+const requirement = DnsRecord.Cname({
   metadata: { ownership: "customer", provenance: "example", purpose: "routing" },
   name: DomainName.parse("app.example.com"),
   policy: "exclusive",
@@ -27,6 +27,11 @@ const result = await Provisioning.create({
   target: Provisioning.Target.ExactZone({ zone: "example.com" }),
 });
 ```
+
+The Promise facade uses the same callable constructors as the Effect entry point. Use
+`DnsRecord.Txt(...)`, `DnsPlan.Operation.create(...)`, and provider helpers such as
+`Vercel.AccountContext.team(...)` for trusted values; use the exported schemas when decoding
+serialized data.
 
 `VERSION` reports the installed package version.
 

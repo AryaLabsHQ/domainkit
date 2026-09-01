@@ -31,7 +31,7 @@ import { Effect } from "effect";
 
 const program = Provisioning.create({
   requirements: [
-    DnsRecord.Cname.make({
+    DnsRecord.Cname({
       metadata: { ownership: "customer", provenance: "test", purpose: "routing" },
       name: DomainName.parse("app.example.com"),
       policy: "exclusive",

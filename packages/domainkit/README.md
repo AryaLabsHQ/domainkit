@@ -21,7 +21,7 @@ import { Digest, DnsRecord, DomainName, Provisioning } from "domainkit";
 import { InMemoryDnsProvider } from "domainkit/testing";
 import { Effect, Layer } from "effect";
 
-const requirement = DnsRecord.Cname.make({
+const requirement = DnsRecord.Cname({
   metadata: {
     ownership: "customer",
     provenance: "product-onboarding",
@@ -47,6 +47,10 @@ const program = Effect.gen(function* () {
 
 Planning is additive and fail-closed: exact records become no-ops, missing records become creates,
 and incompatible state becomes a conflict. DomainKit never silently overwrites DNS.
+
+Tagged values use callable case constructors such as `DnsRecord.Txt({...})` and
+`DnsPlan.Operation.create({...})`; use the exported schemas when decoding persisted or provider
+data.
 
 ## Public entry points
 

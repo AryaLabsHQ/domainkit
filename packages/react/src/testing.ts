@@ -39,8 +39,11 @@ export interface FakeTransport extends Transport.AsyncInterface, Layer.Layer<Tra
 
 export const provider = (overrides: Partial<Transport.Provider> = {}): Transport.Provider => ({
   authentication: [
-    { _tag: "OAuth", label: "Continue with OAuth" },
-    { _tag: "Token", label: "Connect with token", placeholder: "Paste API token" },
+    Transport.AuthenticationMethod.OAuth({ label: "Continue with OAuth" }),
+    Transport.AuthenticationMethod.Token({
+      label: "Connect with token",
+      placeholder: "Paste API token",
+    }),
   ],
   id: "cloudflare",
   name: "Cloudflare",
@@ -80,13 +83,13 @@ export const attachment = (
   ...overrides,
 });
 
-export const connected = (overrides: Partial<Transport.Connected> = {}): Transport.Connected => ({
-  _tag: "Connected",
-  attachment: attachment(),
-  connection: connection(),
-  provider: provider(),
-  ...overrides,
-});
+export const connected = (overrides: Partial<Transport.Connected> = {}): Transport.Connected =>
+  Transport.Connected({
+    attachment: attachment(),
+    connection: connection(),
+    provider: provider(),
+    ...overrides,
+  });
 
 export function makeFakeTransport(options: FakeOptions): FakeTransport {
   const calls: FakeTransport["calls"] = {
@@ -106,22 +109,22 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
       apply: async (input) => {
         calls.cleanupApply.push(input);
         return (
-          options.cleanupApply ?? {
-            _tag: "Cleaned",
+          options.cleanupApply ??
+          Transport.CleanupResult.Cleaned({
             operationId: "cleanup-operation-1",
             results: [],
-          }
+          })
         );
       },
       plan: async (input) => {
         calls.cleanupPlan.push(input);
         return (
-          options.cleanupPlan ?? {
-            _tag: "CleanupPlan",
+          options.cleanupPlan ??
+          Transport.CleanupPlan({
             digest: "cleanup-digest-1",
             expiresAt: "2099-01-01T00:00:00.000Z",
             operations: [],
-          }
+          })
         );
       },
     },
@@ -129,12 +132,12 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
       connect: async (input) => {
         calls.connect.push(input);
         return (
-          options.connect ?? {
-            _tag: "Connected",
+          options.connect ??
+          Transport.Connected({
             attachment: attachment({ domain: DomainName.parse(input.domain) }),
             connection: connection(),
             provider: provider(),
-          }
+          })
         );
       },
       inspect: async (input) => {
@@ -152,8 +155,8 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
       attach: async (input) => {
         calls.attach.push(input);
         return (
-          options.attach ?? {
-            _tag: "Connected",
+          options.attach ??
+          Transport.Connected({
             attachment: attachment({
               connectionId: input.connectionId,
               domain: DomainName.parse(input.domain),
@@ -161,18 +164,18 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
             }),
             connection: connection({ id: input.connectionId }),
             provider: provider(),
-          }
+          })
         );
       },
       detach: async (input) => {
         calls.detach.push(input);
         return (
-          options.detach ?? {
-            _tag: "Detached",
+          options.detach ??
+          Transport.DetachResult({
             attachment: attachment(),
             connection: connection(),
             remainingAttachments: 0,
-          }
+          })
         );
       },
     },
@@ -180,27 +183,28 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
       apply: async (input) => {
         calls.apply.push(input);
         return (
-          options.apply ?? {
-            _tag: "Applied",
+          options.apply ??
+          Transport.ApplyResult.Applied({
             operationId: "apply-operation-1",
             receiptId: "receipt-1",
             results: [],
-          }
+          })
         );
       },
       plan: async (input) => {
         calls.plan.push(input);
         return (
-          options.plan ?? {
-            _tag: "Plan",
+          options.plan ??
+          Transport.ProvisioningPlan({
             digest: "plan-digest-1",
             expiresAt: "2099-01-01T00:00:00.000Z",
-            operations: input.records.map((record) => ({
-              _tag: "Create" as const,
-              id: `create-${record.id}`,
-              record,
-            })),
-          }
+            operations: input.records.map((record) =>
+              Transport.PlanOperation.Create({
+                id: `create-${record.id}`,
+                record,
+              }),
+            ),
+          })
         );
       },
     },
@@ -208,15 +212,19 @@ export function makeFakeTransport(options: FakeOptions): FakeTransport {
       observe: async (input) => {
         calls.observe.push(input);
         return (
-          options.observe ?? {
-            _tag: "Observation",
+          options.observe ??
+          Transport.Observation({
             provider: input.sources.provider
-              ? input.records.map((record) => ({ _tag: "Found" as const, recordId: record.id }))
+              ? input.records.map((record) =>
+                  Transport.ObservationEvidence.Found({ recordId: record.id }),
+                )
               : [],
             publicDns: input.sources.publicDns
-              ? input.records.map((record) => ({ _tag: "Found" as const, recordId: record.id }))
+              ? input.records.map((record) =>
+                  Transport.ObservationEvidence.Found({ recordId: record.id }),
+                )
               : [],
-          }
+          })
         );
       },
     },

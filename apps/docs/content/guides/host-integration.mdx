@@ -53,7 +53,7 @@ Your product decides which DNS records it needs and why. Check those requirement
 ```ts
 import { DnsRecord, DomainName } from "domainkit";
 
-const requirement = DnsRecord.Txt.make({
+const requirement = DnsRecord.Txt({
   metadata: {
     ownership: "product",
     provenance: "domain-onboarding",

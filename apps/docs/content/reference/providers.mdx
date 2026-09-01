@@ -59,9 +59,10 @@ zone discovery, and provider reconstruction from the stored context plus a host-
 
 ## Opaque records
 
-An adapter must return unsupported provider records as `DnsRecord.Opaque` values instead of dropping
-them. Planning keeps opaque records and avoids assumptions about data it cannot model. Deletion
-targets only provider record IDs captured by a DomainKit receipt.
+An adapter must return unsupported provider records as `DnsRecord.Opaque({...})` values instead of
+dropping them. Planning keeps opaque records and avoids assumptions about data it cannot model.
+Deletion targets only provider record IDs captured by a DomainKit receipt. The `DnsRecord.Observed`
+schema is the decoding boundary for provider responses.
 
 ## Acceptance
 

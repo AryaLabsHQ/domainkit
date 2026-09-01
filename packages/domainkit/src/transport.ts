@@ -1,4 +1,4 @@
-import { Context, Data, Effect, Layer, Schema } from "effect";
+import { Context, Data, Effect, Layer, Schema as S } from "effect";
 
 import * as Connection from "./auth/connection.ts";
 import type * as DomainDnsRecord from "./domain/dns-record.ts";
@@ -11,31 +11,42 @@ export {
 } from "./auth/connection.ts";
 
 /** A user-presentable failure at the application transport boundary. */
-export class Failure extends Schema.TaggedError<Failure>()("Failure", {
-  message: Schema.String,
-  operation: Schema.String,
-  retry: Schema.Literals(["never", "after-user-action", "safe", "unknown"]),
+export class Failure extends S.TaggedError<Failure>()("Failure", {
+  message: S.String,
+  operation: S.String,
+  retry: S.Literals(["never", "after-user-action", "safe", "unknown"]),
 }) {}
 
-export const AuthenticationParameter = Schema.Struct({
-  description: Schema.optionalKey(Schema.String),
-  key: Schema.String,
-  label: Schema.String,
-  placeholder: Schema.optionalKey(Schema.String),
-  required: Schema.optionalKey(Schema.Boolean),
+export const AuthenticationParameter = S.Struct({
+  description: S.optionalKey(S.String),
+  key: S.String,
+  label: S.String,
+  placeholder: S.optionalKey(S.String),
+  required: S.optionalKey(S.Boolean),
 });
 export type AuthenticationParameter = typeof AuthenticationParameter.Type;
 
-export const AuthenticationMethod = Schema.TaggedUnion({
-  Integration: { label: Schema.String },
-  OAuth: { label: Schema.String },
+const AuthenticationMethodSchema = S.TaggedUnion({
+  Integration: { label: S.String },
+  OAuth: { label: S.String },
   Token: {
-    label: Schema.String,
-    parameters: Schema.optionalKey(Schema.Array(AuthenticationParameter)),
-    placeholder: Schema.optionalKey(Schema.String),
+    label: S.String,
+    parameters: S.optionalKey(S.Array(AuthenticationParameter)),
+    placeholder: S.optionalKey(S.String),
   },
 });
-export type AuthenticationMethod = typeof AuthenticationMethod.Type;
+
+/** Authentication method schema and constructors for trusted host transport responses. */
+export const AuthenticationMethod = {
+  Schema: AuthenticationMethodSchema,
+  Integration: (input: Parameters<typeof AuthenticationMethodSchema.cases.Integration.make>[0]) =>
+    AuthenticationMethodSchema.cases.Integration.make(input),
+  OAuth: (input: Parameters<typeof AuthenticationMethodSchema.cases.OAuth.make>[0]) =>
+    AuthenticationMethodSchema.cases.OAuth.make(input),
+  Token: (input: Parameters<typeof AuthenticationMethodSchema.cases.Token.make>[0]) =>
+    AuthenticationMethodSchema.cases.Token.make(input),
+};
+export type AuthenticationMethod = typeof AuthenticationMethodSchema.Type;
 
 /** The authentication choice supplied to a connection request. */
 export type Method = Data.TaggedEnum<{
@@ -48,63 +59,100 @@ export type Method = Data.TaggedEnum<{
 }>;
 export const Method = Data.taggedEnum<Method>();
 
-export const Provider = Schema.Struct({
-  authentication: Schema.Array(AuthenticationMethod),
-  id: Schema.String,
-  name: Schema.String,
+export const Provider = S.Struct({
+  authentication: S.Array(AuthenticationMethod.Schema),
+  id: S.String,
+  name: S.String,
 });
 export type Provider = typeof Provider.Type;
 
-export const Connected = Schema.TaggedStruct("Connected", {
+const ConnectedSchema = S.TaggedStruct("Connected", {
   attachment: Connection.DomainAttachment,
   connection: Connection.ProviderConnection,
   provider: Provider,
 });
-export type Connected = typeof Connected.Type;
+/** Constructs a connected transport snapshot from trusted host data. */
+export function Connected(input: Parameters<typeof ConnectedSchema.make>[0]): Connected {
+  return ConnectedSchema.make(input);
+}
+export namespace Connected {
+  export const Schema = ConnectedSchema;
+}
+export type Connected = typeof ConnectedSchema.Type;
 
-export const ReusableConnection = Schema.Struct({
+export const ReusableConnection = S.Struct({
   connection: Connection.ProviderConnection,
-  targets: Schema.Array(Connection.ProviderTarget),
+  targets: S.Array(Connection.ProviderTarget),
 });
 export type ReusableConnection = typeof ReusableConnection.Type;
 
-export const Disconnected = Schema.TaggedStruct("Disconnected", {
-  domain: Schema.String,
+const DisconnectedSchema = S.TaggedStruct("Disconnected", {
+  domain: S.String,
   provider: Provider,
-  reusableConnections: Schema.Array(ReusableConnection),
+  reusableConnections: S.Array(ReusableConnection),
 });
-export type Disconnected = typeof Disconnected.Type;
+/** Constructs a disconnected transport snapshot from trusted host data. */
+export function Disconnected(input: Parameters<typeof DisconnectedSchema.make>[0]): Disconnected {
+  return DisconnectedSchema.make(input);
+}
+export namespace Disconnected {
+  export const Schema = DisconnectedSchema;
+}
+export type Disconnected = typeof DisconnectedSchema.Type;
 
-export const Unsupported = Schema.TaggedStruct("Unsupported", { domain: Schema.String });
-export type Unsupported = typeof Unsupported.Type;
+const UnsupportedSchema = S.TaggedStruct("Unsupported", { domain: S.String });
+/** Constructs an unsupported transport snapshot from trusted host data. */
+export function Unsupported(input: Parameters<typeof UnsupportedSchema.make>[0]): Unsupported {
+  return UnsupportedSchema.make(input);
+}
+export namespace Unsupported {
+  export const Schema = UnsupportedSchema;
+}
+export type Unsupported = typeof UnsupportedSchema.Type;
 
-export const ConnectionSnapshot = Schema.Union([Connected, Disconnected, Unsupported]).pipe(
-  Schema.toTaggedUnion("_tag"),
-);
+export const ConnectionSnapshot = S.Union([
+  ConnectedSchema,
+  DisconnectedSchema,
+  UnsupportedSchema,
+]).pipe(S.toTaggedUnion("_tag"));
 export type ConnectionSnapshot = typeof ConnectionSnapshot.Type;
 
-export const Redirect = Schema.TaggedStruct("Redirect", { authorizationUrl: Schema.String });
-export type Redirect = typeof Redirect.Type;
+const RedirectSchema = S.TaggedStruct("Redirect", { authorizationUrl: S.String });
+/** Constructs an OAuth redirect response from trusted host data. */
+export function Redirect(input: Parameters<typeof RedirectSchema.make>[0]): Redirect {
+  return RedirectSchema.make(input);
+}
+export namespace Redirect {
+  export const Schema = RedirectSchema;
+}
+export type Redirect = typeof RedirectSchema.Type;
 
-export const ConnectionResult = Schema.Union([Connected, Redirect]).pipe(
-  Schema.toTaggedUnion("_tag"),
+export const ConnectionResult = S.Union([ConnectedSchema, RedirectSchema]).pipe(
+  S.toTaggedUnion("_tag"),
 );
 export type ConnectionResult = typeof ConnectionResult.Type;
 
-export const DetachResult = Schema.TaggedStruct("Detached", {
+const DetachResultSchema = S.TaggedStruct("Detached", {
   attachment: Connection.DomainAttachment,
   connection: Connection.ProviderConnection,
-  remainingAttachments: Schema.Int,
+  remainingAttachments: S.Int,
 });
-export type DetachResult = typeof DetachResult.Type;
+/** Constructs a detach response from trusted host data. */
+export function DetachResult(input: Parameters<typeof DetachResultSchema.make>[0]): DetachResult {
+  return DetachResultSchema.make(input);
+}
+export namespace DetachResult {
+  export const Schema = DetachResultSchema;
+}
+export type DetachResult = typeof DetachResultSchema.Type;
 
 /** A presentation projection of a DNS requirement. */
-export const DnsRecord = Schema.Struct({
-  id: Schema.String,
-  name: Schema.String,
-  priority: Schema.optionalKey(Schema.Int),
-  type: Schema.String,
-  value: Schema.String,
+export const DnsRecord = S.Struct({
+  id: S.String,
+  name: S.String,
+  priority: S.optionalKey(S.Int),
+  type: S.String,
+  value: S.String,
 });
 export type DnsRecord = typeof DnsRecord.Type;
 
@@ -145,77 +193,162 @@ export const fromDnsRecord = (id: string, record: DomainDnsRecord.DnsRecord): Dn
   }
 };
 
-export const PlanOperation = Schema.TaggedUnion({
-  Conflict: { id: Schema.String, reason: Schema.String, record: DnsRecord },
-  Create: { id: Schema.String, record: DnsRecord },
-  Noop: { id: Schema.String, record: DnsRecord },
+const PlanOperationSchema = S.TaggedUnion({
+  Conflict: { id: S.String, reason: S.String, record: DnsRecord },
+  Create: { id: S.String, record: DnsRecord },
+  Noop: { id: S.String, record: DnsRecord },
 });
-export type PlanOperation = typeof PlanOperation.Type;
+/** Provisioning operation schema and constructors for trusted host responses. */
+export const PlanOperation = {
+  Schema: PlanOperationSchema,
+  Conflict: (input: Parameters<typeof PlanOperationSchema.cases.Conflict.make>[0]) =>
+    PlanOperationSchema.cases.Conflict.make(input),
+  Create: (input: Parameters<typeof PlanOperationSchema.cases.Create.make>[0]) =>
+    PlanOperationSchema.cases.Create.make(input),
+  Noop: (input: Parameters<typeof PlanOperationSchema.cases.Noop.make>[0]) =>
+    PlanOperationSchema.cases.Noop.make(input),
+};
+export type PlanOperation = typeof PlanOperationSchema.Type;
 
-export const ProvisioningPlan = Schema.TaggedStruct("Plan", {
-  digest: Schema.String,
-  expiresAt: Schema.String,
-  operations: Schema.Array(PlanOperation),
+const ProvisioningPlanSchema = S.TaggedStruct("Plan", {
+  digest: S.String,
+  expiresAt: S.String,
+  operations: S.Array(PlanOperation.Schema),
 });
-export type ProvisioningPlan = typeof ProvisioningPlan.Type;
+/** Constructs a provisioning plan response from trusted host data. */
+export function ProvisioningPlan(
+  input: Parameters<typeof ProvisioningPlanSchema.make>[0],
+): ProvisioningPlan {
+  return ProvisioningPlanSchema.make(input);
+}
+export namespace ProvisioningPlan {
+  export const Schema = ProvisioningPlanSchema;
+}
+export type ProvisioningPlan = typeof ProvisioningPlanSchema.Type;
 
-export const OperationResult = Schema.TaggedUnion({
-  Applied: { operationId: Schema.String },
-  Failed: { message: Schema.String, operationId: Schema.String },
-  Unchanged: { operationId: Schema.String },
+const OperationResultSchema = S.TaggedUnion({
+  Applied: { operationId: S.String },
+  Failed: { message: S.String, operationId: S.String },
+  Unchanged: { operationId: S.String },
 });
-export type OperationResult = typeof OperationResult.Type;
+/** Per-operation result schema and constructors for trusted host responses. */
+export const OperationResult = {
+  Schema: OperationResultSchema,
+  Applied: (input: Parameters<typeof OperationResultSchema.cases.Applied.make>[0]) =>
+    OperationResultSchema.cases.Applied.make(input),
+  Failed: (input: Parameters<typeof OperationResultSchema.cases.Failed.make>[0]) =>
+    OperationResultSchema.cases.Failed.make(input),
+  Unchanged: (input: Parameters<typeof OperationResultSchema.cases.Unchanged.make>[0]) =>
+    OperationResultSchema.cases.Unchanged.make(input),
+};
+export type OperationResult = typeof OperationResultSchema.Type;
 
 const ApplyOutcomeFields = {
-  operationId: Schema.String,
-  receiptId: Schema.String,
-  results: Schema.Array(OperationResult),
+  operationId: S.String,
+  receiptId: S.String,
+  results: S.Array(OperationResult.Schema),
 };
-export const ApplyResult = Schema.TaggedUnion({
+const ApplyResultSchema = S.TaggedUnion({
   Applied: ApplyOutcomeFields,
   Partial: ApplyOutcomeFields,
-  Stale: { message: Schema.String },
+  Stale: { message: S.String },
 });
-export type ApplyResult = typeof ApplyResult.Type;
+/** Apply result schema and constructors for trusted host responses. */
+export const ApplyResult = {
+  Schema: ApplyResultSchema,
+  Applied: (input: Parameters<typeof ApplyResultSchema.cases.Applied.make>[0]) =>
+    ApplyResultSchema.cases.Applied.make(input),
+  Partial: (input: Parameters<typeof ApplyResultSchema.cases.Partial.make>[0]) =>
+    ApplyResultSchema.cases.Partial.make(input),
+  Stale: (input: Parameters<typeof ApplyResultSchema.cases.Stale.make>[0]) =>
+    ApplyResultSchema.cases.Stale.make(input),
+};
+export type ApplyResult = typeof ApplyResultSchema.Type;
 
-export const ObservationEvidence = Schema.TaggedUnion({
-  Found: { recordId: Schema.String },
-  Mismatch: { message: Schema.String, recordId: Schema.String },
-  Missing: { recordId: Schema.String },
-  Unavailable: { message: Schema.String, recordId: Schema.String },
+const ObservationEvidenceSchema = S.TaggedUnion({
+  Found: { recordId: S.String },
+  Mismatch: { message: S.String, recordId: S.String },
+  Missing: { recordId: S.String },
+  Unavailable: { message: S.String, recordId: S.String },
 });
-export type ObservationEvidence = typeof ObservationEvidence.Type;
+/** DNS observation evidence schema and constructors for trusted host responses. */
+export const ObservationEvidence = {
+  Schema: ObservationEvidenceSchema,
+  Found: (input: Parameters<typeof ObservationEvidenceSchema.cases.Found.make>[0]) =>
+    ObservationEvidenceSchema.cases.Found.make(input),
+  Mismatch: (input: Parameters<typeof ObservationEvidenceSchema.cases.Mismatch.make>[0]) =>
+    ObservationEvidenceSchema.cases.Mismatch.make(input),
+  Missing: (input: Parameters<typeof ObservationEvidenceSchema.cases.Missing.make>[0]) =>
+    ObservationEvidenceSchema.cases.Missing.make(input),
+  Unavailable: (input: Parameters<typeof ObservationEvidenceSchema.cases.Unavailable.make>[0]) =>
+    ObservationEvidenceSchema.cases.Unavailable.make(input),
+};
+export type ObservationEvidence = typeof ObservationEvidenceSchema.Type;
 
-export const Observation = Schema.TaggedStruct("Observation", {
-  provider: Schema.Array(ObservationEvidence),
-  publicDns: Schema.Array(ObservationEvidence),
+const ObservationSchema = S.TaggedStruct("Observation", {
+  provider: S.Array(ObservationEvidence.Schema),
+  publicDns: S.Array(ObservationEvidence.Schema),
 });
-export type Observation = typeof Observation.Type;
+/** Constructs a DNS observation response from trusted host data. */
+export function Observation(input: Parameters<typeof ObservationSchema.make>[0]): Observation {
+  return ObservationSchema.make(input);
+}
+export namespace Observation {
+  export const Schema = ObservationSchema;
+}
+export type Observation = typeof ObservationSchema.Type;
 
-export const CleanupOperation = Schema.TaggedUnion({
-  AlreadyAbsent: { id: Schema.String, record: DnsRecord },
-  Blocked: { id: Schema.String, reason: Schema.String, record: DnsRecord },
-  Delete: { id: Schema.String, record: DnsRecord },
+const CleanupOperationSchema = S.TaggedUnion({
+  AlreadyAbsent: { id: S.String, record: DnsRecord },
+  Blocked: { id: S.String, reason: S.String, record: DnsRecord },
+  Delete: { id: S.String, record: DnsRecord },
 });
-export type CleanupOperation = typeof CleanupOperation.Type;
+/** Cleanup operation schema and constructors for trusted host responses. */
+export const CleanupOperation = {
+  Schema: CleanupOperationSchema,
+  AlreadyAbsent: (input: Parameters<typeof CleanupOperationSchema.cases.AlreadyAbsent.make>[0]) =>
+    CleanupOperationSchema.cases.AlreadyAbsent.make(input),
+  Blocked: (input: Parameters<typeof CleanupOperationSchema.cases.Blocked.make>[0]) =>
+    CleanupOperationSchema.cases.Blocked.make(input),
+  Delete: (input: Parameters<typeof CleanupOperationSchema.cases.Delete.make>[0]) =>
+    CleanupOperationSchema.cases.Delete.make(input),
+};
+export type CleanupOperation = typeof CleanupOperationSchema.Type;
 
-export const CleanupPlan = Schema.TaggedStruct("CleanupPlan", {
-  digest: Schema.String,
-  expiresAt: Schema.String,
-  operations: Schema.Array(CleanupOperation),
+const CleanupPlanSchema = S.TaggedStruct("CleanupPlan", {
+  digest: S.String,
+  expiresAt: S.String,
+  operations: S.Array(CleanupOperation.Schema),
 });
-export type CleanupPlan = typeof CleanupPlan.Type;
+/** Constructs a cleanup plan response from trusted host data. */
+export function CleanupPlan(input: Parameters<typeof CleanupPlanSchema.make>[0]): CleanupPlan {
+  return CleanupPlanSchema.make(input);
+}
+export namespace CleanupPlan {
+  export const Schema = CleanupPlanSchema;
+}
+export type CleanupPlan = typeof CleanupPlanSchema.Type;
 
 const CleanupOutcomeFields = {
-  operationId: Schema.String,
-  results: Schema.Array(OperationResult),
+  operationId: S.String,
+  results: S.Array(OperationResult.Schema),
 };
-export const CleanupResult = Schema.TaggedUnion({
+const CleanupResultSchema = S.TaggedUnion({
   Cleaned: CleanupOutcomeFields,
   Partial: CleanupOutcomeFields,
-  Stale: { message: Schema.String },
+  Stale: { message: S.String },
 });
-export type CleanupResult = typeof CleanupResult.Type;
+/** Cleanup result schema and constructors for trusted host responses. */
+export const CleanupResult = {
+  Schema: CleanupResultSchema,
+  Cleaned: (input: Parameters<typeof CleanupResultSchema.cases.Cleaned.make>[0]) =>
+    CleanupResultSchema.cases.Cleaned.make(input),
+  Partial: (input: Parameters<typeof CleanupResultSchema.cases.Partial.make>[0]) =>
+    CleanupResultSchema.cases.Partial.make(input),
+  Stale: (input: Parameters<typeof CleanupResultSchema.cases.Stale.make>[0]) =>
+    CleanupResultSchema.cases.Stale.make(input),
+};
+export type CleanupResult = typeof CleanupResultSchema.Type;
 
 export interface ConnectInput {
   readonly domain: string;

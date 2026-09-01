@@ -17,7 +17,7 @@ export async function provisionWithManualApproval(
   }) => Promise<boolean>,
 ): Promise<void> {
   const zone = DomainName.parse("example.com");
-  const requirement = DnsRecord.Txt.make({
+  const requirement = DnsRecord.Txt({
     metadata: { ownership: "customer", provenance: "example", purpose: "domain verification" },
     name: DomainName.parse("_verify.example.com"),
     policy: "append",

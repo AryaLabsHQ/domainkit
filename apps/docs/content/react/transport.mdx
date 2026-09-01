@@ -65,6 +65,11 @@ Successful outcomes use tagged models. Failures use `Transport.Failure` in the E
 Check untrusted request, database, and provider data at your server boundary before mapping it into
 these browser-safe types.
 
+When a host handler creates a response, use the callable constructors (`Transport.Connected(...)`,
+`Transport.ProvisioningPlan(...)`, `Transport.ApplyResult.Applied(...)`, and the other case
+constructors) instead of writing `_tag` fields by hand. Use the corresponding `Schema` members or
+aggregate schemas only when decoding serialized data.
+
 Custom UI can consume `Connection.useModel(domain)` with `useAtomValue(model.state)` and
 `useAtomSet(model.command)`. Dispatch `Connection.Command.Connect`, `Attach`, `Detach`, and `Retry`;
 the packaged controller and flow use the same atoms. A reusable connection contains its

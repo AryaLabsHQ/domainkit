@@ -4,7 +4,7 @@ import { Clock, Effect, Schema } from "effect";
 import * as AuthorizationCode from "../../auth/authorization-code.ts";
 import * as Connection from "../../auth/connect.ts";
 import * as ProviderAuthorization from "../../auth/authorization.ts";
-import type * as ProviderAuth from "../../auth/manifest.ts";
+import * as ProviderAuth from "../../auth/manifest.ts";
 import * as ProviderContext from "../../auth/provider-context.ts";
 import * as Secret from "../../auth/secret.ts";
 import type * as DomainName from "../../domain/domain-name.ts";
@@ -30,11 +30,10 @@ export const contextCodec = ProviderContext.codec("cloudflare.v1", Context);
 export function tokenMethod(
   capabilities: ProviderAuth.TokenValidation["capabilities"],
 ): Extract<ProviderAuth.Manifest["methods"][number], { readonly _tag: "token" }> {
-  return {
-    _tag: "token",
+  return ProviderAuth.Method.token({
     capabilities: [...capabilities],
     instructionsUrl: "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/",
-  };
+  });
 }
 
 export interface OAuthMethodOptions {
@@ -47,13 +46,12 @@ export interface OAuthMethodOptions {
 
 /** Describes a registered Cloudflare OAuth client and its assigned scope IDs. */
 export function oauthMethod(options: OAuthMethodOptions): ProviderAuth.OAuthMethod {
-  return {
-    _tag: "oauth2",
+  return ProviderAuth.Method.oauth2({
     authorizationServer,
     capabilities: [...options.capabilities],
     clientAuth: options.clientAuth,
     scopes: [...options.scopes],
-  };
+  });
 }
 
 /** Creates the Cloudflare token and OAuth authorization manifest. */
