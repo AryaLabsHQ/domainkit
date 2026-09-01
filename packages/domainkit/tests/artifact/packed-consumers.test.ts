@@ -151,7 +151,7 @@ const observed = await Verification.observe({
   resolvers: [{
     id: "packed-resolver",
     resolver: {
-      resolve: async () => DnsResolver.Resolution.answer.make({
+      resolve: async () => DnsResolver.Resolution.answer({
         answers: [{
           data: "domainkit",
           name: "_verify.example.com",

@@ -30,17 +30,17 @@ describe("public tagged-value constructors", () => {
       ttl: 300,
       value: "domainkit",
     });
-    assert.deepStrictEqual(ProviderAuthorization.Revocation.Active.make({}), {
+    assert.deepStrictEqual(ProviderAuthorization.Revocation.Active(), {
       _tag: "Active",
     });
-    assert.deepStrictEqual(DnsPlan.Operation.create.make({ id: "operation-1", requirement }), {
+    assert.deepStrictEqual(DnsPlan.Operation.create({ id: "operation-1", requirement }), {
       _tag: "create",
       id: "operation-1",
       requirement,
     });
-    assert.deepStrictEqual(DnsResolver.Resolution.nodata.make({}), { _tag: "nodata" });
-    assert.deepStrictEqual(DnsResolver.AsyncResolution.timeout.make({}), { _tag: "timeout" });
-    assert.deepStrictEqual(PromiseDnsResolver.Resolution.failure.make({ message: "offline" }), {
+    assert.deepStrictEqual(DnsResolver.Resolution.nodata(), { _tag: "nodata" });
+    assert.deepStrictEqual(DnsResolver.AsyncResolution.timeout(), { _tag: "timeout" });
+    assert.deepStrictEqual(PromiseDnsResolver.Resolution.failure({ message: "offline" }), {
       _tag: "failure",
       message: "offline",
     });

@@ -21,17 +21,21 @@ const OperationSchema = S.TaggedUnion({
     requirement: DnsRecord.Schema,
   },
 });
-/** DNS plan operation schema and constructor cases for trusted plan values. */
-export const Operation = Object.assign(OperationSchema, {
-  conflict: OperationSchema.cases.conflict,
-  create: OperationSchema.cases.create,
-  noop: OperationSchema.cases.noop,
-});
-export type Operation = typeof Operation.Type;
+/** DNS plan operation schema and callable constructors for trusted plan values. */
+export const Operation = {
+  Schema: OperationSchema,
+  conflict: (input: Parameters<typeof OperationSchema.cases.conflict.make>[0]) =>
+    OperationSchema.cases.conflict.make(input),
+  create: (input: Parameters<typeof OperationSchema.cases.create.make>[0]) =>
+    OperationSchema.cases.create.make(input),
+  noop: (input: Parameters<typeof OperationSchema.cases.noop.make>[0]) =>
+    OperationSchema.cases.noop.make(input),
+};
+export type Operation = typeof OperationSchema.Type;
 
 export const Schema = S.Struct({
   digest: S.String,
-  operations: S.Array(Operation),
+  operations: S.Array(Operation.Schema),
   providerId: S.String,
   version: S.Literal("domainkit.dns-plan.v1"),
   zone: DomainName.Schema,

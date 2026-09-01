@@ -9,7 +9,7 @@ import { CryptoError, sha256Encoded, stringify } from "./canonical-json.ts";
 import * as DnsPlan from "./types.ts";
 
 const UnsignedPlan = S.Struct({
-  operations: S.Array(DnsPlan.Operation),
+  operations: S.Array(DnsPlan.Operation.Schema),
   providerId: S.String,
   version: S.Literal("domainkit.dns-plan.v1"),
   zone: DomainName.Schema,
@@ -219,7 +219,10 @@ export const apply = Effect.fn("Provisioning.apply")(function* (input: ApplyInpu
     });
   }
 
-  const creates = plan.operations.filter(DnsPlan.Operation.guards.create);
+  const creates = plan.operations.filter(
+    (operation): operation is Extract<DnsPlan.Operation, { readonly _tag: "create" }> =>
+      operation._tag === "create",
+  );
   const approved = new Set(authorization.operationIds);
   const unknown = authorization.operationIds.filter(
     (id) => !creates.some((operation) => operation.id === id),
@@ -363,7 +366,7 @@ function reconcileRequirement(
     const exact = sameSet.find((record) => DnsRecord.equals(record, requirement));
     const id = yield* sha256Encoded(RequirementDigest, { requirement });
     if (exact !== undefined) {
-      return DnsPlan.Operation.noop.make({
+      return DnsPlan.Operation.noop({
         id,
         requirement,
         ttlDrift: exact.ttl !== requirement.ttl,
@@ -373,7 +376,7 @@ function reconcileRequirement(
       sameName.length > 0 &&
       (requirement._tag === "CNAME" || sameName.some((record) => record._tag === "CNAME"));
     if (cnameConflict) {
-      return DnsPlan.Operation.conflict.make({
+      return DnsPlan.Operation.conflict({
         existing: sameName,
         id,
         reason: "CNAME records cannot coexist with other records at the same name",
@@ -384,14 +387,14 @@ function reconcileRequirement(
       sameSet.length > 0 &&
       (requirement.policy === "exclusive" || sameSet.some(({ policy }) => policy === "exclusive"))
     ) {
-      return DnsPlan.Operation.conflict.make({
+      return DnsPlan.Operation.conflict({
         existing: sameSet,
         id,
         reason: "The exclusive record set already contains incompatible data",
         requirement,
       });
     }
-    return DnsPlan.Operation.create.make({ id, requirement });
+    return DnsPlan.Operation.create({ id, requirement });
   });
 }
 

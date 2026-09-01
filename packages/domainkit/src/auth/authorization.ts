@@ -29,12 +29,14 @@ const RevocationSchema = S.TaggedUnion({
   Active: {},
   Pending: { requestedAt: S.DateFromString },
 });
-/** Revocation state schema and constructor cases for trusted lifecycle values. */
-export const Revocation = Object.assign(RevocationSchema, {
-  Active: RevocationSchema.cases.Active,
-  Pending: RevocationSchema.cases.Pending,
-});
-export type Revocation = typeof Revocation.Type;
+/** Revocation state schema and callable constructors for trusted lifecycle values. */
+export const Revocation = {
+  Schema: RevocationSchema,
+  Active: () => RevocationSchema.cases.Active.make({}),
+  Pending: (input: Parameters<typeof RevocationSchema.cases.Pending.make>[0]) =>
+    RevocationSchema.cases.Pending.make(input),
+};
+export type Revocation = typeof RevocationSchema.Type;
 
 /** A provider credential authorization shared by one or more organization connections. */
 export const Schema = S.Struct({
@@ -46,7 +48,7 @@ export const Schema = S.Struct({
   providerContext: ProviderContext.Envelope,
   providerId: S.String,
   requiredCapabilities: S.Array(Capability),
-  revocation: Revocation,
+  revocation: Revocation.Schema,
   scopes: S.Array(S.String),
 });
 export interface ProviderAuthorization extends S.Schema.Type<typeof Schema> {}

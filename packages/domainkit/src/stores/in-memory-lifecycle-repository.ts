@@ -1,4 +1,4 @@
-import { Effect, Layer, Ref, Semaphore } from "effect";
+import { DateTime, Effect, Layer, Ref, Semaphore } from "effect";
 
 import * as ProviderAuthorization from "../auth/authorization.ts";
 import * as Connection from "../auth/connection.ts";
@@ -99,6 +99,7 @@ export function make(options: Options = {}): Lifecycle.Interface {
     connection: Connection.StoredConnection,
     revoke: (authorization: ProviderAuthorization.ProviderAuthorization) => Effect.Effect<void, E>,
   ) {
+    const requestedAt = yield* DateTime.nowAsDate;
     const pending: Lifecycle.Aggregate = {
       ...aggregate,
       authorization: {
@@ -106,7 +107,7 @@ export function make(options: Options = {}): Lifecycle.Interface {
         revocation:
           aggregate.authorization.revocation._tag === "Pending"
             ? aggregate.authorization.revocation
-            : ProviderAuthorization.Revocation.Pending.make({ requestedAt: new Date() }),
+            : ProviderAuthorization.Revocation.Pending({ requestedAt }),
       },
     };
     yield* commit("prepareRevocation", pending);

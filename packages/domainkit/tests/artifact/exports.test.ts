@@ -44,14 +44,14 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof effectApi.GoogleDnsOverHttps.layer, "function");
     assert.strictEqual(typeof effectApi.DnsResolverPool.defaultMake, "function");
     assert.strictEqual(typeof effectApi.DnsRecord.Opaque.make, "function");
-    assert.strictEqual(typeof effectApi.DnsPlan.Operation.create.make, "function");
-    assert.strictEqual(typeof effectApi.DnsResolver.Resolution.answer.make, "function");
-    assert.strictEqual(typeof effectApi.DnsResolver.AsyncResolution.timeout.make, "function");
+    assert.strictEqual(typeof effectApi.DnsPlan.Operation.create, "function");
+    assert.strictEqual(typeof effectApi.DnsResolver.Resolution.answer, "function");
+    assert.strictEqual(typeof effectApi.DnsResolver.AsyncResolution.timeout, "function");
     assert.strictEqual(typeof effectApi.Verification.observe, "function");
     assert.strictEqual(typeof effectApi.DnsOverHttps.make, "function");
     assert.strictEqual(typeof promiseApi.DnsOverHttps.make, "function");
     assert.strictEqual(typeof promiseApi.ProviderSession.fromEffect, "function");
-    assert.strictEqual(typeof promiseApi.DnsResolver.Resolution.failure.make, "function");
+    assert.strictEqual(typeof promiseApi.DnsResolver.Resolution.failure, "function");
     assert.strictEqual(typeof promiseApi.GoogleDnsOverHttps.make, "function");
     assert.strictEqual(typeof promiseApi.DnsResolverPool.defaultMake, "function");
     assert.strictEqual(typeof promiseApi.Verification.observe, "function");

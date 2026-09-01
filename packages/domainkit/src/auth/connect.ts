@@ -185,7 +185,7 @@ export const connect = Effect.fn("Connection.connect")(function* (input: Connect
           providerContext: input.authentication.providerContext,
           providerId: input.providerId,
           requiredCapabilities: [...input.requiredCapabilities],
-          revocation: ProviderAuthorization.Revocation.Active.make({}),
+          revocation: ProviderAuthorization.Revocation.Active(),
           scopes: [...input.authentication.scopes],
         }
       : {
@@ -197,7 +197,7 @@ export const connect = Effect.fn("Connection.connect")(function* (input: Connect
           method: input.method,
           providerContext: input.authentication.providerContext,
           requiredCapabilities: [...input.requiredCapabilities],
-          revocation: ProviderAuthorization.Revocation.Active.make({}),
+          revocation: ProviderAuthorization.Revocation.Active(),
           scopes: [...input.authentication.scopes],
         };
   const existingConnection = yield* repository.findConnection(input.ownerId, authorizationId);

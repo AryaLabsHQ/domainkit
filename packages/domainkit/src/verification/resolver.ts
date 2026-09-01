@@ -21,12 +21,14 @@ const ResolutionSchema = Schema.TaggedUnion({
   answer: { answers: Schema.Array(Answer) },
   nodata: {},
 });
-/** DNS answer schema and constructor cases for trusted resolver values. */
-export const Resolution = Object.assign(ResolutionSchema, {
-  answer: ResolutionSchema.cases.answer,
-  nodata: ResolutionSchema.cases.nodata,
-});
-export type Resolution = typeof Resolution.Type;
+/** DNS answer schema and callable constructors for trusted resolver values. */
+export const Resolution = {
+  Schema: ResolutionSchema,
+  answer: (input: Parameters<typeof ResolutionSchema.cases.answer.make>[0]) =>
+    ResolutionSchema.cases.answer.make(input),
+  nodata: () => ResolutionSchema.cases.nodata.make({}),
+};
+export type Resolution = typeof ResolutionSchema.Type;
 
 export class Error extends Schema.TaggedError<Error>()("ResolverError", {
   cause: Schema.optionalKey(Schema.Unknown),
@@ -46,14 +48,17 @@ const AsyncResolutionSchema = Schema.TaggedUnion({
   timeout: {},
   failure: { message: Schema.String },
 });
-/** Promise bridge result schema and constructor cases, including typed failures. */
-export const AsyncResolution = Object.assign(AsyncResolutionSchema, {
-  answer: AsyncResolutionSchema.cases.answer,
-  failure: AsyncResolutionSchema.cases.failure,
-  nodata: AsyncResolutionSchema.cases.nodata,
-  timeout: AsyncResolutionSchema.cases.timeout,
-});
-export type AsyncResolution = typeof AsyncResolution.Type;
+/** Promise bridge result schema and callable constructors, including typed failures. */
+export const AsyncResolution = {
+  Schema: AsyncResolutionSchema,
+  answer: (input: Parameters<typeof AsyncResolutionSchema.cases.answer.make>[0]) =>
+    AsyncResolutionSchema.cases.answer.make(input),
+  failure: (input: Parameters<typeof AsyncResolutionSchema.cases.failure.make>[0]) =>
+    AsyncResolutionSchema.cases.failure.make(input),
+  nodata: () => AsyncResolutionSchema.cases.nodata.make({}),
+  timeout: () => AsyncResolutionSchema.cases.timeout.make({}),
+};
+export type AsyncResolution = typeof AsyncResolutionSchema.Type;
 
 export interface AsyncInterface {
   readonly resolve: (query: Query) => Promise<AsyncResolution>;
@@ -93,8 +98,8 @@ export const toAsync = (resolver: Interface): AsyncInterface => ({
         Effect.match({
           onFailure: (failure): AsyncResolution =>
             failure.reason === "timeout"
-              ? AsyncResolution.timeout.make({})
-              : AsyncResolution.failure.make({ message: failure.message }),
+              ? AsyncResolution.timeout()
+              : AsyncResolution.failure({ message: failure.message }),
           onSuccess: (resolution) => resolution,
         }),
       ),
