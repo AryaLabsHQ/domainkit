@@ -353,6 +353,7 @@
 ) {
   background: var(--domainkit-background);
   border: 1px solid var(--domainkit-border);
+  border-color: color-mix(in oklab, var(--domainkit-border) 60%, var(--domainkit-background));
   border-radius: var(--domainkit-radius);
   box-shadow: var(--domainkit-shadow);
   color: var(--domainkit-text);
@@ -362,6 +363,7 @@
   max-height: calc(100vh - 2rem);
   max-width: calc(100vw - 2rem);
   overflow: hidden;
+  outline: none;
   position: fixed;
   top: 50%;
   transform: translate(-50%, -50%);

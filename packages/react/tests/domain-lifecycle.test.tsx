@@ -128,6 +128,30 @@ describe("provisioning lifecycle", () => {
     expect(transport.calls.apply).toEqual([]);
   });
 
+  it("makes an all-noop plan explicit and does not reapply it", async () => {
+    const user = userEvent.setup();
+    const transport = Testing.makeFakeTransport({
+      inspect: connection,
+      plan: {
+        _tag: "Plan",
+        digest: "unchanged-plan",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        operations: [{ _tag: "Noop", id: "existing-record", record }],
+      },
+    });
+    render(
+      <DomainKit.Root transport={transport}>
+        <Provisioning.Flow connection={connection} records={[record]} />
+      </DomainKit.Root>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Review changes" }));
+    const dialog = await screen.findByRole("dialog");
+    const button = within(dialog).getByRole("button", { name: "No changes needed" });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(transport.calls.apply).toEqual([]);
+  });
+
   it("fails closed when custom UI dispatches Apply for a conflicting plan", async () => {
     const transport = Testing.makeFakeTransport({
       inspect: connection,

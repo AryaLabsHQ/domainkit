@@ -179,6 +179,8 @@ export function Dialog({ controller, trigger }: DialogProps) {
   const plan = planRef.current;
   const busy = state._tag === "Planning" || state._tag === "Applying";
   const open = state._tag !== "Idle" && state._tag !== "Complete";
+  const isNoopOnly =
+    plan !== undefined && plan.operations.every((operation) => operation._tag === "Noop");
   return (
     <BaseDialog.Root
       onOpenChange={(nextOpen, eventDetails) => {
@@ -248,11 +250,13 @@ export function Dialog({ controller, trigger }: DialogProps) {
                 </BaseDialog.Close>
                 <button
                   data-domainkit-part="plan-apply"
-                  disabled={plan.operations.some((operation) => operation._tag === "Conflict")}
+                  disabled={
+                    isNoopOnly || plan.operations.some((operation) => operation._tag === "Conflict")
+                  }
                   onClick={() => controller.apply()}
                   type="button"
                 >
-                  {messages.applyDns}
+                  {isNoopOnly ? messages.noChanges : messages.applyDns}
                 </button>
               </>
             ) : (

@@ -27,6 +27,7 @@ export interface Catalog {
   readonly dialogTitle: (provider: string) => string;
   readonly openingAuthorization: string;
   readonly moreActions: string;
+  readonly noChanges: string;
   readonly planConsent: string;
   readonly planningCleanup: string;
   readonly planningDns: string;
@@ -70,6 +71,7 @@ export const english: Catalog = {
   dialogTitle: (provider) => `Connect ${provider}`,
   openingAuthorization: "Opening provider authorization…",
   moreActions: "More connection actions",
+  noChanges: "No changes needed",
   planConsent: "Review the exact DNS operations before approving this plan.",
   planningCleanup: "Preparing cleanup…",
   planningDns: "Preparing DNS changes…",
