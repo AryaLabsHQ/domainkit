@@ -47,7 +47,7 @@
       "name": "async-state",
       "type": "registry:ui",
       "title": "Async State",
-      "description": "Loading, empty, and error states for DNS screens.",
+      "description": "Loading, empty, and error states for DNS interfaces.",
       "dependencies": ["lucide-react"],
       "registryDependencies": ["empty", "spinner"],
       "files": [{ "path": "registry/ui/async-state.tsx", "type": "registry:ui" }]
