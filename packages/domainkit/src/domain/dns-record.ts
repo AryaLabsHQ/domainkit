@@ -65,8 +65,7 @@ export type DnsRecord = typeof Schema.Type;
 export type Encoded = typeof Schema.Encoded;
 
 /** Provider state that DomainKit cannot create but must retain for safe reconciliation. */
-export const Opaque = S.Struct({
-  _tag: S.Literal("Opaque"),
+export const Opaque = S.TaggedStruct("Opaque", {
   name: S.String.check(S.isMinLength(1)),
   providerRecordId: S.NullOr(S.String),
   providerType: S.String.check(S.isMinLength(1)),

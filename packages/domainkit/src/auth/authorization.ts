@@ -25,9 +25,14 @@ export const CapabilityEvidence = S.Struct({
 });
 export interface CapabilityEvidence extends S.Schema.Type<typeof CapabilityEvidence> {}
 
-export const Revocation = S.TaggedUnion({
+const RevocationSchema = S.TaggedUnion({
   Active: {},
   Pending: { requestedAt: S.DateFromString },
+});
+/** Revocation state schema and constructor cases for trusted lifecycle values. */
+export const Revocation = Object.assign(RevocationSchema, {
+  Active: RevocationSchema.cases.Active,
+  Pending: RevocationSchema.cases.Pending,
 });
 export type Revocation = typeof Revocation.Type;
 

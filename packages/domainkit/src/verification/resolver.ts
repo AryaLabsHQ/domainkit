@@ -17,9 +17,14 @@ export const Answer = Schema.Struct({
 });
 export interface Answer extends Schema.Schema.Type<typeof Answer> {}
 
-export const Resolution = Schema.TaggedUnion({
+const ResolutionSchema = Schema.TaggedUnion({
   answer: { answers: Schema.Array(Answer) },
   nodata: {},
+});
+/** DNS answer schema and constructor cases for trusted resolver values. */
+export const Resolution = Object.assign(ResolutionSchema, {
+  answer: ResolutionSchema.cases.answer,
+  nodata: ResolutionSchema.cases.nodata,
 });
 export type Resolution = typeof Resolution.Type;
 
@@ -35,10 +40,20 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@domainkit/DnsResolver") {}
 
-export type AsyncResolution =
-  | Resolution
-  | { readonly _tag: "timeout" }
-  | { readonly _tag: "failure"; readonly message: string };
+const AsyncResolutionSchema = Schema.TaggedUnion({
+  answer: { answers: Schema.Array(Answer) },
+  nodata: {},
+  timeout: {},
+  failure: { message: Schema.String },
+});
+/** Promise bridge result schema and constructor cases, including typed failures. */
+export const AsyncResolution = Object.assign(AsyncResolutionSchema, {
+  answer: AsyncResolutionSchema.cases.answer,
+  failure: AsyncResolutionSchema.cases.failure,
+  nodata: AsyncResolutionSchema.cases.nodata,
+  timeout: AsyncResolutionSchema.cases.timeout,
+});
+export type AsyncResolution = typeof AsyncResolution.Type;
 
 export interface AsyncInterface {
   readonly resolve: (query: Query) => Promise<AsyncResolution>;
@@ -78,8 +93,8 @@ export const toAsync = (resolver: Interface): AsyncInterface => ({
         Effect.match({
           onFailure: (failure): AsyncResolution =>
             failure.reason === "timeout"
-              ? { _tag: "timeout" }
-              : { _tag: "failure", message: failure.message },
+              ? AsyncResolution.timeout.make({})
+              : AsyncResolution.failure.make({ message: failure.message }),
           onSuccess: (resolution) => resolution,
         }),
       ),

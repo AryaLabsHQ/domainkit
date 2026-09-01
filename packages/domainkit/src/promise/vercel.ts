@@ -9,14 +9,8 @@ import type * as ProviderSession from "../provider/session.ts";
 import type * as ZoneDiscovery from "./zone-discovery.ts";
 
 export * as Auth from "./vercel-auth.ts";
-export type {
-  Account,
-  AccountContext,
-  Fetch,
-  ListZonesInput,
-  Options,
-  Zone,
-} from "../providers/vercel/client.ts";
+export { AccountContext } from "../providers/vercel/client.ts";
+export type { Account, Fetch, ListZonesInput, Options, Zone } from "../providers/vercel/client.ts";
 
 export interface Interface extends DnsProvider.AsyncInterface {
   readonly providerId: "vercel";

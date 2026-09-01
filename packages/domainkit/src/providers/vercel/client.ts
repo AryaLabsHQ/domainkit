@@ -19,6 +19,19 @@ export type AccountContext =
   | { readonly _tag: "personal" }
   | { readonly _tag: "team"; readonly teamId: string };
 
+/** Constructs the account scope used by Vercel API requests. */
+export const AccountContext = {
+  personal: (): Extract<AccountContext, { readonly _tag: "personal" }> => ({ _tag: "personal" }),
+  team: ({
+    teamId,
+  }: {
+    readonly teamId: string;
+  }): Extract<AccountContext, { readonly _tag: "team" }> => ({
+    _tag: "team",
+    teamId,
+  }),
+};
+
 /** Configuration for an Effect-native Vercel authoritative-DNS client. */
 export interface Options {
   readonly baseUrl?: string;

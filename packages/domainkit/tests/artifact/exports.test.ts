@@ -43,10 +43,15 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof effectApi.CloudflareDnsOverHttps.layer, "function");
     assert.strictEqual(typeof effectApi.GoogleDnsOverHttps.layer, "function");
     assert.strictEqual(typeof effectApi.DnsResolverPool.defaultMake, "function");
+    assert.strictEqual(typeof effectApi.DnsRecord.Opaque.make, "function");
+    assert.strictEqual(typeof effectApi.DnsPlan.Operation.create.make, "function");
+    assert.strictEqual(typeof effectApi.DnsResolver.Resolution.answer.make, "function");
+    assert.strictEqual(typeof effectApi.DnsResolver.AsyncResolution.timeout.make, "function");
     assert.strictEqual(typeof effectApi.Verification.observe, "function");
     assert.strictEqual(typeof effectApi.DnsOverHttps.make, "function");
     assert.strictEqual(typeof promiseApi.DnsOverHttps.make, "function");
     assert.strictEqual(typeof promiseApi.ProviderSession.fromEffect, "function");
+    assert.strictEqual(typeof promiseApi.DnsResolver.Resolution.failure.make, "function");
     assert.strictEqual(typeof promiseApi.GoogleDnsOverHttps.make, "function");
     assert.strictEqual(typeof promiseApi.DnsResolverPool.defaultMake, "function");
     assert.strictEqual(typeof promiseApi.Verification.observe, "function");
@@ -62,7 +67,9 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof promiseApi.Cloudflare.make, "function");
     assert.strictEqual(typeof promiseApi.Cloudflare.Auth.refreshCredential, "function");
     assert.strictEqual(typeof effectApi.Vercel.make, "function");
+    assert.strictEqual(typeof effectApi.Vercel.AccountContext.team, "function");
     assert.strictEqual(typeof promiseApi.Vercel.make, "function");
+    assert.strictEqual(typeof promiseApi.Vercel.AccountContext.personal, "function");
   });
 
   it("does not flatten service tags or operations onto either entry point", () => {

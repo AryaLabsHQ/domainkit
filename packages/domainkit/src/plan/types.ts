@@ -4,7 +4,7 @@ import * as DomainName from "../domain/domain-name.ts";
 import * as DnsRecord from "../domain/dns-record.ts";
 import { Error as InvalidInputError } from "../invalid-input.ts";
 
-export const Operation = S.TaggedUnion({
+const OperationSchema = S.TaggedUnion({
   create: {
     id: S.String,
     requirement: DnsRecord.Schema,
@@ -20,6 +20,12 @@ export const Operation = S.TaggedUnion({
     reason: S.String,
     requirement: DnsRecord.Schema,
   },
+});
+/** DNS plan operation schema and constructor cases for trusted plan values. */
+export const Operation = Object.assign(OperationSchema, {
+  conflict: OperationSchema.cases.conflict,
+  create: OperationSchema.cases.create,
+  noop: OperationSchema.cases.noop,
 });
 export type Operation = typeof Operation.Type;
 
