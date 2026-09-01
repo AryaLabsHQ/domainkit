@@ -56,6 +56,14 @@ Use the canonical `domainkit` transport service and an Effect layer at `DomainKi
 duplicated Promise transport models and manual request tracking with Effect Atom, and require React
 19 for the 0.3 release.
 
+### Compose lifecycle models
+
+Expose Effect Atom models for every DNS lifecycle and add shared composable operation primitives.
+
+### Publish Shadcn registry primitives
+
+Document the model-free DomainKit Shadcn registry alongside the installed lifecycle library.
+
 ## @domainkit/react@0.1.1
 
 ### Show exact DNS operation values
