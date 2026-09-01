@@ -31,7 +31,7 @@ await Promise.all(
 );
 
 const fixture = await mkdtemp(join(tmpdir(), "domainkit-registry-"));
-const run = async (...command: ReadonlyArray<string>) => {
+const run = async (...command: string[]) => {
   const child = Bun.spawn(command, { cwd: fixture, stderr: "inherit", stdout: "inherit" });
   const exitCode = await child.exited;
   if (exitCode !== 0) throw new Error(`${command.join(" ")} exited with ${exitCode}`);
