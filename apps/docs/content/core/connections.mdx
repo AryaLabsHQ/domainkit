@@ -1,14 +1,15 @@
 ---
-title: Connections and grants
-description: See how provider accounts, users, domains, and reusable connections fit together while your app keeps credentials and policy.
+title: Connections and domain attachments
+description: See how provider authorizations, organization connections, and exact domain attachments fit together while your app keeps credentials and policy.
 sidebar:
-  label: Connections and grants
+  label: Connections and domain attachments
 seo:
-  title: DomainKit connections and grants
+  title: DomainKit connections and domain attachments
 ---
 
 A provider account and your app's users, tenants, and domains are different things. DomainKit keeps
-them separate: one provider token does not automatically grant access to one product domain.
+them separate: one provider authorization does not automatically attach or authorize one product
+domain.
 
 ## The authorization record
 
@@ -19,22 +20,26 @@ A durable provider authorization contains:
 - a reference to the host-stored credential;
 - required capabilities and their evidence;
 - revocation state, plus credential expiry and refresh material behind the secret boundary;
-- one or more host-owner bindings and grants.
+- a relationship to explicit host-owner connections in the lifecycle aggregate.
 
 The credential belongs to this record, but your app decides how to encrypt and store it.
 
-## Owner bindings and grants
+## Connections and domain attachments
 
-A provider authorization can be bound to a host owner with:
+A provider authorization can be shared by explicit organization connections. Each connection identifies
+the host owner and provider, while each `DomainAttachment` records an exact provider target for one
+domain:
 
-- an account-wide grant, optionally excluding domains; or
-- an explicit set of domain grants.
+- `connectionId`, `domain`, and a host-owned attachment ID;
+- the provider account or personal/team context; and
+- the authoritative zone ID and name, plus discovery evidence when available.
 
-Your app checks the grant in addition to the provider scopes. A broad Cloudflare or Vercel credential
-does not automatically authorize every tenant or every visible zone.
+Your app checks the connection owner and attachment in addition to the provider scopes. A broad
+Cloudflare or Vercel credential does not automatically authorize every tenant or every visible zone.
 
-This lets the same owner use one valid provider authorization for another domain without asking for
-provider consent again.
+This lets a host reuse one valid provider authorization for another owner connection after fresh
+provider proof and policy approval, without asking for provider consent again. The new domain still
+requires explicit target discovery and a `Connection.attach` call.
 
 An expired access token does not expire the provider authorization when a refresh token remains
 available. The host refreshes and atomically rotates the credential before a provider operation. A
@@ -48,38 +53,67 @@ connection; pending revocation projects separately.
 ```text
 token
   -> validate provider authority
-  -> save authorization
+  -> save authorization and connection
 
 interactive
   -> create one-time continuation
   -> redirect to provider
   -> consume callback continuation
   -> exchange code
-  -> save authorization
+  -> save authorization and connection
 ```
 
 Cloudflare supports OAuth and scoped API tokens. Vercel supports its Integration installation flow
 and tokens. DomainKit keeps those provider flows distinct instead of calling every redirect a
 generic OAuth flow.
 
-## Reusing provider authority
+The result is a public `ProviderConnection` (or an authorization redirect). It does not contain
+credentials, provider context, or a domain attachment. `Connection.complete` finishes the same
+interactive lifecycle after the callback. To reuse an existing authorization, pass its
+`authorizationId` only after the host has checked owner policy and obtained fresh provider proof.
 
-`Connection.extend` adds a new domain grant only after the host:
+## Attach and detach a domain
 
-1. loads an authorization owned by the same host owner;
-2. proves the provider authorization can serve the requested domain;
-3. obtains the owner's consent for the new grant.
+After connecting, restore the provider session from the host's private aggregate and resolve the
+customer domain. In an Effect host, the lifecycle service is provided by your composition layer:
 
-Reuse keeps earlier grants. It rejects authorizations that belong to another owner, have expired,
-lack a needed capability, or are being revoked.
+```ts
+import { Effect } from "effect";
+import { Connection, DomainName } from "domainkit";
 
-## Removing a domain
+const program = Effect.gen(function* () {
+  const domain = DomainName.parse("example.com");
+  // `session` and `connection` come from the host's authenticated aggregate.
+  const resolution = yield* session.resolveTarget(domain);
+  if (resolution._tag !== "Resolved") {
+    // SelectionRequired needs an explicit, server-validated user choice.
+    return yield* Effect.fail(new Error("Choose one provider target before attaching"));
+  }
 
-Removing one domain binding preserves the other bindings and normally preserves DNS. If the removed
-binding was the last one, the authorization lifecycle attempts provider revocation before deleting
-the saved authorization and credential state.
+  return yield* Connection.attach({
+    attachment: {
+      connectionId: connection.id,
+      createdAt: new Date(),
+      domain,
+      id: crypto.randomUUID(),
+      target: resolution.target,
+    },
+    connectionId: connection.id,
+    ownerId,
+  });
+});
+```
 
-Revocation is fail-closed. Durable retry state remains until the provider confirms the outcome.
+`Connection.attach` persists the exact target and rejects an attachment for another owner or
+connection. Use the target to create a focused provider client for planning and apply. Browser input
+may request a domain or selection, but the server must resolve and validate the target.
+
+`Connection.detach` removes one attachment while retaining the organization connection and does not
+delete DNS. Cleanup is a separate receipt-bound lifecycle. `Connection.disconnect` removes one
+organization connection; it is blocked while attachments remain and revokes the shared provider
+authorization only when it is the final connection.
+
+Final revocation is fail-closed. Durable retry state remains until the provider confirms the outcome.
 
 ## Host-owned boundaries
 
@@ -87,7 +121,7 @@ The host supplies:
 
 - authenticated start, callback, token, reuse, and disconnect routes;
 - user and tenant authorization policy;
-- one durable `ManagedDnsConnections.Service`;
+- one durable `ManagedDnsConnections.Service` for the authorization, connections, and attachments;
 - credential encryption or vault storage;
 - a short-lived, one-time continuation store;
 - consent records and audit history.
@@ -104,7 +138,8 @@ levels:
 - `Introspected` — a provider response reported it;
 - `Exercised` — a successful provider operation demonstrated it.
 
-The host can promote evidence after successful use without changing the underlying grant model.
+The host can promote evidence after successful use without changing the underlying connection and
+attachment model.
 
 ## Put the concept to work
 

@@ -8,7 +8,8 @@ seo:
 <ProviderLogo provider="vercel" size={48} />
 
 Vercel's interactive method is an Integration installation-code flow. DomainKit keeps it as an
-Integration instead of treating every redirect as generic OAuth.
+Integration instead of treating every redirect as generic OAuth. A successful connection records
+the personal or team context; attaching a domain to an exact Vercel zone is a separate step.
 
 Run provider exchanges and token checks on a trusted server. The browser receives only your app's
 connection outcome.
@@ -29,7 +30,7 @@ import { type ManagedDnsConnections } from "domainkit/promise";
 ## Start an Integration installation
 
 ```ts
-import { Connection, Secret, Vercel } from "domainkit/promise";
+import { Connection, DomainName, Secret, Vercel } from "domainkit/promise";
 
 const capabilities = ["dns:read", "dns:write"] as const;
 
@@ -43,7 +44,6 @@ const flow = Vercel.Auth.integrationFlow({
 
 const result = await Connection.start({
   authorizedById,
-  grant: { _tag: "account", excludedDomains: [] },
   method: Connection.Method.Interactive({ continuations, flow }),
   ownerId,
   repository,
@@ -78,7 +78,7 @@ For a personal account:
 ```ts
 const method = Vercel.Auth.tokenConnectionMethod({
   capabilities,
-  context: { _tag: "personal" },
+  context: Vercel.AccountContext.personal(),
   token: Secret.make(personalAccessToken),
 });
 ```
@@ -88,34 +88,75 @@ For a team, provide the team context selected by the host:
 ```ts
 const method = Vercel.Auth.tokenConnectionMethod({
   capabilities,
-  context: { _tag: "team", teamId },
+  context: Vercel.AccountContext.team({ teamId }),
   token: Secret.make(personalAccessToken),
 });
 ```
 
-Then pass the method to `Connection.start` with the owner grant and durable repository. Keep the
-token behind the host's secret-storage boundary.
+Then pass the method to `Connection.start` with the owner identity and durable repository. Keep the
+token behind the host's secret-storage boundary. `Connection.start` returns a public
+`ProviderConnection`; it does not attach a domain.
 
 ## Reconstruct the provider
 
-Decode the stored context and build the correct server-side client:
+Load the private aggregate from the host repository and restore the credential-scoped client:
 
 ```ts
-const provider = Vercel.make({
-  capabilities: authorization.requiredCapabilities,
-  context:
-    context._tag === "team" ? { _tag: "team", teamId: context.teamId } : { _tag: "personal" },
-  token: credential.accessToken,
+const aggregate = await repository.getByConnectionId(connection.id);
+if (aggregate === null) throw new Error("Connection was not persisted");
+
+const session = await Vercel.Auth.restore({
+  authorization: aggregate.authorization,
+  credential: aggregate.credential,
 });
 ```
 
-Personal clients omit team context. Team clients include `teamId` in Vercel resource requests.
+The restore helper decodes the saved context and uses `Vercel.AccountContext.personal()` or
+`Vercel.AccountContext.team({ teamId })` internally. Personal clients omit team context; team clients
+include `teamId` in Vercel resource requests. The returned client is Effect-native; adapt it once with
+`ProviderSession.fromEffect` before passing a focused provider to Promise `Provisioning` or
+`Verification`.
+
+## Attach the discovered provider target
+
+Resolve the domain against the restored session, then persist the exact target as a host-owned domain
+attachment. `Vercel.Auth.restore` returns the Effect-native client; adapt it once with
+`ProviderSession.fromEffect` before using the Promise-shaped session methods:
+
+```ts
+import { Connection, DomainName, ProviderSession } from "domainkit/promise";
+
+const domain = DomainName.parse("example.com");
+const asyncSession = ProviderSession.fromEffect(session);
+const resolution = await asyncSession.resolveTarget(domain);
+if (resolution._tag !== "Resolved") {
+  throw new Error("Vercel returned no unique authoritative target");
+}
+
+const attached = await Connection.attach({
+  attachment: {
+    connectionId: connection.id,
+    createdAt: new Date(),
+    domain,
+    id: crypto.randomUUID(), // a host-owned durable attachment id
+    target: resolution.target,
+  },
+  connectionId: connection.id,
+  ownerId,
+  repository,
+});
+```
+
+If the session returns `SelectionRequired`, show the candidates and validate the selected target on
+the server. Do not accept an account or team ID from browser input without provider-backed proof.
 
 ## Zone discovery
 
 DomainKit treats a Vercel domain as DNS storage when Vercel reports its DNS service type, zone flag,
 or intended nameservers. Current or intended Vercel nameservers are provider evidence; they do not
-replace an independent public-DNS check.
+replace an independent public-DNS check. Use the focused provider from
+`asyncSession.forTarget(attachment.target)` for planning and apply so DNS requests stay bound to the
+selected zone. Pass the resulting Promise provider to the Promise APIs.
 
 When more than one authorized context can serve a domain, show a recognizable personal/team choice
 instead of silently selecting a team ID.

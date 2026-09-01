@@ -30,7 +30,7 @@ export function DomainSetup() {
 ```
 
 `Domain.Flow` handles connection, plan review, apply, verification, cleanup, and removal of the
-domain grant. Your app still owns authentication, authorization, saved attempts, provider
+domain attachment. Your app still owns authentication, authorization, saved attempts, provider
 credentials, and the server-side `Transport` implementation.
 
 ## Choose the parts you need

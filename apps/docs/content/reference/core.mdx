@@ -30,19 +30,19 @@ import { DnsRecord, Provisioning, Verification } from "domainkit";
 
 ## Authorization and connections
 
-| Namespace                 | Purpose                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------- |
-| `Connection`              | Inspect, start, complete, reuse, remove, and revoke domain connections.         |
-| `ManagedDnsConnections`   | Durable repository contract for managed provider connections and domain grants. |
-| `ConnectionAuthorization` | Authorize domain connection actions against provider and domain context.        |
-| `ProviderAuth`            | Provider authentication manifests and supported authentication methods.         |
-| `ProviderSession`         | Provider account session context and target-resolution values.                  |
-| `ProviderContext`         | Provider, account, and connection context carried through authorization.        |
-| `ProviderDiscovery`       | Select a provider candidate for a domain.                                       |
-| `ZoneDiscovery`           | Discover an authoritative zone and provider from a domain.                      |
-| `Zones`                   | Zone lookup and candidate value types.                                          |
-| `Secret`                  | Redacted secret value used to keep credentials out of logs and diagnostics.     |
-| `Diagnostic`              | Structured, safe-to-present diagnostic information for authorization failures.  |
+| Namespace                 | Purpose                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------- |
+| `Connection`              | Inspect, start, complete, attach, detach, disconnect, and validate connections.        |
+| `ManagedDnsConnections`   | Durable repository contract for provider authorizations, connections, and attachments. |
+| `ConnectionAuthorization` | Authorize connection actions against provider and domain-attachment context.           |
+| `ProviderAuth`            | Provider authentication manifests and supported authentication methods.                |
+| `ProviderSession`         | Provider account session context and target-resolution values.                         |
+| `ProviderContext`         | Provider, account, and connection context carried through authorization.               |
+| `ProviderDiscovery`       | Select a provider candidate for a domain.                                              |
+| `ZoneDiscovery`           | Discover an authoritative zone and provider from a domain.                             |
+| `Zones`                   | Zone lookup and candidate value types.                                                 |
+| `Secret`                  | Redacted secret value used to keep credentials out of logs and diagnostics.            |
+| `Diagnostic`              | Structured, safe-to-present diagnostic information for authorization failures.         |
 
 ## Planning and cleanup
 
@@ -79,17 +79,17 @@ namespace instead of an internal module path so the public package boundary stay
 
 ## Lifecycle map
 
-| Job                | Start with                          | Persist before continuing                       |
-| ------------------ | ----------------------------------- | ----------------------------------------------- |
-| Connect a provider | `Connection.start`                  | authorization attempt and provider context      |
-| Complete OAuth     | `Connection.complete`               | resulting connection and grant                  |
-| Refresh Cloudflare | `Cloudflare.Auth.refreshCredential` | complete rotated credential before provider use |
-| Plan records       | `Provisioning.create`               | plan, digest, and attempt identity              |
-| Approve changes    | `Provisioning.authorize`            | digest-bound authorization                      |
-| Apply records      | `Provisioning.apply`                | receipt, including partial results              |
-| Observe records    | `Verification.observe`              | evidence useful to your product state           |
-| Plan cleanup       | `Deletion.create`                   | receipt-bound deletion plan                     |
-| Apply cleanup      | `Deletion.apply`                    | cleanup result before removing the grant        |
+| Job                | Start with                          | Persist before continuing                        |
+| ------------------ | ----------------------------------- | ------------------------------------------------ |
+| Connect a provider | `Connection.start`                  | authorization attempt and provider context       |
+| Complete OAuth     | `Connection.complete`               | resulting organization connection                |
+| Refresh Cloudflare | `Cloudflare.Auth.refreshCredential` | complete rotated credential before provider use  |
+| Plan records       | `Provisioning.create`               | plan, digest, and attempt identity               |
+| Approve changes    | `Provisioning.authorize`            | digest-bound authorization                       |
+| Apply records      | `Provisioning.apply`                | receipt, including partial results               |
+| Observe records    | `Verification.observe`              | evidence useful to your product state            |
+| Plan cleanup       | `Deletion.create`                   | receipt-bound deletion plan                      |
+| Apply cleanup      | `Deletion.apply`                    | cleanup result before detaching or disconnecting |
 
 See [Plans and receipts](/docs/core/plans) and
 [Provision and clean up DNS](/docs/guides/provision-and-clean-up) for the lifecycle rules. See

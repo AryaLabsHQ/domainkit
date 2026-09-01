@@ -9,8 +9,8 @@ incompatible state is reported as a conflict rather than overwritten.
 
 ## Current packages
 
-The current public releases are `domainkit@0.6.0`, `@domainkit/react@0.6.0`, and
-`@domainkit/capsuledb@0.1.0`.
+The current public releases are `domainkit@0.7.0`, `@domainkit/react@0.7.0`, and
+`@domainkit/capsuledb@0.1.1`.
 
 ## Entry points
 

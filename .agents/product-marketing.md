@@ -1,6 +1,6 @@
 # Product Marketing Context
 
-_Last updated: 2026-09-01_ · _Current public stage: open-source packages at 0.6.0; optional CapsuleDB persistence is published at 0.1.0; hosted documentation is live_
+_Last updated: 2026-09-01_ · _Current public stage: open-source packages at 0.7.0; optional CapsuleDB persistence is published at 0.1.1; hosted documentation is live_
 
 ## Hard rules
 
@@ -130,7 +130,7 @@ primary-source review before publication.
 - apply the approved plan
 - host-owned credentials and policy
 - provider authorization
-- domain grant
+- domain attachment
 - receipt-bound cleanup
 - public DNS observation
 - complete flows and composable parts
@@ -153,7 +153,8 @@ primary-source review before publication.
 - **Authorization:** approval for a specific plan digest and operation set.
 - **Receipt:** durable evidence of writes an apply attempt actually completed.
 - **Provider authorization:** an account-scoped credential and non-secret provider context.
-- **Domain grant:** the host-owner scope in which an authorization may be used.
+- **Organization connection:** an owner-scoped link to a provider authorization.
+- **Domain attachment:** an exact provider target bound to one organization connection and domain.
 - **Observation:** tagged provider or public-DNS evidence; not the host product's complete readiness
   state.
 
@@ -170,8 +171,8 @@ primary-source review before publication.
 
 | Claim                                                                              | Evidence                                                               | Source                                                                                             | Observed date | Allowed surface                                | Confidence | Owner                    |
 | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------- | ---------- | ------------------------ |
-| `domainkit` and `@domainkit/react` latest npm versions are `0.6.0`                 | npm registry readback                                                  | `npm view domainkit`; `npm view @domainkit/react`                                                  | 2026-09-01    | Public web and package docs                    | high       | Maintainer               |
-| `@domainkit/capsuledb` latest npm version is `0.1.0`                               | npm registry readback                                                  | `npm view @domainkit/capsuledb`; `npm view capsuledb`                                              | 2026-09-01    | Public web and package docs                    | high       | Maintainer               |
+| `domainkit` and `@domainkit/react` latest npm versions are `0.7.0`                 | npm registry readback                                                  | `npm view domainkit`; `npm view @domainkit/react`                                                  | 2026-09-01    | Public web and package docs                    | high       | Maintainer               |
+| `@domainkit/capsuledb` latest npm version is `0.1.1`                               | npm registry readback                                                  | `npm view @domainkit/capsuledb`; `npm view capsuledb`                                              | 2026-09-01    | Public web and package docs                    | high       | Maintainer               |
 | DomainKit plans missing, exact, and incompatible DNS as create, noop, and conflict | Source, schemas, tracer tests                                          | `packages/domainkit/src/plan/`; `packages/domainkit/tests/tracer/`                                 | 2026-08-31    | All public technical surfaces                  | high       | Core package maintainer  |
 | Apply authorization is bound to an exact plan digest                               | Source, schemas, tests                                                 | `packages/domainkit/src/plan/types.ts`; `packages/domainkit/src/plan/plan.ts`                      | 2026-08-31    | All public technical surfaces                  | high       | Core package maintainer  |
 | Safe cleanup is separately planned and bound to a prior apply receipt              | Source and tests                                                       | `packages/domainkit/src/plan/deletion.ts`; `packages/domainkit/tests/tracer/plan-apply.test.ts`    | 2026-08-31    | All public technical surfaces                  | high       | Core package maintainer  |
@@ -179,7 +180,7 @@ primary-source review before publication.
 | Provider credentials and durable lifecycle storage remain host-owned               | Accepted architecture decision and interfaces                          | `packages/domainkit/docs/adr/0004-host-owned-credentials.md`                                       | 2026-08-31    | All public surfaces                            | high       | Core package maintainer  |
 | The package root is Effect-native and `domainkit/promise` is secondary             | Package exports, artifact tests, accepted ADR                          | `packages/domainkit/package.json`; `packages/domainkit/docs/adr/0006-effect-first-package-root.md` | 2026-08-31    | Public technical surfaces                      | high       | Core package maintainer  |
 | `@domainkit/react` provides React 19 flows over a host-owned transport             | Manifest, source, artifact tests                                       | `packages/react/package.json`; `packages/react/src/`                                               | 2026-08-31    | Public technical surfaces                      | high       | React package maintainer |
-| React lifecycle events are part of the current 0.6.0 package                       | Published package, source, and artifact tests                          | `packages/react/src/lifecycle.ts`; `packages/react/package.json`                                   | 2026-09-01    | Public technical surfaces                      | high       | React package maintainer |
+| React lifecycle events are part of the current 0.7.0 package                       | Published package, source, and artifact tests                          | `packages/react/src/lifecycle.ts`; `packages/react/package.json`                                   | 2026-09-01    | Public technical surfaces                      | high       | React package maintainer |
 | DomainKit reduces customer setup friction                                          | Product intent and implemented flow; no current usability study        | Current landing page and React workshop                                                            | 2026-08-31    | Directional headline only; no quantified claim | medium     | Product owner            |
 | `domain-kit.dev` hosts public documentation                                        | HTTPS routes and registry endpoints return 200                         | `curl -I https://domain-kit.dev/`; `curl -I https://domain-kit.dev/docs`; registry endpoints       | 2026-08-31    | Public web and package docs                    | high       | Documentation owner      |
 | A named product uses DomainKit in production                                       | No public authorization or live acceptance evidence in this repository | Evidence gap                                                                                       | 2026-08-31    | Prohibited                                     | low        | Product owner            |
@@ -193,9 +194,9 @@ no documented paid plan, hosted service, support SLA, warranty, guarantee, or sc
 
 | Channel               | Status | Destination                       | Allowed claim                                |
 | --------------------- | ------ | --------------------------------- | -------------------------------------------- |
-| npm core package      | active | `domainkit@0.6.0`                 | Latest public core package                   |
-| npm React package     | active | `@domainkit/react@0.6.0`          | Latest public React package                  |
-| npm CapsuleDB package | active | `@domainkit/capsuledb@0.1.0`      | Optional Effect-native persistence package   |
+| npm core package      | active | `domainkit@0.7.0`                 | Latest public core package                   |
+| npm React package     | active | `@domainkit/react@0.7.0`          | Latest public React package                  |
+| npm CapsuleDB package | active | `@domainkit/capsuledb@0.1.1`      | Optional Effect-native persistence package   |
 | GitHub                | active | `AryaLabsHQ/domainkit`            | Public source repository                     |
 | Documentation site    | live   | `https://domain-kit.dev`          | Hosted documentation and generated artifacts |
 | Shadcn registry       | live   | `https://domain-kit.dev/r/*.json` | Public registry components                   |
