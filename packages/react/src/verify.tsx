@@ -18,13 +18,20 @@ export type Readiness = Transport.Readiness;
 export type HostEvidence = Readiness["host"][number];
 export type Requirement = Readiness["requirements"][number];
 
+/**
+ * Readiness rides on the state rather than a ref, so it can never outlive the render that
+ * produced it: a controller pointed at a new domain has no readiness in the very first frame.
+ */
 export type State = Data.TaggedEnum<{
   Idle: {};
   Observing: { readonly readiness: Readiness | null };
   Observed: { readonly readiness: Readiness };
-  Failure: { readonly error: DomainKitError.DomainKitError };
+  Failure: { readonly error: DomainKitError.DomainKitError; readonly readiness: Readiness | null };
 }>;
 export const State = Data.taggedEnum<State>();
+
+const readinessOf = (state: State): Readiness | null =>
+  state._tag === "Idle" ? null : state.readiness;
 
 export interface Controller {
   readonly state: State;
@@ -49,34 +56,32 @@ export function useController({ domain, polling = true }: Options): Controller {
   const verification = transport.verification;
   const runner = useRunner();
   const [state, setState] = useState<State>(State.Idle());
-  const held = useRef<Readiness | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Readiness belongs to the domain that was observed. Dropping it while rendering, rather than
+  // in an effect, keeps the first frame for a new domain free of the previous one's evidence.
+  const [observed, setObserved] = useState(domain);
+  if (observed !== domain) {
+    setObserved(domain);
+    setState(State.Idle());
+  }
 
   const observe = useCallback(() => {
     if (verification === undefined) return;
     clearTimeout(timer.current);
-    setState(State.Observing({ readiness: held.current }));
+    setState((previous) => State.Observing({ readiness: readinessOf(previous) }));
     runner.run(verification.observe(domain), {
       onFailure: (error) => {
-        setState(State.Failure({ error }));
+        setState((previous) => State.Failure({ error, readiness: readinessOf(previous) }));
         emit(Event.Failed({ domain, error }));
       },
-      onSuccess: (readiness) => {
-        held.current = readiness;
-        setState(State.Observed({ readiness }));
-      },
+      onSuccess: (readiness) => setState(State.Observed({ readiness })),
     });
   }, [domain, emit, runner, verification]);
 
-  const lastDomain = useRef(domain);
   useEffect(() => {
-    if (lastDomain.current !== domain) {
-      lastDomain.current = domain;
-      // Readiness belongs to the domain that was observed; the new one has none yet.
-      held.current = null;
-    }
     observe();
-  }, [domain, observe, revision]);
+  }, [observe, revision]);
 
   useEffect(() => {
     if (!polling || state._tag !== "Observed") return;
@@ -92,7 +97,7 @@ export function useController({ domain, polling = true }: Options): Controller {
   return {
     observe,
     polling,
-    readiness: state._tag === "Observed" ? state.readiness : held.current,
+    readiness: readinessOf(state),
     retry: observe,
     state,
   };

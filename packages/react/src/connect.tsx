@@ -27,7 +27,7 @@ export type Field = NonNullable<MethodDescriptor["fields"]>[number];
  * asking for another one.
  */
 export type State = Data.TaggedEnum<{
-  Loading: {};
+  Loading: { readonly snapshot: Snapshot | null };
   Disconnected: { readonly snapshot: Snapshot; readonly discovery: Discovery | null };
   Connected: { readonly snapshot: Snapshot };
   Reconnect: { readonly snapshot: Snapshot };
@@ -79,10 +79,10 @@ const snapshotOf = (state: State): Snapshot | null => {
     case "Reconnect":
     case "Disconnected":
       return state.snapshot;
+    case "Loading":
     case "Submitting":
     case "SelectionRequired":
       return state.snapshot;
-    case "Loading":
     case "Redirecting":
     case "Failure":
       return null;
@@ -109,7 +109,15 @@ export function useController({ domain }: Options): Controller {
   const { emit, navigate, revision, transport } = useDomainKit();
   const connection = transport.connection;
   const runner = useRunner();
-  const [state, setState] = useState<State>(State.Loading());
+  const [state, setState] = useState<State>(State.Loading({ snapshot: null }));
+
+  // The snapshot and the discovery belong to the domain they were read for, so a controller
+  // pointed at a new domain drops both while rendering rather than one effect later.
+  const [inspected, setInspected] = useState(domain);
+  if (inspected !== domain) {
+    setInspected(domain);
+    setState(State.Loading({ snapshot: null }));
+  }
   const held = useRef<{ snapshot: Snapshot | null; discovery: Discovery | null }>({
     discovery: null,
     snapshot: null,
@@ -128,7 +136,8 @@ export function useController({ domain }: Options): Controller {
     if (connection === undefined) return;
     lastCommand.current = null;
     held.current = { discovery: null, snapshot: null };
-    setState(State.Loading());
+    // A refresh keeps the snapshot on screen; a domain change already cleared it.
+    setState((previous) => State.Loading({ snapshot: snapshotOf(previous) }));
     runner.run(
       Effect.flatMap(connection.inspect(domain), (snapshot) =>
         snapshot.status === "disconnected"
@@ -273,13 +282,13 @@ export function useController({ domain }: Options): Controller {
     connect,
     detach,
     disconnect,
-    discovery: state._tag === "Disconnected" ? state.discovery : held.current.discovery,
-    providers: snapshotOf(state)?.providers ?? held.current.snapshot?.providers ?? [],
+    discovery: state._tag === "Disconnected" ? state.discovery : null,
+    providers: snapshotOf(state)?.providers ?? [],
     refresh: load,
     retry,
     reuse,
     select,
-    snapshot: snapshotOf(state) ?? held.current.snapshot,
+    snapshot: snapshotOf(state),
     state,
   };
 }

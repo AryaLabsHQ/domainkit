@@ -26,8 +26,15 @@ const scenario = () => {
   };
 };
 
+/** A button that exists is not always ready: the review actions render disabled while planning. */
+const click = async (name: string | RegExp) => {
+  const button = await screen.findByRole("button", { name });
+  await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+  await userEvent.click(button);
+};
+
 const connect = async () => {
-  await userEvent.click(await screen.findByRole("button", { name: "Connect" }));
+  await click("Connect");
   await userEvent.type(await screen.findByLabelText(/Token/), "secret-token");
   await userEvent.click(screen.getByRole("button", { name: "Token (fake)" }));
   await screen.findByText("fake connected");
@@ -54,18 +61,18 @@ describe("Domain.Flow", () => {
 
       await connect();
 
-      await userEvent.click(await screen.findByRole("button", { name: "Review changes" }));
-      await userEvent.click(await screen.findByRole("button", { name: "Approve" }));
+      await click("Review changes");
+      await click("Approve");
       await waitFor(() => expect(applied).toHaveLength(1));
       expect(applied[0]?.status).toBe("complete");
 
-      await userEvent.click(await screen.findByRole("button", { name: /Check/ }));
+      await click(/Check/);
       await waitFor(() =>
         expect(transport.calls.some((call) => call.method === "verification.observe")).toBe(true),
       );
 
-      await userEvent.click(await screen.findByRole("button", { name: "Remove records" }));
-      await userEvent.click(await screen.findByRole("button", { name: "Approve" }));
+      await click("Remove records");
+      await click("Approve");
       await waitFor(() => expect(cleaned).toHaveLength(1));
 
       expect(transport.calls.map((call) => call.method)).toEqual(
@@ -119,8 +126,8 @@ describe("Domain.Flow", () => {
     expect(screen.queryByRole("columnheader", { name: "Type" })).toBeNull();
 
     await connect();
-    await userEvent.click(await screen.findByRole("button", { name: "Review changes" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    await click("Review changes");
+    await click("Approve");
     await waitFor(() => expect(applied).toHaveLength(1));
   });
 
@@ -174,8 +181,8 @@ describe("Domain.Flow", () => {
       </DomainKit.Root>,
     );
     await connect();
-    await userEvent.click(await screen.findByRole("button", { name: "Review changes" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Decline" }));
+    await click("Review changes");
+    await click("Decline");
     await waitFor(() => expect(screen.getByText(/Declined by/)).toBeDefined());
   });
 

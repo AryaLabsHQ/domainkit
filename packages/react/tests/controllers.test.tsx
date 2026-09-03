@@ -32,6 +32,13 @@ const wrap = (transport: Transport.Transport) =>
     return <DomainKit.Root transport={transport}>{children}</DomainKit.Root>;
   };
 
+/** A button that exists is not always ready: the review actions render disabled while planning. */
+const click = async (name: string | RegExp) => {
+  const button = await screen.findByRole("button", { name });
+  await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+  await userEvent.click(button);
+};
+
 /** Connect a domain with the fake provider's token method and wait for the snapshot. */
 const connectDomain = async (transport: Transport.Transport, domain: string) => {
   const view = render(
@@ -59,8 +66,8 @@ const applyDomain = async (
       <Provision.Flow domain={domain} requirements={requirements} />
     </DomainKit.Root>,
   );
-  await userEvent.click(screen.getByRole("button", { name: "Review changes" }));
-  await userEvent.click(await screen.findByRole("button", { name: "Approve" }));
+  await click("Review changes");
+  await click("Approve");
   await screen.findByText("DNS records added.");
   view.unmount();
 };
@@ -113,7 +120,7 @@ describe("Connect.useController", () => {
         <Connect.Flow domain={domain} />
       </DomainKit.Root>,
     );
-    await userEvent.click(await screen.findByRole("button", { name: "Connect" }));
+    await click("Connect");
     const field = await screen.findByLabelText(/Token/);
     expect(field.getAttribute("type")).toBe("password");
     expect(field.getAttribute("name")).toBe("token");
@@ -161,7 +168,7 @@ describe("Connect.useController", () => {
         <Connect.Flow domain={sibling} />
       </DomainKit.Root>,
     );
-    await userEvent.click(await screen.findByRole("button", { name: "Connect" }));
+    await click("Connect");
     await screen.findByText(`${zone} already serves this domain`);
     await userEvent.click(screen.getByRole("button", { name: `Use ${zone}` }));
     await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
@@ -183,8 +190,8 @@ describe("Provision.useController", () => {
         />
       </DomainKit.Root>,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Review changes" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    await click("Review changes");
+    await click("Approve");
     await waitFor(() => expect(applied).toEqual(["complete"]));
     expect(transport.calls.map((call) => call.method)).toContain("provisioning.approve");
     expect(transport.calls.map((call) => call.method)).toContain("provisioning.apply");
@@ -198,8 +205,8 @@ describe("Provision.useController", () => {
         <Provision.Flow domain={domain} requirements={requirements} />
       </DomainKit.Root>,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Review changes" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Decline" }));
+    await click("Review changes");
+    await click("Decline");
     await waitFor(() => expect(screen.getByText(/Declined by/)).toBeDefined());
     expect(transport.calls.map((call) => call.method)).toContain("provisioning.reject");
   });
@@ -254,7 +261,7 @@ describe("controller inputs", () => {
       );
     }
     const view = render(<Harness target={domain} />);
-    await userEvent.click(screen.getByRole("button", { name: "Review changes" }));
+    await click("Review changes");
     await screen.findByRole("button", { name: "Approve" });
 
     // A fresh `requirements` array with the same records is the same attempt.
@@ -282,6 +289,28 @@ describe("controller inputs", () => {
     }
     const view = render(<Harness target={domain} />);
     await waitFor(() => expect(screen.getByRole("status").textContent).not.toBe("none"));
+    view.rerender(<Harness target={sibling} />);
+    expect(screen.getByRole("status").textContent).toBe("none");
+  });
+});
+
+describe("controller identity", () => {
+  it("shows no connection from the previous domain in the first frame after a change", async () => {
+    const { domain, sibling, transport } = scenario();
+    await connectDomain(transport, domain);
+    function Probe({ target }: { readonly target: string }) {
+      const controller = Connect.useController({ domain: target });
+      return <output>{controller.snapshot?.domain ?? "none"}</output>;
+    }
+    function Harness({ target }: { readonly target: string }) {
+      return (
+        <DomainKit.Root transport={transport}>
+          <Probe target={target} />
+        </DomainKit.Root>
+      );
+    }
+    const view = render(<Harness target={domain} />);
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(domain));
     view.rerender(<Harness target={sibling} />);
     expect(screen.getByRole("status").textContent).toBe("none");
   });
