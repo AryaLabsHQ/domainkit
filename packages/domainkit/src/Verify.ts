@@ -159,10 +159,10 @@ const overallOf = (
   return ready ? "ready" : "pending";
 };
 
-/** The identity of a requirement set: type, name, and data, independent of labels and order. */
+/** The identity of a requirement set: type, name, data, and policy, independent of labels and order. */
 const requirementKey = (requirements: ReadonlyArray<{ readonly record: DnsRecord.DnsRecord }>) =>
   requirements
-    .map(({ record }) => `${record._tag} ${record.name} ${DnsRecord.data(record)}`)
+    .map(({ record }) => `${record._tag} ${record.name} ${DnsRecord.data(record)} ${record.policy}`)
     .sort()
     .join("\n");
 

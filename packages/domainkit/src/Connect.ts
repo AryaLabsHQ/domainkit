@@ -552,7 +552,14 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
               payload.domain === null
                 ? null
                 : yield* attachWith({ connection, session, domain: payload.domain });
-            yield* storage.continuations.consume(input.continuationId);
+            // The connection is durable at this point. A continuation that expired or was spent
+            // while the exchange ran no longer changes the outcome, so the result is returned.
+            yield* storage.continuations.consume(input.continuationId).pipe(
+              Effect.catchIf(
+                (error) => error.reason._tag === "Expired" || error.reason._tag === "NotFound",
+                () => Effect.void,
+              ),
+            );
             return started(connection, attached);
           }),
         );

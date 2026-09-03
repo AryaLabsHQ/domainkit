@@ -191,6 +191,43 @@ describe("Connect", () => {
     }).pipe(withPrincipal, Effect.provide(layerFor(fake)));
   });
 
+  it.effect("returns the persisted connection when the continuation expires mid-exchange", () => {
+    const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+    const oauth = fake.auth.oauth ?? assert.fail("oauth expected");
+    const slow: Testing.FakeProvider = {
+      ...fake,
+      auth: {
+        ...fake.auth,
+        oauth: {
+          ...oauth,
+          complete: (input) =>
+            TestClock.adjust("16 minutes").pipe(Effect.andThen(oauth.complete(input))),
+        },
+      },
+    };
+    return Effect.gen(function* () {
+      const redirect = yield* Connect.start({
+        provider: "fake",
+        method: Connect.Method.oauth(),
+        domain: "app.example.com",
+        callbackUrl: "https://app.example/cb",
+      });
+      if (redirect._tag !== "Redirect") return assert.fail("expected a redirect");
+      const connected = yield* Connect.complete({
+        continuationId: redirect.continuationId,
+        callbackUrl: redirect.authorizationUrl,
+      });
+      assert.strictEqual(connected._tag, "Connected");
+      const snapshot = yield* Connect.inspect("app.example.com");
+      assert.strictEqual(snapshot.authorization?.method, "oauth");
+      const replay = yield* Connect.complete({
+        continuationId: redirect.continuationId,
+        callbackUrl: redirect.authorizationUrl,
+      }).pipe(Effect.flip);
+      assert.ok(replay.reason._tag === "Expired" || replay.reason._tag === "NotFound");
+    }).pipe(withPrincipal, Effect.provide(layerFor(slow)));
+  });
+
   it.effect("keeps the continuation when persistence fails after the exchange", () => {
     const fake = Testing.provider({ zones: ["example.com"], oauth: true });
     let commits = 0;
