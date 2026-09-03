@@ -1,57 +1,74 @@
 ---
-title: Testing API
-description: Reference DomainKit's in-memory services and provider tests for plans, connections, verification, and cleanup without credentials.
+title: domainkit/testing
+description: The fakes, the recording transport, and the conformance runners that let host tests drive the real services instead of stubbing global fetch.
 sidebar:
-  label: Testing API
+  label: domainkit/testing
 seo:
-  title: DomainKit testing API reference
+  title: DomainKit testing reference
 ---
 
-Import test support from `domainkit/testing`. This public entry point is for tests, examples, local
-development, and provider checks.
+```ts
+import { Testing } from "domainkit/testing";
+```
 
 {/* reference-inventory:start */}
 
-| Namespace                         | Purpose                                                                    |
-| --------------------------------- | -------------------------------------------------------------------------- |
-| `InMemoryDnsProvider`             | Stateful DNS provider for planning, apply, delete, and verification tests. |
-| `InMemoryDnsResolver`             | Resolver with controlled answers and failures.                             |
-| `InMemoryManagedDnsConnections`   | In-process saved connection store for lifecycle tests.                     |
-| `InMemoryConnectionContinuations` | In-process continuation store for connection flows.                        |
-| `ProviderConformance`             | Shared test suite for any `DnsProvider` implementation.                    |
+| Namespace | Carries                                                                                   |
+| --------- | ----------------------------------------------------------------------------------------- |
+| `Testing` | `provider`, `resolver`, `storage`, `principal`, `transport`, `fakeRecords`, `conformance` |
+| `VERSION` | The installed package version, so a test can assert what it is running against            |
 
 {/* reference-inventory:end */}
 
-## Test a lifecycle without credentials
+## Fakes
 
-```ts
-import { DnsRecord, DomainName, Provisioning } from "domainkit";
-import { InMemoryDnsProvider } from "domainkit/testing";
-import { Effect } from "effect";
+| Value                 | Gives                                                                           |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `Testing.provider`    | A provider definition with a token method, optional OAuth, over in-memory zones |
+| `Testing.resolver`    | A `Resolver` answering from those zones, or from a table you pass               |
+| `Testing.storage`     | `Storage.layerMemory`, re-exported here for discoverability                     |
+| `Testing.principal`   | A fixed `{ ownerId, actorId }` for tests that do not care which tenant          |
+| `Testing.transport`   | The whole lifecycle behind a `Transport.Interface`, recording every call        |
+| `Testing.fakeRecords` | What the fake providers currently hold for a name                               |
 
-const program = Provisioning.create({
-  requirements: [
-    DnsRecord.Cname({
-      metadata: { ownership: "customer", provenance: "test", purpose: "routing" },
-      name: DomainName.parse("app.example.com"),
-      policy: "exclusive",
-      target: DomainName.parse("tenant.example.net"),
-      ttl: 300,
-    }),
-  ],
-  target: Provisioning.Target.ExactZone({ zone: "example.com" }),
-}).pipe(Effect.provide(InMemoryDnsProvider.layer()));
-```
+<Snippet file="examples/testing/fakes.ts" region="provider" title="A fake provider" />
 
-The executable [quickstart](/docs/quickstart) follows this path through plan, approval, apply, and a
-second plan that makes no changes.
+### Options
 
-## Validate a provider adapter
+| Option        | Effect                                                                               |
+| ------------- | ------------------------------------------------------------------------------------ |
+| `id`          | The provider id. Default `fake`                                                      |
+| `zones`       | Zones the fake credential reaches. Default `example.com`                             |
+| `records`     | Pre-existing records, to produce `Noop` and `Conflict` operations                    |
+| `oauth`       | Offer OAuth beside the token method; the fake redirects to `callbackUrl` immediately |
+| `failWrite`   | Fail the write at this zero-based index, to exercise a partial receipt               |
+| `nameservers` | Nameservers per zone, which `Testing.resolver` answers NS queries from               |
 
-Run `ProviderConformance` against a fresh isolated provider instance. The suite checks create,
-readback and cleanup, exact no-op, conflict without mutation, stale-plan rejection, and partial
-apply cleanup. Add
-provider-specific tests for authentication, discovery, pagination, rate limits, and live API
-behavior; the shared suite cannot prove those concerns.
+:::caution
+`Testing.provider` registers its zones in one table shared by the whole process, and
+`Testing.resolver()` answers from that table. Give each test its own zone, or a record another test
+applied will answer a public DNS query here.
+:::
 
-See [Implement a DNS provider](/docs/guides/implement-provider) for the full acceptance boundary.
+## The recording transport
+
+<Snippet file="examples/testing/fakes.ts" region="transport" title="A transport for UI tests" />
+
+`Testing.transport` mounts `domainkit/server` over memory storage and a fake provider, then wraps
+`Transport.fromFetch` around that handler. `calls` holds `{ method, input }` for every call, oldest
+first, where `method` reads `connection.inspect`, `provisioning.approve`, and so on. There is
+nothing to dispose.
+
+## Conformance
+
+| Runner                         | Checks                                                                                 |
+| ------------------------------ | -------------------------------------------------------------------------------------- |
+| `Testing.conformance.storage`  | Tenant isolation, apply leases, exactly-once continuations, revocation recovery, locks |
+| `Testing.conformance.provider` | Create and read back, exact no-op, conflict, stale plan, partial apply, cleanup        |
+
+<Snippet file="examples/testing/conformance.ts" region="storage" title="Storage conformance" />
+
+<Snippet file="examples/testing/conformance.ts" region="provider" title="Provider conformance" />
+
+The provider runner writes to a real account. Every record it creates carries the `prefix` and is
+removed again, so point it at a zone you own and can inspect.

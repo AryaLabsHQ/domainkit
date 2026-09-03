@@ -1,0 +1,51 @@
+---
+title: Cleanup
+description: Why removing records is its own plan, what a receipt proves, and what happens to a record someone edited by hand.
+sidebar:
+  label: Cleanup
+seo:
+  title: DomainKit receipt-bound cleanup
+---
+
+Cleanup removes only what a receipt proves DomainKit created, and it runs through the same three
+verbs as provisioning: plan, approve, apply. The difference is where the plan comes from.
+
+<Snippet file="examples/core/cleanup.ts" region="plan" title="Planning from a receipt" />
+
+Each `Applied` outcome in the receipt names a provider record id. Cleanup reads that record back and
+turns it into a `Delete` when it still matches the record the plan wrote exactly. Anything else
+becomes a `Conflict`.
+
+<Snippet file="examples/core/cleanup.ts" region="review" title="What the customer sees" />
+
+| Conflict reason  | Means                                                      |
+| ---------------- | ---------------------------------------------------------- |
+| `missing`        | The record is already gone                                 |
+| `value-mismatch` | It no longer matches what the receipt says DomainKit wrote |
+
+A record the provider now reports as something DomainKit cannot model is a `value-mismatch` too:
+whatever is there, it is not what was written.
+
+A conflict is never deleted. A record the customer edited belongs to the customer.
+
+## Its own approval and receipt
+
+<Snippet file="examples/core/cleanup.ts" region="apply" title="Approve and apply" />
+
+The cleanup approval binds the cleanup plan's digest, and the cleanup receipt records what was
+removed. Declining works the same way and is equally terminal.
+
+<Snippet file="examples/core/cleanup.ts" region="reject" title="Declining a removal" />
+
+## Cleanup and detach
+
+Detaching a domain forgets it in DomainKit and leaves every record in DNS. That is the right order
+for a customer moving a domain elsewhere and the wrong one for a customer who wants their zone tidy.
+
+Plan and apply cleanup first, then detach.
+
+## Why not automatic rollback
+
+A failed apply does not undo its earlier writes. A rollback can fail halfway itself, and by the time
+it runs another actor may depend on the record. A partial receipt says exactly what landed, and
+cleanup is a separate decision the customer makes with the same review they gave the plan.

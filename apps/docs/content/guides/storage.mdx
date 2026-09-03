@@ -1,0 +1,95 @@
+---
+title: Persistence and custody
+description: Choose a Storage implementation, seal credentials, and decide whether DomainKit or your pipeline runs the migrations.
+sidebar:
+  label: Persistence
+seo:
+  title: DomainKit persistence and credential custody
+---
+
+`Storage` is the durable seam every lifecycle operation goes through: authorizations with sealed
+credentials, connections, attachments, interactive-flow continuations, attempts carrying a plan,
+approval and receipt, and observed readiness. `Custody` seals a credential before Storage sees it.
+
+## Choose an implementation
+
+| Implementation           | Use it for                                                |
+| ------------------------ | --------------------------------------------------------- |
+| `@domainkit/capsuledb`   | An Effect host on PostgreSQL                              |
+| `Storage.layerMemory`    | Tests and playgrounds                                     |
+| `Storage.layerFromAsync` | Your own database, behind a Promise-shaped implementation |
+
+All of them are held to `Testing.conformance.storage`, so a host can swap one for another without a
+behaviour change.
+
+## PostgreSQL
+
+<Snippet file="examples/storage/postgres.ts" region="wire" title="Installing the layer" />
+
+`PgStorage.layer()` prepares at boot: it creates CapsuleDB's ledger, applies pending migrations, and
+only then provides `Storage`, so a service can never observe a database whose tables are missing.
+The layer needs only your `SqlClient`, and it never opens, replaces, or closes it.
+
+The six tables and their keys are on the
+[`@domainkit/capsuledb` reference](/docs/reference/capsuledb). Every one carries `owner_id`, and
+every query filters by the request's `Principal`, so a row belonging to another tenant reads as
+absent rather than forbidden.
+
+## Or run the migrations yourself
+
+```sh
+capsuledb emit \
+  --module ./node_modules/@domainkit/capsuledb/dist/index.mjs \
+  --export capsule \
+  --dialect postgres \
+  --out ./drizzle
+```
+
+Apply that SQL with your own pipeline, add whatever foreign keys, partitioning, or row-level
+security you want, then boot in assert mode.
+
+<Snippet file="examples/storage/postgres.ts" region="assert" title="Assert mode" />
+
+Assert mode applies nothing and fails unless the database already matches the capsule, so a missed
+migration is a boot failure instead of a runtime surprise. `capsuledb check` compares an emitted
+folder against the current capsule in CI.
+
+<Snippet file="examples/storage/postgres.ts" region="prefix" title="Renaming the tables" />
+
+The prefix is part of the physical layout: it changes the rendered DDL and the migration checksum.
+Fix it before the first deploy and never change it after.
+
+## Custody
+
+There is no plaintext mode. `Connect` seals every credential through `Custody` before it reaches a
+row and opens it after reading one, so a `Storage` implementation only ever stores ciphertext.
+
+<Snippet file="examples/storage/postgres.ts" region="custody" title="Sealing credentials" />
+
+The default is AES-256-GCM over Web Crypto from one 32-byte key, read from `DOMAINKIT_CUSTODY_KEY`
+as base64 or hex. The envelope is `v1.<iv>.<ciphertext>`. Rotating the key means re-sealing stored
+credentials; until then `open` fails with `CryptoFailed`.
+
+## Testing against the seam
+
+<Snippet file="examples/storage/postgres.ts" region="memory" title="One layer for a playground" />
+
+`Testing.conformance.storage` checks tenant isolation, apply leases, exactly-once continuations,
+revocation recovery, and lock semantics against any implementation.
+
+<Snippet file="examples/testing/conformance.ts" region="storage" title="Checking your own" />
+
+## What the invariants buy you
+
+- Aggregate transitions run in one transaction over a locked row, so approve, claim, complete, and
+  fail cannot interleave.
+- A continuation is consumed by a delete that returns the row, so a replayed OAuth callback fails
+  `NotFound` instead of connecting twice.
+- Revocation is two-phase, so a crash between marking and deleting leaves a row that recovery
+  finishes later rather than a credential still live at the provider.
+- The single-flight guard fails `Busy` instead of waiting, so a credential refresh never holds a
+  transaction open across an HTTP call.
+
+One gap stays open on purpose: `Storage` records no per-write progress, so a crash between two
+writes of one apply leaves those records without a receipt until the host re-plans. Re-planning
+turns them into no-ops.

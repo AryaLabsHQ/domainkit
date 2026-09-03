@@ -1,7 +1,6 @@
 import { resolve } from "node:path";
 
 interface EntryPoint {
-  readonly inventoryColumn: number;
   readonly label: string;
   readonly source: string;
   readonly reference: string;
@@ -10,37 +9,31 @@ interface EntryPoint {
 const root = resolve(import.meta.dir, "../../..");
 const entryPoints: ReadonlyArray<EntryPoint> = [
   {
-    inventoryColumn: 1,
     label: "domainkit",
     source: "packages/domainkit/src/index.ts",
     reference: "apps/docs/content/reference/core.mdx",
   },
   {
-    inventoryColumn: 2,
-    label: "domainkit/promise",
-    source: "packages/domainkit/src/promise.ts",
-    reference: "apps/docs/content/reference/promise.mdx",
-  },
-  {
-    inventoryColumn: 1,
     label: "domainkit/server",
-    source: "packages/domainkit/src/server.ts",
+    source: "packages/domainkit/src/entry/server.ts",
     reference: "apps/docs/content/reference/server.mdx",
   },
   {
-    inventoryColumn: 1,
+    label: "domainkit/client",
+    source: "packages/domainkit/src/entry/client.ts",
+    reference: "apps/docs/content/reference/transport.mdx",
+  },
+  {
     label: "domainkit/testing",
-    source: "packages/domainkit/src/testing.ts",
+    source: "packages/domainkit/src/entry/testing.ts",
     reference: "apps/docs/content/reference/testing.mdx",
   },
   {
-    inventoryColumn: 1,
     label: "@domainkit/react",
     source: "packages/react/src/index.ts",
     reference: "apps/docs/content/reference/react.mdx",
   },
   {
-    inventoryColumn: 1,
     label: "@domainkit/capsuledb",
     source: "packages/capsuledb/src/index.ts",
     reference: "apps/docs/content/reference/capsuledb.mdx",
@@ -67,11 +60,8 @@ const exportedNames = (source: string): ReadonlyArray<string> => {
   return [...new Set([...constants, ...namespaces, ...named])].sort();
 };
 
-const documentedNames = (
-  reference: string,
-  path: string,
-  inventoryColumn: number,
-): ReadonlySet<string> => {
+/** The first column of every table row between the inventory markers. */
+const documentedNames = (reference: string, path: string): ReadonlySet<string> => {
   const inventory = reference.match(
     /\{\/\* reference-inventory:start \*\/\}([\s\S]*?)\{\/\* reference-inventory:end \*\/\}/,
   )?.[1];
@@ -82,7 +72,7 @@ const documentedNames = (
     inventory
       .split("\n")
       .filter((line) => line.startsWith("|"))
-      .flatMap((line) => [line.split("|")[inventoryColumn] ?? ""])
+      .flatMap((line) => [line.split("|")[1] ?? ""])
       .flatMap((cell) => [...cell.matchAll(/`([A-Za-z][A-Za-z0-9_]*)`/g)].map(([, name]) => name)),
   );
 };
@@ -95,11 +85,7 @@ const failures = (
         Bun.file(resolve(root, entryPoint.reference)).text(),
       ]);
       const exports = exportedNames(source);
-      const inventory = documentedNames(
-        reference,
-        entryPoint.reference,
-        entryPoint.inventoryColumn,
-      );
+      const inventory = documentedNames(reference, entryPoint.reference);
       const missing = exports.filter((name) => !inventory.has(name));
       const exported = new Set(exports);
       const stale = [...inventory].filter((name) => !exported.has(name));

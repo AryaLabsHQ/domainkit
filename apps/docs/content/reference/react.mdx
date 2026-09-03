@@ -1,67 +1,98 @@
 ---
-title: React API
-description: Reference the namespaces exported by `@domainkit/react`, including flows, UI parts, transport, themes, messages, and events.
+title: "@domainkit/react"
+description: The React namespaces, the controllers and their states, the slots of the domain flow, and the presentation seams the package exports to a host.
 sidebar:
-  label: React API
+  label: "@domainkit/react"
 seo:
   title: DomainKit React API reference
 ---
-
-Import React APIs from `@domainkit/react` and opt in to the default stylesheet separately.
 
 ```tsx
 import { Domain, DomainKit } from "@domainkit/react";
 import "@domainkit/react/styles.css";
 ```
 
+The package entry carries `"use client"`. Namespaces mirror the core lifecycle.
+
 {/* reference-inventory:start */}
 
-## Runtime and complete flow
+## Namespaces
 
-| Namespace   | Purpose                                                                        |
-| ----------- | ------------------------------------------------------------------------------ |
-| `DomainKit` | Root runtime, transport, messages, provider registry, and theme boundary.      |
-| `Domain`    | Complete connection, provisioning, verification, cleanup, and disconnect flow. |
-| `Lifecycle` | Structured host events emitted after successful user-triggered mutations.      |
+| Namespace    | Carries                                                                                            |
+| ------------ | -------------------------------------------------------------------------------------------------- |
+| `DomainKit`  | `Root`, `useTransport`, `useCapabilities`, `useDomainKit`                                          |
+| `Domain`     | `Flow`, its slot props, and the slot defaults                                                      |
+| `Connect`    | `useController`, `Flow`, `Card`, `Dialog`, `Form`, `Status`, `Outcome`, `Root`                     |
+| `Provision`  | `useController`, `Flow`, `Actions`, `Dialog`, `Status`, `Outcome`, `Root`, `State`                 |
+| `Cleanup`    | The same set over a plan built from an apply receipt                                               |
+| `Verify`     | `useController`, `Status`, `Evidence`, `ObserveAction`, `Outcome`, `Root`, `State`                 |
+| `Records`    | `Table`, `Card`, `ZoneFile`, `CopyValue`, `Status`, the table leaf parts, `identity`, `toZoneFile` |
+| `Operations` | `List`, `Item`, and the leaf parts one plan operation renders as                                   |
+| `Provider`   | `Mark`, `Marks`, and the provider `Descriptor` the snapshot carries                                |
+| `Messages`   | `Catalog`, `english`, `merge`, and `failure(error, catalog)`                                       |
+| `Theme`      | The `Theme` shape and `toStyle`, over the `--domainkit-*` custom properties                        |
+| `Testing`    | `transport`, re-exported from `domainkit/testing` for UI tests                                     |
 
-## Focused lifecycles
+## Top-level exports
 
-| Namespace      | Purpose                                                          |
-| -------------- | ---------------------------------------------------------------- |
-| `Connection`   | Provider connection, reuse, retry, and model hook.               |
-| `Provisioning` | Plan review, authorization request, application, and model hook. |
-| `Verification` | Evidence refresh, result presentation, and model hook.           |
-| `Cleanup`      | Receipt-bound cleanup review, application, and model hook.       |
-
-`Connection`, `Provisioning`, and `Cleanup` expose a `Flow`, a `Controller`, a `useModel` hook,
-state and command constructors, and UI parts for custom screens. `Verification` exposes a
-`Controller`, a `useModel` hook, and evidence, outcome, status, and observe-action parts; it does
-not expose a `Flow`.
-
-## Presentation and customization
-
-| Namespace    | Purpose                                                      |
-| ------------ | ------------------------------------------------------------ |
-| `Records`    | Record table, card, rows, cells, and copy controls.          |
-| `Operations` | Neutral plan and cleanup operation list with reusable parts. |
-| `Provider`   | Provider marks, provider descriptors, and mark overrides.    |
-| `Messages`   | Default copy and app-owned message overrides.                |
-| `Theme`      | Typed tokens and theme recipes applied at `DomainKit.Root`.  |
-| `Testing`    | React fixtures and helpers for package consumers.            |
+| Export         | Carries                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `Event`        | What a customer finished doing: `Connected`, `Applied`, `Cleaned`, `Declined`, `Failed`, `Detached`, `Disconnected` |
+| `Listener`     | The `onEvent` signature `DomainKit.Root` takes                                                                      |
+| `Failure`      | The failed member every controller state shares, carrying the `DomainKit.Error`                                     |
+| `defaultIcons` | The built-in icon set                                                                                               |
+| `useIcons`     | The icons in context, for a part you render yourself                                                                |
+| `Icons`        | The icon slot names a host may override                                                                             |
 
 {/* reference-inventory:end */}
 
-All interactive parts forward refs and expose state-aware attributes or classes for host styling.
-Complete flows use the same models and parts that are available for custom screens.
+`ClassName`, `Style`, and `PartProps` are the composition types every rendered part accepts: the
+element's own props, a state-aware `className` and `style`, and Base UI's `render` for replacing
+the element outright.
 
-Component props, examples, install commands, states, and accessibility guidance live on each page
-in the [React component catalog](/components). This page covers the package namespaces and runtime.
+## Root
 
-## Server rendering
+<Snippet
+  file="examples/react/domain-settings.tsx"
+  region="flow"
+  title="The provider and the flow"
+/>
 
-Components can render on the server. Browser-only behaviors such as clipboard writes, file
-downloads, and navigation run from user interactions. Provider credentials are never part of the
-React API; all stateful operations cross your app's `Transport`.
+| Prop              | Effect                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| `transport`       | The transport, by value; its identity survives re-renders                            |
+| `revision`        | Bump to re-inspect every mounted domain after a change the UI did not make           |
+| `theme`           | `--domainkit-*` values as a plain object                                             |
+| `colorScheme`     | `inherit`, `light`, or `dark`                                                        |
+| `messages`        | Overrides on `Messages.Catalog`                                                      |
+| `marks`           | Provider artwork by provider id                                                      |
+| `icons`           | Overrides on `defaultIcons`                                                          |
+| `navigate`        | Where an interactive provider flow sends the customer. Defaults to `window.location` |
+| `portalContainer` | The element dialogs and popovers portal into                                         |
+| `onEvent`         | A `Listener` for finished steps                                                      |
 
-See [Choose an integration level](/docs/react/integration-levels) and
-[Composition](/docs/react/composition) before choosing a smaller part.
+## Controllers
+
+Each takes one options object and returns a controller whose `state` is a tagged union.
+
+| Hook                      | Options                                | State tags                                                                                                       |
+| ------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `Connect.useController`   | `{ domain }`                           | `Loading`, `Disconnected`, `Connected`, `Reconnect`, `Submitting`, `Redirecting`, `SelectionRequired`, `Failure` |
+| `Provision.useController` | `{ domain, requirements, onApplied? }` | `Idle`, `Planning`, `Planned`, `Approving`, `Applying`, `Applied`, `Rejecting`, `Rejected`, `Failure`            |
+| `Cleanup.useController`   | `{ domain, receiptId?, onCleaned? }`   | The same set                                                                                                     |
+| `Verify.useController`    | `{ domain, polling? }`                 | `Idle`, `Observing`, `Observed`, `Failure`                                                                       |
+
+<Snippet file="examples/react/controllers.tsx" region="hooks" title="Composing the flow yourself" />
+
+## Slots
+
+`Domain.Flow` renders four slots, each with a default and no layout container of its own.
+
+| Slot           | Receives                                        | Default                                                    |
+| -------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| `connection`   | `{ controller, domain }`                        | `Connect.Card` once connected, `Connect.Dialog` until then |
+| `records`      | `{ records, readiness, controller, domain }`    | `Records.Table`                                            |
+| `verification` | `{ controller, domain }`                        | `Verify.Status` with per-requirement evidence              |
+| `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline, Remove records           |
+
+<Snippet file="examples/react/slots.tsx" region="one-slot" title="Replacing one slot" />

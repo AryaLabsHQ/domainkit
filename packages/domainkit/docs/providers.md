@@ -1,55 +1,65 @@
 # Provider integrations
 
-DomainKit's provider integrations translate documented authoritative-DNS APIs into the same portable
-record and provisioning contracts. They use Fetch and accept host-owned credentials; they do not
-persist secrets, render consent UI, or depend on a provider SDK.
+A provider integration turns one authoritative-DNS HTTP API into a `Provider.Definition`. It uses
+Fetch, accepts host-owned credentials, and persists nothing: no secret storage, no consent UI, no
+provider SDK.
 
 ## Cloudflare
 
-Cloudflare authorization accepts either an explicit account ID or a domain visible to the
-credential. Domain-based authorization queries the requested name and its parent zone candidates,
-nearest first, and succeeds only when exactly one accessible authoritative zone identifies the
-account. This lets OAuth and API-token flows avoid asking users to find an account ID while failing
-closed when the credential cannot identify the requested domain unambiguously.
+Cloudflare offers API tokens and OAuth on one definition.
 
-After authorization, Cloudflare DNS clients remain explicitly account-scoped. The capability claim
-records what the host requested when it issued or authorized the credential because Cloudflare's
-non-mutating token verification response does not enumerate DNS permissions.
+A **user token** spans every account it can reach. DomainKit verifies it, discovers the account from
+the zones it can see, and records `tokenKind: "user"`, so one connection can serve domains in
+several accounts. An **account-owned token** cannot be verified without naming its account, so the
+token method declares an optional `accountId` field and verification runs against that account.
 
-Domain-targeted token validation supports both user-owned and account-owned API tokens. User tokens
-are verified before discovery; account tokens discover the account from the authorized zone first
-and then use Cloudflare's account-scoped verification endpoint.
+OAuth uses the authorization code flow against `dash.cloudflare.com`. The scope ids come from the
+host's registered OAuth client; the default set is `zone:read`, `dns_records:edit`, and
+`offline_access`. The credential packs the access and refresh tokens together, so refresh and
+revocation need nothing from the host.
 
-Cloudflare supports API tokens and standards-based OAuth authorization code flow. OAuth
-scope IDs come from the OAuth client registration and are supplied by the host rather than
-hard-coded by DomainKit. Existing proxied records are readable, while every record created by
-DomainKit is DNS-only.
+Cloudflare's token verification does not enumerate DNS permissions, so the capability claim records
+what the definition requires rather than what the token proves. A token without `dns_records:edit`
+verifies and fails at the first write with `Forbidden`.
+
+Targets carry the Cloudflare zone id and the nameservers Cloudflare reports. A target with no zone
+id cannot hold records and fails `Unsupported`. Existing proxied records are readable; every record
+DomainKit creates is DNS-only.
 
 ## Vercel
 
-Vercel clients require an explicit personal or team context. Team clients add `teamId` to resource
-requests; personal clients do not. Domains are treated as DNS storage zones when Vercel exposes its
-DNS service type, zone flag, or intended nameservers. Current and intended nameservers remain
-provider evidence; they are not substituted for independent public authority observation.
+Vercel offers personal and team access tokens and its own integration install flow.
 
-Vercel supports personal access tokens and its provider-specific integration installation flow.
-That flow begins at the integration install URL and exchanges the one-time callback code at
-Vercel's token endpoint. DomainKit models it as an integration method instead of claiming that it
-is the same generic OAuth flow used by Cloudflare. The returned personal or team context remains
-attached to the credential result.
+A token connection stores `{ teamId }`, `null` for a personal account. Team requests carry `teamId`;
+personal ones do not.
 
-## Portable behavior
+The integration flow starts at the integration's install URL and exchanges a one-time callback code
+at Vercel's token endpoint. DomainKit models it as an integration method rather than claiming it is
+the OAuth flow Cloudflare uses. The callback's team is checked against the exchanged token, so an
+install reporting a different team fails `Unauthenticated`.
 
-Both adapters support `A`, `AAAA`, `CAA`, `CNAME`, `MX`, `NS`, `SRV`, and `TXT`. Provider-only record
-types are retained as opaque observations during portable reads, while provider APIs still enforce
-their native collision rules. Planning remains additive: exact records no-op, missing records
-create, and incompatible state conflicts without an automatic update or delete.
+A Vercel domain is a target when Vercel hosts its DNS. Current and intended nameservers are provider
+evidence and never substitute for an independent public DNS observation.
 
-Provider errors are decoded at the HTTP boundary, classified into portable reasons, and stripped
-of request credentials. Provider status and error codes remain diagnostic metadata without leaking
-raw response DTOs into the planning contract.
+## Portable behaviour
 
-Provider implementations import generic contracts from `domainkit`.
-`ProviderConformance.run` from `domainkit/testing` exercises complete
-paginated readback, exact no-op, conflict, create, stale plans, partial receipts, and receipt-bound
-cleanup against a fresh provider fixture.
+Both adapters support `A`, `AAAA`, `CAA`, `CNAME`, `MX`, `NS`, `SRV`, and `TXT`. A provider record
+DomainKit cannot model is kept as `DnsRecord.Opaque` during reads, so planning sees it, refuses to
+overwrite it, and reports a conflict. Provider APIs still enforce their own collision rules.
+
+Planning is additive everywhere: exact records are no-ops, missing records are creates, and
+incompatible state is a conflict with no automatic update or delete.
+
+Provider responses are decoded at the HTTP boundary and classified into `Reason` values with the
+credential stripped. A provider status or error code stays as diagnostic metadata; a raw response
+body never reaches a `DomainKit.Error`.
+
+## Conformance
+
+`Testing.conformance.provider(definition, credential, zone)` from `domainkit/testing` exercises
+create and read back, exact no-op, conflict, stale plan, and partial apply against a real account,
+through the same `Provision` and `Cleanup` services a host uses. Every record it writes carries the
+prefix and is removed again.
+
+`bun run test:live:cloudflare` and `bun run test:live:vercel` run it from this package. They are
+opt-in, never run in CI, and write to a zone the operator names twice.

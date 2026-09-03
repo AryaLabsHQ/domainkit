@@ -1,0 +1,86 @@
+---
+title: Glossary
+description: The words DomainKit uses for requirements, plans, approvals, receipts, connections, attachments, and observation.
+sidebar:
+  label: Glossary
+seo:
+  title: DomainKit glossary
+---
+
+Every page, type name, and error message uses these words the same way.
+
+## The lifecycle
+
+**Requirement** — DNS state your product needs: a record, its `policy` (`exclusive` or `append`),
+and an optional `purpose` label for the customer. A `DnsRecord.Model`.
+
+**Plan** — a snapshot of one zone as exact operations, with a deterministic digest over them. Its
+operations are `Create`, `Noop`, `Conflict`, and, for cleanup, `Delete`. A `Plan.Model`.
+
+**Approval** — a principal's consent to apply one plan digest and one explicit set of operations.
+Apply accepts nothing else. An `Approval.Model`.
+
+**Rejection** — the record that a principal declined a plan: who, optionally why, and when. It is
+terminal for that plan, and the domain stays free for a new one.
+
+**Receipt** — durable evidence of what an apply actually wrote, with one outcome per operation and
+a `status` of `complete` or `partial`. Cleanup is planned only from a receipt. A `Receipt.Model`.
+
+**Attempt** — one durable plan, approval, and receipt with a status, so a host can plan in one
+request, collect consent in another, and apply in a third.
+
+## The connection
+
+**Provider authorization** — an account-scoped credential plus the non-secret provider context
+needed to rebuild a session. Stored sealed; DomainKit never writes plaintext.
+
+**Connection** — the principal-facing handle over one authorization. One authorization can back
+several connections, and one connection can serve several domains.
+
+**Domain attachment** — one domain bound to one connection and one exact provider target: the zone
+and the provider identity that addresses it.
+
+**Continuation** — the state held between starting an interactive connection and the provider's
+callback. It is spent exactly once.
+
+**Target** — a zone the credential can reach, with the provider context that addresses it and, when
+the provider reports them, its nameservers.
+
+**Discovery** — which of a principal's existing connections already reaches a domain, decided from
+the domain's authoritative nameservers and each connection's zones.
+
+## Observation
+
+**Observation** — a single reading of DNS from one source, tagged with where it came from:
+`Provider` (the provider's own records), `PublicDns` (one recursive resolver), or `Host` (something
+only your app can see, such as a certificate or an email identity).
+
+**Readiness** — the stored per-requirement status for a domain, the evidence behind each status,
+and `nextCheckAt`, the time to look again.
+
+**Requirement status** — `satisfied` (an exact match), `missing` (nothing matched), `mismatch` (an
+exclusive requirement met a conflicting record at the same name and type), or `unknown` (no source
+answered).
+
+## The seams your app fills
+
+**Principal** — `{ ownerId, actorId }` for the request being served. `ownerId` is the tenant
+boundary every stored row is scoped by; `actorId` is recorded on approvals and rejections.
+
+**Storage** — every durable row, behind one service. `@domainkit/capsuledb` implements it on
+PostgreSQL; `Storage.layerMemory` is the in-memory one; `Storage.layerFromAsync` wraps your own.
+
+**Custody** — sealing a credential before Storage sees it. AES-256-GCM from one configured key by
+default, or your KMS.
+
+**Identity** — the one server-side service you write: a request to a `Principal`, by verifying a
+credential your app issued.
+
+**Transport** — the browser-side view of the mounted routes, split into optional capability groups
+(`connection`, `provisioning`, `verification`, `cleanup`).
+
+## Words we avoid
+
+DomainKit is not a DNS host, a registrar, a universal provider abstraction, or an automatic DNS
+reconciler. Provider writes are not atomic, transactional, or rollback-safe: a plan is applied
+operation by operation, and a partial receipt says exactly how far it got.

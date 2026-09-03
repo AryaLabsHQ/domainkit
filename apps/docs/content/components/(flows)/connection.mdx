@@ -1,126 +1,37 @@
 ---
 title: Connection
-description: Connect a customer domain to a supported DNS provider through your app's server while keeping credentials and callback routes private.
+description: Connect a DNS provider from a form built out of the provider catalog, reuse a connection the customer already has, and pick a zone when several match.
 ---
 
-`Connection.Flow` renders provider discovery, authorization choices, retry states, and attachment
-through your app's `Transport`. Provider credentials never enter the browser.
+`Connect.Flow` is the connection step on its own: the card once connected, the dialog until then.
 
-<ReactExample story="connection" />
-
-## Installation
-
-```package-install
-@domainkit/react domainkit effect @effect/atom-react react react-dom
-```
-
-Import the default styles once in your application entry point:
-
-```tsx
-import "@domainkit/react/styles.css";
-```
+<ReactExample story="connect" />
 
 ## Usage
 
-Render the flow inside the `DomainKit.Root` that provides your transport, theme, messages, and
-provider marks.
+<Snippet file="examples/react/catalog.tsx" region="connect" title="The connection step" />
 
-```tsx
-import { Connection, DomainKit } from "@domainkit/react";
+## What it renders
 
-<DomainKit.Root transport={transportLayer}>
-  <Connection.Flow domain="mail.example.com" />
-</DomainKit.Root>;
-```
+The connect form is built from the snapshot, not from hard-coded provider names. Each provider
+carries its auth methods, and each method its label, docs URL, and token fields, so a new provider
+appears in the dialog without a UI change.
 
-The transport endpoint must authenticate the user, check tenant policy, keep credentials on the
-server, and save connection and domain-attachment state. See [Transport](/docs/react/transport) for
-the request boundary.
+When the transport declares `connection.discover`, the flow asks on mount which of the customer's
+existing connections already reaches the domain and offers that first. A discovery failure is
+silent: the provider list still renders.
 
-## States
+## Parts
 
-| State          | Meaning                                                                 |
-| -------------- | ----------------------------------------------------------------------- |
-| `Loading`      | The flow is detecting the provider or restoring an existing connection. |
-| `Disconnected` | A provider can be selected or an existing authorization can be reused.  |
-| `Submitting`   | The host transport is processing a token or attachment request.         |
-| `Redirecting`  | The browser is leaving for provider authorization.                      |
-| `Connected`    | The host returned an active connection and domain attachment.           |
-| `Detaching`    | A disconnect request is in progress.                                    |
-| `Unsupported`  | The host cannot offer an automatic connection for this domain.          |
-| `Failure`      | The operation failed with an explicit retry policy.                     |
+| Part              | Renders                                                       |
+| ----------------- | ------------------------------------------------------------- |
+| `Connect.Card`    | The connected provider, with detach and disconnect            |
+| `Connect.Dialog`  | The connect surface, with a `render` prop for your own dialog |
+| `Connect.Form`    | The method picker and token fields, without the dialog        |
+| `Connect.Status`  | One line of what the connection is doing                      |
+| `Connect.Outcome` | The last failure, as a sentence from the catalog              |
 
-## Composition
+## Composing it yourself
 
-Use `Connection.useController(domain)` when the packaged flow does not match your product screen.
-Compose `Root`, `Status`, `ConnectTrigger`, `Dialog`, and `RetryAction` around the same controller.
-The [Host connection](/components/host-connection) page shows that integration level.
-
-## Accessibility
-
-`Connection.Dialog` uses dialog semantics and returns focus to its trigger. Keep a visible trigger
-label that names the provider, and do not suppress failure text when applying custom styles.
-
-## API reference
-
-### `Connection.Flow`
-
-<TypeTable
-  type={{
-    domain: {
-      type: "string",
-      required: true,
-      description: "Domain whose provider connection the flow manages.",
-    },
-  }}
-/>
-
-### `Connection.Dialog`
-
-<TypeTable
-  type={{
-    controller: {
-      type: "Connection.Controller",
-      required: true,
-      description: "Controller that stores connection state and runs its commands.",
-    },
-    snapshot: {
-      type: "Disconnected",
-      required: true,
-      description: "Disconnected provider data used to show authorization options.",
-    },
-  }}
-/>
-
-### `Connection.DisconnectDialog`
-
-<TypeTable
-  type={{
-    connection: {
-      type: "Transport.Connected",
-      required: true,
-      description: "Connected domain attachment to disconnect.",
-    },
-    controller: {
-      type: "Connection.Controller",
-      required: true,
-      description: "Controller that runs the detach operation.",
-    },
-    onOpenChange: {
-      type: "(open: boolean) => void",
-      description: "Called when the dialog opens or closes.",
-    },
-    open: {
-      type: "boolean",
-      description:
-        "Set this to control the dialog; omit it to let the dialog manage its own state.",
-    },
-    trigger: {
-      type: "ReactElement | null",
-      description: "Optional trigger element. Pass null to render no trigger.",
-    },
-  }}
-/>
-
-For the complete namespace inventory and shared runtime contracts, see the
-[React API reference](/docs/reference/react).
+`Connect.useController({ domain })` returns the state and the five commands. See
+[controllers](/docs/react/controllers).

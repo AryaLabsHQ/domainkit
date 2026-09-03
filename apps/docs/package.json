@@ -19,6 +19,7 @@
   "scripts": {
     "audit": "bun run reference:check && blume audit",
     "build": "bun run reference:check && bun run registry:build && blume build",
+    "check": "blume check",
     "deploy": "bun run build && wrangler deploy",
     "dev": "blume dev",
     "preview": "blume preview",
@@ -26,7 +27,7 @@
     "registry:build": "shadcn build registry.json --output public/r",
     "registry:check": "bun run registry:build && bun scripts/test-registry.mts",
     "registry:validate": "shadcn registry validate registry.json",
-    "check": "blume check",
+    "test:preview": "bun scripts/test-preview.mts",
     "typecheck": "blume check"
   },
   "dependencies": {
@@ -45,6 +46,9 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@types/bun": "1.4.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
     "astro": "7.2.9",
     "shadcn": "4.17.0",
     "wrangler": "4.127.1"

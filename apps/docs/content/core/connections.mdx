@@ -1,151 +1,102 @@
 ---
-title: Connections and domain attachments
-description: See how provider authorizations, organization connections, and exact domain attachments fit together while your app keeps credentials and policy.
+title: Connections and attachments
+description: How a provider credential becomes a connection, how a domain attaches to a zone, and how a second domain reuses what the customer already connected.
 sidebar:
-  label: Connections and domain attachments
+  label: Connections
 seo:
-  title: DomainKit connections and domain attachments
+  title: DomainKit connections and attachments
 ---
 
-A provider account and your app's users, tenants, and domains are different things. DomainKit keeps
-them separate: one provider authorization does not automatically attach or authorize one product
-domain.
-
-## The authorization record
-
-A durable provider authorization contains:
-
-- the provider and account identity;
-- non-secret provider context needed to reconstruct the correct client;
-- a reference to the host-stored credential;
-- required capabilities and their evidence;
-- revocation state, plus credential expiry and refresh material behind the secret boundary;
-- a relationship to explicit host-owner connections in the lifecycle aggregate.
-
-The credential belongs to this record, but your app decides how to encrypt and store it.
-
-## Connections and domain attachments
-
-A provider authorization can be shared by explicit organization connections. Each connection identifies
-the host owner and provider, while each `DomainAttachment` records an exact provider target for one
-domain:
-
-- `connectionId`, `domain`, and a host-owned attachment ID;
-- the provider account or personal/team context; and
-- the authoritative zone ID and name, plus discovery evidence when available.
-
-Your app checks the connection owner and attachment in addition to the provider scopes. A broad
-Cloudflare or Vercel credential does not automatically authorize every tenant or every visible zone.
-
-This lets a host reuse one valid provider authorization for another owner connection after fresh
-provider proof and policy approval, without asking for provider consent again. The new domain still
-requires explicit target discovery and a `Connection.attach` call.
-
-An expired access token does not expire the provider authorization when a refresh token remains
-available. The host refreshes and persists the rotated credential before a provider operation. The
-repository contract does not make cross-store rotation atomic, so define locking and recovery in
-the host. A credential whose access token has expired and has no refresh token projects as an
-expired connection; pending revocation projects separately.
-
-## Starting and completing a connection
-
-`Connection.start` accepts a token method or an interactive provider flow:
+Three rows carry a customer's provider access, and each answers a different question.
 
 ```text
-token
-  -> validate provider authority
-  -> save authorization and connection
-
-interactive
-  -> create one-time continuation
-  -> redirect to provider
-  -> consume callback continuation
-  -> exchange code
-  -> save authorization and connection
+authorization   the credential, sealed, plus the provider account context
+     |
+connection      the principal-facing handle over one authorization
+     |
+attachment      one domain bound to one connection and one exact zone
 ```
 
-Cloudflare supports OAuth and scoped API tokens. Vercel supports its Integration installation flow
-and tokens. DomainKit keeps those provider flows distinct instead of calling every redirect a
-generic OAuth flow.
+One authorization can back several connections, and one connection can serve several domains.
+DomainKit never deduplicates by provider account: a second organization connecting the same
+provider account gets its own authorization from its own fresh proof.
 
-The result is a public `ProviderConnection` (or an authorization redirect). It does not contain
-credentials, provider context, or a domain attachment. `Connection.complete` finishes the same
-interactive lifecycle after the callback. To reuse an existing authorization, pass its
-`authorizationId` only after the host has checked owner policy and obtained fresh provider proof.
+## Inspecting a domain
 
-## Attach and detach a domain
+<Snippet
+  file="examples/core/connections.ts"
+  region="inspect"
+  title="What a settings screen needs"
+/>
 
-After connecting, restore the provider session from the host's private aggregate and resolve the
-customer domain. In an Effect host, the lifecycle service is provided by your composition layer:
+The snapshot also carries the provider catalog: each provider's id, name, and its auth methods with
+their labels, docs URLs, and token fields. A connect form renders from that instead of hard-coding
+provider names.
 
-```ts
-import { Effect } from "effect";
-import { Connection, DomainName } from "domainkit";
+## Connecting
 
-const program = Effect.gen(function* () {
-  const domain = DomainName.parse("example.com");
-  // `session` and `connection` come from the host's authenticated aggregate.
-  const resolution = yield* session.resolveTarget(domain);
-  if (resolution._tag !== "Resolved") {
-    // SelectionRequired needs an explicit, server-validated user choice.
-    return yield* Effect.fail(new Error("Choose one provider target before attaching"));
-  }
+A token method finishes in one call. OAuth and marketplace installs answer with a redirect and
+finish at the callback.
 
-  return yield* Connection.attach({
-    attachment: {
-      connectionId: connection.id,
-      createdAt: new Date(),
-      domain,
-      id: crypto.randomUUID(),
-      target: resolution.target,
-    },
-    connectionId: connection.id,
-    ownerId,
-  });
-});
-```
+<Snippet file="examples/core/connections.ts" region="token" title="A token method" />
 
-`Connection.attach` persists the exact target and rejects an attachment for another owner or
-connection. Use the target to create a focused provider client for planning and apply. Browser input
-may request a domain or selection, but the server must resolve and validate the target.
+<Snippet file="examples/core/connections.ts" region="interactive" title="An interactive method" />
 
-`Connection.detach` removes one attachment while retaining the organization connection and does not
-delete DNS. Cleanup is a separate receipt-bound lifecycle. `Connection.disconnect` removes one
-organization connection; it is blocked while attachments remain and revokes the shared provider
-authorization only when it is the final connection.
+`Connect.start` answers one of three things:
 
-Final revocation is fail-closed. Durable retry state remains until the provider confirms the outcome.
+| `Started`           | Means                                                                |
+| ------------------- | -------------------------------------------------------------------- |
+| `Connected`         | The connection exists, and the domain is attached when one was given |
+| `Redirect`          | Send the customer to `authorizationUrl`; the callback finishes it    |
+| `SelectionRequired` | The credential reaches several matching zones; pick one and attach   |
 
-## Host-owned boundaries
+The continuation created by `start` is spent exactly once, so a replayed callback fails `NotFound`
+rather than connecting twice.
 
-The host supplies:
+## Reusing a connection
 
-- authenticated start, callback, token, reuse, and disconnect routes;
-- user and tenant authorization policy;
-- one durable `ManagedDnsConnections.Service` for the authorization, connections, and attachments;
-- credential encryption or vault storage;
-- a short-lived, one-time continuation store;
-- consent records and audit history.
+The second domain on a provider the customer already connected should not ask them to connect
+again. `Connect.discover` resolves the domain's authoritative nameservers, lists the zones each of
+the principal's connections can reach, and answers which one serves it.
 
-A SQL application can save the record in one transaction. If database and vault storage are split,
-the app must make the save recoverable behind the same repository boundary.
+<Snippet file="examples/core/connections.ts" region="discover" title="Skipping the connect step" />
 
-## Capability evidence
+The closest zone wins. When several connections hold that zone, a connection whose reported
+nameservers cover every authoritative nameserver wins; otherwise the caller selects.
 
-Provider scope strings are not complete proof. Each required capability records one of three evidence
-levels:
+## Attaching
 
-- `Declared` — the host or provider flow claims the capability;
-- `Introspected` — a provider response reported it;
-- `Exercised` — a successful provider operation demonstrated it.
+<Snippet file="examples/core/connections.ts" region="attach" title="Binding a domain to a zone" />
 
-The host can promote evidence after successful use without changing the underlying connection and
-attachment model.
+An attachment is exact: one domain, one connection, one zone, and the provider identity that
+addresses it. Every session handed to planning, applying, or observing is re-checked against the
+provider, so a zone the credential can no longer reach fails `NotFound` instead of writing
+somewhere else.
 
-## Put the concept to work
+## Releasing
 
-- [Integrate a host application](/docs/guides/host-integration)
-- [Why not Domain Connect?](/docs/core/domain-connect)
-- [Connect Cloudflare](/docs/providers/cloudflare)
-- [Connect Vercel](/docs/providers/vercel)
-- [Authorization API reference](/docs/reference/core#authorization-and-connections)
+<Snippet file="examples/core/connections.ts" region="release" title="Detach and disconnect" />
+
+Detaching forgets the domain and leaves the records in DNS. Plan a
+[cleanup](/docs/core/cleanup) first when the records should go.
+
+Disconnecting detaches every domain and revokes the credential at the provider where the method
+supports it. Revocation is two-phase: the row is marked pending, the provider is called outside any
+transaction, and only then is the row removed. A failure in between leaves a row that recovery
+finishes on the next connect or disconnect.
+
+## Keeping the credential alive
+
+`Connect.refresh` runs automatically before provider use, ten minutes before expiry by default, and
+single-flights through the storage lock so two requests never refresh at once. It answers `current`,
+`refreshed`, or `reconnect`.
+
+An access token expiring is not the authorization expiring: a credential with a refresh token stays
+usable. A credential the provider will no longer refresh surfaces as the `Reconnect` reason, and the
+host asks the customer to connect again.
+
+`Connect.Policy` sets `refreshBeforeMs`, the continuation lifetime, and `allowReuse`, which decides
+whether one of an owner's connections may serve a given domain.
+
+Setting up DNS through a provider's own template protocol instead is
+[Domain Connect](/docs/core/domain-connect), which DomainKit does not implement.

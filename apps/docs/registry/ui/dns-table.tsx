@@ -14,6 +14,9 @@ export interface DnsTableRecord {
   readonly id: string;
   readonly name: string;
   readonly priority?: number;
+  /** What the record is for, shown to the customer under its name. */
+  readonly purpose?: ReactNode;
+  /** Readiness for this record, once something has observed it. */
   readonly status?: ReactNode;
   readonly type: string;
   readonly value: string;
@@ -59,7 +62,12 @@ export function DnsTableRow({ className, record, showStatus = false, ...props }:
   return (
     <TableRow className={cn("hover:bg-muted/30", className)} data-slot="dns-table-row" {...props}>
       <TableCell className="px-4 font-medium">{record.type}</TableCell>
-      <TableCell className="px-4 font-mono text-xs">{record.name}</TableCell>
+      <TableCell className="px-4 font-mono text-xs">
+        <span className="block">{record.name}</span>
+        {record.purpose === undefined ? null : (
+          <span className="mt-0.5 block font-sans text-muted-foreground">{record.purpose}</span>
+        )}
+      </TableCell>
       <TableCell className="max-w-80 px-4 font-mono text-xs">
         <span className="block truncate" title={record.value}>
           {record.value}

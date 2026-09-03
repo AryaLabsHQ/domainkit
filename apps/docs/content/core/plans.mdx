@@ -1,98 +1,126 @@
 ---
-title: Plans and receipts
-description: See how DNS requirements become plans, approvals, receipts, and cleanup, and how conflicts stop an unsafe write.
+title: Plans, approval, and receipts
+description: How a plan is built from your requirements, what its four operations mean, what an approval binds it to, and what a receipt proves about an apply.
 sidebar:
-  label: Plans and receipts
+  label: Plans
 seo:
-  title: DomainKit plans and receipts
+  title: DomainKit plans, approvals, and receipts
 ---
 
-Provider APIs do not usually offer one conditional operation for many records. Calls can stop
-halfway, and provider state can change after review. DomainKit makes those cases visible instead of
-pretending a series of writes is atomic.
+A plan is a snapshot of one zone rendered as exact operations, with a SHA-256 digest over all of
+them. Nothing is written while a plan is built: planning is a read.
 
-## The plan and receipt data
+## Requirements
 
-```text
-requirements
-  -> plan
-  -> authorization
-  -> apply receipt
-  -> observation
+A requirement is a DNS record your product needs, its conflict `policy`, and an optional `purpose`
+the customer sees.
 
-source plan + apply receipt
-  -> cleanup plan
-  -> cleanup authorization
-  -> deletion receipt
-```
+<Snippet file="examples/core/plans.ts" region="requirements" title="Two requirements" />
 
-| Artifact         | Meaning                                                                        | Durable host use                |
-| ---------------- | ------------------------------------------------------------------------------ | ------------------------------- |
-| Requirement      | DNS state the product needs, including ownership, purpose, and conflict policy | Recreate from product state     |
-| Plan             | A provider and zone snapshot with exact operations and a digest                | Save through review and apply   |
-| Authorization    | Approval for one plan digest and selected create operations                    | Save with the plan attempt      |
-| Apply receipt    | Provider writes that finished, including partial results                       | Save for recovery and cleanup   |
-| Cleanup plan     | A new review of receipt-owned records that are still exact                     | Save through destructive review |
-| Deletion receipt | Deletions that finished, including partial results                             | Save for recovery and audit     |
+`policy` defaults to `exclusive` for CNAME and `append` for everything else. An exclusive
+requirement means no other record may sit at that name and type; an append requirement tolerates
+neighbours.
 
-These are versioned data types, not interchangeable UI states.
+Every requirement must sit at or below the attached domain. A name outside it fails `InvalidInput`
+before the planner reads the zone, so tenants sharing a zone cannot plan into each other's names.
 
-## Additive planning
+## Building the plan
 
-Every requirement becomes one operation:
+<Snippet file="examples/core/plans.ts" region="plan" title="Reading the zone" />
 
-- `create` when the record is missing;
-- `noop` when the exact record already exists;
-- `conflict` when existing DNS is incompatible.
+## The four operations
 
-`exclusive` requirements cannot coexist with another value in the same record set. `append`
-requirements can coexist where DNS semantics permit it. CNAME requirements are always exclusive.
+| Operation  | Means                                                                  |
+| ---------- | ---------------------------------------------------------------------- |
+| `Create`   | The record is missing and will be created                              |
+| `Noop`     | An exact match already exists. `ttlDrift` says whether its TTL differs |
+| `Conflict` | Incompatible state, with a `reason` for what is in the way             |
+| `Delete`   | Cleanup only: remove a record a receipt proves DomainKit created       |
 
-Planning never creates an implicit update or delete. The user can resolve a conflict outside the
-plan or continue through a manual path.
+| Conflict reason   | Raised when                                                             | By           |
+| ----------------- | ----------------------------------------------------------------------- | ------------ |
+| `cname-collision` | A CNAME would share a name with another record, in either direction     | Provisioning |
+| `opaque`          | A record at that name and type is one DomainKit cannot model            | Provisioning |
+| `exclusive-name`  | An exclusive requirement meets a different record at that name and type | Provisioning |
+| `missing`         | The record a receipt names is already gone                              | Cleanup      |
+| `value-mismatch`  | The record a receipt names no longer matches what was written           | Cleanup      |
 
-## Review the exact plan
+The planner is additive. DomainKit never updates, overwrites, or deletes a record it did not create,
+so a conflict is reported and the write does not happen.
 
-The plan digest covers the provider, zone, and operations. Authorization names that exact digest and
-the selected creates. Changing the plan after review invalidates the authorization.
+<Snippet file="examples/core/plans.ts" region="review" title="What a review screen needs" />
 
-Before writing, apply rebuilds the current provider view. A changed snapshot produces a stale error
-instead of applying the previously reviewed operations.
+`Plan.renderInstructions(plan)` renders the same operations as copyable lines, for a host whose
+customers apply records by hand.
 
-This reduces the gap between review and write, but it cannot make a provider API transactional. Each
-approved create is checked again before it is written.
+## Approval
 
-## Partial apply is explicit
+An approval binds consent to the plan's digest and to an explicit list of operation ids.
 
-Writes happen one at a time. If a later write fails after an earlier one succeeds, DomainKit returns
-a `PartialApplyError` with a receipt for the writes that finished. It does not roll those records
-back automatically: a rollback could fail or remove a change another actor now needs.
+<Snippet file="examples/core/plans.ts" region="approve" title="Approving all of it, or part" />
 
-The host must store that receipt before retrying or offering remediation.
+A plan with conflicts is approved only with `allowPartial` and a conflict-free selection. The digest
+ignores `purpose` labels, so relabelling a requirement never invalidates consent the customer
+already gave.
 
-## Cleanup is a separate decision
+Approving an already-approved plan returns the same approval, so a retried request is safe.
 
-An apply receipt shows which provider record IDs came from a reviewed create plan. `Deletion.create`
-uses that plan and receipt, then reads every record again. Drift, missing identity, or changed
-provider state blocks automatic deletion.
+## Declining
 
-The resulting cleanup plan has a new digest and requires a new authorization. Detaching a domain
-from a provider connection can therefore preserve DNS, while removing records remains a separately
-reviewed destructive action.
+<Snippet file="examples/core/plans.ts" region="reject" title="Recording a refusal" />
 
-## What the host still decides
+A rejection is terminal for that plan: approving or applying it afterwards fails `Stale`. The domain
+itself stays free, so the next plan starts clean.
 
-DomainKit does not choose:
+## Apply
 
-- who may review or authorize a plan;
-- how long the host retains plan attempts and receipts;
-- whether conflicts block the whole product workflow;
-- how partial outcomes are presented or repaired;
-- when a cleanup option is offered;
-- what audit event or product state follows an operation.
+<Snippet file="examples/core/plans.ts" region="apply" title="Applying an approval" />
 
-## Put the concept to work
+Apply re-plans the zone before the first write and fails `Stale` when the digest moved, then
+revalidates each approved create before writing it. That narrows the race between the last read and
+the write; it cannot remove it.
 
-- [Create and apply your first plan](/docs/quickstart)
-- [Provision and clean up records](/docs/guides/provision-and-clean-up)
-- [Plan and receipt API reference](/docs/reference/core#planning-and-cleanup)
+## Receipts
+
+A receipt lists one outcome per operation.
+
+| Outcome   | Carries                                                        |
+| --------- | -------------------------------------------------------------- |
+| `Applied` | The operation id and the provider's id for the record it wrote |
+| `Skipped` | `noop`, `not-approved`, or `not-attempted`                     |
+| `Failed`  | The operation id and the provider's message                    |
+
+A failure after a confirmed write is not an exception. Apply stops there, earlier writes stay
+`Applied`, later approved operations become `Skipped(not-attempted)`, and the receipt's `status` is
+`partial`. Re-planning turns the written records into no-ops and the rest into creates.
+
+A failure before any write marks the attempt `failed` and raises. The next apply re-claims it.
+
+## Three requests, one attempt
+
+Every step is a stored attempt, so a host can render the plan in one request, collect consent in
+another, and apply in a third.
+
+<Snippet file="examples/core/plans.ts" region="resume" title="Resuming a flow the customer left" />
+
+| Status     | Means                                                         |
+| ---------- | ------------------------------------------------------------- |
+| `planned`  | Built and waiting for consent                                 |
+| `approved` | Consent recorded, not yet applied                             |
+| `applying` | An apply holds the lease                                      |
+| `complete` | Every approved write landed                                   |
+| `partial`  | A write failed after an earlier one landed; re-plan to finish |
+| `failed`   | Apply stopped before any write                                |
+| `expired`  | The plan aged out before it was applied                       |
+| `rejected` | The customer declined                                         |
+
+A claim while the apply lease is still live fails `Busy`. A plan lives one hour and an apply lease
+two minutes by default; `Provision.Policy` changes both.
+
+## When it goes wrong
+
+<Snippet file="examples/core/plans.ts" region="failures" title="Matching on the reason" />
+
+[Failure reasons](/docs/core/errors) maps every reason to the next step.
+
+The [`domainkit` reference](/docs/reference/core) lists every namespace the lifecycle is built from.

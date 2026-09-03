@@ -4,20 +4,33 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+/** The four operations a DNS plan can carry. */
+export type DnsOperationKind = "conflict" | "create" | "delete" | "noop";
+
+export const dnsOperationLabels: Record<DnsOperationKind, string> = {
+  conflict: "Conflict",
+  create: "Create",
+  delete: "Remove",
+  noop: "No change",
+};
+
 export interface DnsOperationProps extends ComponentProps<typeof Card> {
-  readonly action: ReactNode;
   readonly name: string;
+  readonly operation: DnsOperationKind;
   readonly priority?: number;
+  readonly purpose?: ReactNode;
+  /** Why an operation conflicts, or why a record cannot be removed. */
   readonly reason?: ReactNode;
   readonly type: string;
   readonly value: string;
 }
 
 export function DnsOperation({
-  action,
   className,
   name,
+  operation,
   priority,
+  purpose,
   reason,
   type,
   value,
@@ -26,13 +39,21 @@ export function DnsOperation({
   return (
     <Card
       className={cn("gap-4 border-border py-4 transition-colors hover:bg-muted/20", className)}
+      data-operation={operation}
       data-slot="dns-operation"
       {...props}
     >
       <CardContent className="grid gap-4 px-4 sm:grid-cols-[auto_1fr]">
         <div className="flex items-center gap-2 self-start">
-          <Badge className="tracking-wide uppercase" variant="secondary">
-            {action}
+          <Badge
+            className={cn(
+              "tracking-wide uppercase",
+              operation === "conflict" &&
+                "border-destructive/30 bg-destructive/10 text-destructive",
+            )}
+            variant="secondary"
+          >
+            {dnsOperationLabels[operation]}
           </Badge>
           <Badge className="font-mono" variant="default">
             {type}
@@ -43,6 +64,9 @@ export function DnsOperation({
           <div className="break-all text-muted-foreground">{value}</div>
           {priority === undefined ? null : (
             <div className="text-muted-foreground">Priority {priority}</div>
+          )}
+          {purpose === undefined ? null : (
+            <div className="font-sans text-muted-foreground">{purpose}</div>
           )}
           {reason === undefined ? null : (
             <div className="rounded-md bg-destructive/10 px-2.5 py-2 font-sans text-destructive">

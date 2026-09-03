@@ -6,19 +6,20 @@ export default function DnsTableExample() {
     <DnsTable
       records={[
         {
-          id: "mx",
-          name: "mail.example.com",
-          priority: 10,
-          status: <DnsStatus tone="success">Found</DnsStatus>,
-          type: "MX",
-          value: "feedback-smtp.example.net",
+          id: "cname",
+          name: "app.example.com",
+          purpose: "Serve your site",
+          status: <DnsStatus status="satisfied" />,
+          type: "CNAME",
+          value: "edge.acme.dev",
         },
         {
-          id: "spf",
-          name: "mail.example.com",
-          status: <DnsStatus tone="warning">Pending</DnsStatus>,
+          id: "txt",
+          name: "_acme.app.example.com",
+          purpose: "Prove ownership",
+          status: <DnsStatus status="missing" />,
           type: "TXT",
-          value: "v=spf1 include:example.net ~all",
+          value: "acme-verify=7f3a",
         },
       ]}
     />

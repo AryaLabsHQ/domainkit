@@ -4,7 +4,8 @@ The package root is the canonical Effect API. Public entry points are `domainkit
 `domainkit/server`, `domainkit/client`, `domainkit/testing`, and one subpath per root namespace
 (`domainkit/Principal`, `domainkit/DnsRecord`, ...), as declared in `package.json` and pinned to
 `src/index.ts` by `tests/artifact/exports.test.ts`. The source entry files (`src/index.ts`,
-`src/entry/*.ts`) and packed artifact tests are authoritative; `src/internal/**` is not public API.
+`src/entry/*.ts`) and the packed artifact tests are authoritative; `src/internal/**` is not public
+API.
 
 ## Public contract
 
@@ -24,6 +25,6 @@ The package root is the canonical Effect API. Public entry points are `domainkit
 ## Documentation and verification
 
 When exports change, update the owning `apps/docs/content/reference` inventory and run the docs
-reference checker. Update the README, `examples/`, and `tests/artifact` for published-surface
-changes. Run `bun run release:check` in this package (typecheck, test, build, examples, packed
+reference checker. Update the README, this package's `examples/`, the repository-root `examples/`
+gallery the documentation site renders, and `tests/artifact` for published-surface changes. Run `bun run release:check` in this package (typecheck, test, build, examples, packed
 artifacts); finish with `git diff --check`.

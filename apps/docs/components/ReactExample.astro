@@ -5,14 +5,17 @@ import Tabs from "blume/components/content/Tabs.astro";
 
 import ComponentPreview from "../islands/ComponentPreview.tsx";
 import type { StoryId } from "../islands/react-catalog/preview-state.ts";
-import { reactExampleSource } from "./react-examples.ts";
+import { snippet } from "./snippets.ts";
 
 interface Props {
   readonly story: StoryId;
+  /** The gallery region to show beside the preview. Defaults to the story's own. */
+  readonly region?: string;
 }
 
-const { story } = Astro.props;
-const code = reactExampleSource[story];
+const { region, story } = Astro.props;
+const file = "examples/react/catalog.tsx";
+const code = snippet(file, region ?? story);
 ---
 
 <div class="not-prose react-example">
@@ -21,7 +24,7 @@ const code = reactExampleSource[story];
       <ComponentPreview client:only="react" story={story} />
     </Tab>
     <Tab class="react-example__code" title="Code">
-      <CodeBlock code={code} lang="tsx" />
+      <CodeBlock code={code} lang="tsx" title={file} />
     </Tab>
   </Tabs>
 </div>

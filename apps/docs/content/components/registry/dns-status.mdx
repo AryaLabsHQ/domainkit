@@ -1,10 +1,10 @@
 ---
 title: DNS status
-description: Show a DNS status as success, warning, danger, or neutral while your app owns the evidence and the message behind each state.
+description: Show how one DNS requirement stands after an observation, with the four statuses DomainKit reports and a tone override for anything else.
 ---
 
-`dns-status` is a small status label with four tones. It renders the meaning you provide; it does not
-infer status from provider responses or public DNS.
+`dns-status` is a small readiness badge. It renders the status you give it; it does not observe DNS
+or decide what a status means for your product.
 
 <Component path="registry/dns-status" />
 
@@ -16,25 +16,36 @@ npx shadcn@latest add https://domain-kit.dev/r/dns-status.json
 
 ## Usage
 
+`status` picks both the tone and the default label, so the four requirement statuses need nothing
+else.
+
 ```tsx
-<DnsStatus tone="success">Found</DnsStatus>
-<DnsStatus tone="warning">Pending propagation</DnsStatus>
-<DnsStatus tone="danger">Mismatch</DnsStatus>
-<DnsStatus>Not checked</DnsStatus>
+<DnsStatus status="satisfied" />
+<DnsStatus status="missing" />
+<DnsStatus status="mismatch" />
+<DnsStatus status="unknown" />
+<DnsStatus tone="warning">Checking again in 5 minutes</DnsStatus>
 ```
 
 ## API
 
-| Prop       | Type                                              | Required | Description                                |
-| ---------- | ------------------------------------------------- | -------- | ------------------------------------------ |
-| `children` | `ReactNode`                                       | yes      | Visible status text or content.            |
-| `tone`     | `"danger" \| "neutral" \| "success" \| "warning"` | no       | Visual status tone; defaults to `neutral`. |
+| Prop       | Type                                                  | Required | Description                            |
+| ---------- | ----------------------------------------------------- | -------- | -------------------------------------- |
+| `status`   | `"missing" \| "mismatch" \| "satisfied" \| "unknown"` | no       | Picks the tone and the default label.  |
+| `tone`     | `"danger" \| "neutral" \| "success" \| "warning"`     | no       | Overrides the tone the status implies. |
+| `children` | `ReactNode`                                           | no       | Replaces the default label.            |
 
-`DnsStatus` also accepts shadcn `Badge` props and `className`, except for `variant`, which the
-component controls so the tone stays legible.
+`dnsStatusTones` and `dnsStatusLabels` are exported, so the copied file is where you change the
+wording or the colour of a status.
 
-Keep the evidence or failure reason in visible text. Color is extra information and must not be the
-only way your interface says whether a record is missing, mismatched, or still propagating.
+`DnsStatus` also accepts shadcn `Badge` props and `className`, except `variant`, which the component
+controls so the tone stays legible.
 
-For live provider and public-DNS observations, use the packaged [Verification](/components/verification)
-flow and keep your product readiness policy in the host application.
+Keep the evidence in visible text. Colour is extra information and must never be the only way your
+interface says a record is missing, mismatched, or unchecked.
+
+## Boundary
+
+The statuses match what [verification](/docs/core/verification) reports per requirement. Observing
+DNS and deciding what readiness means for your product both stay in the host application; the
+packaged [verification](/components/verification) component does the first for you.

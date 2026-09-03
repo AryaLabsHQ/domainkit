@@ -4,24 +4,31 @@ export default function DnsOperationExample() {
   return (
     <div className="grid gap-3">
       <DnsOperation
-        action="Create"
-        name="mail.example.com"
-        priority={10}
-        type="MX"
-        value="feedback-smtp.example.net"
-      />
-      <DnsOperation
-        action="No-op"
-        name="mail.example.com"
-        type="TXT"
-        value="v=spf1 include:example.net ~all"
-      />
-      <DnsOperation
-        action="Conflict"
-        name="mail.example.com"
-        reason="An incompatible value already exists."
+        name="app.example.com"
+        operation="create"
+        purpose="Serve your site"
         type="CNAME"
-        value="app.example.net"
+        value="edge.acme.dev"
+      />
+      <DnsOperation
+        name="_acme.app.example.com"
+        operation="noop"
+        purpose="Prove ownership"
+        type="TXT"
+        value="acme-verify=7f3a"
+      />
+      <DnsOperation
+        name="app.example.com"
+        operation="conflict"
+        reason="A CNAME cannot share a name with the existing A record."
+        type="CNAME"
+        value="edge.acme.dev"
+      />
+      <DnsOperation
+        name="_acme.app.example.com"
+        operation="delete"
+        type="TXT"
+        value="acme-verify=7f3a"
       />
     </div>
   );

@@ -1,0 +1,71 @@
+---
+title: Test against the seam
+description: Drive the real services with in-memory fakes, render UI against a recording transport, and check your own implementations with the conformance runners.
+sidebar:
+  label: Testing
+seo:
+  title: Test a DomainKit integration
+---
+
+`domainkit/testing` exists so host tests never stub global `fetch`. Every fake is a real
+implementation of a seam the lifecycle already goes through, so the code under test is the code that
+ships.
+
+## A fake provider
+
+<Snippet
+  file="examples/testing/fakes.ts"
+  region="provider"
+  title="A provider over in-memory zones"
+/>
+
+Seed `records` to produce `Noop` and `Conflict` operations, set `failWrite` to exercise a partial
+receipt, and set `oauth` to add the interactive method beside the token one.
+
+<Snippet file="examples/testing/fakes.ts" region="failures" title="Failing one write" />
+
+## One layer for the lifecycle
+
+<Snippet file="examples/testing/fakes.ts" region="layer" title="Memory storage and a fake pool" />
+
+<Snippet file="examples/testing/fakes.ts" region="run" title="Driving the real services" />
+
+`DomainKit.layerMemory` adds `Storage.layerMemory` and a throwaway custody key, so a test needs no
+database and no key material.
+
+:::caution
+`Testing.provider` registers its zones in one table shared by the whole process, and
+`Testing.resolver()` answers from that table. Give each test its own zone, or a record another test
+applied will answer a public DNS query here.
+:::
+
+## Public DNS answers
+
+<Snippet file="examples/testing/fakes.ts" region="resolver" title="An explicit answer table" />
+
+Passing a table replaces the fake providers' zones entirely, which is how you test a requirement
+that is satisfied at the provider and still missing in public DNS.
+
+## UI tests
+
+<Snippet file="examples/testing/fakes.ts" region="transport" title="A transport for the browser" />
+
+`Testing.transport` mounts `domainkit/server` over memory storage and a fake provider, then points
+`Transport.fromFetch` at that handler. Rendering `<DomainKit.Root transport={transport}>` gives a
+component tree that connects, plans, approves, applies, observes, and cleans up for real.
+
+`transport.calls` records `{ method, input }` for every call, so a test can assert that approving
+sent the operation ids the customer selected. Declaring fewer capabilities renders the UI against a
+host that mounted only part of the route group.
+
+## Conformance
+
+<Snippet file="examples/testing/conformance.ts" region="storage" title="Your own Storage" />
+
+<Snippet file="examples/testing/conformance.ts" region="provider" title="Your own provider" />
+
+The storage runner takes a layer and registers one case per invariant with your test runner. The
+provider runner writes to a real account and cleans up after itself, so it belongs in an opt-in
+suite rather than in CI.
+
+The [`domainkit/testing` reference](/docs/reference/testing) lists every fake and its options.

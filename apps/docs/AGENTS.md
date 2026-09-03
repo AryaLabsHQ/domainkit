@@ -9,31 +9,56 @@ evidence, and claim boundaries.
 
 Give each page one Diátaxis job:
 
-- **Tutorial** — a runnable, deterministic learning path. Prefer the in-memory provider and show
-  expected plan, receipt, and idempotent re-plan results before requiring credentials.
-- **How-to** — a goal-oriented task such as wiring a host transport, connecting Cloudflare, or
-  implementing a provider. State prerequisites, host-owned responsibilities, and failure behavior.
-- **Reference** — neutral, source-checked facts. Inventories must match public entry points; explain
-  behavior, tagged states, environment requirements, and React commands next to the symbols.
-- **Explanation** — answer why the lifecycle is digest-bound, why cleanup is separate, and why
-  provider readback is different from public DNS propagation.
+- **Tutorial** — a runnable, deterministic learning path. Prefer the in-memory provider and show the
+  expected plan, receipt, and idempotent re-plan before requiring credentials.
+- **How-to** — a goal-oriented task such as mounting the route group, connecting Cloudflare, or
+  writing a provider. State prerequisites, host-owned responsibilities, and failure behaviour.
+- **Reference** — neutral, source-checked facts. Inventories must match the public entry points;
+  explain behaviour, tagged states, and options next to the symbols.
+- **Explanation** — answer why approval is digest-bound, why cleanup is separate, and why provider
+  readback is not public propagation.
 
 Preserve stable URLs when splitting an overloaded page. Link the next useful step rather than
 duplicating whole sections across pages.
 
+## Code samples
+
+Never hand-write a code block that claims to be DomainKit usage. Add the code to `examples/` (or use
+`packages/domainkit/examples`, which `domainkit release:check` already gates), mark a region, and
+render it:
+
+```mdx
+<Snippet file="examples/core/plans.ts" region="apply" />
+```
+
+`components/snippets.ts` reads only those two trees, so every sample on the site compiles in CI.
+`<ReactExample story="..." />` pairs a live preview with the matching region of
+`examples/react/catalog.tsx`.
+
 ## Accuracy rules
 
 - The golden architecture is host-owned: authenticated routes, credential custody, durable stores,
-  identity/tenancy, consent, and audit remain outside DomainKit.
-- Do not claim DomainKit is a DNS host, registrar, automatic reconciler, hosted backend, or Domain
-  Connect successor. Do not claim unpublished worktree APIs are part of the released package.
+  identity and tenancy, consent, and audit stay outside DomainKit.
+- Do not claim DomainKit is a DNS host, registrar, automatic reconciler, hosted backend, or a Domain
+  Connect successor. Do not claim unpublished worktree APIs are in the released package.
 - Keep the homepage promise focused on building domain setup into SaaS; reviewable plans are the
   proof mechanism. Effect and React are delivery layers, not the product category.
-- Generate inventories from `packages/domainkit/src/index.ts`, `promise.ts`, `testing.ts`, and
-  `packages/react/src/index.ts`. Hand-author semantics; never list internal-only modules as public.
+- Generate inventories from `packages/domainkit/src/index.ts`, `src/entry/server.ts`,
+  `src/entry/client.ts`, `src/entry/testing.ts`, `packages/react/src/index.ts`, and
+  `packages/capsuledb/src/index.ts`. Hand-author semantics; never list an internal module as public.
+- Pages describe the current API only. No version comparisons and no migration notes.
 
 ## Checks
 
-From this directory, run `bun run reference:check`, `./node_modules/.bin/blume validate --strict`,
-`bun run audit --strict`, `bun run check --isolated --strict`, and `bun run build`. Also run example typechecks
-when tutorials change and inspect the rendered primary journeys when UI/navigation changes.
+From this directory: `bun run reference:check`, `bun run typecheck`, `bun run test:preview`,
+`bun run build`, `./node_modules/.bin/blume validate --strict`, `bun run audit --strict`, and
+`bun run registry:check`. From the repository root: `bun run typecheck:examples`. Inspect the
+rendered primary journeys when navigation or UI changes.
+
+`test:preview` pins the component previews' remount key. Each preview runs the real lifecycle
+against a fake server built from its dial values, so a value the key misses leaves a controller
+holding a connection, a plan, or readiness the replacement server never issued. Add a case there
+before adding a dial.
+
+`audit --strict` fails on warnings, so a page needs a 110–160 character `description`, a rendered
+title of 60 columns or fewer, and at least one link to it from another page's body.

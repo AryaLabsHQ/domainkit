@@ -1,14 +1,14 @@
 ---
 title: Entry points
-description: Choose the public DomainKit import that fits your app and see what each entry point provides for your runtime and integration.
+description: The public DomainKit imports, what each entry point carries, where each one runs, and the runtime and peer versions they need to be installed with.
 sidebar:
   label: Entry points
 seo:
   title: DomainKit entry points
 ---
 
-DomainKit publishes core imports, an optional CapsuleDB package, and a React package. Use the public
-names below; internal source paths are not part of the API.
+DomainKit publishes one core package with four entry points, an optional PostgreSQL persistence
+package, and a React package. These names are the public contract; internal source paths are not.
 
 ## Install
 
@@ -16,39 +16,78 @@ names below; internal source paths are not part of the API.
 domainkit effect@rc
 ```
 
-Add the React package when your product needs ready-made flows or UI parts:
+Add the React package when the product needs ready-made flows or UI parts:
 
 ```package-install
-@domainkit/react @effect/atom-react@rc react react-dom
+@domainkit/react react react-dom
+```
+
+Add the persistence package when the host runs Effect on PostgreSQL:
+
+```package-install
+@domainkit/capsuledb capsuledb @effect/sql-pg
 ```
 
 ## Entry points
 
-| Import                        | Purpose                                                       |
-| ----------------------------- | ------------------------------------------------------------- |
-| `domainkit`                   | Canonical Effect services, schemas, plans, providers, and DNS |
-| `domainkit/promise`           | Promise API for apps that do not use Effect                   |
-| `domainkit/server`            | Effect-native server routes, async factory, and Web handler   |
-| `domainkit/testing`           | In-memory services and provider tests                         |
-| `@domainkit/react`            | React flows, models, UI parts, messages, and themes           |
-| `@domainkit/react/styles.css` | Optional default styles for the React package                 |
-| `@domainkit/capsuledb`        | Optional PostgreSQL persistence for Effect hosts              |
+| Import                        | Carries                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------ |
+| `domainkit`                   | Lifecycle services, host seams, providers, values, and `DomainKit.Error` |
+| `domainkit/server`            | `Server.group`, its layers, `Server.Identity`, and the wire schemas      |
+| `domainkit/client`            | `Transport.fromFetch` and the Promise adapters                           |
+| `domainkit/testing`           | Fakes, the recording transport, and the conformance runners              |
+| `@domainkit/react`            | React flows, controllers, parts, messages, and themes                    |
+| `@domainkit/react/styles.css` | The optional default stylesheet                                          |
+| `@domainkit/capsuledb`        | `Storage` on PostgreSQL as one CapsuleDB capsule                         |
 
-The Promise and Web handler boundaries adapt the same Effect-native lifecycle. They do not define
-second lifecycles or wire protocols. Prefer Layers inside Effect applications and adapt only where
-the host framework requires a standard Web handler.
+`domainkit/client` runs in the browser and holds no credential. `domainkit/server` and
+`@domainkit/capsuledb` run on the server and never reach browser code.
+
+## One subpath per namespace
+
+The root re-exports every namespace, and each one is also its own subpath:
+
+```ts
+import { Plan, Principal } from "domainkit";
+// or
+import * as Plan from "domainkit/Plan";
+import * as Principal from "domainkit/Principal";
+```
+
+The root import is the documented default and what every example on this site uses. Reach for a
+subpath in two cases:
+
+- **Your package emits declarations.** A `.d.ts` that mentions `Principal.Service` or `Plan.Model`
+  needs a module path TypeScript can name. `import("domainkit/Principal").Service` resolves to one
+  module, so the declaration your build emits is portable.
+- **You want a narrow import.** One namespace, without pulling the root's names into scope.
+
+Runtime and types resolve to the same module either way, so the two spellings never disagree.
+
+| Subpath                                                                                     |
+| ------------------------------------------------------------------------------------------- |
+| `domainkit/Approval`, `/Cleanup`, `/Cloudflare`, `/Connect`, `/Custody`, `/DnsRecord`       |
+| `domainkit/DomainKit`, `/DomainName`, `/Plan`, `/Principal`, `/Provider`, `/Providers`      |
+| `domainkit/Provision`, `/Reason`, `/Receipt`, `/Resolver`, `/Storage`, `/Vercel`, `/Verify` |
+
+Nothing else is importable. There is no pattern export, and no path under `internal` or `entry` is
+part of the contract.
+
+## Where each one runs
+
+```text
+browser                        server
+-------                        ------
+@domainkit/react               domainkit/server   -> domainkit
+  -> domainkit/client  --HTTP-->                     -> @domainkit/capsuledb
+                                                     -> provider APIs
+```
 
 ## Runtime requirements
 
-- `domainkit` requires Node.js 24.10 or newer and Effect 4.
-- `@domainkit/react` requires React 19, React DOM 19, Effect 4, and Effect Atom React 4.
-- Provider credentials, OAuth state, connections, plans, and receipts stay on the server.
+- `domainkit` needs Node.js 24.10 or newer and Effect 4 as a peer dependency.
+- `@domainkit/react` needs React 19 and React DOM 19 beside those.
+- `@domainkit/capsuledb` needs `capsuledb` and a host-owned `SqlClient`.
 
-## Version alignment
-
-Install `domainkit` and `@domainkit/react` at the same release version. The React transport uses
-models from the core package, so mixed versions can disagree about schemas and results.
-
-Continue with the [Core API](/docs/reference/core), [Promise API](/docs/reference/promise),
-[Server API](/docs/reference/server), [Testing API](/docs/reference/testing), or
-[React components](/components).
+Install `domainkit` and `@domainkit/react` at the same release version. The React package decodes
+the core package's schemas, so mixed versions can disagree about a shape.

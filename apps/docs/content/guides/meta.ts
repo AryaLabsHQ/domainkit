@@ -1,13 +1,6 @@
 import { defineMeta } from "blume";
 
 export default defineMeta({
-  order: 3,
-  pages: [
-    "host-integration",
-    "provision-and-clean-up",
-    "observe-dns",
-    "implement-provider",
-    "troubleshooting",
-  ],
+  pages: ["host-integration", "storage", "implement-provider", "testing", "troubleshooting"],
   title: "Build",
 });

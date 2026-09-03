@@ -1,92 +1,27 @@
 ---
-title: Record Card
-description: Show one DNS record with copy controls, priority, and provider or public-DNS evidence while keeping the result easy to scan.
+title: Record card
+description: Render one DNS requirement as a card with its type, name, value, purpose, and status, for narrow layouts and single-record screens.
 ---
 
-`Records.Card` is an alternative to the records table for setup steps, narrow layouts, and
-record-by-record progress.
+`Records.Card` renders one requirement with its type, name, value, purpose, and status.
 
-<ReactExample story="card" />
-
-## Installation
-
-```package-install
-@domainkit/react domainkit effect @effect/atom-react react react-dom
-```
-
-The [Registry](/components/registry) also provides presentation parts when you want to own the card
-markup. Use the package component when you need DomainKit's record and observation types.
+<ReactExample story="record-card" />
 
 ## Usage
 
-Pass one `DnsRecord` and any evidence for its `id`:
+<Snippet file="examples/react/catalog.tsx" region="record-card" title="One card per requirement" />
 
-```tsx
-<Records.Card
-  record={record}
-  evidence={observation.publicDns.filter((item) => item.recordId === record.id)}
-/>
-```
+## Props
 
-The card renders the record type, name, value, optional priority, copy controls, and matching evidence.
-It does not turn several observations into one product status.
+| Prop        | Type                       | Required | Means                           |
+| ----------- | -------------------------- | -------- | ------------------------------- |
+| `record`    | `DnsRecord.Model`          | yes      | The requirement to show         |
+| `readiness` | `Verify.Readiness \| null` | no       | Adds the status for this record |
 
-## Composition
+`Records.identity(record)` gives the card a stable key, and the card's own leaf parts
+(`CardHeader`, `CardTitle`, `CardContent`) are exported for a host that wants a different shell.
 
-Use `CardHeader`, `CardTitle`, `CardContent`, `CopyValue`, `Priority`, and `Status` when you need a
-different structure but want the same parts and state-aware styling.
+## When to use it
 
-## Accessibility
-
-Keep the record type visible as the card title. Copy controls should announce both the action and
-the value. Do not communicate observation failures or pending propagation through color alone.
-
-## API reference
-
-### `Records.Card`
-
-<TypeTable
-  type={{
-    copiedIcon: {
-      type: "ReactNode",
-      description: "Optional icon shown after a record value has been copied.",
-    },
-    copyIcon: {
-      type: "ReactNode",
-      description: "Optional icon shown for record value copy actions.",
-    },
-    evidence: {
-      type: "ReadonlyArray<Transport.ObservationEvidence>",
-      description: "Optional provider or public-DNS evidence matched by record ID.",
-    },
-    record: {
-      type: "Transport.DnsRecord",
-      required: true,
-      description: "DNS record rendered by the card.",
-    },
-  }}
-/>
-
-### `Records.Status`
-
-<TypeTable
-  type={{
-    evidence: {
-      type: "Transport.ObservationEvidence",
-      required: true,
-      description: "Record evidence whose status is shown.",
-    },
-  }}
-/>
-
-### `Records.Priority`
-
-<TypeTable
-  type={{
-    priority: {
-      type: "number",
-      default: "0",
-      description: "Numeric record priority, such as MX 10.",
-    },
-  }}
-/>
+Use the card where a table would not fit: a narrow settings column, a mobile layout, or a screen
+that shows one record at a time. Use `Records.Table` when the customer needs to compare several.

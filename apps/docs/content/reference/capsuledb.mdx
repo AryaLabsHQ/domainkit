@@ -1,78 +1,69 @@
 ---
-title: CapsuleDB persistence
-description: Provide PostgreSQL authorization persistence while retaining host ownership of clients, credentials, tenancy, and policy.
+title: "@domainkit/capsuledb"
+description: DomainKit's Storage on PostgreSQL as one declarative CapsuleDB capsule, with its options, its six tables, and the two ways to run its migrations.
+sidebar:
+  label: "@domainkit/capsuledb"
+seo:
+  title: DomainKit CapsuleDB persistence reference
 ---
 
-`@domainkit/capsuledb` is an optional PostgreSQL implementation of
-`ManagedDnsConnections.Service`. The package owns lifecycle migrations and concurrency semantics;
-your application owns the SQL client, credentials, tenant/domain bindings, startup, and policy.
+```ts
+import { PgStorage } from "@domainkit/capsuledb";
+```
 
 {/* reference-inventory:start */}
 
-| Export              | Purpose                                                        |
-| ------------------- | -------------------------------------------------------------- |
-| `VERSION`           | Installed CapsuleDB package version from the package manifest. |
-| `CredentialCustody` | Host-owned credential sealing and opening capability.          |
-| `HostBindings`      | Host owner and domain reference capability.                    |
-| `capsule`           | Managed-DNS CapsuleDB capsule and its persistence layer.       |
+| Export      | Carries                                                                          |
+| ----------- | -------------------------------------------------------------------------------- |
+| `PgStorage` | `layer(options)`, the `Storage.Service` implementation on the host's `SqlClient` |
+| `capsule`   | The declaration itself, which `capsuledb emit` reads to write SQL                |
+| `VERSION`   | The installed package version, read from the package manifest                    |
 
 {/* reference-inventory:end */}
 
-## Runtime composition
+## Options
 
-Construct one Effect `PgClient` from your existing pool. Use the same SQL client for Effect Drizzle,
-CapsuleDB's registry preparation, and the capsule layer. The example below is a startup composition
-sketch; your host supplies the client, credential custody, and owner/domain binding services when it
-installs the returned layer.
+| Option           | Default     | Effect                                                                   |
+| ---------------- | ----------- | ------------------------------------------------------------------------ |
+| `prefix`         | `domainkit` | The table prefix. Part of the physical layout; fixed at the first deploy |
+| `mode`           | `prepare`   | `prepare` migrates at boot; `assert` expects the host applied the SQL    |
+| `registryPrefix` | `capsuledb` | CapsuleDB's own ledger prefix; must match `capsuledb emit --prefix`      |
 
-```ts
-import { PgClient } from "@effect/sql-pg";
-import { CredentialCustody, HostBindings, capsule } from "@domainkit/capsuledb";
-import { Pg, makeRegistry, prepare } from "capsuledb";
-import { Effect } from "effect";
+<Snippet file="examples/storage/postgres.ts" region="wire" title="Installing the layer" />
 
-const initialize = Effect.gen(function* () {
-  const authorizationCapsule = yield* capsule;
-  const registry = yield* makeRegistry({
-    capsules: [authorizationCapsule],
-    provider: Pg.profile,
-  });
+The layer requires only `SqlClient`. Credentials arrive sealed, so Storage never needs `Custody` and
+never handles plaintext.
 
-  yield* prepare(registry);
-  return authorizationCapsule.layer;
-});
+## Tables
+
+| Table                      | Key                               | Holds                                                             |
+| -------------------------- | --------------------------------- | ----------------------------------------------------------------- |
+| `domainkit_authorizations` | `id`                              | Provider grant, capabilities, revocation state, sealed credential |
+| `domainkit_connections`    | `id`                              | The principal-facing handle over one authorization                |
+| `domainkit_attachments`    | `id`, unique `(owner_id, domain)` | Domain, zone, provider target                                     |
+| `domainkit_continuations`  | `id`                              | Interactive-flow state with a TTL                                 |
+| `domainkit_attempts`       | `id`                              | Plan, approval, receipt, status, lease, failure                   |
+| `domainkit_readiness`      | `(owner_id, domain)`              | Latest observation, per-requirement evidence, backoff             |
+
+Every table carries `owner_id` and every query filters by the request's `Principal`, so a row
+belonging to another tenant reads as absent. The package declares no foreign keys, to host tables
+or between its own.
+
+## Emitting the SQL
+
+```sh
+capsuledb emit \
+  --module ./node_modules/@domainkit/capsuledb/dist/index.mjs \
+  --export capsule \
+  --dialect postgres \
+  --out ./drizzle
 ```
 
-`initialize` is not a complete application entrypoint: it leaves the host-specific
-`PgClient.PgClient`, `CredentialCustody.Service`, and `HostBindings.Service` implementations to the
-caller. Provide those services when mounting `authorizationCapsule.layer`, and run the effect once
-at startup.
+That writes the ledger DDL, the capsule's migration, a readiness row, and a `capsuledb.emit.json`
+index naming the files it owns. Apply them with your own pipeline, then boot in assert mode.
 
-Run preparation once per execution-environment startup before accepting API or workflow traffic.
-Do not prepare per request. If preparation fails, keep the entrypoint unready.
+<Snippet file="examples/storage/postgres.ts" region="assert" title="Assert mode" />
 
-`CredentialCustody.Service` seals and opens `CredentialCustody.Credential` values. It must preserve your current
-ciphertext and rotation/recovery behavior; never give the package keys or plaintext persistence.
+`capsuledb check` compares an emitted folder against the current capsule in CI.
 
-`HostBindings.Service` resolves opaque owner and domain foreign-key references. Its methods execute
-inside the repository's active transaction, so implementations can query host tables through
-Effect Drizzle over the same `PgClient`. The service must remain stateless and must not capture a
-request's organization identity.
-
-## Ownership boundary
-
-| DomainKit package owns                                            | Host application owns                             |
-| ----------------------------------------------------------------- | ------------------------------------------------- |
-| Authorization aggregate schema and migrations                     | `PgClient`, pool, and connection lifetime         |
-| Managed-DNS connect, attach, detach, rotate, and evidence updates | Identity, tenancy, authorization, and consent     |
-| Durable revocation preparation and recovery                       | Credential encryption, KMS keys, and audit policy |
-| Semantic `ManagedDnsConnections.Service`                          | Organization/domain tables and foreign-key policy |
-
-The package exports no tables, storage rows, Drizzle schema, or query handles. Promise consumers
-continue through `domainkit/promise`; persistence remains Effect-first.
-
-## Current provider scope
-
-The current implementation supports PostgreSQL only. Bun SQLite, libSQL, and D1 are not supported by
-this package; the lifecycle needs locking and multi-phase revocation that those adapters do not
-currently provide.
+The migration is id `1`, name `create-storage`, under capsule id `domainkit.storage`.

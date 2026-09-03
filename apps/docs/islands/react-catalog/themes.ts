@@ -1,4 +1,4 @@
-import type { Theme } from "../../../../packages/react/src/theme.ts";
+import type { Theme } from "@domainkit/react";
 
 export const workshopThemePresets = [
   {
@@ -266,7 +266,7 @@ export const workshopThemePresets = [
   readonly id: string;
   readonly inspiration: string;
   readonly label: string;
-  readonly themes: Readonly<Record<"dark" | "light", Theme>>;
+  readonly themes: Readonly<Record<"dark" | "light", Theme.Theme>>;
 }>;
 
 export type WorkshopThemeId = (typeof workshopThemePresets)[number]["id"];
@@ -274,7 +274,7 @@ export type WorkshopThemeId = (typeof workshopThemePresets)[number]["id"];
 export const isWorkshopThemeId = (value: string): value is WorkshopThemeId =>
   workshopThemePresets.some((preset) => preset.id === value);
 
-export const workshopTheme = (id: WorkshopThemeId, colorScheme: "dark" | "light"): Theme => {
+export const workshopTheme = (id: WorkshopThemeId, colorScheme: "dark" | "light"): Theme.Theme => {
   const preset = workshopThemePresets.find((candidate) => candidate.id === id);
   if (preset === undefined) throw new Error(`Unknown workshop theme: ${id}`);
   return preset.themes[colorScheme];

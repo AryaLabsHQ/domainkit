@@ -1,123 +1,68 @@
 ---
 title: Composition
-description: Build DomainKit React screens with Base UI render props, provider marks, host overrides, and CSS tokens while keeping your own layout.
+description: Replace one part of the flow and keep the rest, place the slots in your own layout, and swap any element with your own.
+sidebar:
+  label: Composition
 seo:
-  title: Theme DomainKit React parts in your product
+  title: Compose the DomainKit React flow
 ---
 
-Complete flows are built from smaller parts. Every public part accepts Base UI's `render` prop plus
-state-aware `className` and `style` values. `Connection.Flow` and `Connection.ConnectTrigger` are
-ready-made styles. `Connection.Trigger` is the unstyled trigger primitive; its `children` supply
-the label and `render` lets you use your own button. Use `ConnectTrigger` when you want the
-provider-marked trigger that opens the dialog.
+`Domain.Flow` renders four slots, and every one has a default. Replacing a slot changes that part
+and nothing else.
 
-```tsx
-<Connection.OAuthAction
-  controller={controller}
-  label="Connect"
-  render={<MyButton variant="primary" />}
+| Slot           | Receives                                        | Default                                                    |
+| -------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| `connection`   | `{ controller, domain }`                        | `Connect.Card` once connected, `Connect.Dialog` until then |
+| `records`      | `{ records, readiness, controller, domain }`    | `Records.Table`                                            |
+| `verification` | `{ controller, domain }`                        | `Verify.Status` with per-requirement evidence              |
+| `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline, Remove records           |
+
+## One slot
+
+<Snippet file="examples/react/slots.tsx" region="one-slot" title="Your own records table" />
+
+<ReactExample story="slots" />
+
+## Your own layout
+
+<Snippet file="examples/react/slots.tsx" region="layout" title="Placing the slots" />
+
+`Domain.Flow` adds no layout container around a slot: its output is a direct child of the flow root,
+so a grid on the flow places the slots directly without `display: contents`.
+
+## Your own actions
+
+<Snippet
+  file="examples/react/slots.tsx"
+  region="actions"
+  title="Driving the flow from your buttons"
 />
-```
 
-The [Host connection](/components/host-connection) page owns the complete controller, trigger, and
-dialog example together with its API tables.
+The actions slot receives all three controllers, so the buttons can live in a toolbar somewhere else
+in your screen while the flow keeps the state.
 
-## Theming
+## Parts
 
-```tsx
-<DomainKit.Root
-  colorScheme="inherit"
-  icons={{ copy: <Copy />, copied: <Check />, download: <Download /> }}
-  marks={{ internaldns: <InternalDnsMark /> }}
-  messages={{ connectProvider: (name) => `Connect ${name}` }}
-  theme={{ accent: "var(--brand-primary)", radius: "var(--radius-md)" }}
-  transport={transport}
->
-  {children}
-</DomainKit.Root>
-```
+Every rendered element is a part. A part takes its element's own props plus three composition props.
 
-The opt-in stylesheet reads `--domainkit-*` variables. Theme props set those variables without
-replacing the host font, colors, or icons.
+| Prop        | Takes                                                            |
+| ----------- | ---------------------------------------------------------------- |
+| `className` | A string, or a function of the part's state                      |
+| `style`     | A `CSSProperties`, or a function of the part's state             |
+| `render`    | An element or render function that replaces the element outright |
 
-Recognized provider marks load from `integrations.sh` and fall back to the provider's first letter
-when unavailable. Use `marks` when your product needs to replace a remote mark or supply branding
-for a private provider.
+Parts also carry `data-domainkit-part` and, where they have one, a state attribute, so a stylesheet
+can target them without a class name.
 
-## Host notifications
+Every dialog and popover takes a `render` prop of its own that replaces the surface, so a host with
+its own dialog primitive keeps its dialog and DomainKit's behaviour.
 
-DomainKit emits lifecycle events after user-initiated changes. Keep notification UI in the host app
-and map the events to Sonner, another toast system, telemetry, or nothing:
+## Standalone flows
 
-```tsx
-<DomainKit.Root
-  onEvent={(event) => {
-    switch (event._tag) {
-      case "ConnectionEstablished":
-        toast.success(`${event.connection.provider.name} connected`);
-        break;
-      case "RecordsApplied":
-        toast.success("DNS records added");
-        break;
-      case "RecordsCleaned":
-        toast.success("DNS records removed");
-        break;
-      case "DomainDetached":
-        toast.success("Domain detached");
-        break;
-    }
-  }}
-  transport={transport}
->
-  {children}
-</DomainKit.Root>
-```
+Each namespace exports a `Flow` of its own when only one step belongs in a screen.
 
-Partial apply and cleanup results have their own events, so hosts can show a warning instead of
-reporting partial work as success. Initial inspection and passive verification do not emit events.
+<ReactExample story="connect" />
 
-The default dialogs close after a complete success. Partial results and failures stay visible because
-they need user attention; short success messages belong to the host.
+<ReactExample story="provision" />
 
-## Records from parts
-
-Record parts accept browser-safe records directly and do not require
-`DomainKit.Root` or a transport. The [Records](/components/records) page owns the table, zone-file,
-copy-control, and API examples.
-
-## Effect Atom models
-
-Every stateful lifecycle exposes the atoms used by its controller and flow:
-
-```tsx
-const model = Provisioning.useModel(connection, records);
-const state = useAtomValue(model.state);
-const command = useAtomSet(model.command);
-
-if (state._tag === "Review") {
-  const isNoopOnly = state.plan.operations.every((operation) => operation._tag === "noop");
-
-  return (
-    <Operations.Root lifecycle="provisioning">
-      {state.plan.operations.map((operation) => (
-        <Operations.Item key={operation.id} operation={operation} />
-      ))}
-      {isNoopOnly ? (
-        <p>No changes needed</p>
-      ) : (
-        <button onClick={() => command(Provisioning.Command.Apply())}>Apply approved plan</button>
-      )}
-    </Operations.Root>
-  );
-}
-```
-
-The same model interface is available as `Connection.useModel`, `Verification.useModel`, and
-`Cleanup.useModel`. `Operations.List` is the full neutral operation view; its parts support Base UI
-render elements, forwarded refs, state-aware classes, and host event handlers.
-
-## Related docs
-
-- [Choose an integration level](/docs/react/integration-levels)
-- [React API reference](/docs/reference/react)
-- [Implement the authenticated transport](/docs/react/transport)
+<ReactExample story="cleanup" />

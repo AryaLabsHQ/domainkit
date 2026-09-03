@@ -1,21 +1,40 @@
 ---
 title: Shadcn registry
-description: Copy DNS display components into your application through the DomainKit Shadcn registry and keep your own styles, data, and state.
+description: Copy plain DNS display components into your project with the shadcn CLI and keep your own styles, data, and state, with no DomainKit runtime.
 ---
 
-The registry distributes source files for DNS display components. These copied files use plain props
-and Tailwind tokens; they do not import `domainkit`, Effect, Atom, transports, or provider clients.
+The registry ships source files, not a package. Each item is a small React component that renders
+the props you pass it: no `domainkit` import, no Effect, no transport, no provider client.
 
 ```package-install
 npx shadcn@latest add https://domain-kit.dev/r/dns-table.json https://domain-kit.dev/r/dns-operation.json https://domain-kit.dev/r/dns-status.json https://domain-kit.dev/r/provider-mark.json https://domain-kit.dev/r/copy-value.json https://domain-kit.dev/r/async-state.json
 ```
 
-Use `@domainkit/react` for connection, OAuth, provisioning, verification, cleanup, and shared Effect
-Atom state. Registry components only render the data you pass to them; they do not run the lifecycle
-or replace the transport.
+Your project needs an initialised `components.json`. Each item lands in the configured `ui` alias,
+and the shadcn primitives it needs are listed as `registryDependencies`, so the CLI installs those
+for you.
 
-`provider-mark` provides the generic `ProviderMark` wrapper. Pass an image from
-`https://integrations.sh/logo/{domain}?sz=64` when the copied component needs a provider logo.
+## What is in it
 
-Browse the [Registry component catalog](/components/registry) for a preview, source view, install
-command, usage example, and API reference for every shipped item.
+| Item            | Renders                                                      |
+| --------------- | ------------------------------------------------------------ |
+| `dns-table`     | DNS records in a compact table, with an optional status cell |
+| `dns-operation` | One planned create, no-op, conflict, or delete               |
+| `dns-status`    | A compact status label with an explicit tone                 |
+| `provider-mark` | An accessible wrapper around a provider logo                 |
+| `copy-value`    | A DNS value with a copy action                               |
+| `async-state`   | Loading, empty, and error states                             |
+
+## Where the boundary sits
+
+The registry is for a product that already has its own state and only needs the display. It cannot
+connect a provider, plan, approve, apply, observe, or clean up, because none of that can happen
+without a transport.
+
+Use [`@domainkit/react`](/docs/react) when the lifecycle should run. Its components take the same
+shape of data and add the controllers behind it.
+
+`provider-mark` supplies the accessible label and the size; your app supplies the artwork.
+
+Browse the [registry catalog](/components/registry) for a preview, the source, the install command,
+and the props of every item.

@@ -1,39 +1,32 @@
 import type { DialConfig } from "dialkit";
-import { DomainName } from "domainkit";
+import { DnsRecord, DomainName } from "domainkit";
 
-import type { PreviewState, StoryId } from "./preview-state.ts";
+import { previewZone, type PreviewState, type StoryId } from "./preview-state.ts";
 
 export interface PreviewDialValues {
   readonly domain?: string;
-  readonly hasReceipt?: boolean;
+  readonly oauth?: boolean;
   readonly provider?: string;
   readonly records?: {
-    readonly primary?: {
-      readonly name?: string;
-      readonly priority?: number;
-      readonly type?: string;
-      readonly value?: string;
-    };
-    readonly secondary?: {
-      readonly name?: string;
-      readonly priority?: number;
-      readonly type?: string;
-      readonly value?: string;
-    };
+    readonly cname?: { readonly name?: string; readonly target?: string };
+    readonly txt?: { readonly name?: string; readonly value?: string };
   };
-  readonly targetState?: string;
+  readonly seeded?: boolean;
 }
 
 const recordStories = new Set<StoryId>([
-  "card",
-  "domain",
-  "host-lifecycle",
-  "lifecycle",
+  "domain-flow",
+  "provision",
+  "record-card",
   "records",
+  "slots",
   "verification",
 ]);
-const receiptStories = new Set<StoryId>(["domain", "host-lifecycle", "lifecycle"]);
-const targetStories = new Set<StoryId>(["connection", "host-connection"]);
+const connectStories = new Set<StoryId>(["connect", "domain-flow", "slots"]);
+const zoneStories = new Set<StoryId>(["cleanup", "domain-flow", "provision", "slots"]);
+
+const first = (records: PreviewState["requirements"]) => records[0];
+const second = (records: PreviewState["requirements"]) => records[1];
 
 export function previewDialConfig(state: PreviewState): DialConfig {
   const config: DialConfig = {
@@ -47,90 +40,79 @@ export function previewDialConfig(state: PreviewState): DialConfig {
     },
   };
 
-  if (state.story !== "provider") {
+  if (state.story !== "provider-mark") {
     config.domain = { default: state.domain, type: "text" };
   }
-  if (targetStories.has(state.story)) {
-    config.targetState = {
-      default: state.targetState,
-      options: [
-        { label: "Unique zone", value: "unique" },
-        { label: "Multiple zones", value: "ambiguous" },
-        { label: "No zone", value: "unavailable" },
-      ],
-      type: "select",
-    };
+  if (connectStories.has(state.story)) {
+    config.oauth = state.oauth;
   }
-  if (receiptStories.has(state.story)) {
-    config.hasReceipt = state.receipt;
+  if (zoneStories.has(state.story)) {
+    config.seeded = state.seeded;
   }
   if (recordStories.has(state.story)) {
-    const [primary, secondary] = state.records;
+    const cname = first(state.requirements);
+    const txt = second(state.requirements);
     config.records = {
       _collapsed: true,
-      ...(primary === undefined
+      ...(cname === undefined || cname._tag !== "CNAME"
         ? {}
-        : {
-            primary: {
-              name: primary.name,
-              ...(primary.priority === undefined
-                ? {}
-                : { priority: [primary.priority, 0, 100, 1] }),
-              type: primary.type,
-              value: primary.value,
-            },
-          }),
-      ...(secondary === undefined
+        : { cname: { name: cname.name, target: cname.target } }),
+      ...(txt === undefined || txt._tag !== "TXT"
         ? {}
-        : {
-            secondary: {
-              name: secondary.name,
-              type: secondary.type,
-              value: secondary.value,
-            },
-          }),
+        : { txt: { name: txt.name, value: txt.value } }),
     };
   }
 
   return config;
 }
 
-const validDomain = (candidate: string | undefined, fallback: string): string => {
+const hostname = (candidate: string | undefined, fallback: string): string => {
   if (candidate === undefined) return fallback;
-  try {
-    DomainName.parse(candidate);
-    return candidate;
-  } catch {
-    return fallback;
-  }
+  const parsed = DomainName.fromString(candidate);
+  return parsed._tag === "None" ? fallback : parsed.value;
 };
+
+/** The fake provider only serves `previewZone`, so a name outside it would never plan. */
+const withinZone = (candidate: string | undefined, fallback: string): string => {
+  const name = hostname(candidate, fallback);
+  return DomainName.isWithin(name, previewZone) ? name : fallback;
+};
+
+/** Record schemas reject an empty value, so an emptied dial keeps the record it is editing. */
+const text = (candidate: string | undefined, fallback: string): string =>
+  candidate === undefined || candidate.trim() === "" ? fallback : candidate;
 
 export function stateFromDials(initial: PreviewState, values: PreviewDialValues): PreviewState {
   const providerId = values.provider === "vercel" ? "vercel" : "cloudflare";
-  const targetState =
-    values.targetState === "ambiguous" || values.targetState === "unavailable"
-      ? values.targetState
-      : "unique";
-  const [primaryValues, secondaryValues] = [values.records?.primary, values.records?.secondary];
-  const records = initial.records.map((record, index) => {
-    const next = index === 0 ? primaryValues : index === 1 ? secondaryValues : undefined;
-    if (next === undefined) return record;
-    return {
-      ...record,
-      name: next.name ?? record.name,
-      ...(next.priority === undefined ? {} : { priority: next.priority }),
-      type: next.type ?? record.type,
-      value: next.value ?? record.value,
-    };
-  });
+  const cname = first(initial.requirements);
+  const txt = second(initial.requirements);
+  const requirements = [
+    ...(cname === undefined || cname._tag !== "CNAME"
+      ? []
+      : [
+          DnsRecord.cname({
+            name: withinZone(values.records?.cname?.name, cname.name),
+            target: hostname(values.records?.cname?.target, cname.target),
+            ...(cname.purpose === undefined ? {} : { purpose: cname.purpose }),
+          }),
+        ]),
+    ...(txt === undefined || txt._tag !== "TXT"
+      ? []
+      : [
+          DnsRecord.txt({
+            name: withinZone(values.records?.txt?.name, txt.name),
+            value: text(values.records?.txt?.value, txt.value),
+            ...(txt.purpose === undefined ? {} : { purpose: txt.purpose }),
+          }),
+        ]),
+  ];
 
   return {
     ...initial,
-    domain: validDomain(values.domain, initial.domain),
+    domain: withinZone(values.domain, initial.domain),
+    oauth: values.oauth ?? initial.oauth,
     providerId,
-    providerName: providerId === "vercel" ? "Vercel" : "Cloudflare",
-    receipt: values.hasReceipt ?? initial.receipt,
-    records,
-    targetState,
+    requirements,
+    seeded: values.seeded ?? initial.seeded,
   };
 }

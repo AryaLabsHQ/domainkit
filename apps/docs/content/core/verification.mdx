@@ -1,66 +1,91 @@
 ---
-title: Provider and public DNS
-description: See why provider state, public DNS, and product readiness are different checks and how to show each result clearly.
+title: Verification and readiness
+description: What DomainKit observes for a domain, how provider evidence differs from public DNS, how a requirement's status is decided, and when to look again.
 sidebar:
-  label: DNS verification
+  label: Verification
 seo:
-  title: DomainKit provider and DNS evidence
+  title: DomainKit DNS verification and readiness
 ---
 
-DNS can be present in a provider account before public resolvers return it. Resolvers can also
-disagree because of caching, propagation, outages, or provider behavior. DomainKit keeps those
-results separate instead of reducing them to one yes-or-no value.
+`Verify.observe` is the only observation operation. It reads the provider through the attachment's
+session and the public pool through `Resolver`, stores readiness per requirement, and says when to
+look again.
 
-## Three different questions
+<Snippet file="examples/core/verification.ts" region="observe" title="One observation" />
 
-| Layer                  | Question                                                            | Owner                       |
-| ---------------------- | ------------------------------------------------------------------- | --------------------------- |
-| Provider observation   | Does the authoritative provider account contain the desired record? | DomainKit provider readback |
-| Public-DNS observation | What do named recursive resolvers currently answer?                 | DomainKit resolver pool     |
-| Product readiness      | Is the domain ready for this application's complete feature?        | Host application            |
+<Snippet
+  file="examples/core/verification.ts"
+  region="requirements"
+  title="Watching a specific set"
+/>
 
-Product readiness can also include certificates, email-provider checks, routing, background polling,
-or business rules that DNS observation cannot answer.
+Supplied `requirements` win. Without them, `observe` uses the attachment's latest provisioning
+receipt, meaning the records the apply wrote or found already in place. A domain with neither fails
+`InvalidInput`. The route and the browser transport carry the same optional field, so a UI can ask
+about a set the server has no receipt for.
 
-## One observation operation
+A domain with no attachment is observed too, as long as it names its requirements. Public DNS stands
+alone, no provider evidence is recorded, and the readiness row is the same shape.
 
-`Verification.observe` takes a source configuration and returns one tagged result. Public DNS is on
-by default; provider readback is optional and needs a provider and zone.
+## Three kinds of evidence
 
-When both sources are requested, both must match before the result is `Verified`.
+| Evidence    | Comes from                                                       | Names      |
+| ----------- | ---------------------------------------------------------------- | ---------- |
+| `Provider`  | The provider's own record list, through the attachment's session | `provider` |
+| `PublicDns` | One recursive resolver, one entry per resolver that answered     | `resolver` |
+| `Host`      | Something only your app can see                                  | `source`   |
 
-## Result states
+A provider readback is not propagation. The record can exist at the provider and still be missing
+from a resolver, and the two are kept apart so a stuck setup is diagnosable.
 
-| `_tag`        | Meaning                                                           |
-| ------------- | ----------------------------------------------------------------- |
-| `Verified`    | Every requested source matched the requirement                    |
-| `Pending`     | A requested source has not observed the desired state yet         |
-| `Mismatch`    | A requested source observed DNS that differs from the requirement |
-| `Unavailable` | A requested source could not produce trustworthy evidence         |
-| `NotObserved` | No evidence source was requested                                  |
+Every entry explains itself. `Provider` and `PublicDns` carry `values`, what that source returned
+for the requirement's name and type, rendered the way `DnsRecord.data` renders a record and empty
+when the source returned nothing. All three carry `detail`, which is `null` when the requirement is
+satisfied and otherwise says why it is not: `expected edge.acme.dev; found other.acme.dev`, `no TXT
+record at _acme.app.example.com`, `google timed out`.
 
-The result keeps each source's evidence. A host can say “the provider contains the record, but public
-DNS is still pending” without guessing.
+<Snippet file="examples/core/verification.ts" region="evidence" title="Reading the evidence" />
 
-## Resolver disagreement
+<Snippet
+  file="examples/core/verification.ts"
+  region="host-evidence"
+  title="Merging what only you can see"
+/>
 
-The default pool queries named Cloudflare and Google DNS-over-HTTPS resolvers concurrently with
-`AnyMatch`. Alternative tagged policies are:
+`attachEvidence` merges by `source` without re-reading DNS, so a webhook can update one signal
+without paying for a full observation.
 
-- `AllMatch` when every configured resolver must match;
-- `Quorum` when a selected minimum must match.
+## Statuses
 
-Every answer, no-data result, timeout, and failure remains available to the caller. Under a quorum
-policy, unavailable resolvers are not silently counted as mismatches.
+| Requirement status | Means                                                                   |
+| ------------------ | ----------------------------------------------------------------------- |
+| `satisfied`        | An exact match was observed                                             |
+| `missing`          | Nothing matched                                                         |
+| `mismatch`         | An exclusive requirement met a conflicting record at that name and type |
+| `unknown`          | No source answered                                                      |
 
-## Why public DNS is the default
+The domain's `overall` is `failed` when any requirement is a mismatch or any host evidence failed,
+`ready` when every requirement is satisfied and every host signal is `ok`, and `pending` otherwise.
 
-Provider readback proves account state, not public visibility. Public resolvers show what another
-system can discover. The default therefore works without a provider credential and does not depend on
-one provider account for verification.
+## The resolver pool
 
-## Put the concept to work
+The default `Resolver` fans out to Cloudflare and Google over RFC wire-format DNS-over-HTTPS with a
+three-second timeout, and keeps every answer, so readiness can say "found at Cloudflare, missing at
+Google". `Resolver.resolve` never fails: a failure or a timeout is a per-resolver outcome.
 
-- [Observe DNS](/docs/guides/observe-dns)
-- [Integrate product readiness](/docs/guides/host-integration#7-keep-product-readiness-separate)
-- [Verification API reference](/docs/reference/core#verification)
+A wire response counts only when its message id is zero, its single question matches the query in
+name, class, and type, it is not truncated, and every answer carries a TTL.
+
+<Snippet file="examples/core/verification.ts" region="policy" title="Quorum and backoff" />
+
+`quorum` decides how many resolvers must agree for `satisfied`: `any` by default, or `all`, or a
+minimum. A mismatch at any resolver outranks agreement elsewhere.
+
+## When to look again
+
+<Snippet file="examples/core/verification.ts" region="polling" title="Following the schedule" />
+
+`nextCheckAt` comes from the backoff ladder, 15 seconds, 1 minute, 5 minutes, 30 minutes by default,
+measured from when the current pending streak began. The streak restarts when the requirement set
+changes and clears when the domain is ready, so a worker sleeps on the readiness row instead of
+polling on a timer of its own.
