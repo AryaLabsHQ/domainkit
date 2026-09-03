@@ -1,35 +1,36 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 
-import { DomainKitError, Plan } from "../../src/index.ts";
+import { DomainKit, Plan, Reason } from "../../src/index.ts";
+import * as Errors from "../../src/internal/error.ts";
 
-const reasons: ReadonlyArray<DomainKitError.Reason> = [
-  new DomainKitError.InvalidInput({ message: "bad", field: "domain" }),
-  new DomainKitError.Unauthenticated({ message: "who" }),
-  new DomainKitError.Forbidden({ message: "no" }),
-  new DomainKitError.NotFound({ entity: "plan", id: "p1" }),
-  new DomainKitError.Conflict({ planId: Plan.PlanId.make("p1"), operations: [] }),
-  new DomainKitError.Stale({ planId: Plan.PlanId.make("p1"), digest: Plan.Digest.make("d") }),
-  new DomainKitError.Expired({ entity: "approval", id: "a1" }),
-  new DomainKitError.Busy({ key: "refresh:x" }),
-  new DomainKitError.ProviderRejected({ provider: "cloudflare", code: "81057", message: "dup" }),
-  new DomainKitError.ProviderUnavailable({
+const reasons: ReadonlyArray<Reason.Model> = [
+  new Reason.InvalidInput({ message: "bad", field: "domain" }),
+  new Reason.Unauthenticated({ message: "who" }),
+  new Reason.Forbidden({ message: "no" }),
+  new Reason.NotFound({ entity: "plan", id: "p1" }),
+  new Reason.Conflict({ planId: Plan.PlanId.make("p1"), operations: [] }),
+  new Reason.Stale({ planId: Plan.PlanId.make("p1"), digest: Plan.Digest.make("d") }),
+  new Reason.Expired({ entity: "approval", id: "a1" }),
+  new Reason.Busy({ key: "refresh:x" }),
+  new Reason.ProviderRejected({ provider: "cloudflare", code: "81057", message: "dup" }),
+  new Reason.ProviderUnavailable({
     provider: "vercel",
     retryAfterMs: 1000,
     message: "429",
   }),
-  new DomainKitError.Reconnect({ provider: "cloudflare", connectionId: "c1" }),
-  new DomainKitError.StorageFailed({ operation: "attempts.claim", message: "db down" }),
-  new DomainKitError.CryptoFailed({ operation: "open" }),
-  new DomainKitError.ResolverFailed({ resolver: "google", message: "timeout" }),
-  new DomainKitError.ProviderConflict({ provider: "cloudflare", code: "81057", message: "exists" }),
-  new DomainKitError.Unsupported({ provider: "vercel", operation: "dns", message: "no" }),
+  new Reason.Reconnect({ provider: "cloudflare", connectionId: "c1" }),
+  new Reason.StorageFailed({ operation: "attempts.claim", message: "db down" }),
+  new Reason.CryptoFailed({ operation: "open" }),
+  new Reason.ResolverFailed({ resolver: "google", message: "timeout" }),
+  new Reason.ProviderConflict({ provider: "cloudflare", code: "81057", message: "exists" }),
+  new Reason.Unsupported({ provider: "vercel", operation: "dns", message: "no" }),
 ];
 
 const expected: Record<
-  DomainKitError.Reason["_tag"],
+  Reason.Model["_tag"],
   {
-    readonly category: DomainKitError.Category;
+    readonly category: DomainKit.ErrorCategory;
     readonly status: number;
     readonly retryable: boolean;
   }
@@ -55,13 +56,13 @@ const expected: Record<
 describe("DomainKitError", () => {
   it("names every reason class after its tag and derives category, status, and retry", () => {
     assert.strictEqual(
-      new DomainKitError.DomainKitError({ reason: new DomainKitError.Busy({ key: "k" }) })._tag,
+      new DomainKit.Error({ reason: new Reason.Busy({ key: "k" }) })._tag,
       "DomainKitError",
     );
-    assert.strictEqual(DomainKitError.DomainKitError.name, "DomainKitError");
+    assert.strictEqual(DomainKit.Error.name, "DomainKitError");
     for (const reason of reasons) {
       assert.strictEqual(reason.constructor.name, reason._tag);
-      const error = new DomainKitError.DomainKitError({ reason });
+      const error = new DomainKit.Error({ reason });
       const table = expected[reason._tag];
       assert.strictEqual(error.category, table.category, reason._tag);
       assert.strictEqual(error.httpStatus, table.status, reason._tag);
@@ -73,25 +74,23 @@ describe("DomainKitError", () => {
 
   it.effect("is catchable by tag and survives the wire", () =>
     Effect.gen(function* () {
-      const caught = yield* DomainKitError.fail(new DomainKitError.Busy({ key: "apply:p1" })).pipe(
+      const caught = yield* Errors.fail(new Reason.Busy({ key: "apply:p1" })).pipe(
         Effect.catchTag("DomainKitError", (error) => Effect.succeed(error.reason)),
       );
       assert.strictEqual(caught._tag, "Busy");
-      const original = new DomainKitError.DomainKitError({
-        reason: new DomainKitError.Stale({
+      const original = new DomainKit.Error({
+        reason: new Reason.Stale({
           planId: Plan.PlanId.make("p1"),
           digest: Plan.Digest.make("d"),
         }),
       });
-      const encoded = JSON.parse(
-        JSON.stringify(Schema.encodeSync(DomainKitError.DomainKitError)(original)),
-      );
+      const encoded = JSON.parse(JSON.stringify(Schema.encodeSync(DomainKit.Error)(original)));
       assert.deepStrictEqual(encoded, {
         _tag: "DomainKitError",
         reason: { _tag: "Stale", planId: "p1", digest: "d" },
       });
-      const decoded = yield* Schema.decodeUnknownEffect(DomainKitError.DomainKitError)(encoded);
-      assert.ok(DomainKitError.isDomainKitError(decoded));
+      const decoded = yield* Schema.decodeUnknownEffect(DomainKit.Error)(encoded);
+      assert.ok(DomainKit.isError(decoded));
       assert.strictEqual(decoded.httpStatus, 409);
       assert.strictEqual(decoded.message, original.message);
     }),

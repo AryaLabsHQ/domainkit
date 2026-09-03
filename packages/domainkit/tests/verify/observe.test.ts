@@ -19,7 +19,7 @@ const requirements = [
   DnsRecord.txt({ name: "_acme.app.example.com", value: "acme-verify=7f3a" }),
 ];
 
-const withPrincipal = Effect.provideService(Principal.Principal, Testing.principal);
+const withPrincipal = Effect.provideService(Principal.Service, Testing.principal);
 
 const connectAndApply = Effect.gen(function* () {
   yield* Connect.start({
@@ -173,11 +173,11 @@ describe("Verify", () => {
         records: [DnsRecord.cname({ name: "app.example.com", target: "edge.acme.dev" })],
       },
     ]);
-    const split: Layer.Layer<Resolver.Resolver> = Layer.succeed(Resolver.Resolver)({
+    const split: Layer.Layer<Resolver.Service> = Layer.succeed(Resolver.Service)({
       resolve: (name, type) =>
         Effect.map(
           Effect.provide(
-            Effect.flatMap(Resolver.Resolver, (service) => service.resolve(name, type)),
+            Effect.flatMap(Resolver.Service, (service) => service.resolve(name, type)),
             conflicting,
           ),
           (outcomes) => [
@@ -300,7 +300,7 @@ describe("Verify", () => {
         domain: "app.example.com",
       });
       if (started._tag !== "Connected") return assert.fail("expected a connection");
-      const storage = yield* Storage.Storage;
+      const storage = yield* Storage.Service;
       yield* storage.authorizations
         .revoke(started.connection.authorizationId, Effect.fail(new Error("provider down")))
         .pipe(Effect.ignore);

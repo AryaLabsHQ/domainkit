@@ -6,10 +6,10 @@ import {
   Connect,
   DnsRecord,
   DomainKit,
-  DomainKitError,
   Principal,
   Provider,
   Provision,
+  Reason,
 } from "../../src/index.ts";
 import { Testing } from "../../src/entry/testing.ts";
 
@@ -56,8 +56,8 @@ const makeAsyncProvider = (options: { readonly failList?: boolean } = {}) => {
         get: async (_zone, id) => rows.get(id) ?? null,
         delete: async (_zone, id) => {
           if (!rows.delete(id)) {
-            throw new DomainKitError.DomainKitError({
-              reason: new DomainKitError.NotFound({ entity: "record", id }),
+            throw new DomainKit.Error({
+              reason: new Reason.NotFound({ entity: "record", id }),
             });
           }
         },
@@ -67,7 +67,7 @@ const makeAsyncProvider = (options: { readonly failList?: boolean } = {}) => {
   return { definition, rows };
 };
 
-const withPrincipal = Effect.provideService(Principal.Principal, Testing.principal);
+const withPrincipal = Effect.provideService(Principal.Service, Testing.principal);
 
 describe("Provider.fromAsync", () => {
   it.effect("runs the lifecycle over a Promise-shaped provider", () => {
@@ -105,7 +105,7 @@ describe("Provider.fromAsync", () => {
     );
   });
 
-  it.effect("maps rejections to DomainKitError and passes thrown DomainKitErrors through", () => {
+  it.effect("maps rejections to DomainKit.Error and passes thrown ones through", () => {
     const { definition } = makeAsyncProvider({ failList: true });
     return Effect.gen(function* () {
       yield* Connect.start({

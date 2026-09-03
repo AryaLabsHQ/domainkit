@@ -6,7 +6,8 @@
 import { Effect, Option, Schema, SchemaIssue, SchemaTransformation } from "effect";
 import { getDomain } from "tldts";
 
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Errors from "./internal/error.ts";
+import * as Reason from "./Reason.ts";
 
 const labelPattern = /^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/;
 
@@ -18,7 +19,7 @@ const Branded = Schema.String.check(
 ).pipe(Schema.brand("@domainkit/DomainName"));
 
 /** Decodes any hostname spelling into its normalized, branded form; encodes back to a string. */
-export const DomainName = Schema.String.pipe(
+export const Model = Schema.String.pipe(
   Schema.decodeTo(
     Branded,
     SchemaTransformation.transformOrFail({
@@ -32,10 +33,10 @@ export const DomainName = Schema.String.pipe(
     }),
   ),
 );
-export type DomainName = typeof Branded.Type;
+export type Model = typeof Branded.Type;
 
 /** Validates and normalizes; `None` when the input is not a hostname. */
-export const fromString = (input: string): Option.Option<DomainName> => {
+export const fromString = (input: string): Option.Option<Model> => {
   try {
     return Option.some(normalizeUnsafe(input));
   } catch {
@@ -43,13 +44,13 @@ export const fromString = (input: string): Option.Option<DomainName> => {
   }
 };
 
-/** Validates and normalizes; throws `DomainKitError` (reason `InvalidInput`) when invalid. */
-export const fromStringUnsafe = (input: string): DomainName => {
+/** Validates and normalizes; throws `DomainKit.Error` (reason `InvalidInput`) when invalid. */
+export const fromStringUnsafe = (input: string): Model => {
   try {
     return normalizeUnsafe(input);
   } catch (cause) {
-    throw new DomainKitError.DomainKitError({
-      reason: new DomainKitError.InvalidInput({ message: errorMessage(cause), field: "domain" }),
+    throw new Errors.DomainKitError({
+      reason: new Reason.InvalidInput({ message: errorMessage(cause), field: "domain" }),
     });
   }
 };
@@ -58,18 +59,16 @@ export const fromStringUnsafe = (input: string): DomainName => {
 export const decode = (
   input: string,
   field = "domain",
-): Effect.Effect<DomainName, DomainKitError.DomainKitError> =>
+): Effect.Effect<Model, Errors.DomainKitError> =>
   Effect.suspend(() => {
     try {
       return Effect.succeed(normalizeUnsafe(input));
     } catch (cause) {
-      return DomainKitError.fail(
-        new DomainKitError.InvalidInput({ message: errorMessage(cause), field }),
-      );
+      return Errors.fail(new Reason.InvalidInput({ message: errorMessage(cause), field }));
     }
   });
 
-export const isDomainName = (input: unknown): input is DomainName =>
+export const isDomainName = (input: unknown): input is Model =>
   typeof input === "string" && isNormalized(input);
 
 /**
@@ -77,14 +76,14 @@ export const isDomainName = (input: unknown): input is DomainName =>
  * `a.b.example.com` -> `a.b.example.com`, `b.example.com`, `example.com`. Empty when the name has
  * no registrable suffix.
  */
-export const candidates = (domain: DomainName): ReadonlyArray<DomainName> => {
+export const candidates = (domain: Model): ReadonlyArray<Model> => {
   const registrable = getDomain(domain, { allowPrivateDomains: true });
   if (registrable === null) return [];
   const labels = domain.split(".");
   const registrableLabels = registrable.split(".").length;
-  const values: Array<DomainName> = [];
+  const values: Array<Model> = [];
   for (let index = 0; index <= labels.length - registrableLabels; index += 1) {
-    values.push(labels.slice(index).join(".") as DomainName);
+    values.push(labels.slice(index).join(".") as Model);
   }
   return values;
 };
@@ -101,8 +100,8 @@ function isNormalized(value: string): boolean {
   );
 }
 
-function normalizeUnsafe(input: string): DomainName {
-  return normalize(input) as DomainName;
+function normalizeUnsafe(input: string): Model {
+  return normalize(input) as Model;
 }
 
 function normalize(input: string): string {

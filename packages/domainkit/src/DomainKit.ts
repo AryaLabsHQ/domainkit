@@ -11,7 +11,7 @@ import { Layer, Redacted } from "effect";
 import * as Cleanup from "./Cleanup.ts";
 import * as Connect from "./Connect.ts";
 import * as Custody from "./Custody.ts";
-import type * as DomainKitError from "./DomainKitError.ts";
+import { DomainKitError } from "./internal/error.ts";
 import type * as Provider from "./Provider.ts";
 import * as Providers from "./Providers.ts";
 import * as Provision from "./Provision.ts";
@@ -19,23 +19,28 @@ import * as Resolver from "./Resolver.ts";
 import * as Storage from "./Storage.ts";
 import * as Verify from "./Verify.ts";
 
+export { DomainKitError as Error };
+export type { Category as ErrorCategory } from "./internal/error.ts";
+
+export const isError = (input: unknown): input is DomainKitError => input instanceof DomainKitError;
+
 export interface Options {
   readonly providers: ReadonlyArray<Provider.Definition>;
   /** Replace the public DNS pool (e.g. `Testing.resolver()`); default `Resolver.layer`. */
-  readonly resolver?: Layer.Layer<Resolver.Resolver>;
+  readonly resolver?: Layer.Layer<Resolver.Service>;
 }
 
 export type Services =
-  | Provision.Provision
-  | Cleanup.Cleanup
-  | Connect.Connect
-  | Verify.Verify
-  | Providers.Providers
-  | Resolver.Resolver;
+  | Provision.Service
+  | Cleanup.Service
+  | Connect.Service
+  | Verify.Service
+  | Providers.Service
+  | Resolver.Service;
 
 export const layer = (
   options: Options,
-): Layer.Layer<Services, never, Storage.Storage | Custody.Custody> =>
+): Layer.Layer<Services, never, Storage.Service | Custody.Service> =>
   Layer.mergeAll(Provision.layer, Cleanup.layer, Verify.layer).pipe(
     Layer.provideMerge(Connect.layer),
     Layer.provideMerge(
@@ -46,7 +51,7 @@ export const layer = (
 /** `layer` with `Storage.layerMemory` and a throwaway custody key. Tests and playgrounds only. */
 export const layerMemory = (
   options: Options,
-): Layer.Layer<Services | Storage.Storage | Custody.Custody, DomainKitError.DomainKitError> =>
+): Layer.Layer<Services | Storage.Service | Custody.Service, DomainKitError> =>
   layer(options).pipe(
     Layer.provideMerge(
       Layer.mergeAll(

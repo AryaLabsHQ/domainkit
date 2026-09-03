@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { Connect, DnsRecord, DomainKit, Principal, Storage } from "../../src/index.ts";
 import { Testing } from "../../src/entry/testing.ts";
 
-const withPrincipal = Effect.provideService(Principal.Principal, Testing.principal);
+const withPrincipal = Effect.provideService(Principal.Service, Testing.principal);
 
 const connect = (provider: string) =>
   Connect.start({ provider, method: Connect.Method.token("token") }).pipe(
@@ -130,7 +130,7 @@ describe("Connect.discover", () => {
       if (missing._tag === "NotFound") assert.deepStrictEqual(missing.nameservers, []);
       const foreign = yield* Connect.discover("app.other.test").pipe(
         Effect.provideService(
-          Principal.Principal,
+          Principal.Service,
           Principal.make({ ownerId: "someone-else", actorId: "x" }),
         ),
       );
@@ -153,7 +153,7 @@ describe("Connect.discover", () => {
     const fake = Testing.provider({ zones: ["example.com"] });
     return Effect.gen(function* () {
       const connection = yield* connect("fake");
-      const storage = yield* Storage.Storage;
+      const storage = yield* Storage.Service;
       yield* storage.authorizations
         .revoke(connection.authorizationId, Effect.fail(new Error("provider down")))
         .pipe(Effect.ignore);

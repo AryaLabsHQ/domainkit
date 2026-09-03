@@ -1,7 +1,8 @@
 /** Cloudflare: personal API tokens and OAuth. */
 import { type Config, Effect, Redacted, Schema } from "effect";
 
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Errors from "./internal/error.ts";
+import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
 import * as Client from "./internal/cloudflare/client.ts";
 import type * as Protocol from "./internal/cloudflare/protocol.ts";
@@ -107,7 +108,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
 
   const issued = (
     tokens: OAuth.Tokens,
-  ): Effect.Effect<Provider.IssuedCredential, DomainKitError.DomainKitError> =>
+  ): Effect.Effect<Provider.IssuedCredential, Errors.DomainKitError> =>
     discoverAccount(tokens.accessToken).pipe(
       Effect.map((accountId) => ({
         secret: packSecret(tokens),
@@ -156,8 +157,8 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
         Effect.gen(function* () {
           const { refreshToken } = parseSecret(credential.secret);
           if (refreshToken === null) {
-            return yield* DomainKitError.fail(
-              new DomainKitError.Unauthenticated({
+            return yield* Errors.fail(
+              new Reason.Unauthenticated({
                 message: "Cloudflare credential has no refresh token",
               }),
             );
@@ -246,8 +247,8 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
           const zone = Schema.decodeUnknownOption(AccountContext)(target.context);
           const zoneId = zone._tag === "Some" ? zone.value.zoneId : undefined;
           if (zoneId === undefined) {
-            const failure = DomainKitError.fail(
-              new DomainKitError.Unsupported({
+            const failure = Errors.fail(
+              new Reason.Unsupported({
                 provider: "cloudflare",
                 operation: "dns",
                 message: "Cloudflare target has no zone id; only zone targets host records",

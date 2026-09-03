@@ -13,16 +13,18 @@ consumers already know.
 
 ## Decision
 
-`domainkit` exports one module per concept, each `Foo.Foo` for its service tag or schema and each
-identifier prefixed `@domainkit/`. Lifecycle services are `Provision`, `Cleanup`, `Connect`, and
-`Verify`; host seams are `Storage`, `Custody`, and `Principal`; providers are `Provider`,
-`Providers`, `Cloudflare`, and `Vercel`; values are `DomainName`, `DnsRecord`, `Plan`,
-`Approval`, and `Receipt`; `DomainKitError` is the one error, `Resolver` the public DNS pool, and
+`domainkit` exports one module per concept, each identifier prefixed `@domainkit/`. A service
+module exposes `Service` (the tag) and `Interface` (its shape); a value module exposes `Model`
+(the schema), so consumers write `Storage.Service` and `Plan.Model`, never `Storage.Storage`.
+Lifecycle services are `Provision`, `Cleanup`, `Connect`, and `Verify`; host seams are `Storage`,
+`Custody`, and `Principal`; providers are `Provider`, `Providers`, `Cloudflare`, and `Vercel`;
+values are `DomainName`, `DnsRecord`, `Plan`, `Approval`, and `Receipt`; `DomainKit.Error` is the
+one error and `Reason` its reason union; `Resolver` is the public DNS pool, and
 `DomainKit.layer({ providers })` the composed layer that requires `Storage` and `Custody` beneath
 it. Free-function accessors (`Provision.plan(...)`) delegate to the service in context. Knobs with
 defaults are `Context.Reference` values (`Provision.Policy`, `Connect.Policy`, `Verify.Policy`).
 
-Every failure is a `DomainKitError` whose `reason` union derives `category`, `isRetryable`, and
+Every failure is a `DomainKit.Error` whose `reason` union derives `category`, `isRetryable`, and
 `httpStatus`; class names equal their tags.
 
 Promise support is limited to edge adapters: `Storage.layerFromAsync`, `Custody.layerFromAsync`,
@@ -47,5 +49,5 @@ provider, adapter, or compatibility subpaths exist.
 
 - `src/index.ts`
 - `src/DomainKit.ts`
-- `src/DomainKitError.ts`
+- `src/Reason.ts` and `src/internal/error.ts`
 - `tests/artifact/exports.test.ts`

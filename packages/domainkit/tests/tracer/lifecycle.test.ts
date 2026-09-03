@@ -38,7 +38,7 @@ const connectFake = (fake: Testing.FakeProvider) =>
 
 const provide = (fake: Testing.FakeProvider) =>
   Effect.provide(DomainKit.layerMemory({ providers: [fake] }));
-const withPrincipal = Effect.provideService(Principal.Principal, Testing.principal);
+const withPrincipal = Effect.provideService(Principal.Service, Testing.principal);
 
 describe("provisioning and cleanup tracer", () => {
   it.effect("plans, approves, applies, re-plans as noop, and cleans up on memory storage", () => {
@@ -169,10 +169,10 @@ describe("provisioning and cleanup tracer", () => {
       assert.strictEqual(stale.reason._tag, "Stale");
       const attempt = yield* Provision.get(plan.id);
       assert.strictEqual(attempt.receipt, null);
-      const storage = yield* Storage.Storage;
+      const storage = yield* Storage.Service;
       const row = yield* storage.attempts.get(plan.id);
       assert.strictEqual(row.status, "failed");
-      const tampered = new Plan.Plan({ ...plan, digest: Plan.Digest.make("forged") });
+      const tampered = new Plan.Model({ ...plan, digest: Plan.Digest.make("forged") });
       const forged = yield* Provision.approve(tampered).pipe(Effect.flip);
       assert.strictEqual(forged.reason._tag, "Stale");
     }).pipe(withPrincipal, provide(fake));
@@ -242,7 +242,7 @@ describe("provisioning and cleanup tracer", () => {
       yield* connectFake(fake);
       const plan = yield* Provision.plan({ domain: "app.example.com", requirements });
       const approval = yield* Provision.approve(plan);
-      const storage = yield* Storage.Storage;
+      const storage = yield* Storage.Service;
       const now = yield* DateTime.now;
       yield* storage.attempts.claim(plan.id, DateTime.add(now, { minutes: 2 }));
       const busy = yield* Provision.apply(approval).pipe(Effect.flip);
@@ -266,7 +266,7 @@ describe("provisioning and cleanup tracer", () => {
         provider: fake.id,
         method: Connect.Method.token("token-b"),
         domain: "other.example.com",
-      }).pipe(Effect.provideService(Principal.Principal, tenantB));
+      }).pipe(Effect.provideService(Principal.Service, tenantB));
       const crossTenant = yield* Provision.plan({
         domain: "app.example.com",
         requirements: [DnsRecord.txt({ name: "other.example.com", value: "hijack" })],

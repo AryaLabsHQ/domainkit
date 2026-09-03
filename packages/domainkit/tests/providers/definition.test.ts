@@ -1,7 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Redacted, Schema } from "effect";
 
-import { DomainKitError, Provider, Providers } from "../../src/index.ts";
+import { DomainKit, Provider, Providers, Reason } from "../../src/index.ts";
+import * as Errors from "../../src/internal/error.ts";
 import { bail } from "./recorded-fetch.ts";
 
 const session = (): Provider.Session => ({
@@ -45,14 +46,14 @@ describe("Provider.make and Providers", () => {
     } catch (error) {
       caught = error;
     }
-    assert.ok(DomainKitError.isDomainKitError(caught));
+    assert.ok(DomainKit.isError(caught));
     assert.strictEqual(caught.reason._tag, "InvalidInput");
     assert.throws(() => Provider.make({ ...tokenOnly, id: "Bad Id" }));
   });
 
   it.effect("resolves registered providers and rejects unknown or duplicate ids", () =>
     Effect.gen(function* () {
-      const registry = yield* Providers.Providers;
+      const registry = yield* Providers.Service;
       const found = yield* registry.get("porkbun");
       assert.strictEqual(found.name, "Porkbun");
       assert.deepStrictEqual(
@@ -79,8 +80,8 @@ describe("Provider.make and Providers", () => {
         migrateContext: (stored) =>
           stored.version === "porkbun.v0"
             ? Effect.succeed({ apiKey: String((stored.value as { key?: string }).key ?? "") })
-            : DomainKitError.fail(
-                new DomainKitError.Unsupported({
+            : Errors.fail(
+                new Reason.Unsupported({
                   provider: "porkbun",
                   operation: "context",
                   message: "no",

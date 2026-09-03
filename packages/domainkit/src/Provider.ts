@@ -6,11 +6,12 @@
 import { Data, type DateTime, Effect, Redacted, Schema } from "effect";
 
 import type * as DnsRecord from "./DnsRecord.ts";
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Errors from "./internal/error.ts";
+import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
 import type { Capability } from "./Storage.ts";
 
-export type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError>;
+export type Fx<A> = Effect.Effect<A, Errors.DomainKitError>;
 
 /** A record as the provider reports it, with the id needed to read or delete it later. */
 export interface ObservedRecord {
@@ -24,7 +25,7 @@ export interface Dns {
   /** Must return the provider's id for the new record; cleanup deletes by that id. */
   readonly create: (
     zone: string,
-    record: DnsRecord.DnsRecord,
+    record: DnsRecord.Model,
   ) => Fx<{ readonly providerRecordId: string }>;
   readonly get: (zone: string, providerRecordId: string) => Fx<DnsRecord.Observed | null>;
   readonly delete: (zone: string, providerRecordId: string) => Fx<void>;
@@ -108,12 +109,12 @@ export const tokenAuth = <const Fields extends TokenFieldSchemas>(input: {
 const decodeTokenValues = <Fields extends TokenFieldSchemas>(
   fields: Schema.Struct<Fields>,
   values: TokenValues,
-): Effect.Effect<Schema.Struct<Fields>["Type"], DomainKitError.DomainKitError> => {
+): Effect.Effect<Schema.Struct<Fields>["Type"], Errors.DomainKitError> => {
   const raw: Record<string, string> = {};
   for (const [name, value] of Object.entries(values)) {
     if (value !== undefined) raw[name] = Redacted.value(value);
   }
-  return DomainKitError.decode(fields, raw, "method");
+  return Errors.decode(fields, raw, "method");
 };
 
 export interface FieldDescriptor {
@@ -230,24 +231,24 @@ export type Envelope = typeof Envelope.Type;
 export const encodeContext = <Context>(
   definition: Definition<Context>,
   value: Context,
-): Effect.Effect<Envelope, DomainKitError.DomainKitError> =>
+): Effect.Effect<Envelope, Errors.DomainKitError> =>
   Schema.encodeEffect(definition.context)(value).pipe(
     Effect.map((encoded) => ({ version: definition.contextVersion, value: encoded })),
     Effect.mapError(
       (cause) =>
-        new DomainKitError.DomainKitError({
-          reason: new DomainKitError.InvalidInput({ message: cause.message, field: "context" }),
+        new Errors.DomainKitError({
+          reason: new Reason.InvalidInput({ message: cause.message, field: "context" }),
         }),
     ),
   );
 
 export type AuthMethod = "token" | "oauth" | "integration";
 
-/** Validates a definition: an id and at least one auth method. Throws `DomainKitError` otherwise. */
+/** Validates a definition: an id and at least one auth method. Throws `DomainKit.Error` otherwise. */
 export const make = <Context>(definition: Definition<Context>): Definition<Context> => {
   const invalid = (message: string, field: string) =>
-    new DomainKitError.DomainKitError({
-      reason: new DomainKitError.InvalidInput({ message, field }),
+    new Errors.DomainKitError({
+      reason: new Reason.InvalidInput({ message, field }),
     });
   if (!/^[a-z0-9][a-z0-9-]*$/.test(definition.id)) {
     throw invalid(
@@ -277,7 +278,7 @@ export const methods = (definition: Definition): ReadonlyArray<AuthMethod> => {
  * matches at the same depth need a selection, none is `NotFound`.
  */
 export const resolveAmong = (
-  domain: DomainName.DomainName,
+  domain: DomainName.Model,
   targets: ReadonlyArray<Target>,
 ): Resolution => {
   for (const candidate of DomainName.candidates(domain)) {
@@ -296,15 +297,15 @@ export const resolveAmong = (
 export const decodeContext = <Context>(
   definition: Definition<Context>,
   stored: unknown,
-): Effect.Effect<Context, DomainKitError.DomainKitError> =>
-  DomainKitError.decode(Envelope, stored, "context").pipe(
+): Effect.Effect<Context, Errors.DomainKitError> =>
+  Errors.decode(Envelope, stored, "context").pipe(
     Effect.flatMap((envelope) => {
       if (envelope.version === definition.contextVersion) {
-        return DomainKitError.decode(definition.context, envelope.value, "context");
+        return Errors.decode(definition.context, envelope.value, "context");
       }
       if (definition.migrateContext !== undefined) return definition.migrateContext(envelope);
-      return DomainKitError.fail(
-        new DomainKitError.Unsupported({
+      return Errors.fail(
+        new Reason.Unsupported({
           provider: definition.id,
           operation: "context",
           message: `${definition.id} context version ${envelope.version} is not supported (current ${definition.contextVersion})`,

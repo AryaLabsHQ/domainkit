@@ -5,7 +5,8 @@
 import { DateTime, Effect, Layer, Redacted, Schema } from "effect";
 
 import * as DnsRecord from "./DnsRecord.ts";
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Errors from "./internal/error.ts";
+import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
 import { provider as providerCases } from "./internal/conformance/provider.ts";
 import { storage as storageCases } from "./internal/conformance/storage.ts";
@@ -15,9 +16,9 @@ import * as Resolver from "./Resolver.ts";
 import * as Storage from "./Storage.ts";
 
 /** In-memory Storage. Same as `Storage.layerMemory`; re-exported for discoverability. */
-export const storage: Layer.Layer<Storage.Storage> = Storage.layerMemory;
+export const storage: Layer.Layer<Storage.Service> = Storage.layerMemory;
 
-export const principal: Principal.Shape = Principal.make({
+export const principal: Principal.Interface = Principal.make({
   ownerId: "org_test",
   actorId: "user_test",
 });
@@ -97,7 +98,7 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
       const decoded = Schema.decodeUnknownOption(TargetContext)(target.context);
       const zone = decoded._tag === "Some" ? zones.get(decoded.value.zone) : undefined;
       return zone === undefined
-        ? DomainKitError.fail(new DomainKitError.NotFound({ entity: "zone", id: target.zone }))
+        ? Errors.fail(new Reason.NotFound({ entity: "zone", id: target.zone }))
         : Effect.succeed(zone);
     });
 
@@ -125,14 +126,10 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
             ...issue("oauth"),
             expiresAt: DateTime.add(now, { hours: 1 }),
           }))
-        : DomainKitError.fail(
-            new DomainKitError.Unauthenticated({ message: "fake provider rejected the code" }),
-          ),
+        : Errors.fail(new Reason.Unauthenticated({ message: "fake provider rejected the code" })),
     refresh: (credential) =>
       Redacted.value(credential.secret).startsWith("revoked")
-        ? DomainKitError.fail(
-            new DomainKitError.Unauthenticated({ message: "fake refresh token was revoked" }),
-          )
+        ? Errors.fail(new Reason.Unauthenticated({ message: "fake refresh token was revoked" }))
         : Effect.map(DateTime.now, (now) => ({
             ...issue("oauth"),
             expiresAt: DateTime.add(now, { hours: 1 }),
@@ -152,8 +149,8 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
         fields: Schema.Struct({ token: Schema.RedactedFromValue(Schema.String) }),
         authenticate: ({ token }) =>
           Redacted.value(token).length === 0
-            ? DomainKitError.fail(
-                new DomainKitError.Unauthenticated({
+            ? Errors.fail(
+                new Reason.Unauthenticated({
                   message: "fake provider rejected an empty token",
                 }),
               )
@@ -177,16 +174,16 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
             const index = writes;
             writes += 1;
             if (options.failWrite?.(index) === true) {
-              return yield* DomainKitError.fail(
-                new DomainKitError.ProviderUnavailable({
+              return yield* Errors.fail(
+                new Reason.ProviderUnavailable({
                   provider: id,
                   message: `fake provider failed write ${index}`,
                 }),
               );
             }
             if (!DomainName.isWithin(record.name, zone.name)) {
-              return yield* DomainKitError.fail(
-                new DomainKitError.ProviderRejected({
+              return yield* Errors.fail(
+                new Reason.ProviderRejected({
                   provider: id,
                   message: `${record.name} is outside ${zone.name}`,
                 }),
@@ -242,8 +239,8 @@ export const resolver = (
     readonly name: string;
     readonly records: ReadonlyArray<DnsRecord.Observed>;
   }>,
-): Layer.Layer<Resolver.Resolver> =>
-  Layer.succeed(Resolver.Resolver)({
+): Layer.Layer<Resolver.Service> =>
+  Layer.succeed(Resolver.Service)({
     resolve: (name, type) =>
       Effect.sync(() => {
         const normalized = DomainName.fromString(name);

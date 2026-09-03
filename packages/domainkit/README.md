@@ -54,7 +54,7 @@ const program = Effect.gen(function* () {
 );
 
 export const main = program.pipe(
-  Effect.provideService(Principal.Principal, { ownerId: "org_42", actorId: "user_7" }),
+  Effect.provideService(Principal.Service, { ownerId: "org_42", actorId: "user_7" }),
   Effect.provide(
     DomainKit.layerMemory({ providers: [Testing.provider({ zones: ["example.com"] })] }),
   ),
@@ -68,7 +68,7 @@ and cleanup is its own plan, approval, and receipt built from the apply receipt.
 Every step is a stored attempt, so a host can render the plan in one request, collect consent in
 another, and apply in a third; retrying any step replays its result. A customer who declines calls
 `Provision.reject`, which closes the attempt for good and leaves the domain free for a new plan. Every failure is one
-`DomainKitError` whose `reason` you match on; `category`, `isRetryable`, and `httpStatus` derive
+`DomainKit.Error` whose `reason` you match on; `category`, `isRetryable`, and `httpStatus` derive
 from it.
 
 ## Wire it into your app

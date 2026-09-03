@@ -8,7 +8,7 @@ const key = Redacted.make(Custody.generateKey());
 describe("Custody", () => {
   it.effect("round-trips a secret through a versioned envelope", () =>
     Effect.gen(function* () {
-      const custody = yield* Custody.Custody;
+      const custody = yield* Custody.Service;
       const sealed = yield* custody.seal(Redacted.make("token-1"));
       assert.match(sealed, /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
       assert.ok(!sealed.includes("token-1"));
@@ -45,7 +45,7 @@ describe("Custody", () => {
 
   it.effect("reads DOMAINKIT_CUSTODY_KEY through layerConfig", () =>
     Effect.gen(function* () {
-      const custody = yield* Custody.Custody;
+      const custody = yield* Custody.Service;
       const opened = yield* custody.open(yield* custody.seal(Redacted.make("env")));
       assert.strictEqual(Redacted.value(opened), "env");
     }).pipe(
@@ -59,7 +59,7 @@ describe("Custody", () => {
 
   it.effect("adapts a Promise-shaped KMS", () =>
     Effect.gen(function* () {
-      const custody = yield* Custody.Custody;
+      const custody = yield* Custody.Service;
       assert.strictEqual(yield* custody.seal(Redacted.make("a")), "sealed:a");
       assert.strictEqual(Redacted.value(yield* custody.open("sealed:a")), "a");
       const failure = yield* custody.open("bad").pipe(Effect.flip);

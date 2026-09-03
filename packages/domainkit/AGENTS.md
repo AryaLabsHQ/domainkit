@@ -8,11 +8,12 @@ public API.
 
 ## Public contract
 
-- One module per concept, each `Foo.Foo` for its tag or schema; free-function accessors delegate
+- One module per concept: services expose `Service` (the tag) and `Interface` (its shape), value
+  modules expose `Model` (the schema); free-function accessors delegate
   to the service in context. Do not add a god service or a Promise mirror.
 - Keep the additive, fail-closed plan model (`Create`, `Noop`, `Conflict`) and digest-bound
   approval intact. Cleanup builds its plan from a receipt and has its own approval and receipt.
-- Every operation fails with `DomainKitError`; add a reason to the union rather than a new class.
+- Every operation fails with `DomainKit.Error`; add a class to `Reason` rather than a new error.
 - Every `Storage` method and lifecycle operation requires `Principal`; never add a method that
   reads across owners. Storage stores sealed credentials only; `Connect` seals through `Custody`.
 - Provider adapters are `Provider.make` values over the kept protocol and record codecs; Cloudflare

@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Option, Schema } from "effect";
 
-import { DomainKitError, DomainName } from "../../src/index.ts";
+import { DomainKit, DomainName } from "../../src/index.ts";
 
 describe("DomainName", () => {
   it("normalizes case, trailing dots, and IDN labels", () => {
@@ -23,14 +23,14 @@ describe("DomainName", () => {
     assert.strictEqual(DomainName.isDomainName("example.com"), true);
   });
 
-  it("throws a DomainKitError with reason InvalidInput from fromStringUnsafe", () => {
+  it("throws a DomainKit.Error with reason InvalidInput from fromStringUnsafe", () => {
     let caught: unknown;
     try {
       DomainName.fromStringUnsafe("nope");
     } catch (cause) {
       caught = cause;
     }
-    assert.ok(DomainKitError.isDomainKitError(caught));
+    assert.ok(DomainKit.isError(caught));
     assert.strictEqual(caught.reason._tag, "InvalidInput");
     assert.strictEqual(
       caught.reason._tag === "InvalidInput" ? caught.reason.field : undefined,
@@ -40,11 +40,9 @@ describe("DomainName", () => {
 
   it.effect("decodes and encodes through the schema codec", () =>
     Effect.gen(function* () {
-      const decoded = yield* Schema.decodeUnknownEffect(DomainName.DomainName)(
-        "Track.Example.com.",
-      );
+      const decoded = yield* Schema.decodeUnknownEffect(DomainName.Model)("Track.Example.com.");
       assert.strictEqual(decoded, "track.example.com");
-      assert.strictEqual(Schema.encodeSync(DomainName.DomainName)(decoded), "track.example.com");
+      assert.strictEqual(Schema.encodeSync(DomainName.Model)(decoded), "track.example.com");
       const failure = yield* DomainName.decode("bad host", "zone").pipe(Effect.flip);
       assert.strictEqual(failure.reason._tag, "InvalidInput");
     }),

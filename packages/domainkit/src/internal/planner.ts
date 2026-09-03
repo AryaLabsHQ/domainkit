@@ -1,7 +1,8 @@
 import { Effect, Schema } from "effect";
 
 import * as DnsRecord from "../DnsRecord.ts";
-import * as DomainKitError from "../DomainKitError.ts";
+import * as Errors from "./error.ts";
+import * as Reason from "../Reason.ts";
 import * as Plan from "../Plan.ts";
 import { sha256Hex, stringify } from "./digest.ts";
 
@@ -17,14 +18,12 @@ const Unsigned = Schema.Struct({
 export type Unsigned = typeof Unsigned.Type;
 
 export const operationId = (
-  record: DnsRecord.DnsRecord,
-): Effect.Effect<Plan.OperationId, DomainKitError.DomainKitError> =>
+  record: DnsRecord.Model,
+): Effect.Effect<Plan.OperationId, Errors.DomainKitError> =>
   sha256Hex(stringify({ record: strip(record) })).pipe(Effect.map(Plan.OperationId.make));
 
 /** The digest covers every operation but not requirement labels, which are display metadata. */
-export const digest = (
-  unsigned: Unsigned,
-): Effect.Effect<Plan.Digest, DomainKitError.DomainKitError> =>
+export const digest = (unsigned: Unsigned): Effect.Effect<Plan.Digest, Errors.DomainKitError> =>
   Effect.try({
     try: () => {
       const encoded = Schema.encodeSync(Unsigned)(unsigned);
@@ -37,8 +36,8 @@ export const digest = (
       });
     },
     catch: () =>
-      new DomainKitError.DomainKitError({
-        reason: new DomainKitError.CryptoFailed({ operation: "digest" }),
+      new Errors.DomainKitError({
+        reason: new Reason.CryptoFailed({ operation: "digest" }),
       }),
   }).pipe(Effect.flatMap(sha256Hex), Effect.map(Plan.Digest.make));
 
@@ -49,12 +48,9 @@ const withoutPurpose = (record: DnsRecord.Encoded): DnsRecord.Encoded => {
 
 /** Additive, fail-closed reconciliation of requirements against what the provider holds. */
 export const reconcile = (
-  requirements: ReadonlyArray<DnsRecord.DnsRecord>,
+  requirements: ReadonlyArray<DnsRecord.Model>,
   existing: ReadonlyArray<DnsRecord.Observed>,
-): Effect.Effect<
-  ReadonlyArray<Plan.Create | Plan.Noop | Plan.Conflict>,
-  DomainKitError.DomainKitError
-> =>
+): Effect.Effect<ReadonlyArray<Plan.Create | Plan.Noop | Plan.Conflict>, Errors.DomainKitError> =>
   Effect.gen(function* () {
     const sorted = [...requirements].sort(compare);
     const projected: Array<DnsRecord.Observed> = [...existing].sort(compare);
@@ -70,7 +66,7 @@ export const reconcile = (
 
 const reconcileOne = (
   id: Plan.OperationId,
-  record: DnsRecord.DnsRecord,
+  record: DnsRecord.Model,
   existing: ReadonlyArray<DnsRecord.Observed>,
 ): Plan.Create | Plan.Noop | Plan.Conflict => {
   const sameName = existing.filter((candidate) => candidate.name === record.name);
@@ -99,12 +95,12 @@ const reconcileOne = (
 };
 
 /** Requirements a plan was built from, for re-planning at apply time. */
-export const requirements = (plan: Plan.Plan): ReadonlyArray<DnsRecord.DnsRecord> =>
+export const requirements = (plan: Plan.Model): ReadonlyArray<DnsRecord.Model> =>
   plan.operations.map((operation) => operation.record);
 
 /** Operation ids hash the encoded requirement without its label, so relabeling never invalidates a plan. */
-function strip(record: DnsRecord.DnsRecord): DnsRecord.Encoded {
-  return withoutPurpose(Schema.encodeSync(DnsRecord.DnsRecord)(record));
+function strip(record: DnsRecord.Model): DnsRecord.Encoded {
+  return withoutPurpose(Schema.encodeSync(DnsRecord.Model)(record));
 }
 
 function compare(left: DnsRecord.Observed, right: DnsRecord.Observed): number {

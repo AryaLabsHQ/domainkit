@@ -1,9 +1,10 @@
 import { DateTime, Effect, Option, Semaphore } from "effect";
 
 import type * as Approval from "../Approval.ts";
-import * as DomainKitError from "../DomainKitError.ts";
+import * as Errors from "./error.ts";
+import * as Reason from "../Reason.ts";
 import * as Plan from "../Plan.ts";
-import { Principal, type Shape } from "../Principal.ts";
+import * as Principal from "../Principal.ts";
 import type * as Receipt from "../Receipt.ts";
 import * as Storage from "../Storage.ts";
 import { fresh } from "./ids.ts";
@@ -19,14 +20,12 @@ interface State {
   readonly locks: Set<string>;
 }
 
-const notFound = (entity: DomainKitError.NotFound["entity"], id: string) =>
-  DomainKitError.fail(new DomainKitError.NotFound({ entity, id }));
+const notFound = (entity: Reason.NotFound["entity"], id: string) =>
+  Errors.fail(new Reason.NotFound({ entity, id }));
 const invalid = (message: string, field?: string) =>
-  DomainKitError.fail(
-    new DomainKitError.InvalidInput({ message, ...(field === undefined ? {} : { field }) }),
-  );
+  Errors.fail(new Reason.InvalidInput({ message, ...(field === undefined ? {} : { field }) }));
 
-export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service {
+export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Interface {
   const state: State = {
     authorizations: new Map(),
     credentials: new Map(),
@@ -42,16 +41,16 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
     options.beforeCommit === undefined ? Effect.void : options.beforeCommit(operation);
 
   const read = <A, E, R = never>(
-    run: (principal: Shape) => Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, Principal | R> => Effect.flatMap(Principal, run);
+    run: (principal: Principal.Interface) => Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, Principal.Service | R> => Effect.flatMap(Principal.Service, run);
   const write = <A, E>(
-    run: (principal: Shape) => Effect.Effect<A, E>,
-  ): Effect.Effect<A, E, Principal> =>
-    Effect.flatMap(Principal, (principal) => mutations.withPermit(run(principal)));
+    run: (principal: Principal.Interface) => Effect.Effect<A, E>,
+  ): Effect.Effect<A, E, Principal.Service> =>
+    Effect.flatMap(Principal.Service, (principal) => mutations.withPermit(run(principal)));
 
   const owned = <Row extends { readonly ownerId: string }>(
     rows: Map<string, Row>,
-    principal: Shape,
+    principal: Principal.Interface,
     id: string,
   ): Row | undefined => {
     const row = rows.get(id);
@@ -59,32 +58,32 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
   };
   const ownedRows = <Row extends { readonly ownerId: string }>(
     rows: Map<string, Row>,
-    principal: Shape,
+    principal: Principal.Interface,
   ) => [...rows.values()].filter((row) => row.ownerId === principal.ownerId);
 
-  const authorization = (principal: Shape, id: string) =>
+  const authorization = (principal: Principal.Interface, id: string) =>
     Effect.suspend(() => {
       const row = owned(state.authorizations, principal, id);
       return row === undefined ? notFound("authorization", id) : Effect.succeed(row);
     });
-  const connection = (principal: Shape, id: string) =>
+  const connection = (principal: Principal.Interface, id: string) =>
     Effect.suspend(() => {
       const row = owned(state.connections, principal, id);
       return row === undefined ? notFound("connection", id) : Effect.succeed(row);
     });
-  const attachment = (principal: Shape, id: string) =>
+  const attachment = (principal: Principal.Interface, id: string) =>
     Effect.suspend(() => {
       const row = owned(state.attachments, principal, id);
       return row === undefined ? notFound("attachment", id) : Effect.succeed(row);
     });
-  const attempt = (principal: Shape, id: string) =>
+  const attempt = (principal: Principal.Interface, id: string) =>
     Effect.suspend(() => {
       const row = owned(state.attempts, principal, id);
       return row === undefined ? notFound("plan", id) : Effect.succeed(row);
     });
   const attemptWhere = (
-    principal: Shape,
-    entity: DomainKitError.NotFound["entity"],
+    principal: Principal.Interface,
+    entity: Reason.NotFound["entity"],
     id: string,
     predicate: (row: Storage.Attempt) => boolean,
   ) =>
@@ -94,10 +93,10 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
     });
 
   const finishRevocation = <E, R>(
-    principal: Shape,
+    principal: Principal.Interface,
     row: Storage.Authorization,
     revoke: Effect.Effect<void, E, R>,
-  ): Effect.Effect<void, DomainKitError.DomainKitError | E, R> =>
+  ): Effect.Effect<void, Errors.DomainKitError | E, R> =>
     Effect.gen(function* () {
       yield* commit("authorizations.prepareRevocation");
       state.authorizations.set(
@@ -123,9 +122,7 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
             if (expectedId !== undefined) {
               const current = yield* authorization(principal, expectedId);
               if (current.revocation !== "active") {
-                return yield* DomainKitError.fail(
-                  new DomainKitError.Busy({ key: `authorization:${expectedId}` }),
-                );
+                return yield* Errors.fail(new Reason.Busy({ key: `authorization:${expectedId}` }));
               }
               if (input.id !== expectedId) {
                 return yield* invalid("Authorization id must match expectedId", "id");
@@ -296,9 +293,7 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
             if (row === undefined) return yield* notFound("continuation", id);
             const now = yield* DateTime.now;
             if (DateTime.toEpochMillis(row.expiresAt) <= DateTime.toEpochMillis(now)) {
-              return yield* DomainKitError.fail(
-                new DomainKitError.Expired({ entity: "continuation", id }),
-              );
+              return yield* Errors.fail(new Reason.Expired({ entity: "continuation", id }));
             }
             return row;
           }),
@@ -312,9 +307,7 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
             state.continuations.delete(id);
             const now = yield* DateTime.now;
             if (DateTime.toEpochMillis(row.expiresAt) <= DateTime.toEpochMillis(now)) {
-              return yield* DomainKitError.fail(
-                new DomainKitError.Expired({ entity: "continuation", id }),
-              );
+              return yield* Errors.fail(new Reason.Expired({ entity: "continuation", id }));
             }
             return row;
           }),
@@ -362,7 +355,7 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
             ),
           ),
         ),
-      approve: (id, approval: Approval.Approval) =>
+      approve: (id, approval: Approval.Model) =>
         write((principal) =>
           Effect.gen(function* () {
             const row = yield* attempt(principal, id);
@@ -385,7 +378,7 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
             const row = yield* attempt(principal, id);
             if (row.status === "rejected") return row;
             if (row.status === "expired") {
-              return yield* DomainKitError.fail(new DomainKitError.Expired({ entity: "plan", id }));
+              return yield* Errors.fail(new Reason.Expired({ entity: "plan", id }));
             }
             if (row.status !== "planned" || row.plan.digest !== input.digest)
               return yield* stale(row);
@@ -411,7 +404,7 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
                 row.leaseExpiresAt !== null &&
                 DateTime.toEpochMillis(row.leaseExpiresAt) > DateTime.toEpochMillis(now);
               if (held) {
-                return yield* DomainKitError.fail(new DomainKitError.Busy({ key: `apply:${id}` }));
+                return yield* Errors.fail(new Reason.Busy({ key: `apply:${id}` }));
               }
             } else if (row.status !== "approved" && row.status !== "failed") {
               return yield* stale(row);
@@ -428,7 +421,7 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
             return next;
           }),
         ),
-      complete: (id, receipt: Receipt.Receipt) =>
+      complete: (id, receipt: Receipt.Model) =>
         write((principal) =>
           Effect.gen(function* () {
             const row = yield* attempt(principal, id);
@@ -484,12 +477,12 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
         ),
     },
     withLock: (key, effect) =>
-      Effect.flatMap(Principal, (principal) => {
+      Effect.flatMap(Principal.Service, (principal) => {
         const scoped = `${principal.ownerId}:${key}`;
         return Effect.acquireRelease(
           Effect.suspend(() => {
             if (state.locks.has(scoped)) {
-              return DomainKitError.fail(new DomainKitError.Busy({ key }));
+              return Errors.fail(new Reason.Busy({ key }));
             }
             state.locks.add(scoped);
             return Effect.void;
@@ -504,6 +497,4 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
 }
 
 const stale = (row: Storage.Attempt) =>
-  DomainKitError.fail(
-    new DomainKitError.Stale({ planId: Plan.PlanId.make(row.id), digest: row.plan.digest }),
-  );
+  Errors.fail(new Reason.Stale({ planId: Plan.PlanId.make(row.id), digest: row.plan.digest }));

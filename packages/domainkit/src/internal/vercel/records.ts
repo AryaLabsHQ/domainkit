@@ -70,7 +70,7 @@ const decodeRecord = (zone: string, record: Protocol.Record): DnsRecord.Observed
 
 export const encode = (
   zone: string,
-  record: DnsRecord.DnsRecord,
+  record: DnsRecord.Model,
 ): Effect.Effect<Record<string, unknown>, never> =>
   Effect.sync(() => {
     const common = {

@@ -5,7 +5,8 @@
 import { Context, Data, Effect, Layer } from "effect";
 
 import type * as DnsRecord from "./DnsRecord.ts";
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Errors from "./internal/error.ts";
+import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
 import * as Doh from "./internal/doh.ts";
 import type { Fetch } from "./internal/http.ts";
@@ -24,7 +25,7 @@ export type Outcome = Data.TaggedEnum<{
 }>;
 export const Outcome = Data.taggedEnum<Outcome>();
 
-export interface Service {
+export interface Interface {
   /** Never fails: each resolver's outcome is preserved. */
   readonly resolve: (
     name: string,
@@ -33,7 +34,7 @@ export interface Service {
   ) => Effect.Effect<ReadonlyArray<Outcome>>;
 }
 
-export class Resolver extends Context.Service<Resolver, Service>()("@domainkit/Resolver") {}
+export class Service extends Context.Service<Service, Interface>()("@domainkit/Resolver") {}
 
 export interface Endpoint {
   readonly name: string;
@@ -54,17 +55,15 @@ export const google: Endpoint = { name: "google", url: "https://dns.google/dns-q
 
 export const defaults = { endpoints: [cloudflare, google], timeoutMs: 3_000 } as const;
 
-export const make = (
-  options: Options = {},
-): Effect.Effect<Service, DomainKitError.DomainKitError> =>
+export const make = (options: Options = {}): Effect.Effect<Interface, Errors.DomainKitError> =>
   Effect.gen(function* () {
     const endpoints = options.endpoints ?? defaults.endpoints;
     const timeoutMs = options.timeoutMs ?? defaults.timeoutMs;
     const fetch = options.fetch ?? globalThis.fetch;
     for (const endpoint of endpoints) {
       if (!URL.canParse(endpoint.url)) {
-        return yield* DomainKitError.fail(
-          new DomainKitError.InvalidInput({
+        return yield* Errors.fail(
+          new Reason.InvalidInput({
             message: `Resolver ${endpoint.name} has an invalid URL`,
             field: "endpoints",
           }),
@@ -73,7 +72,7 @@ export const make = (
     }
     const one = (
       endpoint: Endpoint,
-      name: DomainName.DomainName,
+      name: DomainName.Model,
       type: DnsRecord.Type,
       signal: AbortSignal | undefined,
     ) =>
@@ -110,7 +109,7 @@ export const make = (
   });
 
 /** Cloudflare + Google DoH, 3s timeout. */
-export const layer: Layer.Layer<Resolver> = Layer.effect(Resolver)(make().pipe(Effect.orDie));
+export const layer: Layer.Layer<Service> = Layer.effect(Service)(make().pipe(Effect.orDie));
 
-export const layerWith = (options: Options): Layer.Layer<Resolver, DomainKitError.DomainKitError> =>
-  Layer.effect(Resolver)(make(options));
+export const layerWith = (options: Options): Layer.Layer<Service, Errors.DomainKitError> =>
+  Layer.effect(Service)(make(options));

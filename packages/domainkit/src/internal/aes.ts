@@ -1,13 +1,14 @@
 import { Effect, Redacted } from "effect";
 
-import * as DomainKitError from "../DomainKitError.ts";
+import * as Errors from "./error.ts";
+import * as Reason from "../Reason.ts";
 
 const version = "v1";
 const ivBytes = 12;
 
 const cryptoFailed = (operation: "seal" | "open") => () =>
-  new DomainKitError.DomainKitError({
-    reason: new DomainKitError.CryptoFailed({ operation }),
+  new Errors.DomainKitError({
+    reason: new Reason.CryptoFailed({ operation }),
   });
 
 /** Accepts a 32-byte key as base64, base64url, or hex. */
@@ -26,7 +27,7 @@ export const decodeKey = (encoded: string): Uint8Array<ArrayBuffer> | null => {
 
 export const importKey = (
   raw: Uint8Array<ArrayBuffer>,
-): Effect.Effect<CryptoKey, DomainKitError.DomainKitError> =>
+): Effect.Effect<CryptoKey, Errors.DomainKitError> =>
   Effect.tryPromise({
     try: () =>
       crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]),
@@ -36,7 +37,7 @@ export const importKey = (
 export const seal = (
   key: CryptoKey,
   plaintext: Redacted.Redacted<string>,
-): Effect.Effect<string, DomainKitError.DomainKitError> =>
+): Effect.Effect<string, Errors.DomainKitError> =>
   Effect.tryPromise({
     try: async () => {
       const iv = crypto.getRandomValues(new Uint8Array(ivBytes));
@@ -55,7 +56,7 @@ export const seal = (
 export const open = (
   key: CryptoKey,
   envelope: string,
-): Effect.Effect<Redacted.Redacted<string>, DomainKitError.DomainKitError> =>
+): Effect.Effect<Redacted.Redacted<string>, Errors.DomainKitError> =>
   Effect.tryPromise({
     try: async () => {
       const [tag, iv, ciphertext] = envelope.split(".");

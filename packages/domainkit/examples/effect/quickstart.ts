@@ -54,7 +54,7 @@ const connected = Connect.start({
 
 export const main = connected.pipe(
   Effect.andThen(program),
-  Effect.provideService(Principal.Principal, { ownerId: "org_42", actorId: "user_7" }),
+  Effect.provideService(Principal.Service, { ownerId: "org_42", actorId: "user_7" }),
   Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
 );
 

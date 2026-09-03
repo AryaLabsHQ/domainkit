@@ -2,7 +2,8 @@ import { DateTime, Deferred, Effect, Fiber, Layer, Option } from "effect";
 
 import * as Approval from "../../Approval.ts";
 import * as DnsRecord from "../../DnsRecord.ts";
-import * as DomainKitError from "../../DomainKitError.ts";
+import * as Errors from "../error.ts";
+import * as Reason from "../../Reason.ts";
 import * as Plan from "../../Plan.ts";
 import * as Principal from "../../Principal.ts";
 import * as Receipt from "../../Receipt.ts";
@@ -33,7 +34,7 @@ const expect = (condition: boolean, message: string) =>
 
 const expectReason = <A, R>(
   effect: Effect.Effect<A, unknown, R>,
-  tag: DomainKitError.Reason["_tag"],
+  tag: Reason.Model["_tag"],
   label: string,
 ): Effect.Effect<void, Failure, R> =>
   effect.pipe(
@@ -41,13 +42,13 @@ const expectReason = <A, R>(
     Effect.mapError(() => new Failure(`${label}: expected failure ${tag}, effect succeeded`)),
     Effect.flatMap((cause) =>
       expect(
-        DomainKitError.isDomainKitError(cause) && cause.reason._tag === tag,
-        `${label}: expected reason ${tag}, received ${DomainKitError.isDomainKitError(cause) ? cause.reason._tag : String(cause)}`,
+        Errors.isDomainKitError(cause) && cause.reason._tag === tag,
+        `${label}: expected reason ${tag}, received ${Errors.isDomainKitError(cause) ? cause.reason._tag : String(cause)}`,
       ),
     ),
   );
 
-const authorizationRow = (principal: Principal.Shape, id: string, now: DateTime.Utc) =>
+const authorizationRow = (principal: Principal.Interface, id: string, now: DateTime.Utc) =>
   new Storage.Authorization({
     id,
     ownerId: principal.ownerId,
@@ -63,9 +64,9 @@ const authorizationRow = (principal: Principal.Shape, id: string, now: DateTime.
 const credentialRow = (now: DateTime.Utc, ciphertext = "sealed-1") =>
   new Storage.Credential({ ciphertext, expiresAt: null, rotatedAt: now });
 
-const connect = (principal: Principal.Shape, id: string) =>
+const connect = (principal: Principal.Interface, id: string) =>
   Effect.gen(function* () {
-    const storage = yield* Storage.Storage;
+    const storage = yield* Storage.Service;
     const now = yield* DateTime.now;
     yield* storage.authorizations.upsert({
       authorization: authorizationRow(principal, id, now),
@@ -79,10 +80,10 @@ const connect = (principal: Principal.Shape, id: string) =>
       target: { zoneId: `zone-${id}` },
     });
     return { storage, connection, attachment };
-  }).pipe(Effect.provideService(Principal.Principal, principal));
+  }).pipe(Effect.provideService(Principal.Service, principal));
 
 const planRow = (attachmentId: string, now: DateTime.Utc, suffix: string) =>
-  new Plan.Plan({
+  new Plan.Model({
     id: Plan.PlanId.make(`plan-${suffix}`),
     version: "domainkit.plan.v2",
     kind: "provisioning",
@@ -101,7 +102,7 @@ const planRow = (attachmentId: string, now: DateTime.Utc, suffix: string) =>
     expiresAt: DateTime.add(now, { hours: 1 }),
   });
 
-const attemptRow = (principal: Principal.Shape, plan: Plan.Plan) =>
+const attemptRow = (principal: Principal.Interface, plan: Plan.Model) =>
   new Storage.Attempt({
     id: plan.id,
     ownerId: principal.ownerId,
@@ -118,8 +119,8 @@ const attemptRow = (principal: Principal.Shape, plan: Plan.Plan) =>
     updatedAt: plan.createdAt,
   });
 
-const approvalRow = (plan: Plan.Plan, suffix: string) =>
-  new Approval.Approval({
+const approvalRow = (plan: Plan.Model, suffix: string) =>
+  new Approval.Model({
     id: Approval.ApprovalId.make(`approval-${suffix}`),
     version: "domainkit.approval.v2",
     kind: plan.kind,
@@ -131,8 +132,8 @@ const approvalRow = (plan: Plan.Plan, suffix: string) =>
     expiresAt: plan.expiresAt,
   });
 
-const receiptRow = (plan: Plan.Plan, approval: Approval.Approval, suffix: string) =>
-  new Receipt.Receipt({
+const receiptRow = (plan: Plan.Model, approval: Approval.Model, suffix: string) =>
+  new Receipt.Model({
     id: Receipt.ReceiptId.make(`receipt-${suffix}`),
     version: "domainkit.receipt.v2",
     kind: plan.kind,
@@ -149,8 +150,8 @@ const receiptRow = (plan: Plan.Plan, approval: Approval.Approval, suffix: string
   });
 
 /** Every invariant a `Storage` implementation must hold. Each case runs against a fresh layer. */
-export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArray<Case> => {
-  const run = <E>(effect: Effect.Effect<void, E, Storage.Storage>): Effect.Effect<void, unknown> =>
+export const cases = (layer: Layer.Layer<Storage.Service, unknown>): ReadonlyArray<Case> => {
+  const run = <E>(effect: Effect.Effect<void, E, Storage.Service>): Effect.Effect<void, unknown> =>
     effect.pipe(Effect.provide(layer));
   return [
     {
@@ -158,8 +159,8 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
       run: run(
         Effect.gen(function* () {
           const { storage, connection, attachment } = yield* connect(owner, "auth-a");
-          const asOther = <A, E>(effect: Effect.Effect<A, E, Principal.Principal>) =>
-            effect.pipe(Effect.provideService(Principal.Principal, other));
+          const asOther = <A, E>(effect: Effect.Effect<A, E, Principal.Service>) =>
+            effect.pipe(Effect.provideService(Principal.Service, other));
           yield* expectReason(
             asOther(storage.authorizations.get("auth-a")),
             "NotFound",
@@ -220,7 +221,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
             [...promoted.capabilities].sort().join(",") === "dns:read,dns:write",
             "promoteCapabilities did not merge capabilities",
           );
-        }).pipe(Effect.provideService(Principal.Principal, owner)),
+        }).pipe(Effect.provideService(Principal.Service, owner)),
       ),
     },
     {
@@ -263,14 +264,14 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
             "InvalidInput",
             "insert of an existing id",
           );
-        }).pipe(Effect.provideService(Principal.Principal, owner)),
+        }).pipe(Effect.provideService(Principal.Service, owner)),
       ),
     },
     {
       name: "consumes continuations exactly once and rejects expired ones",
       run: run(
         Effect.gen(function* () {
-          const storage = yield* Storage.Storage;
+          const storage = yield* Storage.Service;
           const now = yield* DateTime.now;
           const continuation = new Storage.Continuation({
             id: "cont-1",
@@ -285,7 +286,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
           yield* expectReason(
             storage.continuations
               .consume("cont-1")
-              .pipe(Effect.provideService(Principal.Principal, other)),
+              .pipe(Effect.provideService(Principal.Service, other)),
             "NotFound",
             "consume by another owner",
           );
@@ -317,7 +318,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
             "NotFound",
             "expired consume is also spent",
           );
-        }).pipe(Effect.provideService(Principal.Principal, owner)),
+        }).pipe(Effect.provideService(Principal.Service, owner)),
       ),
     },
     {
@@ -402,11 +403,11 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
           const cleanup = yield* storage.attempts.latest(attachment.id, "cleanup");
           yield* expect(Option.isNone(cleanup), "latest must filter by kind");
           yield* expectReason(
-            storage.attempts.get(plan.id).pipe(Effect.provideService(Principal.Principal, other)),
+            storage.attempts.get(plan.id).pipe(Effect.provideService(Principal.Service, other)),
             "NotFound",
             "attempts.get across owners",
           );
-        }).pipe(Effect.provideService(Principal.Principal, owner)),
+        }).pipe(Effect.provideService(Principal.Service, owner)),
       ),
     },
     {
@@ -429,7 +430,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
           yield* expectReason(
             storage.attempts
               .reject(plan.id, { digest: plan.digest, actorId: other.actorId, reason: null })
-              .pipe(Effect.provideService(Principal.Principal, other)),
+              .pipe(Effect.provideService(Principal.Service, other)),
             "NotFound",
             "reject by another owner",
           );
@@ -489,7 +490,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
             "Expired",
             "reject an expired plan",
           );
-        }).pipe(Effect.provideService(Principal.Principal, owner)),
+        }).pipe(Effect.provideService(Principal.Service, owner)),
       ),
     },
     {
@@ -523,7 +524,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
           );
           const recoveredByOther = yield* storage.authorizations
             .recoverRevocations(() => Effect.void)
-            .pipe(Effect.provideService(Principal.Principal, other));
+            .pipe(Effect.provideService(Principal.Service, other));
           yield* expect(recoveredByOther === 0, "recovery must not cross owners");
           let calls = 0;
           const recovered = yield* storage.authorizations.recoverRevocations(() =>
@@ -540,7 +541,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
           );
           const again = yield* storage.authorizations.recoverRevocations(() => Effect.void);
           yield* expect(again === 0, "recovery must be idempotent");
-        }).pipe(Effect.provideService(Principal.Principal, owner)),
+        }).pipe(Effect.provideService(Principal.Service, owner)),
       ),
     },
     {
@@ -570,14 +571,14 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
             "NotFound",
             "connection after remove",
           );
-        }).pipe(Effect.provideService(Principal.Principal, owner)),
+        }).pipe(Effect.provideService(Principal.Service, owner)),
       ),
     },
     {
       name: "fails Busy while a lock is held and releases it afterwards",
       run: run(
         Effect.gen(function* () {
-          const storage = yield* Storage.Storage;
+          const storage = yield* Storage.Service;
           const gate = yield* Deferred.make<void>();
           const holder = yield* Effect.forkChild(
             storage.withLock("refresh:auth-1", Deferred.await(gate)),
@@ -590,7 +591,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
           );
           const otherOwner = yield* storage
             .withLock("refresh:auth-1", Effect.succeed("ok"))
-            .pipe(Effect.provideService(Principal.Principal, other));
+            .pipe(Effect.provideService(Principal.Service, other));
           yield* expect(otherOwner === "ok", "locks must be scoped by owner");
           yield* Deferred.succeed(gate, undefined);
           yield* Fiber.join(holder);
@@ -601,7 +602,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
             .pipe(Effect.ignore);
           const afterFailure = yield* storage.withLock("refresh:auth-1", Effect.succeed("free"));
           yield* expect(afterFailure === "free", "lock was not released after a failure");
-        }).pipe(Effect.provideService(Principal.Principal, owner)),
+        }).pipe(Effect.provideService(Principal.Service, owner)),
       ),
     },
     {
@@ -636,7 +637,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
           );
           const foreign = yield* storage.readiness
             .get(attachment.domain)
-            .pipe(Effect.provideService(Principal.Principal, other));
+            .pipe(Effect.provideService(Principal.Service, other));
           yield* expect(Option.isNone(foreign), "readiness leaked across owners");
           yield* storage.readiness.put(
             new Storage.Readiness({
@@ -657,7 +658,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
             "NotFound",
             "readiness with an unknown attachment",
           );
-        }).pipe(Effect.provideService(Principal.Principal, owner)),
+        }).pipe(Effect.provideService(Principal.Service, owner)),
       ),
     },
   ];
@@ -665,7 +666,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
 
 /** Registers every case with `options.it` when given; always returns the cases. */
 export const storage = (
-  layer: Layer.Layer<Storage.Storage, unknown>,
+  layer: Layer.Layer<Storage.Service, unknown>,
   options: Options = {},
 ): ReadonlyArray<Case> => {
   const all = cases(layer);

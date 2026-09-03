@@ -2,9 +2,10 @@ import { DateTime, Effect, Layer } from "effect";
 
 import * as Cleanup from "../../Cleanup.ts";
 import * as Connect from "../../Connect.ts";
-import { Custody } from "../../Custody.ts";
+import * as Custody from "../../Custody.ts";
 import * as DnsRecord from "../../DnsRecord.ts";
-import * as DomainKitError from "../../DomainKitError.ts";
+import * as Errors from "../error.ts";
+import * as Reason from "../../Reason.ts";
 import * as DomainKit from "../../DomainKit.ts";
 import * as Principal from "../../Principal.ts";
 import * as Provider from "../../Provider.ts";
@@ -26,8 +27,8 @@ export type Case = (typeof cases)[number];
 const principal = Principal.make({ ownerId: "conformance", actorId: "conformance" });
 
 const failure = (name: Case, message: string) =>
-  new DomainKitError.DomainKitError({
-    reason: new DomainKitError.InvalidInput({
+  new Errors.DomainKitError({
+    reason: new Reason.InvalidInput({
       message: `provider conformance ${name}: ${message}`,
       field: "conformance",
     }),
@@ -36,7 +37,7 @@ const failure = (name: Case, message: string) =>
 const expect = (name: Case, condition: boolean, message: string) =>
   condition ? Effect.void : Effect.fail(failure(name, message));
 
-type Env = Storage.Storage | Connect.Connect | Provision.Provision | Cleanup.Cleanup;
+type Env = Storage.Service | Connect.Service | Provision.Service | Cleanup.Service;
 
 /** Attach `zone` to a connection built straight from `credential`, bypassing `authenticate`. */
 const attachZone = (
@@ -45,8 +46,8 @@ const attachZone = (
   zone: string,
 ) =>
   Effect.gen(function* () {
-    const storage = yield* Storage.Storage;
-    const custody = yield* Custody;
+    const storage = yield* Storage.Service;
+    const custody = yield* Custody.Service;
     const now = yield* DateTime.now;
     const authorization = new Storage.Authorization({
       id: yield* fresh("auth"),
@@ -82,7 +83,7 @@ const cname = (zone: string, label: string) =>
 const txt = (zone: string, label: string, value: string) =>
   DnsRecord.txt({ name: `${label}.${zone}`, value, ttl: 300 });
 
-const recordIds = (receipt: Receipt.Receipt) =>
+const recordIds = (receipt: Receipt.Model) =>
   Receipt.applied(receipt).map(({ providerRecordId }) => providerRecordId);
 
 /**
@@ -94,25 +95,25 @@ export const provider = (
   credential: Provider.Credential,
   zone: string,
   options: { readonly prefix?: string } = {},
-): Effect.Effect<void, DomainKitError.DomainKitError> => {
+): Effect.Effect<void, Errors.DomainKitError> => {
   const prefix = options.prefix ?? "domainkit-conformance";
   const run = <A>(
     target: Provider.Definition,
     body: (
       dns: Provider.Dns,
       attachment: Storage.Attachment,
-    ) => Effect.Effect<A, DomainKitError.DomainKitError, Env | Principal.Principal>,
+    ) => Effect.Effect<A, Errors.DomainKitError, Env | Principal.Service>,
   ) =>
     Effect.gen(function* () {
       const attachment = yield* attachZone(target, credential, zone);
       const { session, target: resolved } = yield* Connect.session(attachment.id);
       return yield* body(session.dns(resolved), attachment);
     }).pipe(
-      Effect.provideService(Principal.Principal, principal),
+      Effect.provideService(Principal.Service, principal),
       Effect.provide(
         DomainKit.layerMemory({
           providers: [target],
-          resolver: Layer.succeed(Resolver.Resolver)(silentResolver),
+          resolver: Layer.succeed(Resolver.Service)(silentResolver),
         }),
       ),
     );
@@ -251,8 +252,8 @@ export const provider = (
             create: (targetZone, record) => {
               writes += 1;
               return writes === 2
-                ? DomainKitError.fail(
-                    new DomainKitError.ProviderUnavailable({
+                ? Errors.fail(
+                    new Reason.ProviderUnavailable({
                       provider: definition.id,
                       message: "injected conformance failure",
                     }),
@@ -301,6 +302,6 @@ export const provider = (
 };
 
 /** Verification is out of scope for the provider contract; keep the pool quiet. */
-const silentResolver: Resolver.Service = {
+const silentResolver: Resolver.Interface = {
   resolve: () => Effect.succeed([]),
 };

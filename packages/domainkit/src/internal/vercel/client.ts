@@ -1,6 +1,7 @@
 import { Effect, Schema as S } from "effect";
 
-import * as DomainKitError from "../../DomainKitError.ts";
+import * as Errors from "../error.ts";
+import * as Reason from "../../Reason.ts";
 import * as DomainName from "../../DomainName.ts";
 import type * as Provider from "../../Provider.ts";
 import { bearer, classify, type Fetch, rejected, requestJson } from "../http.ts";
@@ -15,7 +16,7 @@ export interface Options {
   readonly baseUrl: string;
 }
 
-type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError>;
+type Fx<A> = Effect.Effect<A, Errors.DomainKitError>;
 
 const url = (
   options: Options,
@@ -52,8 +53,8 @@ const call = <R extends S.ConstraintDecoder<unknown>>(
         reply.status === 404 ||
         (detail._tag === "Some" && detail.value.error.code === "not_found")
       ) {
-        return yield* DomainKitError.fail(
-          new DomainKitError.NotFound({ entity: "zone", id: decodeURIComponent(target.pathname) }),
+        return yield* Errors.fail(
+          new Reason.NotFound({ entity: "zone", id: decodeURIComponent(target.pathname) }),
         );
       }
       const code = detail._tag === "Some" ? detail.value.error.code : undefined;
@@ -62,11 +63,11 @@ const call = <R extends S.ConstraintDecoder<unknown>>(
       if (resetMs !== undefined && !headers.has("retry-after")) {
         headers.set("retry-after", String(Math.max(0, Math.ceil((resetMs - Date.now()) / 1_000))));
       }
-      return yield* DomainKitError.fail(
+      return yield* Errors.fail(
         classify(provider, code === "rate_limited" ? 429 : reply.status, headers, message, code),
       );
     }
-    return yield* DomainKitError.decode(result, reply.body).pipe(
+    return yield* Errors.decode(result, reply.body).pipe(
       Effect.mapError(() =>
         rejected(provider, "Vercel response did not match its API contract", "response"),
       ),
@@ -147,7 +148,7 @@ export const exchangeCode = (input: {
     });
     if (!reply.ok) {
       const detail = S.decodeUnknownOption(Protocol.ErrorEnvelope)(reply.body);
-      return yield* DomainKitError.fail(
+      return yield* Errors.fail(
         classify(
           provider,
           reply.status,
@@ -159,7 +160,7 @@ export const exchangeCode = (input: {
         ),
       );
     }
-    return yield* DomainKitError.decode(Protocol.IntegrationToken, reply.body).pipe(
+    return yield* Errors.decode(Protocol.IntegrationToken, reply.body).pipe(
       Effect.mapError(() =>
         rejected(provider, "Vercel token response did not match its API contract", "response"),
       ),

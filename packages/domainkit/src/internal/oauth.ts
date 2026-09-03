@@ -1,7 +1,8 @@
 import { DateTime, Effect, Redacted } from "effect";
 import * as oauth from "oauth4webapi";
 
-import * as DomainKitError from "../DomainKitError.ts";
+import * as Errors from "./error.ts";
+import * as Reason from "../Reason.ts";
 import type { Fetch } from "./http.ts";
 
 export interface Server {
@@ -22,7 +23,7 @@ export interface Client {
 /** A PKCE pair: the verifier stays in the continuation, the challenge goes to the provider. */
 export const pkce = (): Effect.Effect<
   { readonly codeVerifier: string; readonly codeChallenge: string },
-  DomainKitError.DomainKitError
+  Errors.DomainKitError
 > =>
   Effect.tryPromise({
     try: async () => {
@@ -30,8 +31,8 @@ export const pkce = (): Effect.Effect<
       return { codeVerifier, codeChallenge: await oauth.calculatePKCECodeChallenge(codeVerifier) };
     },
     catch: () =>
-      new DomainKitError.DomainKitError({
-        reason: new DomainKitError.CryptoFailed({ operation: "digest" }),
+      new Errors.DomainKitError({
+        reason: new Reason.CryptoFailed({ operation: "digest" }),
       }),
   });
 
@@ -89,17 +90,17 @@ const tokens = (response: oauth.TokenEndpointResponse, now: DateTime.Utc): Token
   scope: response.scope ?? null,
 });
 
-const failure = (provider: string, cause: unknown): DomainKitError.DomainKitError => {
+const failure = (provider: string, cause: unknown): Errors.DomainKitError => {
   if (cause instanceof oauth.ResponseBodyError) {
     const terminal = ["invalid_grant", "invalid_client", "unauthorized_client"].includes(
       cause.error,
     );
-    return new DomainKitError.DomainKitError({
+    return new Errors.DomainKitError({
       reason: terminal
-        ? new DomainKitError.Unauthenticated({
+        ? new Reason.Unauthenticated({
             message: `${provider} rejected the grant: ${cause.error}`,
           })
-        : new DomainKitError.ProviderRejected({
+        : new Reason.ProviderRejected({
             provider,
             code: cause.error,
             message: cause.error_description ?? cause.error,
@@ -107,14 +108,14 @@ const failure = (provider: string, cause: unknown): DomainKitError.DomainKitErro
     });
   }
   if (cause instanceof oauth.AuthorizationResponseError) {
-    return new DomainKitError.DomainKitError({
-      reason: new DomainKitError.Unauthenticated({
+    return new Errors.DomainKitError({
+      reason: new Reason.Unauthenticated({
         message: `${provider} authorization failed: ${cause.error}`,
       }),
     });
   }
-  return new DomainKitError.DomainKitError({
-    reason: new DomainKitError.ProviderUnavailable({
+  return new Errors.DomainKitError({
+    reason: new Reason.ProviderUnavailable({
       provider,
       message: cause instanceof Error ? cause.message : `${provider} OAuth request failed`,
     }),
@@ -130,7 +131,7 @@ export const exchangeCode = (input: {
   readonly callbackUrl: string;
   readonly codeVerifier: string;
   readonly fetch?: Fetch;
-}): Effect.Effect<Tokens, DomainKitError.DomainKitError> =>
+}): Effect.Effect<Tokens, Errors.DomainKitError> =>
   Effect.gen(function* () {
     const now = yield* DateTime.now;
     const server = input.server as oauth.AuthorizationServer;
@@ -165,7 +166,7 @@ export const refresh = (input: {
   readonly client: Client;
   readonly refreshToken: string;
   readonly fetch?: Fetch;
-}): Effect.Effect<Tokens, DomainKitError.DomainKitError> =>
+}): Effect.Effect<Tokens, Errors.DomainKitError> =>
   Effect.gen(function* () {
     const now = yield* DateTime.now;
     const server = input.server as oauth.AuthorizationServer;
@@ -193,7 +194,7 @@ export const revoke = (input: {
   readonly client: Client;
   readonly token: string;
   readonly fetch?: Fetch;
-}): Effect.Effect<void, DomainKitError.DomainKitError> =>
+}): Effect.Effect<void, Errors.DomainKitError> =>
   Effect.tryPromise({
     try: async (signal) => {
       const server = input.server as oauth.AuthorizationServer;

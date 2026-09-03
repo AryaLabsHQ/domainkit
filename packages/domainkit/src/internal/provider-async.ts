@@ -1,6 +1,7 @@
 import { DateTime, Effect, Redacted, type Schema } from "effect";
 
-import * as DomainKitError from "../DomainKitError.ts";
+import * as Errors from "./error.ts";
+import * as Reason from "../Reason.ts";
 import type * as DnsRecord from "../DnsRecord.ts";
 import * as Provider from "../Provider.ts";
 import type { Capability } from "../Storage.ts";
@@ -19,7 +20,7 @@ export interface AsyncDns {
   readonly list: (zone: string) => Promise<ReadonlyArray<Provider.ObservedRecord>>;
   readonly create: (
     zone: string,
-    record: DnsRecord.DnsRecord,
+    record: DnsRecord.Model,
   ) => Promise<{ readonly providerRecordId: string }>;
   readonly get: (zone: string, providerRecordId: string) => Promise<DnsRecord.Observed | null>;
   readonly delete: (zone: string, providerRecordId: string) => Promise<void>;
@@ -85,10 +86,10 @@ export interface AsyncDefinition<Context = unknown> {
 }
 
 const failure = (provider: string) => (cause: unknown) =>
-  DomainKitError.isDomainKitError(cause)
+  Errors.isDomainKitError(cause)
     ? cause
-    : new DomainKitError.DomainKitError({
-        reason: new DomainKitError.ProviderUnavailable({
+    : new Errors.DomainKitError({
+        reason: new Reason.ProviderUnavailable({
           provider,
           message: cause instanceof Error ? cause.message : `${provider} request failed`,
         }),
@@ -105,7 +106,7 @@ const plain = (credential: Provider.Credential): AsyncCredential => ({
   context: credential.context,
 });
 
-/** Adapt a Promise-shaped provider; rejections become `DomainKitError` (a thrown one passes through). */
+/** Adapt a Promise-shaped provider; rejections become `DomainKit.Error` (a thrown one passes through). */
 export const fromAsync = <Context>(
   definition: AsyncDefinition<Context>,
 ): Provider.Definition<Context> => {

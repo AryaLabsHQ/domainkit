@@ -13,13 +13,14 @@ import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 
 import * as Approval from "./Approval.ts";
 import * as DnsRecord from "./DnsRecord.ts";
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Errors from "./internal/error.ts";
+import * as Reason from "./Reason.ts";
 import { makeMemory } from "./internal/storage-memory.ts";
 import * as Plan from "./Plan.ts";
-import { Principal, type Shape as PrincipalShape } from "./Principal.ts";
+import * as Principal from "./Principal.ts";
 import * as Receipt from "./Receipt.ts";
 
-export type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError, Principal>;
+export type Fx<A> = Effect.Effect<A, Errors.DomainKitError, Principal.Service>;
 
 // ---------------------------------------------------------------------------------------------
 // Rows
@@ -109,9 +110,9 @@ export class Attempt extends Schema.Class<Attempt>("@domainkit/Storage/Attempt")
   attachmentId: Schema.String,
   kind: Plan.Kind,
   status: AttemptStatus,
-  plan: Plan.Plan,
-  approval: Schema.NullOr(Approval.Approval),
-  receipt: Schema.NullOr(Receipt.Receipt),
+  plan: Plan.Model,
+  approval: Schema.NullOr(Approval.Model),
+  receipt: Schema.NullOr(Receipt.Model),
   rejection: Schema.NullOr(Rejection),
   /** Cleanup attempts point at the provisioning receipt they undo. */
   sourceReceiptId: Schema.NullOr(Receipt.ReceiptId),
@@ -140,7 +141,7 @@ export class Readiness extends Schema.Class<Readiness>("@domainkit/Storage/Readi
   requirements: Schema.Array(
     Schema.Struct({
       operationId: Schema.NullOr(Plan.OperationId),
-      record: DnsRecord.DnsRecord,
+      record: DnsRecord.Model,
       status: RequirementStatus,
       /** Encoded `Verify.Evidence` values. */
       evidence: Schema.Array(Schema.Unknown),
@@ -158,7 +159,7 @@ export class Readiness extends Schema.Class<Readiness>("@domainkit/Storage/Readi
 // Service
 // ---------------------------------------------------------------------------------------------
 
-export interface Service {
+export interface Interface {
   readonly authorizations: {
     /**
      * Insert, or CAS-replace when `expectedId` is set: the row must exist under this owner with an
@@ -180,10 +181,10 @@ export interface Service {
     readonly revoke: <E, R>(
       id: string,
       revoke: Effect.Effect<void, E, R>,
-    ) => Effect.Effect<void, DomainKitError.DomainKitError | E, Principal | R>;
+    ) => Effect.Effect<void, Errors.DomainKitError | E, Principal.Service | R>;
     readonly recoverRevocations: <E, R>(
       revoke: (authorization: Authorization) => Effect.Effect<void, E, R>,
-    ) => Effect.Effect<number, DomainKitError.DomainKitError | E, Principal | R>;
+    ) => Effect.Effect<number, Errors.DomainKitError | E, Principal.Service | R>;
   };
   readonly connections: {
     readonly create: (authorizationId: string) => Fx<Connection>;
@@ -219,7 +220,7 @@ export interface Service {
     readonly byReceipt: (id: Receipt.ReceiptId) => Fx<Attempt>;
     readonly latest: (attachmentId: string, kind: Plan.Kind) => Fx<Option.Option<Attempt>>;
     /** `planned` -> `approved`; approving again with the same approval id is a no-op, anything else fails `Stale`. */
-    readonly approve: (id: Plan.PlanId, approval: Approval.Approval) => Fx<Attempt>;
+    readonly approve: (id: Plan.PlanId, approval: Approval.Model) => Fx<Attempt>;
     /**
      * `planned` -> `rejected` (terminal). Rejecting again returns the row unchanged; any other
      * status fails `Stale`, `expired` fails `Expired`, and a digest mismatch fails `Stale`.
@@ -237,7 +238,7 @@ export interface Service {
      * `applying`; fails `Busy` while a lease is live and `Stale` from any other status.
      */
     readonly claim: (id: Plan.PlanId, lease: DateTime.Utc) => Fx<Attempt>;
-    readonly complete: (id: Plan.PlanId, receipt: Receipt.Receipt) => Fx<Attempt>;
+    readonly complete: (id: Plan.PlanId, receipt: Receipt.Model) => Fx<Attempt>;
     readonly fail: (id: Plan.PlanId, message: string) => Fx<Attempt>;
   };
   readonly readiness: {
@@ -249,22 +250,22 @@ export interface Service {
   readonly withLock: <A, E, R>(
     key: string,
     effect: Effect.Effect<A, E, R>,
-  ) => Effect.Effect<A, E | DomainKitError.DomainKitError, R | Principal>;
+  ) => Effect.Effect<A, E | Errors.DomainKitError, R | Principal.Service>;
 }
 
-export class Storage extends Context.Service<Storage, Service>()("@domainkit/Storage") {}
+export class Service extends Context.Service<Service, Interface>()("@domainkit/Storage") {}
 
 export interface MemoryOptions {
   /** Fault injection: runs before every mutation commits; failing here leaves state untouched. */
-  readonly beforeCommit?: (operation: string) => Effect.Effect<void, DomainKitError.DomainKitError>;
+  readonly beforeCommit?: (operation: string) => Effect.Effect<void, Errors.DomainKitError>;
 }
 
 /** In-memory implementation for tests and local development. Not for production. */
-export const layerMemory: Layer.Layer<Storage> = Layer.sync(Storage)(() => makeMemory());
+export const layerMemory: Layer.Layer<Service> = Layer.sync(Service)(() => makeMemory());
 
 /** `layerMemory` with fault injection for storage-failure tests. */
-export const layerMemoryWith = (options: MemoryOptions): Layer.Layer<Storage> =>
-  Layer.sync(Storage)(() => makeMemory(options));
+export const layerMemoryWith = (options: MemoryOptions): Layer.Layer<Service> =>
+  Layer.sync(Service)(() => makeMemory(options));
 
 export { makeMemory };
 
@@ -274,52 +275,58 @@ export { makeMemory };
 
 /**
  * A Promise-shaped implementation for hosts that persist without Effect. Every method takes the
- * principal explicitly. Rejections become `StorageFailed`; reject with a `DomainKitError` to keep
+ * principal explicitly. Rejections become `StorageFailed`; reject with a `DomainKit.Error` to keep
  * a typed reason. Two-phase revocation and locking are split into plain steps so no callback has
  * to run an Effect.
  */
-export interface AsyncService {
+export interface AsyncInterface {
   readonly authorizations: {
     readonly upsert: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       input: {
         readonly authorization: Authorization;
         readonly credential: Credential;
         readonly expectedId?: string;
       },
     ) => Promise<Authorization>;
-    readonly get: (principal: PrincipalShape, id: string) => Promise<Authorization>;
-    readonly credential: (principal: PrincipalShape, id: string) => Promise<Credential>;
+    readonly get: (principal: Principal.Interface, id: string) => Promise<Authorization>;
+    readonly credential: (principal: Principal.Interface, id: string) => Promise<Credential>;
     readonly rotate: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       id: string,
       credential: Credential,
     ) => Promise<void>;
     readonly promoteCapabilities: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       id: string,
       capabilities: ReadonlyArray<Capability>,
     ) => Promise<void>;
     /** Mark `pending` durably; must be idempotent. */
-    readonly prepareRevocation: (principal: PrincipalShape, id: string) => Promise<Authorization>;
+    readonly prepareRevocation: (
+      principal: Principal.Interface,
+      id: string,
+    ) => Promise<Authorization>;
     /** Delete the authorization after the provider confirmed revocation. */
-    readonly completeRevocation: (principal: PrincipalShape, id: string) => Promise<void>;
+    readonly completeRevocation: (principal: Principal.Interface, id: string) => Promise<void>;
     readonly pendingRevocations: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
     ) => Promise<ReadonlyArray<Authorization>>;
   };
   readonly connections: {
-    readonly create: (principal: PrincipalShape, authorizationId: string) => Promise<Connection>;
-    readonly get: (principal: PrincipalShape, id: string) => Promise<Connection>;
+    readonly create: (
+      principal: Principal.Interface,
+      authorizationId: string,
+    ) => Promise<Connection>;
+    readonly get: (principal: Principal.Interface, id: string) => Promise<Connection>;
     readonly list: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       filter?: { readonly provider?: string },
     ) => Promise<ReadonlyArray<Connection>>;
-    readonly remove: (principal: PrincipalShape, id: string) => Promise<void>;
+    readonly remove: (principal: Principal.Interface, id: string) => Promise<void>;
   };
   readonly attachments: {
     readonly create: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       input: {
         readonly connectionId: string;
         readonly domain: string;
@@ -327,36 +334,42 @@ export interface AsyncService {
         readonly target: unknown;
       },
     ) => Promise<Attachment>;
-    readonly get: (principal: PrincipalShape, id: string) => Promise<Attachment>;
-    readonly byDomain: (principal: PrincipalShape, domain: string) => Promise<Attachment | null>;
+    readonly get: (principal: Principal.Interface, id: string) => Promise<Attachment>;
+    readonly byDomain: (
+      principal: Principal.Interface,
+      domain: string,
+    ) => Promise<Attachment | null>;
     readonly list: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       connectionId: string,
     ) => Promise<ReadonlyArray<Attachment>>;
-    readonly remove: (principal: PrincipalShape, id: string) => Promise<void>;
+    readonly remove: (principal: Principal.Interface, id: string) => Promise<void>;
   };
   readonly continuations: {
-    readonly put: (principal: PrincipalShape, continuation: Continuation) => Promise<void>;
-    readonly get: (principal: PrincipalShape, id: string) => Promise<Continuation>;
-    readonly consume: (principal: PrincipalShape, id: string) => Promise<Continuation>;
+    readonly put: (principal: Principal.Interface, continuation: Continuation) => Promise<void>;
+    readonly get: (principal: Principal.Interface, id: string) => Promise<Continuation>;
+    readonly consume: (principal: Principal.Interface, id: string) => Promise<Continuation>;
   };
   readonly attempts: {
-    readonly create: (principal: PrincipalShape, attempt: Attempt) => Promise<Attempt>;
-    readonly get: (principal: PrincipalShape, id: Plan.PlanId) => Promise<Attempt>;
-    readonly byApproval: (principal: PrincipalShape, id: Approval.ApprovalId) => Promise<Attempt>;
-    readonly byReceipt: (principal: PrincipalShape, id: Receipt.ReceiptId) => Promise<Attempt>;
+    readonly create: (principal: Principal.Interface, attempt: Attempt) => Promise<Attempt>;
+    readonly get: (principal: Principal.Interface, id: Plan.PlanId) => Promise<Attempt>;
+    readonly byApproval: (
+      principal: Principal.Interface,
+      id: Approval.ApprovalId,
+    ) => Promise<Attempt>;
+    readonly byReceipt: (principal: Principal.Interface, id: Receipt.ReceiptId) => Promise<Attempt>;
     readonly latest: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       attachmentId: string,
       kind: Plan.Kind,
     ) => Promise<Attempt | null>;
     readonly approve: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       id: Plan.PlanId,
-      approval: Approval.Approval,
+      approval: Approval.Model,
     ) => Promise<Attempt>;
     readonly reject: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       id: Plan.PlanId,
       input: {
         readonly digest: Plan.Digest;
@@ -365,48 +378,50 @@ export interface AsyncService {
       },
     ) => Promise<Attempt>;
     readonly claim: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       id: Plan.PlanId,
       lease: DateTime.Utc,
     ) => Promise<Attempt>;
     readonly complete: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       id: Plan.PlanId,
-      receipt: Receipt.Receipt,
+      receipt: Receipt.Model,
     ) => Promise<Attempt>;
     readonly fail: (
-      principal: PrincipalShape,
+      principal: Principal.Interface,
       id: Plan.PlanId,
       message: string,
     ) => Promise<Attempt>;
   };
   readonly readiness: {
-    readonly put: (principal: PrincipalShape, readiness: Readiness) => Promise<void>;
-    readonly get: (principal: PrincipalShape, domain: string) => Promise<Readiness | null>;
+    readonly put: (principal: Principal.Interface, readiness: Readiness) => Promise<void>;
+    readonly get: (principal: Principal.Interface, domain: string) => Promise<Readiness | null>;
   };
   /** Return `false` when another holder has the key. */
-  readonly acquireLock: (principal: PrincipalShape, key: string) => Promise<boolean>;
-  readonly releaseLock: (principal: PrincipalShape, key: string) => Promise<void>;
+  readonly acquireLock: (principal: Principal.Interface, key: string) => Promise<boolean>;
+  readonly releaseLock: (principal: Principal.Interface, key: string) => Promise<void>;
 }
 
 const storageFailed = (operation: string) => (cause: unknown) =>
-  DomainKitError.isDomainKitError(cause)
+  Errors.isDomainKitError(cause)
     ? cause
-    : new DomainKitError.DomainKitError({
-        reason: new DomainKitError.StorageFailed({
+    : new Errors.DomainKitError({
+        reason: new Reason.StorageFailed({
           operation,
           message: cause instanceof Error ? cause.message : String(cause),
         }),
       });
 
 /** Wraps a Promise-shaped implementation. Rejections become `StorageFailed`. */
-export const fromAsync = (service: AsyncService): Service => {
-  const call = <A>(operation: string, run: (principal: PrincipalShape) => Promise<A>): Fx<A> =>
-    Effect.flatMap(Principal, (principal) =>
+export const fromAsync = (service: AsyncInterface): Interface => {
+  const call = <A>(operation: string, run: (principal: Principal.Interface) => Promise<A>): Fx<A> =>
+    Effect.flatMap(Principal.Service, (principal) =>
       Effect.tryPromise({ try: () => run(principal), catch: storageFailed(operation) }),
     );
-  const option = <A>(operation: string, run: (principal: PrincipalShape) => Promise<A | null>) =>
-    call(operation, run).pipe(Effect.map(Option.fromNullishOr));
+  const option = <A>(
+    operation: string,
+    run: (principal: Principal.Interface) => Promise<A | null>,
+  ) => call(operation, run).pipe(Effect.map(Option.fromNullishOr));
   return {
     authorizations: {
       upsert: (input) =>
@@ -494,7 +509,7 @@ export const fromAsync = (service: AsyncService): Service => {
       Effect.acquireRelease(
         call("acquireLock", (p) => service.acquireLock(p, key)).pipe(
           Effect.flatMap((acquired) =>
-            acquired ? Effect.void : DomainKitError.fail(new DomainKitError.Busy({ key })),
+            acquired ? Effect.void : Errors.fail(new Reason.Busy({ key })),
           ),
         ),
         () => call("releaseLock", (p) => service.releaseLock(p, key)).pipe(Effect.ignore),
@@ -505,5 +520,5 @@ export const fromAsync = (service: AsyncService): Service => {
   };
 };
 
-export const layerFromAsync = (service: AsyncService): Layer.Layer<Storage> =>
-  Layer.succeed(Storage)(fromAsync(service));
+export const layerFromAsync = (service: AsyncInterface): Layer.Layer<Service> =>
+  Layer.succeed(Service)(fromAsync(service));

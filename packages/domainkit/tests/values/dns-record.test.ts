@@ -81,7 +81,7 @@ describe("DnsRecord", () => {
       tag: "issue",
       value: "letsencrypt.org",
     });
-    const encoded = Schema.encodeSync(DnsRecord.DnsRecord)(record);
+    const encoded = Schema.encodeSync(DnsRecord.Model)(record);
     assert.deepStrictEqual(encoded, {
       _tag: "CAA",
       name: "example.com",

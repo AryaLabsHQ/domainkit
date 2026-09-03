@@ -7,7 +7,7 @@
 import { Effect, Schema } from "effect";
 
 import * as DnsRecord from "./DnsRecord.ts";
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Errors from "./internal/error.ts";
 
 export const PlanId = Schema.String.pipe(Schema.brand("@domainkit/PlanId"));
 export type PlanId = typeof PlanId.Type;
@@ -23,17 +23,17 @@ export type Kind = typeof Kind.Type;
 
 export class Create extends Schema.TaggedClass<Create>("@domainkit/Plan/Create")("Create", {
   id: OperationId,
-  record: DnsRecord.DnsRecord,
+  record: DnsRecord.Model,
 }) {}
 export class Noop extends Schema.TaggedClass<Noop>("@domainkit/Plan/Noop")("Noop", {
   id: OperationId,
-  record: DnsRecord.DnsRecord,
+  record: DnsRecord.Model,
   existing: DnsRecord.Observed,
   ttlDrift: Schema.Boolean,
 }) {}
 export class Conflict extends Schema.TaggedClass<Conflict>("@domainkit/Plan/Conflict")("Conflict", {
   id: OperationId,
-  record: DnsRecord.DnsRecord,
+  record: DnsRecord.Model,
   existing: Schema.Array(DnsRecord.Observed),
   reason: Schema.Literals([
     "exclusive-name",
@@ -46,7 +46,7 @@ export class Conflict extends Schema.TaggedClass<Conflict>("@domainkit/Plan/Conf
 /** Cleanup only: remove the provider record a receipt proves DomainKit created. */
 export class Delete extends Schema.TaggedClass<Delete>("@domainkit/Plan/Delete")("Delete", {
   id: OperationId,
-  record: DnsRecord.DnsRecord,
+  record: DnsRecord.Model,
   providerRecordId: Schema.String,
 }) {}
 export const Operation = Schema.Union([Create, Noop, Conflict, Delete]);
@@ -54,7 +54,7 @@ export type Operation = typeof Operation.Type;
 
 export const Version = Schema.Literal("domainkit.plan.v2");
 
-export class Plan extends Schema.Class<Plan>("@domainkit/Plan")({
+export class Model extends Schema.Class<Model>("@domainkit/Plan")({
   id: PlanId,
   version: Version,
   kind: Kind,
@@ -67,28 +67,28 @@ export class Plan extends Schema.Class<Plan>("@domainkit/Plan")({
   createdAt: Schema.DateTimeUtcFromString,
   expiresAt: Schema.DateTimeUtcFromString,
 }) {}
-export type Encoded = typeof Plan.Encoded;
+export type Encoded = typeof Model.Encoded;
 
-export const decode = (input: unknown): Effect.Effect<Plan, DomainKitError.DomainKitError> =>
-  DomainKitError.decode(Plan, input);
-export const encode: (plan: Plan) => Encoded = Schema.encodeSync(Plan);
+export const decode = (input: unknown): Effect.Effect<Model, Errors.DomainKitError> =>
+  Errors.decode(Model, input);
+export const encode: (plan: Model) => Encoded = Schema.encodeSync(Model);
 
 /** `true` when the plan has no conflicts and at least one write (`Create` or `Delete`). */
-export const isApplicable = (plan: Plan): boolean =>
+export const isApplicable = (plan: Model): boolean =>
   conflicts(plan).length === 0 && writes(plan).length > 0;
 
-export const conflicts = (plan: Plan): ReadonlyArray<Conflict> =>
+export const conflicts = (plan: Model): ReadonlyArray<Conflict> =>
   plan.operations.filter((operation): operation is Conflict => operation._tag === "Conflict");
 
 /** The operations that would touch the provider: creates for provisioning, deletes for cleanup. */
-export const writes = (plan: Plan): ReadonlyArray<Create | Delete> =>
+export const writes = (plan: Model): ReadonlyArray<Create | Delete> =>
   plan.operations.filter(
     (operation): operation is Create | Delete =>
       operation._tag === "Create" || operation._tag === "Delete",
   );
 
 /** Manual instructions for hosts whose customers apply records by hand. */
-export const renderInstructions = (plan: Plan): string =>
+export const renderInstructions = (plan: Model): string =>
   plan.operations
     .map((operation) => {
       const verb =

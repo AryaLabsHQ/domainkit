@@ -24,7 +24,7 @@ provider SDKs, which keeps the runtime boundary small.
 
 - Applications supply their own persistence, transport, and runtime composition.
 - Provider adapters decode external responses and classify provider failures into
-  `DomainKitError` reasons explicitly.
+  `DomainKit.Error` reasons explicitly.
 - DomainKit accepts some focused HTTP implementation work in exchange for fewer runtime
   constraints.
 

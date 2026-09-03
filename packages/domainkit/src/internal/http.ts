@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 
-import * as DomainKitError from "../DomainKitError.ts";
+import * as Errors from "./error.ts";
+import * as Reason from "../Reason.ts";
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -18,7 +19,7 @@ export const requestJson = (input: {
   readonly provider: string;
   readonly url: URL | string;
   readonly init?: RequestInit;
-}): Effect.Effect<Reply, DomainKitError.DomainKitError> =>
+}): Effect.Effect<Reply, Errors.DomainKitError> =>
   Effect.tryPromise({
     try: async (signal): Promise<Reply> => {
       const response = await input.fetch(input.url, { ...input.init, signal });
@@ -28,9 +29,9 @@ export const requestJson = (input: {
         try {
           body = JSON.parse(text);
         } catch {
-          throw new DomainKitError.DomainKitError({
+          throw new Errors.DomainKitError({
             reason: response.ok
-              ? new DomainKitError.ProviderRejected({
+              ? new Reason.ProviderRejected({
                   provider: input.provider,
                   message: `${input.provider} returned a non-JSON response`,
                 })
@@ -46,10 +47,10 @@ export const requestJson = (input: {
       return { status: response.status, ok: response.ok, headers: response.headers, body };
     },
     catch: (cause) =>
-      DomainKitError.isDomainKitError(cause)
+      Errors.isDomainKitError(cause)
         ? cause
-        : new DomainKitError.DomainKitError({
-            reason: new DomainKitError.ProviderUnavailable({
+        : new Errors.DomainKitError({
+            reason: new Reason.ProviderUnavailable({
               provider: input.provider,
               message: cause instanceof Error ? cause.message : `${input.provider} request failed`,
             }),
@@ -66,11 +67,11 @@ export const classify = (
   headers: Headers,
   message: string,
   code?: string,
-): DomainKitError.Reason => {
-  if (status === 401) return new DomainKitError.Unauthenticated({ message });
-  if (status === 403) return new DomainKitError.Forbidden({ message });
+): Reason.Model => {
+  if (status === 401) return new Reason.Unauthenticated({ message });
+  if (status === 403) return new Reason.Forbidden({ message });
   if (status === 409 || code === "conflict") {
-    return new DomainKitError.ProviderConflict({
+    return new Reason.ProviderConflict({
       provider,
       message,
       code: code ?? String(status),
@@ -78,13 +79,13 @@ export const classify = (
   }
   if (status === 429 || status >= 500) {
     const retryAfterMs = retryAfter(headers.get("retry-after"));
-    return new DomainKitError.ProviderUnavailable({
+    return new Reason.ProviderUnavailable({
       provider,
       message,
       ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
     });
   }
-  return new DomainKitError.ProviderRejected({
+  return new Reason.ProviderRejected({
     provider,
     message,
     code: code ?? String(status),
@@ -92,8 +93,8 @@ export const classify = (
 };
 
 export const rejected = (provider: string, message: string, code?: string) =>
-  new DomainKitError.DomainKitError({
-    reason: new DomainKitError.ProviderRejected({
+  new Errors.DomainKitError({
+    reason: new Reason.ProviderRejected({
       provider,
       message,
       ...(code === undefined ? {} : { code }),

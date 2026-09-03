@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect";
 
-import * as DomainKitError from "../DomainKitError.ts";
+import * as Errors from "./error.ts";
+import * as Reason from "../Reason.ts";
 
 export type Json =
   | null
@@ -26,11 +27,11 @@ export function stringify(value: unknown): string {
 }
 
 const cryptoFailed = () =>
-  new DomainKitError.DomainKitError({
-    reason: new DomainKitError.CryptoFailed({ operation: "digest" }),
+  new Errors.DomainKitError({
+    reason: new Reason.CryptoFailed({ operation: "digest" }),
   });
 
-export const sha256Hex = (value: string): Effect.Effect<string, DomainKitError.DomainKitError> =>
+export const sha256Hex = (value: string): Effect.Effect<string, Errors.DomainKitError> =>
   Effect.tryPromise({
     try: async () => {
       const bytes = new Uint8Array(
@@ -45,7 +46,7 @@ export const sha256Hex = (value: string): Effect.Effect<string, DomainKitError.D
 export const sha256Encoded = <S extends Schema.ConstraintEncoder<unknown>>(
   schema: S,
   value: S["Type"],
-): Effect.Effect<string, DomainKitError.DomainKitError> =>
+): Effect.Effect<string, Errors.DomainKitError> =>
   Effect.try({
     try: () => stringify(Schema.encodeSync(schema)(value)),
     catch: cryptoFailed,

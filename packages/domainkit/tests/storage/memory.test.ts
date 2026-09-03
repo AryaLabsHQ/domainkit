@@ -1,14 +1,15 @@
 import { assert, describe, it } from "@effect/vitest";
 import { DateTime, Effect } from "effect";
 
-import { DomainKitError, Principal, Storage } from "../../src/index.ts";
+import { Principal, Reason, Storage } from "../../src/index.ts";
+import * as Errors from "../../src/internal/error.ts";
 
 const principal = Principal.make({ ownerId: "org_1", actorId: "user_1" });
 
 describe("Storage.layerMemoryWith", () => {
   it.effect("leaves state untouched when beforeCommit fails", () =>
     Effect.gen(function* () {
-      const storage = yield* Storage.Storage;
+      const storage = yield* Storage.Service;
       const now = yield* DateTime.now;
       const failure = yield* storage.authorizations
         .upsert({
@@ -30,12 +31,12 @@ describe("Storage.layerMemoryWith", () => {
       const missing = yield* storage.authorizations.get("auth-1").pipe(Effect.flip);
       assert.strictEqual(missing.reason._tag, "NotFound");
     }).pipe(
-      Effect.provideService(Principal.Principal, principal),
+      Effect.provideService(Principal.Service, principal),
       Effect.provide(
         Storage.layerMemoryWith({
           beforeCommit: (operation) =>
-            DomainKitError.fail(
-              new DomainKitError.StorageFailed({ operation, message: "injected commit failure" }),
+            Errors.fail(
+              new Reason.StorageFailed({ operation, message: "injected commit failure" }),
             ),
         }),
       ),
@@ -43,9 +44,9 @@ describe("Storage.layerMemoryWith", () => {
   );
 
   it("requires a Principal for every method at the type level", () => {
-    const program = Effect.flatMap(Storage.Storage, (storage) => storage.connections.list());
+    const program = Effect.flatMap(Storage.Service, (storage) => storage.connections.list());
     // @ts-expect-error Principal is a required service, never a default.
-    const runnable: Effect.Effect<unknown, unknown, Storage.Storage> = program;
+    const runnable: Effect.Effect<unknown, unknown, Storage.Service> = program;
     assert.ok(runnable !== undefined);
   });
 });

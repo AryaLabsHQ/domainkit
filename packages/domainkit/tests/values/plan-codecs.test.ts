@@ -13,7 +13,7 @@ const conflict = new Plan.Conflict({
   reason: "cname-collision",
 });
 
-const plan = new Plan.Plan({
+const plan = new Plan.Model({
   id: Plan.PlanId.make("plan-1"),
   version: "domainkit.plan.v2",
   kind: "provisioning",
@@ -34,7 +34,7 @@ describe("Plan, Approval, and Receipt codecs", () => {
       assert.strictEqual(encoded.createdAt, "2026-09-03T00:00:00.000Z");
       assert.strictEqual(encoded.operations[0]?._tag, "Create");
       const decoded = yield* Plan.decode(JSON.parse(JSON.stringify(encoded)));
-      assert.ok(decoded instanceof Plan.Plan);
+      assert.ok(decoded instanceof Plan.Model);
       assert.ok(decoded.operations[0] instanceof Plan.Create);
       assert.strictEqual(
         DateTime.toEpochMillis(decoded.expiresAt),
@@ -49,7 +49,7 @@ describe("Plan, Approval, and Receipt codecs", () => {
 
   it("reports applicability, conflicts, writes, and manual instructions", () => {
     assert.strictEqual(Plan.isApplicable(plan), true);
-    const conflicting = new Plan.Plan({ ...plan, operations: [create, conflict] });
+    const conflicting = new Plan.Model({ ...plan, operations: [create, conflict] });
     assert.strictEqual(Plan.isApplicable(conflicting), false);
     assert.deepStrictEqual(Plan.conflicts(conflicting), [conflict]);
     assert.deepStrictEqual(Plan.writes(conflicting), [create]);
@@ -61,7 +61,7 @@ describe("Plan, Approval, and Receipt codecs", () => {
 
   it.effect("keeps Approval and Receipt codecs in parity with Plan", () =>
     Effect.gen(function* () {
-      const approval = new Approval.Approval({
+      const approval = new Approval.Model({
         id: Approval.ApprovalId.make("apr-1"),
         version: "domainkit.approval.v2",
         kind: "provisioning",
@@ -72,7 +72,7 @@ describe("Plan, Approval, and Receipt codecs", () => {
         approvedAt: at,
         expiresAt: plan.expiresAt,
       });
-      const receipt = new Receipt.Receipt({
+      const receipt = new Receipt.Model({
         id: Receipt.ReceiptId.make("rcpt-1"),
         version: "domainkit.receipt.v2",
         kind: "provisioning",
@@ -91,11 +91,11 @@ describe("Plan, Approval, and Receipt codecs", () => {
       const decodedApproval = yield* Approval.decode(
         JSON.parse(JSON.stringify(Approval.encode(approval))),
       );
-      assert.ok(decodedApproval instanceof Approval.Approval);
+      assert.ok(decodedApproval instanceof Approval.Model);
       const decodedReceipt = yield* Receipt.decode(
         JSON.parse(JSON.stringify(Receipt.encode(receipt))),
       );
-      assert.ok(decodedReceipt instanceof Receipt.Receipt);
+      assert.ok(decodedReceipt instanceof Receipt.Model);
       assert.strictEqual(Receipt.isComplete(decodedReceipt), false);
       assert.deepStrictEqual(
         Receipt.applied(decodedReceipt).map(({ providerRecordId }) => providerRecordId),

@@ -2,7 +2,8 @@ import * as DnsPacket from "@leichtgewicht/dns-packet";
 import { Effect } from "effect";
 
 import * as DnsRecord from "../DnsRecord.ts";
-import * as DomainKitError from "../DomainKitError.ts";
+import * as Errors from "./error.ts";
+import * as Reason from "../Reason.ts";
 import type { Fetch } from "./http.ts";
 
 export interface Answer {
@@ -12,8 +13,8 @@ export interface Answer {
 }
 
 const failed = (resolver: string, message: string) =>
-  new DomainKitError.DomainKitError({
-    reason: new DomainKitError.ResolverFailed({ resolver, message }),
+  new Errors.DomainKitError({
+    reason: new Reason.ResolverFailed({ resolver, message }),
   });
 
 /** One RFC 8484 wire-format query; the caller applies the timeout. */
@@ -25,7 +26,7 @@ export const query = (input: {
   readonly type: DnsRecord.Type;
   /** Host-supplied abort, combined with the fiber's own interruption signal. */
   readonly signal?: AbortSignal | undefined;
-}): Effect.Effect<Answer, DomainKitError.DomainKitError> =>
+}): Effect.Effect<Answer, Errors.DomainKitError> =>
   Effect.tryPromise({
     try: async (fiberSignal) => {
       const controller = new AbortController();
@@ -68,7 +69,7 @@ export const query = (input: {
       );
     },
     catch: (cause) =>
-      DomainKitError.isDomainKitError(cause)
+      Errors.isDomainKitError(cause)
         ? cause
         : failed(input.resolver, cause instanceof Error ? cause.message : "DNS resolution failed"),
   });

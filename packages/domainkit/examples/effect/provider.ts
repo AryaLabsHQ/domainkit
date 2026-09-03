@@ -1,6 +1,6 @@
 // A provider is one value. Token-only providers skip OAuth; that is the whole difference.
 import { Effect, Redacted, Schema } from "effect";
-import { DnsRecord, DomainKitError, Provider } from "domainkit";
+import { DnsRecord, DomainKit, Provider, Reason } from "domainkit";
 
 const Context = Schema.Struct({ apiKey: Schema.String });
 
@@ -46,15 +46,17 @@ export const porkbun = Provider.make({
 // The same shape with OAuth added is Cloudflare; DomainKit handles redirect, callback, refresh, and revoke.
 
 // Stand-in for the HTTP client this example does not ship; a real adapter decodes Porkbun's JSON here.
-const rows = new Map<string, DnsRecord.DnsRecord>();
+const rows = new Map<string, DnsRecord.Model>();
 function porkbunApi<A>(
   credential: Provider.Credential,
   method: string,
   path: string,
-  body?: DnsRecord.DnsRecord,
-): Effect.Effect<A, DomainKitError.DomainKitError> {
+  body?: DnsRecord.Model,
+): Effect.Effect<A, DomainKit.Error> {
   if (Redacted.value(credential.secret).length === 0) {
-    return DomainKitError.fail(new DomainKitError.Unauthenticated({ message: "missing API key" }));
+    return Effect.fail(
+      new DomainKit.Error({ reason: new Reason.Unauthenticated({ message: "missing API key" }) }),
+    );
   }
   return Effect.sync(() => {
     const [, action, , id] = path.split("/");

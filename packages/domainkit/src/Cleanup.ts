@@ -5,41 +5,42 @@
 import { Context, Effect, Layer, Option } from "effect";
 
 import type * as Approval from "./Approval.ts";
-import { Connect } from "./Connect.ts";
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Connect from "./Connect.ts";
+import * as Errors from "./internal/error.ts";
+import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
 import * as Attempts from "./internal/attempts.ts";
 import type * as Plan from "./Plan.ts";
-import type { Principal } from "./Principal.ts";
+import type * as Principal from "./Principal.ts";
 import * as Provision from "./Provision.ts";
 import * as Receipt from "./Receipt.ts";
 import * as Storage from "./Storage.ts";
 
-type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError, Principal>;
+type Fx<A> = Effect.Effect<A, Errors.DomainKitError, Principal.Service>;
 
-export interface Service {
+export interface Interface {
   /** Read back every receipt record; records that no longer match exactly become `Conflict`. */
   readonly plan: (
     input: { readonly receiptId: Receipt.ReceiptId } | { readonly domain: string },
-  ) => Fx<Plan.Plan>;
+  ) => Fx<Plan.Model>;
   readonly approve: (
-    plan: Plan.Plan | Plan.PlanId,
+    plan: Plan.Model | Plan.PlanId,
     options?: Attempts.ApproveOptions,
-  ) => Fx<Approval.Approval>;
+  ) => Fx<Approval.Model>;
   /** Decline the cleanup plan; terminal, same rules as `Provision.reject`. */
   readonly reject: (
-    plan: Plan.Plan | Plan.PlanId,
+    plan: Plan.Model | Plan.PlanId,
     options?: Provision.RejectOptions,
   ) => Fx<Provision.Attempt>;
-  readonly apply: (approval: Approval.Approval | Approval.ApprovalId) => Fx<Receipt.Receipt>;
+  readonly apply: (approval: Approval.Model | Approval.ApprovalId) => Fx<Receipt.Model>;
 }
 
-export class Cleanup extends Context.Service<Cleanup, Service>()("@domainkit/Cleanup") {}
+export class Service extends Context.Service<Service, Interface>()("@domainkit/Cleanup") {}
 
-export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Effect.gen(
+export const make: Effect.Effect<Interface, never, Storage.Service | Connect.Service> = Effect.gen(
   function* () {
-    const storage = yield* Storage.Storage;
-    const connect = yield* Connect;
+    const storage = yield* Storage.Service;
+    const connect = yield* Connect.Service;
     const attempts = Attempts.make(storage, connect, "cleanup");
 
     const sourceAttempt = (
@@ -49,8 +50,8 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
         if ("receiptId" in input) {
           const attempt = yield* storage.attempts.byReceipt(input.receiptId);
           if (attempt.kind !== "provisioning" || attempt.receipt === null) {
-            return yield* DomainKitError.fail(
-              new DomainKitError.NotFound({ entity: "receipt", id: input.receiptId }),
+            return yield* Errors.fail(
+              new Reason.NotFound({ entity: "receipt", id: input.receiptId }),
             );
           }
           return attempt;
@@ -61,9 +62,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
           ? yield* storage.attempts.latest(attachment.value.id, "provisioning")
           : Option.none<Storage.Attempt>();
         if (Option.isNone(latest) || latest.value.receipt === null) {
-          return yield* DomainKitError.fail(
-            new DomainKitError.NotFound({ entity: "receipt", id: domain }),
-          );
+          return yield* Errors.fail(new Reason.NotFound({ entity: "receipt", id: domain }));
         }
         return latest.value;
       });
@@ -75,9 +74,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
           const source = yield* sourceAttempt(input);
           const receipt = source.receipt;
           if (receipt === null) {
-            return yield* DomainKitError.fail(
-              new DomainKitError.NotFound({ entity: "receipt", id: source.id }),
-            );
+            return yield* Errors.fail(new Reason.NotFound({ entity: "receipt", id: source.id }));
           }
           const attachment = yield* storage.attachments.get(source.attachmentId);
           yield* Attempts.assertWithin(
@@ -92,8 +89,8 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
                 (operation) => operation._tag === "Create" && operation.id === applied.operationId,
               );
               if (created === undefined) {
-                return yield* DomainKitError.fail(
-                  new DomainKitError.InvalidInput({
+                return yield* Errors.fail(
+                  new Reason.InvalidInput({
                     message: `Receipt ${receipt.id} proves no created record for ${applied.operationId}`,
                     field: "receiptId",
                   }),
@@ -131,15 +128,15 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
   },
 );
 
-export const layer: Layer.Layer<Cleanup, never, Storage.Storage | Connect> =
-  Layer.effect(Cleanup)(make);
+export const layer: Layer.Layer<Service, never, Storage.Service | Connect.Service> =
+  Layer.effect(Service)(make);
 
 const accessor =
   <Args extends ReadonlyArray<unknown>, A>(
-    pick: (service: Service) => (...args: Args) => Fx<A>,
-  ): ((...args: Args) => Effect.Effect<A, DomainKitError.DomainKitError, Principal | Cleanup>) =>
+    pick: (service: Interface) => (...args: Args) => Fx<A>,
+  ): ((...args: Args) => Effect.Effect<A, Errors.DomainKitError, Principal.Service | Service>) =>
   (...args) =>
-    Effect.flatMap(Cleanup, (service) => pick(service)(...args));
+    Effect.flatMap(Service, (service) => pick(service)(...args));
 
 export const plan = accessor((service) => service.plan);
 export const approve = accessor((service) => service.approve);

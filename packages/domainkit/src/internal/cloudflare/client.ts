@@ -1,7 +1,8 @@
 import { DateTime, Effect, Schema as S } from "effect";
 
 import type * as DnsRecord from "../../DnsRecord.ts";
-import * as DomainKitError from "../../DomainKitError.ts";
+import * as Errors from "../error.ts";
+import * as Reason from "../../Reason.ts";
 import type * as Provider from "../../Provider.ts";
 import { bearer, classify, type Fetch, rejected, requestJson } from "../http.ts";
 import * as Protocol from "./protocol.ts";
@@ -9,7 +10,7 @@ import * as Records from "./records.ts";
 
 export const provider = "cloudflare";
 
-const notFound = new DomainKitError.NotFound({ entity: "zone", id: "cloudflare" });
+const notFound = new Reason.NotFound({ entity: "zone", id: "cloudflare" });
 
 /** Cloudflare's "record already exists" family (81056 identical, 81057 same name and content, 81058 CNAME). */
 const conflictCodes = new Set([81056, 81057, 81058]);
@@ -20,7 +21,7 @@ export interface Options {
   readonly baseUrl: string;
 }
 
-type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError>;
+type Fx<A> = Effect.Effect<A, Errors.DomainKitError>;
 
 const call = <R extends S.ConstraintDecoder<unknown>>(
   options: Options,
@@ -35,20 +36,20 @@ const call = <R extends S.ConstraintDecoder<unknown>>(
       url: `${options.baseUrl}${path}`,
       init: bearer(options.token, init),
     });
-    if (reply.status === 404) return yield* DomainKitError.fail(notFound);
+    if (reply.status === 404) return yield* Errors.fail(notFound);
     const base = S.decodeUnknownOption(Protocol.BaseEnvelope)(reply.body);
     if (!reply.ok || base._tag === "None" || !base.value.success) {
       const detail = base._tag === "Some" ? base.value.errors[0] : undefined;
       if (detail !== undefined && conflictCodes.has(detail.code)) {
-        return yield* DomainKitError.fail(
-          new DomainKitError.ProviderConflict({
+        return yield* Errors.fail(
+          new Reason.ProviderConflict({
             provider,
             code: String(detail.code),
             message: detail.message,
           }),
         );
       }
-      return yield* DomainKitError.fail(
+      return yield* Errors.fail(
         classify(
           provider,
           reply.status,
@@ -60,10 +61,10 @@ const call = <R extends S.ConstraintDecoder<unknown>>(
     }
     const contract = () =>
       rejected(provider, "Cloudflare response did not match its API contract", "response");
-    const envelope = yield* DomainKitError.decode(Protocol.Envelope, reply.body).pipe(
+    const envelope = yield* Errors.decode(Protocol.Envelope, reply.body).pipe(
       Effect.mapError(contract),
     );
-    const decoded: R["Type"] = yield* DomainKitError.decode(result, envelope.result).pipe(
+    const decoded: R["Type"] = yield* Errors.decode(result, envelope.result).pipe(
       Effect.mapError(contract),
     );
     return { result: decoded, totalPages: envelope.result_info?.total_pages };
@@ -110,8 +111,8 @@ export const verifyToken = (options: Options, path: string): Fx<DateTime.Utc | n
         ? Effect.succeed(
             typeof result.expires_on === "string" ? DateTime.makeUnsafe(result.expires_on) : null,
           )
-        : DomainKitError.fail(
-            new DomainKitError.Unauthenticated({
+        : Errors.fail(
+            new Reason.Unauthenticated({
               message: `Cloudflare token is ${result.status}`,
             }),
           ),
@@ -129,8 +130,8 @@ export const tokenExpiry = (
           ? Effect.succeed(
               typeof result.expires_on === "string" ? DateTime.makeUnsafe(result.expires_on) : null,
             )
-          : DomainKitError.fail(
-              new DomainKitError.Unauthenticated({
+          : Errors.fail(
+              new Reason.Unauthenticated({
                 message: `Cloudflare token is ${result.status}`,
               }),
             ),
@@ -171,7 +172,7 @@ export const dns = (options: Options, zoneId: string): Provider.Dns => {
           ),
         ),
       ),
-    create: (_zone, record: DnsRecord.DnsRecord) =>
+    create: (_zone, record: DnsRecord.Model) =>
       call(options, base, Protocol.Record, {
         method: "POST",
         body: JSON.stringify(Records.encode(record)),

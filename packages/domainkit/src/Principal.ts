@@ -5,16 +5,19 @@
  */
 import { Context, Layer } from "effect";
 
-export interface Shape {
+export interface Interface {
   /** Tenant boundary: organization, workspace, account. Storage scopes every row by it. */
   readonly ownerId: string;
   /** The user or automation acting on the tenant's behalf; recorded on approvals and receipts. */
   readonly actorId: string;
 }
 
-export class Principal extends Context.Service<Principal, Shape>()("@domainkit/Principal") {}
+export class Service extends Context.Service<Service, Interface>()("@domainkit/Principal") {}
 
-export const make = (input: Shape): Shape => ({ ownerId: input.ownerId, actorId: input.actorId });
+export const make = (input: Interface): Interface => ({
+  ownerId: input.ownerId,
+  actorId: input.actorId,
+});
 
-export const layer = (input: Shape): Layer.Layer<Principal> =>
-  Layer.succeed(Principal)(make(input));
+export const layer = (input: Interface): Layer.Layer<Service> =>
+  Layer.succeed(Service)(make(input));

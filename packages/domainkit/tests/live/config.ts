@@ -1,6 +1,7 @@
 import { Effect, Schema as S } from "effect";
 
-import { DomainKitError, DomainName } from "../../src/index.ts";
+import { DomainName, Reason } from "../../src/index.ts";
+import * as Errors from "../../src/internal/error.ts";
 
 const NonEmpty = S.String.check(S.isMinLength(1));
 
@@ -9,9 +10,9 @@ const NonEmpty = S.String.check(S.isMinLength(1));
  * twice: once as the target and once as the explicit permission.
  */
 export const Fields = {
-  allowedZone: DomainName.DomainName,
+  allowedZone: DomainName.Model,
   token: NonEmpty,
-  zone: DomainName.DomainName,
+  zone: DomainName.Model,
 } as const;
 
 export const decode = <
@@ -20,12 +21,12 @@ export const decode = <
   schema: Schema,
 ) =>
   Effect.fn("LiveConfig.decode")((value: unknown) =>
-    DomainKitError.decode(schema, value).pipe(
+    Errors.decode(schema, value).pipe(
       Effect.flatMap((config) =>
         config.zone === config.allowedZone
           ? Effect.succeed(config)
-          : DomainKitError.fail(
-              new DomainKitError.InvalidInput({
+          : Errors.fail(
+              new Reason.InvalidInput({
                 message: "DOMAINKIT_LIVE_ALLOW_ZONE must exactly match DOMAINKIT_LIVE_ZONE",
                 field: "allowedZone",
               }),

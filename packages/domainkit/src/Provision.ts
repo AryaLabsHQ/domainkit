@@ -6,24 +6,25 @@
 import { Context, Effect, Layer, Option } from "effect";
 
 import type * as Approval from "./Approval.ts";
-import { Connect } from "./Connect.ts";
+import * as Connect from "./Connect.ts";
 import type * as DnsRecord from "./DnsRecord.ts";
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Errors from "./internal/error.ts";
+import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
 import * as Attempts from "./internal/attempts.ts";
 import * as Planner from "./internal/planner.ts";
 import type * as Plan from "./Plan.ts";
-import type { Principal } from "./Principal.ts";
+import type * as Principal from "./Principal.ts";
 import type * as Receipt from "./Receipt.ts";
 import * as Storage from "./Storage.ts";
 
-type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError, Principal>;
+type Fx<A> = Effect.Effect<A, Errors.DomainKitError, Principal.Service>;
 
 export interface Attempt {
-  readonly plan: Plan.Plan;
+  readonly plan: Plan.Model;
   readonly status: Storage.AttemptStatus;
-  readonly approval: Approval.Approval | null;
-  readonly receipt: Receipt.Receipt | null;
+  readonly approval: Approval.Model | null;
+  readonly receipt: Receipt.Model | null;
   readonly rejection: Storage.Rejection | null;
 }
 
@@ -31,35 +32,35 @@ export interface RejectOptions {
   readonly reason?: string;
 }
 
-export interface Service {
+export interface Interface {
   /** Read provider state and build an additive plan. Fails `NotFound` when the domain is not attached. */
   readonly plan: (input: {
     readonly domain: string;
-    readonly requirements: ReadonlyArray<DnsRecord.DnsRecord>;
-  }) => Fx<Plan.Plan>;
+    readonly requirements: ReadonlyArray<DnsRecord.Model>;
+  }) => Fx<Plan.Model>;
   /**
    * Record the principal's consent. Fails `Conflict` unless `allowPartial` and the selected
    * operations are conflict-free. Approving an already-approved plan returns the same approval.
    */
   readonly approve: (
-    plan: Plan.Plan | Plan.PlanId,
+    plan: Plan.Model | Plan.PlanId,
     options?: Attempts.ApproveOptions,
-  ) => Fx<Approval.Approval>;
+  ) => Fx<Approval.Model>;
   /**
    * Decline the plan for the acting principal; terminal. Rejecting again returns the same
    * attempt; a plan that was approved or applied fails `Stale`.
    */
-  readonly reject: (plan: Plan.Plan | Plan.PlanId, options?: RejectOptions) => Fx<Attempt>;
+  readonly reject: (plan: Plan.Model | Plan.PlanId, options?: RejectOptions) => Fx<Attempt>;
   /**
    * Re-plan the zone, fail `Stale` if the digest moved, then create records. Partial success is a
    * `partial` receipt. Applying an attempt that already completed returns its receipt.
    */
-  readonly apply: (approval: Approval.Approval | Approval.ApprovalId) => Fx<Receipt.Receipt>;
+  readonly apply: (approval: Approval.Model | Approval.ApprovalId) => Fx<Receipt.Model>;
   readonly get: (planId: Plan.PlanId) => Fx<Attempt>;
   readonly latest: (domain: string) => Fx<Attempt | null>;
 }
 
-export class Provision extends Context.Service<Provision, Service>()("@domainkit/Provision") {}
+export class Service extends Context.Service<Service, Interface>()("@domainkit/Provision") {}
 
 export interface PolicyShape {
   /** Plan lifetime before it must be rebuilt. Default 1 hour. */
@@ -72,10 +73,10 @@ export class Policy extends Context.Reference<PolicyShape>("@domainkit/Provision
   defaultValue: () => defaults,
 }) {}
 
-export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Effect.gen(
+export const make: Effect.Effect<Interface, never, Storage.Service | Connect.Service> = Effect.gen(
   function* () {
-    const storage = yield* Storage.Storage;
-    const connect = yield* Connect;
+    const storage = yield* Storage.Service;
+    const connect = yield* Connect.Service;
     const attempts = Attempts.make(storage, connect, "provisioning");
 
     const attachmentFor = (input: string): Fx<Storage.Attachment> =>
@@ -83,9 +84,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
         const domain = yield* DomainName.decode(input);
         const attachment = yield* storage.attachments.byDomain(domain);
         if (Option.isNone(attachment)) {
-          return yield* DomainKitError.fail(
-            new DomainKitError.NotFound({ entity: "attachment", id: domain }),
-          );
+          return yield* Errors.fail(new Reason.NotFound({ entity: "attachment", id: domain }));
         }
         return attachment.value;
       });
@@ -132,15 +131,15 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
   },
 );
 
-export const layer: Layer.Layer<Provision, never, Storage.Storage | Connect> =
-  Layer.effect(Provision)(make);
+export const layer: Layer.Layer<Service, never, Storage.Service | Connect.Service> =
+  Layer.effect(Service)(make);
 
 const accessor =
   <Args extends ReadonlyArray<unknown>, A>(
-    pick: (service: Service) => (...args: Args) => Fx<A>,
-  ): ((...args: Args) => Effect.Effect<A, DomainKitError.DomainKitError, Principal | Provision>) =>
+    pick: (service: Interface) => (...args: Args) => Fx<A>,
+  ): ((...args: Args) => Effect.Effect<A, Errors.DomainKitError, Principal.Service | Service>) =>
   (...args) =>
-    Effect.flatMap(Provision, (service) => pick(service)(...args));
+    Effect.flatMap(Service, (service) => pick(service)(...args));
 
 export const plan = accessor((service) => service.plan);
 export const approve = accessor((service) => service.approve);

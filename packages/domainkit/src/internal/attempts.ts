@@ -1,19 +1,20 @@
 import { DateTime, Duration, Effect } from "effect";
 
 import * as Approval from "../Approval.ts";
-import { Connect } from "../Connect.ts";
+import * as Connect from "../Connect.ts";
 import * as DnsRecord from "../DnsRecord.ts";
-import * as DomainKitError from "../DomainKitError.ts";
+import * as Errors from "./error.ts";
+import * as Reason from "../Reason.ts";
 import * as DomainName from "../DomainName.ts";
 import * as Plan from "../Plan.ts";
-import { Principal } from "../Principal.ts";
+import * as Principal from "../Principal.ts";
 import type * as Provider from "../Provider.ts";
 import * as Receipt from "../Receipt.ts";
 import * as Storage from "../Storage.ts";
 import { fresh } from "./ids.ts";
 import * as Planner from "./planner.ts";
 
-type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError, Principal>;
+type Fx<A> = Effect.Effect<A, Errors.DomainKitError, Principal.Service>;
 
 export interface ApproveOptions {
   readonly operationIds?: ReadonlyArray<Plan.OperationId>;
@@ -25,11 +26,11 @@ export interface PolicyShape {
   readonly applyLeaseMs: number;
 }
 
-const stale = (plan: Plan.Plan) =>
-  DomainKitError.fail(new DomainKitError.Stale({ planId: plan.id, digest: plan.digest }));
+const stale = (plan: Plan.Model) =>
+  Errors.fail(new Reason.Stale({ planId: plan.id, digest: plan.digest }));
 
 const expired = (entity: "plan" | "approval", id: string) =>
-  DomainKitError.fail(new DomainKitError.Expired({ entity, id }));
+  Errors.fail(new Reason.Expired({ entity, id }));
 
 const past = (at: DateTime.Utc, now: DateTime.Utc) =>
   DateTime.toEpochMillis(at) <= DateTime.toEpochMillis(now);
@@ -37,13 +38,13 @@ const past = (at: DateTime.Utc, now: DateTime.Utc) =>
 /** Every requirement must sit at or below the attached domain; other tenants share the zone. */
 export const assertWithin = (
   attachment: Storage.Attachment,
-  records: ReadonlyArray<DnsRecord.DnsRecord>,
-): Effect.Effect<void, DomainKitError.DomainKitError> => {
+  records: ReadonlyArray<DnsRecord.Model>,
+): Effect.Effect<void, Errors.DomainKitError> => {
   const outside = records.filter((record) => !DomainName.isWithin(record.name, attachment.domain));
   return outside.length === 0
     ? Effect.void
-    : DomainKitError.fail(
-        new DomainKitError.InvalidInput({
+    : Errors.fail(
+        new Reason.InvalidInput({
           message: `${outside.map(({ name }) => name).join(", ")} is outside the attached domain ${attachment.domain}`,
           field: "requirements",
         }),
@@ -51,7 +52,7 @@ export const assertWithin = (
 };
 
 /** Shared plan -> approve -> apply machinery for provisioning and cleanup attempts. */
-export const make = (storage: Storage.Service, connect: Connect["Service"], kind: Plan.Kind) => {
+export const make = (storage: Storage.Interface, connect: Connect.Interface, kind: Plan.Kind) => {
   const providerOf = (attachment: Storage.Attachment) =>
     Effect.gen(function* () {
       const connection = yield* storage.connections.get(attachment.connectionId);
@@ -66,9 +67,9 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
     readonly operations: ReadonlyArray<Plan.Operation>;
     readonly ttlMs: number;
     readonly sourceReceiptId: Receipt.ReceiptId | null;
-  }): Fx<Plan.Plan> =>
+  }): Fx<Plan.Model> =>
     Effect.gen(function* () {
-      const principal = yield* Principal;
+      const principal = yield* Principal.Service;
       const provider = yield* providerOf(input.attachment);
       const now = yield* DateTime.now;
       const unsigned: Planner.Unsigned = {
@@ -80,7 +81,7 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
         attachmentId: input.attachment.id,
         operations: input.operations,
       };
-      const plan = new Plan.Plan({
+      const plan = new Plan.Model({
         ...unsigned,
         id: Plan.PlanId.make(yield* fresh("plan")),
         digest: yield* Planner.digest(unsigned),
@@ -107,13 +108,11 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
       return plan;
     });
 
-  const attemptOf = (plan: Plan.Plan | Plan.PlanId): Fx<Storage.Attempt> =>
+  const attemptOf = (plan: Plan.Model | Plan.PlanId): Fx<Storage.Attempt> =>
     Effect.gen(function* () {
       const attempt = yield* storage.attempts.get(typeof plan === "string" ? plan : plan.id);
       if (attempt.kind !== kind) {
-        return yield* DomainKitError.fail(
-          new DomainKitError.NotFound({ entity: "plan", id: attempt.id }),
-        );
+        return yield* Errors.fail(new Reason.NotFound({ entity: "plan", id: attempt.id }));
       }
       if (typeof plan !== "string" && plan.digest !== attempt.plan.digest)
         return yield* stale(plan);
@@ -121,13 +120,13 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
     });
 
   const approve = (
-    plan: Plan.Plan | Plan.PlanId,
+    plan: Plan.Model | Plan.PlanId,
     options: ApproveOptions = {},
-  ): Fx<Approval.Approval> =>
+  ): Fx<Approval.Model> =>
     Effect.gen(function* () {
       const attempt = yield* attemptOf(plan);
       if (attempt.approval !== null) return attempt.approval;
-      const principal = yield* Principal;
+      const principal = yield* Principal.Service;
       const now = yield* DateTime.now;
       if (past(attempt.plan.expiresAt, now)) return yield* expired("plan", attempt.plan.id);
       const writes = Plan.writes(attempt.plan);
@@ -135,8 +134,8 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
       const selected = [...new Set(options.operationIds ?? writes.map(({ id }) => id))].sort();
       const unknown = selected.filter((id) => !writeIds.has(id));
       if (unknown.length > 0) {
-        return yield* DomainKitError.fail(
-          new DomainKitError.InvalidInput({
+        return yield* Errors.fail(
+          new Reason.InvalidInput({
             message: `Operations ${unknown.join(", ")} are not writable in plan ${attempt.plan.id}`,
             field: "operationIds",
           }),
@@ -145,20 +144,20 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
       const conflicts = Plan.conflicts(attempt.plan);
       if (options.allowPartial !== true) {
         if (conflicts.length > 0) {
-          return yield* DomainKitError.fail(
-            new DomainKitError.Conflict({ planId: attempt.plan.id, operations: conflicts }),
+          return yield* Errors.fail(
+            new Reason.Conflict({ planId: attempt.plan.id, operations: conflicts }),
           );
         }
         if (selected.length !== writes.length) {
-          return yield* DomainKitError.fail(
-            new DomainKitError.InvalidInput({
+          return yield* Errors.fail(
+            new Reason.InvalidInput({
               message: "Approving a subset of the plan requires allowPartial",
               field: "operationIds",
             }),
           );
         }
       }
-      const approval = new Approval.Approval({
+      const approval = new Approval.Model({
         id: Approval.ApprovalId.make(yield* fresh("apr")),
         version: "domainkit.approval.v2",
         kind,
@@ -175,12 +174,12 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
 
   /** Decline a planned attempt on behalf of the principal's actor. */
   const reject = (
-    plan: Plan.Plan | Plan.PlanId,
+    plan: Plan.Model | Plan.PlanId,
     options: { readonly reason?: string } = {},
   ): Fx<Storage.Attempt> =>
     Effect.gen(function* () {
       const attempt = yield* attemptOf(plan);
-      const principal = yield* Principal;
+      const principal = yield* Principal.Service;
       return yield* storage.attempts.reject(attempt.id, {
         digest: attempt.plan.digest,
         actorId: principal.actorId,
@@ -189,17 +188,17 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
     });
 
   const apply = (
-    approval: Approval.Approval | Approval.ApprovalId,
+    approval: Approval.Model | Approval.ApprovalId,
     policy: PolicyShape,
-  ): Fx<Receipt.Receipt> =>
+  ): Fx<Receipt.Model> =>
     Effect.gen(function* () {
       const attempt =
         typeof approval === "string"
           ? yield* storage.attempts.byApproval(approval)
           : yield* attemptOf(approval.planId);
       if (attempt.kind !== kind) {
-        return yield* DomainKitError.fail(
-          new DomainKitError.NotFound({
+        return yield* Errors.fail(
+          new Reason.NotFound({
             entity: "approval",
             id: typeof approval === "string" ? approval : approval.id,
           }),
@@ -207,8 +206,8 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
       }
       const stored = attempt.approval;
       if (stored === null || (typeof approval !== "string" && stored.id !== approval.id)) {
-        return yield* DomainKitError.fail(
-          new DomainKitError.NotFound({
+        return yield* Errors.fail(
+          new Reason.NotFound({
             entity: "approval",
             id: typeof approval === "string" ? approval : approval.id,
           }),
@@ -229,7 +228,7 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
     });
 
   /** Writes under a claimed lease; a failure before any write releases the attempt as `failed`. */
-  const run = (attempt: Storage.Attempt, approval: Approval.Approval): Fx<Receipt.Receipt> =>
+  const run = (attempt: Storage.Attempt, approval: Approval.Model): Fx<Receipt.Model> =>
     Effect.gen(function* () {
       const plan = attempt.plan;
       const attachment = yield* storage.attachments.get(attempt.attachmentId);
@@ -242,7 +241,7 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
       let stopped = false;
       const finish = (status: "complete" | "partial") =>
         Effect.gen(function* () {
-          const receipt = new Receipt.Receipt({
+          const receipt = new Receipt.Model({
             id: Receipt.ReceiptId.make(yield* fresh("rcpt")),
             version: "domainkit.receipt.v2",
             kind,
@@ -312,7 +311,7 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
     });
 
   /** Re-plan the zone and fail `Stale` when the digest moved since the plan was built. */
-  const revalidate = (plan: Plan.Plan, dns: Provider.Dns, zone: string) =>
+  const revalidate = (plan: Plan.Model, dns: Provider.Dns, zone: string) =>
     Effect.gen(function* () {
       const current = yield* currentOperations(plan, dns, zone);
       const digest = yield* Planner.digest({
@@ -328,10 +327,10 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
     });
 
   const currentOperations = (
-    plan: Plan.Plan,
+    plan: Plan.Model,
     dns: Provider.Dns,
     zone: string,
-  ): Effect.Effect<ReadonlyArray<Plan.Operation>, DomainKitError.DomainKitError> =>
+  ): Effect.Effect<ReadonlyArray<Plan.Operation>, Errors.DomainKitError> =>
     kind === "provisioning"
       ? Effect.flatMap(dns.list(zone), (observed) =>
           Planner.reconcile(
@@ -341,7 +340,7 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
         )
       : Effect.forEach(
           plan.operations,
-          (operation): Effect.Effect<Plan.Operation, DomainKitError.DomainKitError> =>
+          (operation): Effect.Effect<Plan.Operation, Errors.DomainKitError> =>
             operation._tag === "Delete"
               ? cleanupOperation(
                   dns,
@@ -354,11 +353,11 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
         );
 
   const write = (
-    plan: Plan.Plan,
+    plan: Plan.Model,
     operation: Plan.Create | Plan.Delete,
     dns: Provider.Dns,
     zone: string,
-  ): Effect.Effect<string, DomainKitError.DomainKitError> =>
+  ): Effect.Effect<string, Errors.DomainKitError> =>
     operation._tag === "Create"
       ? Effect.gen(function* () {
           const observed = yield* dns.list(zone);
@@ -391,9 +390,9 @@ export const cleanupOperation = (
   dns: Provider.Dns,
   zone: string,
   id: Plan.OperationId,
-  record: DnsRecord.DnsRecord,
+  record: DnsRecord.Model,
   providerRecordId: string,
-): Effect.Effect<Plan.Delete | Plan.Conflict, DomainKitError.DomainKitError> =>
+): Effect.Effect<Plan.Delete | Plan.Conflict, Errors.DomainKitError> =>
   Effect.map(dns.get(zone, providerRecordId), (observed) => {
     if (observed === null)
       return new Plan.Conflict({ id, record, existing: [], reason: "missing" });

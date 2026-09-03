@@ -30,7 +30,7 @@ const Ipv6 = Schema.String.check(
 const NonEmpty = Schema.String.check(Schema.isMinLength(1));
 
 const Common = {
-  name: DomainName.DomainName,
+  name: DomainName.Model,
   ttl: Ttl,
   policy: Policy,
   purpose: Schema.optionalKey(Schema.String),
@@ -46,7 +46,7 @@ export class AAAA extends Schema.TaggedClass<AAAA>("@domainkit/DnsRecord/AAAA")(
 }) {}
 export class CNAME extends Schema.TaggedClass<CNAME>("@domainkit/DnsRecord/CNAME")("CNAME", {
   ...Common,
-  target: DomainName.DomainName,
+  target: DomainName.Model,
 }) {}
 export class TXT extends Schema.TaggedClass<TXT>("@domainkit/DnsRecord/TXT")("TXT", {
   ...Common,
@@ -54,7 +54,7 @@ export class TXT extends Schema.TaggedClass<TXT>("@domainkit/DnsRecord/TXT")("TX
 }) {}
 export class MX extends Schema.TaggedClass<MX>("@domainkit/DnsRecord/MX")("MX", {
   ...Common,
-  exchange: DomainName.DomainName,
+  exchange: DomainName.Model,
   priority: Priority,
 }) {}
 export class CAA extends Schema.TaggedClass<CAA>("@domainkit/DnsRecord/CAA")("CAA", {
@@ -65,19 +65,19 @@ export class CAA extends Schema.TaggedClass<CAA>("@domainkit/DnsRecord/CAA")("CA
 }) {}
 export class NS extends Schema.TaggedClass<NS>("@domainkit/DnsRecord/NS")("NS", {
   ...Common,
-  nameserver: DomainName.DomainName,
+  nameserver: DomainName.Model,
 }) {}
 export class SRV extends Schema.TaggedClass<SRV>("@domainkit/DnsRecord/SRV")("SRV", {
   ...Common,
-  target: DomainName.DomainName,
+  target: DomainName.Model,
   port: Port,
   priority: Priority,
   weight: Priority,
 }) {}
 
-export const DnsRecord = Schema.Union([A, AAAA, CNAME, TXT, MX, CAA, NS, SRV]);
-export type DnsRecord = typeof DnsRecord.Type;
-export type Encoded = typeof DnsRecord.Encoded;
+export const Model = Schema.Union([A, AAAA, CNAME, TXT, MX, CAA, NS, SRV]);
+export type Model = typeof Model.Type;
+export type Encoded = typeof Model.Encoded;
 
 /** A provider record DomainKit cannot model but must not overwrite. */
 export class Opaque extends Schema.TaggedClass<Opaque>("@domainkit/DnsRecord/Opaque")("Opaque", {
@@ -85,7 +85,7 @@ export class Opaque extends Schema.TaggedClass<Opaque>("@domainkit/DnsRecord/Opa
   type: Schema.String,
   raw: Schema.Unknown,
 }) {}
-export const Observed = Schema.Union([DnsRecord, Opaque]);
+export const Observed = Schema.Union([Model, Opaque]);
 export type Observed = typeof Observed.Type;
 
 type Options = { readonly ttl?: number; readonly policy?: Policy; readonly purpose?: string };
@@ -154,10 +154,10 @@ export const srv = (
     weight: input.weight,
   });
 
-export const isDnsRecord = (input: unknown): input is DnsRecord => Schema.is(DnsRecord)(input);
+export const isDnsRecord = (input: unknown): input is Model => Schema.is(Model)(input);
 
 /** The record's data portion as a canonical string, for display and zone-file rendering. */
-export const data = (record: DnsRecord): string => {
+export const data = (record: Model): string => {
   switch (record._tag) {
     case "A":
     case "AAAA":

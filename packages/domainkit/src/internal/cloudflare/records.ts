@@ -87,7 +87,7 @@ const decodeRecord = (record: Protocol.Record): Effect.Effect<DnsRecord.Observed
   });
 };
 
-export const encode = (record: DnsRecord.DnsRecord): Record<string, unknown> => {
+export const encode = (record: DnsRecord.Model): Record<string, unknown> => {
   const common = { name: record.name, proxied: false, ttl: record.ttl ?? 1, type: record._tag };
   switch (record._tag) {
     case "A":

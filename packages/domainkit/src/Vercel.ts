@@ -1,7 +1,8 @@
 /** Vercel: personal tokens and marketplace integrations. */
 import { type Config, Effect, Redacted, Schema } from "effect";
 
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Errors from "./internal/error.ts";
+import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
 import { resolve } from "./internal/config.ts";
 import type { Fetch } from "./internal/http.ts";
@@ -73,8 +74,8 @@ export const provider = (options: Options = {}): Provider.Definition<TeamContext
           });
           const callbackTeam = input.params.teamId;
           if (callbackTeam !== undefined && callbackTeam !== token.team_id) {
-            return yield* DomainKitError.fail(
-              new DomainKitError.Unauthenticated({
+            return yield* Errors.fail(
+              new Reason.Unauthenticated({
                 message: "Vercel integration callback team does not match the installed team",
               }),
             );
@@ -116,7 +117,7 @@ export const provider = (options: Options = {}): Provider.Definition<TeamContext
       const teamId = context._tag === "Some" ? context.value.teamId : null;
       const listTargets = (): Effect.Effect<
         ReadonlyArray<Provider.Target>,
-        DomainKitError.DomainKitError
+        Errors.DomainKitError
       > =>
         teamId !== null
           ? Client.zones(clientOptions, teamId).pipe(

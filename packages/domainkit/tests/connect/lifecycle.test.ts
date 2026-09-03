@@ -5,12 +5,13 @@ import { TestClock } from "effect/testing";
 import {
   Connect,
   Custody,
-  DomainKitError,
   Principal,
   type Provider,
   Providers,
+  Reason,
   Storage,
 } from "../../src/index.ts";
+import * as Errors from "../../src/internal/error.ts";
 import { Testing } from "../../src/entry/testing.ts";
 
 const layerFor = (...definitions: ReadonlyArray<Testing.FakeProvider>) =>
@@ -25,7 +26,7 @@ const layerFor = (...definitions: ReadonlyArray<Testing.FakeProvider>) =>
     ),
   );
 
-const withPrincipal = Effect.provideService(Principal.Principal, Testing.principal);
+const withPrincipal = Effect.provideService(Principal.Service, Testing.principal);
 
 describe("Connect", () => {
   it.effect("connects with a token, attaches the domain, and reports it through inspect", () => {
@@ -59,7 +60,7 @@ describe("Connect", () => {
           ],
         },
       ]);
-      const storage = yield* Storage.Storage;
+      const storage = yield* Storage.Service;
       const credential = yield* storage.authorizations.credential(
         started.connection.authorizationId,
       );
@@ -155,7 +156,7 @@ describe("Connect", () => {
         );
         assert.deepStrictEqual([first, second].sort(), ["current", "refreshed"]);
         assert.strictEqual(fake.issued().length, 2);
-        const storage = yield* Storage.Storage;
+        const storage = yield* Storage.Service;
         const credential = yield* storage.authorizations.credential(
           connected.connection.authorizationId,
         );
@@ -203,7 +204,7 @@ describe("Connect", () => {
         callbackUrl: redirect.authorizationUrl,
       });
       if (connected._tag !== "Connected") return assert.fail("expected a connection");
-      const storage = yield* Storage.Storage;
+      const storage = yield* Storage.Service;
       yield* TestClock.adjust("55 minutes");
 
       // Revocation completes while the provider is issuing the refreshed credential.
@@ -367,9 +368,7 @@ describe("Connect", () => {
     const storage = Storage.layerMemoryWith({
       beforeCommit: (operation) =>
         operation === "continuations.consume"
-          ? DomainKitError.fail(
-              new DomainKitError.StorageFailed({ operation, message: "storage outage" }),
-            )
+          ? Errors.fail(new Reason.StorageFailed({ operation, message: "storage outage" }))
           : Effect.void,
     });
     const layer = Connect.layer.pipe(
@@ -408,9 +407,7 @@ describe("Connect", () => {
         if (operation !== "authorizations.upsert") return Effect.void;
         commits += 1;
         return commits === 1
-          ? DomainKitError.fail(
-              new DomainKitError.StorageFailed({ operation, message: "storage outage" }),
-            )
+          ? Errors.fail(new Reason.StorageFailed({ operation, message: "storage outage" }))
           : Effect.void;
       },
     });
@@ -476,8 +473,8 @@ describe("Connect", () => {
             Effect.suspend(() => {
               attempts += 1;
               return attempts === 1
-                ? DomainKitError.fail(
-                    new DomainKitError.ProviderUnavailable({
+                ? Errors.fail(
+                    new Reason.ProviderUnavailable({
                       provider: "fake",
                       message: "provider down",
                     }),
@@ -501,7 +498,7 @@ describe("Connect", () => {
       if (connected._tag !== "Connected") return assert.fail("expected a connection");
       const failure = yield* Connect.disconnect(connected.connection.id).pipe(Effect.flip);
       assert.strictEqual(failure.reason._tag, "ProviderUnavailable");
-      const storage = yield* Storage.Storage;
+      const storage = yield* Storage.Service;
       const pending = yield* storage.authorizations.get(connected.connection.authorizationId);
       assert.strictEqual(pending.revocation, "pending");
       const next = yield* Connect.start({ provider: "fake", method: Connect.Method.token("t") });

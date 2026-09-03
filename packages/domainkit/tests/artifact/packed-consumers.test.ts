@@ -43,7 +43,7 @@ export const run = () => {
       version: VERSION,
     };
   }).pipe(
-    Effect.provideService(Principal.Principal, Testing.principal),
+    Effect.provideService(Principal.Service, Testing.principal),
     Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
   );
   return Effect.runPromise(program);
@@ -107,16 +107,16 @@ if (JSON.stringify(result) !== JSON.stringify(expected)) {
         join(directory, "types.ts"),
         `
 import { Effect, Layer, Redacted } from "effect";
-import { Custody, DomainKit, type DomainKitError, type Provider, type Storage } from "domainkit";
+import { Custody, DomainKit, type Provider, type Storage } from "domainkit";
 import { Testing } from "domainkit/testing";
 
 export type PublicProvider = Provider.Definition;
-export type PublicStorage = Storage.Service;
-export type PublicAsyncStorage = Storage.AsyncService;
-export type PublicError = DomainKitError.DomainKitError;
+export type PublicStorage = Storage.Interface;
+export type PublicAsyncStorage = Storage.AsyncInterface;
+export type PublicError = DomainKit.Error;
 export type Fake = Testing.FakeProvider;
 
-export const live: Layer.Layer<DomainKit.Services, DomainKitError.DomainKitError, Storage.Storage> =
+export const live: Layer.Layer<DomainKit.Services, DomainKit.Error, Storage.Service> =
   DomainKit.layer({ providers: [Testing.provider()] }).pipe(
     Layer.provide(Custody.layer({ key: Redacted.make(Custody.generateKey()) })),
   );

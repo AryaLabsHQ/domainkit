@@ -30,7 +30,7 @@ describe("host-shaped test against the seam", () => {
         assert.strictEqual(readiness.overall, "ready");
         assert.strictEqual(fake.records("customer.dev").length, 2);
       }).pipe(
-        Effect.provideService(Principal.Principal, Testing.principal),
+        Effect.provideService(Principal.Service, Testing.principal),
         Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
       );
     },
