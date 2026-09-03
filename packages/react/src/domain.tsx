@@ -1,4 +1,4 @@
-import type { DnsRecord, Receipt } from "domainkit";
+import { Receipt, type DnsRecord } from "domainkit";
 import { useCallback, type ReactElement, type ReactNode } from "react";
 
 import type { PartProps } from "./composition.tsx";
@@ -157,7 +157,7 @@ export function Flow({
     ),
     ...(connection.snapshot?.lastReceiptId == null
       ? {}
-      : { receiptId: connection.snapshot.lastReceiptId as Receipt.ReceiptId }),
+      : { receiptId: Receipt.ReceiptId.make(connection.snapshot.lastReceiptId) }),
   });
   const verification = Verify.useController({ domain });
   const readiness = verification.readiness;
@@ -168,24 +168,31 @@ export function Flow({
     {
       children: (
         <>
-          {capabilities.includes("connection")
-            ? (slots.connection ?? DefaultConnection)({ controller: connection, domain })
-            : null}
-          {(
-            slots.records ??
-            (({ readiness: current, records }: RecordsSlotProps) => (
-              <Records.Table readiness={current} records={records} />
-            ))
-          )({ controller: verification, domain, readiness, records: requirements })}
-          {capabilities.includes("verification")
-            ? (
-                slots.verification ??
-                (({ controller }: VerificationSlotProps) => (
-                  <Verify.Status controller={controller} />
-                ))
-              )({ controller: verification, domain })
-            : null}
-          {(slots.actions ?? DefaultActions)({ cleanup, connection, domain, provisioning })}
+          {!capabilities.includes("connection") ? null : slots.connection === undefined ? (
+            <DefaultConnection controller={connection} domain={domain} />
+          ) : (
+            slots.connection({ controller: connection, domain })
+          )}
+          {slots.records === undefined ? (
+            <Records.Table readiness={readiness} records={requirements} />
+          ) : (
+            slots.records({ controller: verification, domain, readiness, records: requirements })
+          )}
+          {!capabilities.includes("verification") ? null : slots.verification === undefined ? (
+            <Verify.Status controller={verification} />
+          ) : (
+            slots.verification({ controller: verification, domain })
+          )}
+          {slots.actions === undefined ? (
+            <DefaultActions
+              cleanup={cleanup}
+              connection={connection}
+              domain={domain}
+              provisioning={provisioning}
+            />
+          ) : (
+            slots.actions({ cleanup, connection, domain, provisioning })
+          )}
         </>
       ),
       "data-domainkit-part": "domain-flow",

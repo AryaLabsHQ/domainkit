@@ -72,7 +72,7 @@ const needsNewPlan = (error: DomainKitError.DomainKitError): boolean =>
   error.reason._tag === "Conflict";
 
 export function useAttempt(options: Options): Controller {
-  const { domain, done, group, onDone } = options;
+  const { domain, done, group, onDone, plan: buildEffect } = options;
   const { emit } = useDomainKit();
   const runner = useRunner();
   const [state, setState] = useState<State>(State.Idle());
@@ -81,8 +81,6 @@ export function useAttempt(options: Options): Controller {
     plan: null,
   });
   const lastCommand = useRef<(() => void) | null>(null);
-  const planRef = useRef(options.plan);
-  planRef.current = options.plan;
 
   const onFailure = useCallback(
     (error: DomainKitError.DomainKitError) => {
@@ -113,7 +111,7 @@ export function useAttempt(options: Options): Controller {
   );
 
   const buildPlan = useCallback(() => {
-    const effect = planRef.current();
+    const effect = buildEffect();
     if (effect === null) return;
     const command = () => {
       setState(State.Planning());
@@ -127,7 +125,7 @@ export function useAttempt(options: Options): Controller {
     };
     lastCommand.current = command;
     command();
-  }, [onFailure, runner]);
+  }, [buildEffect, onFailure, runner]);
 
   const approve = useCallback(
     (operationIds?: ReadonlyArray<Plan.OperationId>) => {

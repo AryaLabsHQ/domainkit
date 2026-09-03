@@ -216,7 +216,24 @@ export function Dialog({
   const running = busy(controller.state._tag);
   const body = children ?? <Body controller={controller} kind={kind} />;
   const title = kind === "provisioning" ? messages.planTitle : messages.cleanupTitle;
-  if (render !== undefined) return <>{render({ children: body, open: isOpen })}</>;
+  const label = trigger ?? (kind === "provisioning" ? messages.reviewChanges : messages.cleanUp);
+  if (render !== undefined) {
+    return (
+      <>
+        <button
+          data-domainkit-part={kind === "provisioning" ? "plan-trigger" : "cleanup-trigger"}
+          onClick={() => {
+            setOpen(true);
+            controller.plan();
+          }}
+          type="button"
+        >
+          {label}
+        </button>
+        {render({ children: body, open: isOpen })}
+      </>
+    );
+  }
   return (
     <BaseDialog.Root
       onOpenChange={(next, details) => {
@@ -232,7 +249,7 @@ export function Dialog({
         data-domainkit-part={kind === "provisioning" ? "plan-trigger" : "cleanup-trigger"}
         onClick={controller.plan}
       >
-        {trigger ?? (kind === "provisioning" ? messages.reviewChanges : messages.cleanUp)}
+        {label}
       </BaseDialog.Trigger>
       <BaseDialog.Portal container={portalContainer}>
         <BaseDialog.Backdrop

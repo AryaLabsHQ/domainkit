@@ -1,4 +1,4 @@
-import { DomainKitError, type Receipt } from "domainkit";
+import { DomainKitError, Receipt } from "domainkit";
 import * as Effect from "effect/Effect";
 import { useCallback, type ReactElement, type ReactNode } from "react";
 
@@ -41,7 +41,7 @@ export function useController({ domain, onCleaned, receiptId }: Options): Contro
           ? DomainKitError.fail(
               new DomainKitError.NotFound({ entity: "receipt", id: snapshot.domain }),
             )
-          : group.plan(snapshot.lastReceiptId as Receipt.ReceiptId),
+          : group.plan(Receipt.ReceiptId.make(snapshot.lastReceiptId)),
       );
     }, [connection, domain, group, receiptId]),
   });

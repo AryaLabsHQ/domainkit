@@ -596,7 +596,20 @@ export function Dialog({
       ? messages.connectAnyTitle
       : messages.connectTitle(provider));
   const body = children ?? <Form controller={controller} />;
-  if (render !== undefined) return <>{render({ children: body, open: true })}</>;
+  if (render !== undefined) {
+    return (
+      <>
+        <button
+          data-domainkit-part="connection-trigger"
+          onClick={() => setOpen(!open)}
+          type="button"
+        >
+          {trigger ?? messages.connect}
+        </button>
+        {render({ children: body, open })}
+      </>
+    );
+  }
   return (
     <BaseDialog.Root
       onOpenChange={(next, details) => {

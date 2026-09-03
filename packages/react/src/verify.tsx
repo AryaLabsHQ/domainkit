@@ -289,7 +289,7 @@ export function Status({ controller, render, ...props }: StatusProps): ReactElem
       ) : (
         <>
           <ObserveAction controller={controller} />
-          {render({ children: body, open: true })}
+          {render({ children: body, open: controller.state._tag !== "Idle" })}
         </>
       )}
     </Root>
