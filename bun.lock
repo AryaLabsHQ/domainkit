@@ -46,7 +46,7 @@
         "@effect/vitest": "4.0.0-rc.112",
         "@testcontainers/postgresql": "12.1.0",
         "@types/bun": "1.4.0",
-        "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#c323a6c6657d095fa58541985341ea68036b33f7",
+        "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#860ae859adb63f2af365cd6d785115270b35bff3",
         "drizzle-orm": "1.0.0-rc.5-ab785fc",
         "effect": "4.0.0-rc.112",
         "tsdown": "0.22.14",
@@ -120,7 +120,7 @@
     "blume@1.5.3": "patches/blume@1.5.3.patch",
   },
   "overrides": {
-    "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#c323a6c6657d095fa58541985341ea68036b33f7",
+    "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#860ae859adb63f2af365cd6d785115270b35bff3",
   },
   "packages": {
     "@ai-sdk/gateway": ["@ai-sdk/gateway@4.0.69", "", { "dependencies": { "@ai-sdk/provider": "4.0.9", "@ai-sdk/provider-utils": "5.0.34", "@vercel/oidc": "3.2.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-W5MMdyqsaziQy/A4kxlK74iEQ+NuO6OaszH32cEQpUgBW0o15S2fAdP0aYSH2/5lrVZSMXLQLCzuMkRGHBua3A=="],
@@ -1337,7 +1337,7 @@
 
     "caniuse-lite": ["caniuse-lite@1.0.30001810", "", {}, "sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg=="],
 
-    "capsuledb": ["capsuledb@github:aryasaatvik/CapsuleDB#c323a6c", { "peerDependencies": { "@effect/sql-libsql": ">=4.0.0-rc.111 <5", "@effect/sql-sqlite-bun": ">=4.0.0-rc.111 <5", "effect": ">=4.0.0-rc.111 <5" }, "optionalPeers": ["@effect/sql-libsql", "@effect/sql-sqlite-bun"], "bin": { "capsuledb": "./dist/cli.mjs" } }, "aryasaatvik-CapsuleDB-c323a6c", "sha512-E362lihmt57aPMqfkCQuz64I4+fxLiC+fJ0jLfnq8vQ5q3NfDsZj0dz1fyrSVvfCJBciAZFGx/nUPLweew2tTw=="],
+    "capsuledb": ["capsuledb@github:aryasaatvik/CapsuleDB#860ae85", { "peerDependencies": { "@effect/sql-libsql": ">=4.0.0-rc.111 <5", "@effect/sql-sqlite-bun": ">=4.0.0-rc.111 <5", "effect": ">=4.0.0-rc.111 <5" }, "optionalPeers": ["@effect/sql-libsql", "@effect/sql-sqlite-bun"], "bin": { "capsuledb": "./dist/cli.mjs" } }, "aryasaatvik-CapsuleDB-860ae85", "sha512-76ELU9KGpThOjiSGVMAnl0Sa3PZMwbhcz76YOtAlOvWi4kpSgvAuDnP6oYuKgMNb+InAnwL5PrWUVvNw82kxmg=="],
 
     "ccount": ["ccount@2.0.1", "", {}, "sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg=="],
 

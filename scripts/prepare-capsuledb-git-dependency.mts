@@ -1,7 +1,7 @@
 import { access, cp, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-const capsuleDbSha = "c323a6c6657d095fa58541985341ea68036b33f7";
+const capsuleDbSha = "860ae859adb63f2af365cd6d785115270b35bff3";
 const workspaceRoot = resolve(import.meta.dir, "..");
 const integrationRoot = join(workspaceRoot, "packages", "capsuledb");
 const installedRoot = join(integrationRoot, "node_modules", "capsuledb");
