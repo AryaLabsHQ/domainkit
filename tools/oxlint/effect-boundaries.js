@@ -15,6 +15,7 @@ const foreignPromiseFiles = new Set([
   `${coreSource}internal/doh.ts`,
   `${coreSource}internal/http.ts`,
   `${coreSource}internal/oauth.ts`,
+  `${coreSource}internal/provider-async.ts`,
 ]);
 
 function relative(filename) {

@@ -310,3 +310,15 @@ export const decodeContext = <Context>(
       );
     }),
   );
+
+export {
+  type AsyncCredential,
+  type AsyncDefinition,
+  type AsyncDns,
+  type AsyncIntegrationAuth,
+  type AsyncIssuedCredential,
+  type AsyncOAuthAuth,
+  type AsyncSession,
+  type AsyncTokenAuth,
+  fromAsync,
+} from "./internal/provider-async.ts";
