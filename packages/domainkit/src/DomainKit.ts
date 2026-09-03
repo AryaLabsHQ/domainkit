@@ -3,8 +3,8 @@
  * provides `Storage` and `Custody` beneath it, the same way `Persistence.layer` sits over a
  * backing store in Effect.
  *
- * Defaults: `Resolver.layer` (Cloudflare + Google DoH), WebCrypto digests, and the `Policy`
- * references. Override a policy with `Effect.provideService`; pass `resolver` for a different pool.
+ * Defaults: `Resolver.layer` (Cloudflare + Google DoH) and the `Policy` references. Override a
+ * policy with `Effect.provideService`; pass `resolver` for a different pool.
  */
 import { Layer, Redacted } from "effect";
 
