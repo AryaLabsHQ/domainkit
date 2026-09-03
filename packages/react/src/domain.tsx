@@ -61,6 +61,11 @@ export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children">
   readonly slots?: Slots;
   readonly onApplied?: (receipt: Receipt.Model) => void;
   readonly onCleaned?: (receipt: Receipt.Model) => void;
+  /**
+   * Where an interactive provider flow returns the customer. Defaults to the page they started
+   * from; pass `null` to let the server's `defaultReturnTo` decide.
+   */
+  readonly returnTo?: string | null;
 }
 
 function DefaultConnection({ controller }: ConnectionSlotProps): ReactElement {
@@ -129,11 +134,15 @@ export function Flow({
   onApplied,
   onCleaned,
   requirements,
+  returnTo,
   slots = {},
   ...props
 }: FlowProps): ReactElement {
   const { capabilities } = useDomainKit();
-  const connection = Connect.useController({ domain });
+  const connection = Connect.useController({
+    domain,
+    ...(returnTo === undefined ? {} : { returnTo }),
+  });
   const refresh = connection.refresh;
   const provisioning = Provision.useController({
     domain,

@@ -71,7 +71,16 @@ export interface Controller {
 
 export interface Options {
   readonly domain: string;
+  /**
+   * Where an interactive method returns the customer. Defaults to the page they started from;
+   * pass `null` to send none and let the server's `defaultReturnTo` decide.
+   */
+  readonly returnTo?: string | null;
 }
+
+/** Read at connect time, not at render, so it is the page the customer is actually on. */
+const currentUrl = (): string | null =>
+  typeof window === "undefined" ? null : window.location.href;
 
 const snapshotOf = (state: State): Snapshot | null => {
   switch (state._tag) {
@@ -105,7 +114,7 @@ const settled = (snapshot: Snapshot, discovery: Discovery | null): State => {
  * transport declares it and the domain has no connection yet; a discovery failure is not the
  * customer's problem, so the provider list still renders.
  */
-export function useController({ domain }: Options): Controller {
+export function useController({ domain, returnTo }: Options): Controller {
   const { emit, navigate, revision, transport } = useDomainKit();
   const connection = transport.connection;
   const runner = useRunner();
@@ -219,16 +228,17 @@ export function useController({ domain }: Options): Controller {
   const connect = useCallback(
     (input: ConnectInput) => {
       if (connection === undefined) return;
-      const returnTo = input.returnTo;
+      const destination = input.returnTo ?? (returnTo === undefined ? currentUrl() : returnTo);
+      const interactive = destination === null ? {} : { returnTo: destination };
       const method =
         input.method === "token"
           ? Transport.Method.token(input.values ?? {})
           : input.method === "oauth"
-            ? Transport.Method.oauth(returnTo === undefined ? {} : { returnTo })
-            : Transport.Method.integration(returnTo === undefined ? {} : { returnTo });
+            ? Transport.Method.oauth(interactive)
+            : Transport.Method.integration(interactive);
       submit(connection.start({ domain, method, provider: input.provider }));
     },
-    [connection, domain, submit],
+    [connection, domain, returnTo, submit],
   );
 
   const reuse = useCallback(
@@ -739,11 +749,12 @@ export function Card({ controller, ...props }: CardProps): ReactElement {
 
 export interface FlowProps extends Omit<RootProps, "controller"> {
   readonly domain: string;
+  readonly returnTo?: string | null;
 }
 
 /** Connection on its own: the card once connected, the dialog until then. */
-export function Flow({ domain, ...props }: FlowProps): ReactElement {
-  const controller = useController({ domain });
+export function Flow({ domain, returnTo, ...props }: FlowProps): ReactElement {
+  const controller = useController({ domain, ...(returnTo === undefined ? {} : { returnTo }) });
   const state = controller.state;
   return (
     <Root controller={controller} {...props}>

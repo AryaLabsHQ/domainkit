@@ -318,3 +318,67 @@ describe("controller identity", () => {
     expect(screen.getByRole("status").textContent).toBe("none");
   });
 });
+
+describe("interactive return destination", () => {
+  const startMethod = (transport: {
+    readonly calls: ReadonlyArray<{ method: string; input: unknown }>;
+  }) =>
+    (
+      transport.calls.find((call) => call.method === "connection.start")?.input as
+        | { readonly method: { readonly _tag: string; readonly returnTo?: string } }
+        | undefined
+    )?.method;
+
+  const oauth = () => {
+    const zone = `oauth${(cases += 1)}.example`;
+    return {
+      domain: `app.${zone}`,
+      transport: Testing.transport({ provider: { oauth: true, zones: [zone] } }),
+    };
+  };
+
+  it("sends the page the customer started from", async () => {
+    const { domain, transport } = oauth();
+    render(
+      <DomainKit.Root navigate={() => {}} transport={transport}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await click("Sign in (fake)");
+    await waitFor(() => expect(startMethod(transport)).toBeDefined());
+    expect(startMethod(transport)).toMatchObject({
+      _tag: "OAuth",
+      returnTo: window.location.href,
+    });
+  });
+
+  it("takes an explicit destination from the host", async () => {
+    const { domain, transport } = oauth();
+    render(
+      <DomainKit.Root navigate={() => {}} transport={transport}>
+        <Connect.Flow domain={domain} returnTo="https://app.example.com/domains/1" />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await click("Sign in (fake)");
+    await waitFor(() => expect(startMethod(transport)).toBeDefined());
+    expect(startMethod(transport)).toMatchObject({
+      _tag: "OAuth",
+      returnTo: "https://app.example.com/domains/1",
+    });
+  });
+
+  it("sends none when the host opts out, leaving the server's default in charge", async () => {
+    const { domain, transport } = oauth();
+    render(
+      <DomainKit.Root navigate={() => {}} transport={transport}>
+        <Connect.Flow domain={domain} returnTo={null} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await click("Sign in (fake)");
+    await waitFor(() => expect(startMethod(transport)).toBeDefined());
+    expect(startMethod(transport)).toEqual({ _tag: "OAuth" });
+  });
+});

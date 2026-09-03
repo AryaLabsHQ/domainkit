@@ -99,6 +99,22 @@ test("lets a host's own rule beat a part, because the package ships in a cascade
   await flow.screenshot({ path: shot("host-override") });
 });
 
+test("sends the page the customer started from as the interactive return destination", async ({
+  page,
+}) => {
+  await page.goto("/?zone=browser8.example&view=returnto");
+  await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByRole("button", { name: "Sign in (fake)" }).click();
+  const started = page.getByTestId("started");
+  await expect(started).not.toBeEmpty();
+  const method = JSON.parse((await started.textContent()) ?? "{}") as {
+    readonly _tag: string;
+    readonly returnTo?: string;
+  };
+  expect(method._tag).toBe("OAuth");
+  expect(method.returnTo).toBe(page.url());
+});
+
 test("takes theme tokens and the color scheme from the root", async ({ page }) => {
   await open(page, "browser4.example", "dark");
   const root = page.locator("[data-domainkit-root]").first();
