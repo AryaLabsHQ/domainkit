@@ -9,6 +9,7 @@ import {
   Principal,
   Provision,
   Resolver,
+  Storage,
   Verify,
 } from "../../src/index.ts";
 import { Testing } from "../../src/entry/testing.ts";
@@ -256,6 +257,62 @@ describe("Verify", () => {
       withPrincipal,
       Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver([]) })),
     );
+  });
+
+  it.effect("observes public DNS alone for domains with no attachment or no usable session", () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    const resolver = Testing.resolver([
+      {
+        name: "standalone.dev",
+        records: [DnsRecord.txt({ name: "standalone.dev", value: "v=spf1" })],
+      },
+      {
+        name: "app.example.com",
+        records: [DnsRecord.cname({ name: "app.example.com", target: "edge.acme.dev" })],
+      },
+    ]);
+    return Effect.gen(function* () {
+      const noRequirements = yield* Verify.observe({ domain: "standalone.dev" }).pipe(Effect.flip);
+      assert.strictEqual(noRequirements.reason._tag, "InvalidInput");
+      const standalone = yield* Verify.observe({
+        domain: "standalone.dev",
+        requirements: [DnsRecord.txt({ name: "standalone.dev", value: "v=spf1" })],
+      });
+      assert.strictEqual(standalone.overall, "ready");
+      assert.strictEqual(standalone.attachmentId, null);
+      assert.deepStrictEqual(
+        standalone.requirements[0]?.evidence.map((evidence) => evidence._tag),
+        ["PublicDns"],
+      );
+      const pending = yield* Verify.observe({
+        domain: "standalone.dev",
+        requirements: [DnsRecord.txt({ name: "standalone.dev", value: "missing" })],
+      });
+      assert.strictEqual(pending.overall, "pending");
+      assert.ok(pending.nextCheckAt !== null);
+      const latest = yield* Verify.latest("standalone.dev");
+      assert.strictEqual(latest?.overall, "pending");
+      const started = yield* Connect.start({
+        provider: "fake",
+        method: Connect.Method.token("t"),
+        domain: "app.example.com",
+      });
+      if (started._tag !== "Connected") return assert.fail("expected a connection");
+      const storage = yield* Storage.Storage;
+      yield* storage.authorizations
+        .revoke(started.connection.authorizationId, Effect.fail(new Error("provider down")))
+        .pipe(Effect.ignore);
+      const publicOnly = yield* Verify.observe({
+        domain: "app.example.com",
+        requirements: [DnsRecord.cname({ name: "app.example.com", target: "edge.acme.dev" })],
+      });
+      assert.strictEqual(publicOnly.overall, "ready");
+      assert.strictEqual(publicOnly.attachmentId, started.attachment?.id ?? null);
+      assert.deepStrictEqual(
+        publicOnly.requirements[0]?.evidence.map((evidence) => evidence._tag),
+        ["PublicDns"],
+      );
+    }).pipe(withPrincipal, Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver })));
   });
 
   it.effect("requires every resolver under the all quorum", () => {

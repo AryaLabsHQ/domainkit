@@ -275,7 +275,6 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
             yield* attachment(principal, id);
             yield* commit("attachments.remove");
             state.attachments.delete(id);
-            state.readiness.delete(id);
           }),
         ),
     },
@@ -471,14 +470,17 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
             if (readiness.ownerId !== principal.ownerId) {
               return yield* invalid("Readiness owner does not match the principal", "ownerId");
             }
-            yield* attachment(principal, readiness.attachmentId);
+            if (readiness.attachmentId !== null)
+              yield* attachment(principal, readiness.attachmentId);
             yield* commit("readiness.put");
-            state.readiness.set(readiness.attachmentId, readiness);
+            state.readiness.set(`${principal.ownerId}:${readiness.domain}`, readiness);
           }),
         ),
-      get: (attachmentId) =>
+      get: (domain) =>
         read((principal) =>
-          Effect.sync(() => Option.fromNullishOr(owned(state.readiness, principal, attachmentId))),
+          Effect.sync(() =>
+            Option.fromNullishOr(state.readiness.get(`${principal.ownerId}:${domain}`)),
+          ),
         ),
     },
     withLock: (key, effect) =>

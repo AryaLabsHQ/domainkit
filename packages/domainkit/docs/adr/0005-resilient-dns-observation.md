@@ -26,7 +26,10 @@ outranks agreement elsewhere; `Verify.Policy.quorum` (`any` by default, `all`, o
 how many resolvers must agree for `satisfied`. Provider and public evidence must both be satisfied
 for the requirement to be satisfied.
 
-Readiness is persisted per attachment with `nextCheckAt` from the `Verify.Policy.backoff` ladder
+Readiness is persisted per domain, with the attachment linked when one exists, so a host that
+only watches public DNS for a domain it never attached gets the same row, ladder, and
+`nextCheckAt`. When the attachment's provider session cannot be built, public DNS stands alone
+and no provider evidence is recorded. Readiness carries `nextCheckAt` from the `Verify.Policy.backoff` ladder
 (15s, 1m, 5m, 30m by default); the pending streak restarts when the requirement set changes and
 clears when the attachment is ready. Requirements default to the latest provisioning receipt; an
 explicit set is also accepted and an empty set is rejected.

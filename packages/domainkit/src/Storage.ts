@@ -127,9 +127,14 @@ export type RequirementStatus = typeof RequirementStatus.Type;
 export const Overall = Schema.Literals(["ready", "pending", "failed"]);
 export type Overall = typeof Overall.Type;
 
-/** Latest observed readiness for one attachment, written by `Verify.observe`. */
+/**
+ * Latest observed readiness for one domain, written by `Verify.observe`. Keyed by domain so
+ * observe-only hosts (no attachment, public DNS alone) get the same row; `attachmentId` links the
+ * attachment when one exists.
+ */
 export class Readiness extends Schema.Class<Readiness>("@domainkit/Storage/Readiness")({
-  attachmentId: Schema.String,
+  domain: Schema.String,
+  attachmentId: Schema.NullOr(Schema.String),
   ownerId: Schema.String,
   overall: Overall,
   requirements: Schema.Array(
@@ -236,8 +241,9 @@ export interface Service {
     readonly fail: (id: Plan.PlanId, message: string) => Fx<Attempt>;
   };
   readonly readiness: {
+    /** One row per (owner, domain); `attachmentId`, when set, must exist for the owner. */
     readonly put: (readiness: Readiness) => Fx<void>;
-    readonly get: (attachmentId: string) => Fx<Option.Option<Readiness>>;
+    readonly get: (domain: string) => Fx<Option.Option<Readiness>>;
   };
   /** Single-flight guard keyed by string (credential refresh, apply). Fails `Busy` rather than waiting. */
   readonly withLock: <A, E, R>(
@@ -376,7 +382,7 @@ export interface AsyncService {
   };
   readonly readiness: {
     readonly put: (principal: PrincipalShape, readiness: Readiness) => Promise<void>;
-    readonly get: (principal: PrincipalShape, attachmentId: string) => Promise<Readiness | null>;
+    readonly get: (principal: PrincipalShape, domain: string) => Promise<Readiness | null>;
   };
   /** Return `false` when another holder has the key. */
   readonly acquireLock: (principal: PrincipalShape, key: string) => Promise<boolean>;
@@ -482,7 +488,7 @@ export const fromAsync = (service: AsyncService): Service => {
     },
     readiness: {
       put: (readiness) => call("readiness.put", (p) => service.readiness.put(p, readiness)),
-      get: (attachmentId) => option("readiness.get", (p) => service.readiness.get(p, attachmentId)),
+      get: (domain) => option("readiness.get", (p) => service.readiness.get(p, domain)),
     },
     withLock: (key, effect) =>
       Effect.acquireRelease(

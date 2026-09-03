@@ -50,7 +50,9 @@ export interface Requirement {
 }
 
 export interface Readiness {
-  readonly attachmentId: string;
+  readonly domain: string;
+  /** `null` for observe-only domains that have no attachment. */
+  readonly attachmentId: string | null;
   readonly overall: Storage.Overall;
   readonly requirements: ReadonlyArray<Requirement>;
   readonly host: ReadonlyArray<HostEvidence>;
@@ -63,7 +65,9 @@ type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError, Principal>;
 export interface Service {
   /**
    * Requirements default to the latest provisioning receipt for the attachment (records it
-   * applied or found in place); pass `requirements` to observe an arbitrary set.
+   * applied or found in place); pass `requirements` to observe an arbitrary set, including for a
+   * domain with no attachment. Provider evidence is added when the attachment's session can be
+   * built; public DNS is always observed.
    */
   readonly observe: (input: {
     readonly domain: string;
@@ -105,6 +109,11 @@ export class Policy extends Context.Reference<PolicyShape>("@domainkit/Verify/Po
 // ---------------------------------------------------------------------------------------------
 
 const StoredEvidence = Schema.Array(Evidence);
+
+interface ProviderSide {
+  readonly provider: string;
+  readonly records: ReadonlyArray<DnsRecord.Observed>;
+}
 const StoredHost = Schema.Array(HostEvidence);
 
 /** A requirement is satisfied by an exact match; an exclusive one is contradicted by any same-set record. */
@@ -172,16 +181,16 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
     const connect = yield* Connect;
     const resolver = yield* Resolver;
 
-    const attachmentFor = (input: string): Fx<Storage.Attachment> =>
+    const attachmentFor = (
+      input: string,
+    ): Fx<{
+      readonly domain: DomainName.DomainName;
+      readonly attachment: Storage.Attachment | null;
+    }> =>
       Effect.gen(function* () {
         const domain = yield* DomainName.decode(input);
         const attachment = yield* storage.attachments.byDomain(domain);
-        if (Option.isNone(attachment)) {
-          return yield* DomainKitError.fail(
-            new DomainKitError.NotFound({ entity: "attachment", id: domain }),
-          );
-        }
-        return attachment.value;
+        return { domain, attachment: Option.getOrNull(attachment) };
       });
 
     const decodeRow = (
@@ -200,6 +209,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
         );
         const host = yield* DomainKitError.decode(StoredHost, row.host, "host");
         return {
+          domain: row.domain,
           attachmentId: row.attachmentId,
           overall: row.overall,
           requirements,
@@ -211,7 +221,8 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
 
     /** Persist readiness, carrying the pending streak forward for the backoff ladder. */
     const store = (input: {
-      readonly attachment: Storage.Attachment;
+      readonly domain: string;
+      readonly attachment: Storage.Attachment | null;
       readonly requirements: ReadonlyArray<Requirement>;
       readonly host: ReadonlyArray<HostEvidence>;
       readonly previous: Option.Option<Storage.Readiness>;
@@ -244,7 +255,8 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
                 ),
               );
         const row = new Storage.Readiness({
-          attachmentId: input.attachment.id,
+          domain: input.domain,
+          attachmentId: input.attachment?.id ?? null,
           ownerId: principal.ownerId,
           overall,
           requirements: input.requirements.map((requirement) => ({
@@ -260,6 +272,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
         });
         yield* storage.readiness.put(row);
         return {
+          domain: row.domain,
           attachmentId: row.attachmentId,
           overall,
           requirements: input.requirements,
@@ -303,11 +316,19 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
     const observe: Service["observe"] = (input) =>
       Effect.gen(function* () {
         const policy = yield* Policy;
-        const attachment = yield* attachmentFor(input.domain);
+        const { domain, attachment } = yield* attachmentFor(input.domain);
+        if (input.requirements === undefined && attachment === null) {
+          return yield* DomainKitError.fail(
+            new DomainKitError.InvalidInput({
+              message: `${domain} is not attached; pass requirements to observe public DNS`,
+              field: "requirements",
+            }),
+          );
+        }
         const requirements =
-          input.requirements === undefined
+          input.requirements === undefined && attachment !== null
             ? yield* defaultRequirements(attachment)
-            : input.requirements.map((record) => ({ operationId: null, record }));
+            : (input.requirements ?? []).map((record) => ({ operationId: null, record }));
         if (requirements.length === 0) {
           return yield* DomainKitError.fail(
             new DomainKitError.InvalidInput({
@@ -317,33 +338,33 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
           );
         }
         const now = yield* DateTime.now;
-        const { session, target } = yield* connect.session(attachment.id);
-        const providerRecords = yield* session
-          .dns(target)
-          .list(target.zone)
-          .pipe(
-            Effect.map((observed) => Option.some(observed.map(({ record }) => record))),
-            Effect.catchIf(
-              (error) => error.reason._tag !== "Reconnect",
-              () => Effect.succeed(Option.none<ReadonlyArray<DnsRecord.Observed>>()),
-            ),
-          );
-        const provider = yield* Effect.gen(function* () {
-          const connection = yield* storage.connections.get(attachment.connectionId);
-          const authorization = yield* storage.authorizations.get(connection.authorizationId);
-          return authorization.provider;
-        });
+        // Provider readback is evidence when the attachment's session can be built; when it
+        // cannot (no attachment, revoked credential, provider outage) public DNS stands alone.
+        const providerSide = yield* attachment === null
+          ? Effect.succeed(Option.none<ProviderSide>())
+          : Effect.gen(function* () {
+              const connection = yield* storage.connections.get(attachment.connectionId);
+              const authorization = yield* storage.authorizations.get(connection.authorizationId);
+              const { session, target } = yield* connect.session(attachment.id);
+              const observed = yield* session.dns(target).list(target.zone);
+              return Option.some<ProviderSide>({
+                provider: authorization.provider,
+                records: observed.map(({ record }) => record),
+              });
+            }).pipe(Effect.catch(() => Effect.succeed(Option.none<ProviderSide>())));
         const observed = yield* Effect.forEach(
           requirements,
           ({ operationId, record }) =>
             Effect.gen(function* () {
-              const providerEvidence = new ProviderEvidence({
-                provider,
-                status: Option.isSome(providerRecords)
-                  ? statusAgainst(record, providerRecords.value)
-                  : "unknown",
-                observedAt: now,
-              });
+              const providerEvidence = Option.isSome(providerSide)
+                ? [
+                    new ProviderEvidence({
+                      provider: providerSide.value.provider,
+                      status: statusAgainst(record, providerSide.value.records),
+                      observedAt: now,
+                    }),
+                  ]
+                : [];
               const outcomes = yield* resolver.resolve(record.name, record._tag);
               const publicEvidence = outcomes.map(
                 (outcome) =>
@@ -361,27 +382,30 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
                 policy.quorum,
                 publicEvidence.map(({ status }) => status),
               );
-              const status = combine([providerEvidence.status, publicStatus]);
+              const status = combine([
+                ...providerEvidence.map((evidence) => evidence.status),
+                publicStatus,
+              ]);
               return {
                 operationId,
                 record,
                 status,
-                evidence: [providerEvidence, ...publicEvidence],
+                evidence: [...providerEvidence, ...publicEvidence],
               } satisfies Requirement;
             }),
           { concurrency: "unbounded" },
         );
-        const previous = yield* storage.readiness.get(attachment.id);
+        const previous = yield* storage.readiness.get(domain);
         const host = Option.isSome(previous)
           ? yield* DomainKitError.decode(StoredHost, previous.value.host, "host")
           : [];
-        return yield* store({ attachment, requirements: observed, host, previous });
+        return yield* store({ domain, attachment, requirements: observed, host, previous });
       });
 
     const attachEvidence: Service["attachEvidence"] = (input) =>
       Effect.gen(function* () {
-        const attachment = yield* attachmentFor(input.domain);
-        const previous = yield* storage.readiness.get(attachment.id);
+        const { domain, attachment } = yield* attachmentFor(input.domain);
+        const previous = yield* storage.readiness.get(domain);
         const current = Option.isSome(previous)
           ? yield* decodeRow(previous.value)
           : {
@@ -391,6 +415,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
         const bySource = new Map(current.host.map((evidence) => [evidence.source, evidence]));
         for (const evidence of input.evidence) bySource.set(evidence.source, evidence);
         return yield* store({
+          domain,
           attachment,
           requirements: current.requirements,
           host: [...bySource.values()],
@@ -400,8 +425,8 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
 
     const latest: Service["latest"] = (domain) =>
       Effect.gen(function* () {
-        const attachment = yield* attachmentFor(domain);
-        const stored = yield* storage.readiness.get(attachment.id);
+        const { domain: name } = yield* attachmentFor(domain);
+        const stored = yield* storage.readiness.get(name);
         return Option.isSome(stored) ? yield* decodeRow(stored.value) : null;
       });
 

@@ -605,12 +605,13 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
       ),
     },
     {
-      name: "stores readiness per attachment",
+      name: "stores readiness per domain, with or without an attachment",
       run: run(
         Effect.gen(function* () {
           const { storage, attachment } = yield* connect(owner, "auth-ready");
           const now = yield* DateTime.now;
           const readiness = new Storage.Readiness({
+            domain: attachment.domain,
             attachmentId: attachment.id,
             ownerId: owner.ownerId,
             overall: "pending",
@@ -628,15 +629,34 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
             nextCheckAt: DateTime.add(now, { seconds: 15 }),
           });
           yield* storage.readiness.put(readiness);
-          const stored = yield* storage.readiness.get(attachment.id);
+          const stored = yield* storage.readiness.get(attachment.domain);
           yield* expect(
             Option.isSome(stored) && stored.value.overall === "pending",
             "readiness was not stored",
           );
           const foreign = yield* storage.readiness
-            .get(attachment.id)
+            .get(attachment.domain)
             .pipe(Effect.provideService(Principal.Principal, other));
           yield* expect(Option.isNone(foreign), "readiness leaked across owners");
+          yield* storage.readiness.put(
+            new Storage.Readiness({
+              ...readiness,
+              domain: "observe-only.example.com",
+              attachmentId: null,
+            }),
+          );
+          const observeOnly = yield* storage.readiness.get("observe-only.example.com");
+          yield* expect(
+            Option.isSome(observeOnly) && observeOnly.value.attachmentId === null,
+            "readiness without an attachment was not stored",
+          );
+          yield* expectReason(
+            storage.readiness.put(
+              new Storage.Readiness({ ...readiness, attachmentId: "att-missing" }),
+            ),
+            "NotFound",
+            "readiness with an unknown attachment",
+          );
         }).pipe(Effect.provideService(Principal.Principal, owner)),
       ),
     },
