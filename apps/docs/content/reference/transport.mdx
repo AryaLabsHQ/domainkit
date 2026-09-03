@@ -63,6 +63,13 @@ Every method returns `Effect<A, DomainKit.Error>` with no requirements.
 ## Failures
 
 A failure arrives as the same `DomainKit.Error` the lifecycle raised, reason intact. A reply the
-transport cannot read as one is classified from its status: 401 becomes `Unauthenticated`, 429 and
-5xx become a retryable `ProviderUnavailable` carrying `retry-after`, anything else
-`ProviderRejected`. All three name the transport's base URL as the origin.
+transport cannot read as one is classified from its status, naming the transport's base URL as the
+origin.
+
+| Status        | Becomes                                                                  |
+| ------------- | ------------------------------------------------------------------------ |
+| 401           | `Unauthenticated`                                                        |
+| 403           | `Forbidden`                                                              |
+| 409           | `ProviderConflict`                                                       |
+| 429 and 5xx   | `ProviderUnavailable`, retryable, with `retryAfterMs` from `retry-after` |
+| anything else | `ProviderRejected`, carrying the status as its code                      |

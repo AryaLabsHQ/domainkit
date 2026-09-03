@@ -62,9 +62,16 @@ A failure arrives as the `DomainKit.Error` the lifecycle raised, reason intact, 
 still carries its conflicting operations and the UI can list them.
 
 A reply the transport cannot read as one came from in front of your server. It is classified from
-the status instead: 401 becomes `Unauthenticated`, 429 and 5xx become a retryable
-`ProviderUnavailable` carrying `retry-after`, anything else `ProviderRejected`. All of them name the
-transport's base URL, so a proxy answering HTML is obvious in the message.
+the status instead, and every result names the transport's base URL, so a proxy answering HTML is
+obvious in the message.
+
+| Status        | Becomes                                                                  |
+| ------------- | ------------------------------------------------------------------------ |
+| 401           | `Unauthenticated`                                                        |
+| 403           | `Forbidden`                                                              |
+| 409           | `ProviderConflict`                                                       |
+| 429 and 5xx   | `ProviderUnavailable`, retryable, with `retryAfterMs` from `retry-after` |
+| anything else | `ProviderRejected`, carrying the status as its code                      |
 
 ## In tests
 
