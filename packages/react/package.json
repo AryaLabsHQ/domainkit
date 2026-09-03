@@ -1,6 +1,6 @@
 {
   "name": "@domainkit/react",
-  "version": "0.9.0-next.0",
+  "version": "0.8.0",
   "description": "React flows and UI parts for custom-domain setup",
   "keywords": [
     "custom-domains",
