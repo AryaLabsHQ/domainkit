@@ -16,7 +16,7 @@ const execFileAsync = promisify(execFile);
 const packageRoot = join(import.meta.dirname, "..");
 
 interface EmitIndex {
-  readonly files: ReadonlyArray<string>;
+  readonly files: ReadonlyArray<{ readonly path: string; readonly checksum: string }>;
 }
 
 /**
@@ -73,7 +73,7 @@ describe("emitted SQL", () => {
     if (suite === undefined || out === undefined) throw new Error("the suite did not start");
 
     const index = JSON.parse(await readFile(join(out, "capsuledb.emit.json"), "utf8")) as EmitIndex;
-    const sqlFiles = index.files.filter((file) => file.endsWith(".sql"));
+    const sqlFiles = index.files.map(({ path }) => path).filter((path) => path.endsWith(".sql"));
     assert.ok(sqlFiles.length >= 3, "emit writes the ledger, the migration, and the readiness row");
 
     const contents = await Promise.all(sqlFiles.map((file) => readFile(join(out, file), "utf8")));
@@ -104,7 +104,7 @@ describe("emitted SQL", () => {
       "domainkit_readiness",
     ]);
     const index = JSON.parse(await readFile(join(out, "capsuledb.emit.json"), "utf8")) as EmitIndex;
-    const migrationFile = index.files.find((file) => file.startsWith("0001_"));
+    const migrationFile = index.files.find(({ path }) => path.startsWith("0001_"))?.path;
     assert.ok(migrationFile !== undefined, "emit numbers the capsule migration 0001");
     const migration = await readFile(join(out, migrationFile), "utf8");
     for (const name of names) {

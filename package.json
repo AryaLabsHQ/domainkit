@@ -49,7 +49,7 @@
     "tegami": "1.4.0"
   },
   "overrides": {
-    "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#860ae859adb63f2af365cd6d785115270b35bff3"
+    "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#94777cfdcf5cca5dce1a4abe5db9665e0630a00f"
   },
   "packageManager": "bun@1.4.0",
   "patchedDependencies": {

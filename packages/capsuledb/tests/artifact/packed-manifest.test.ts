@@ -45,7 +45,7 @@ describe("packed manifest", () => {
       // `capsuledb` through the peer range, never through a Git URL.
       assert.strictEqual(
         packed.devDependencies?.capsuledb,
-        "git+https://github.com/aryasaatvik/CapsuleDB.git#860ae859adb63f2af365cd6d785115270b35bff3",
+        "git+https://github.com/aryasaatvik/CapsuleDB.git#94777cfdcf5cca5dce1a4abe5db9665e0630a00f",
       );
       assert.strictEqual(packed.dependencies?.capsuledb, undefined);
       assert.ok(packed.peerDependencies?.capsuledb !== undefined, "capsuledb stays a peer");
