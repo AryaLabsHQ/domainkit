@@ -13,6 +13,53 @@ const execFileAsync = promisify(execFile);
 
 const PackResult = Schema.Array(Schema.Struct({ filename: Schema.String }));
 
+/** The lifecycle every consumer runs: connect a fake provider, plan, approve, apply, observe. */
+const lifecycle = `
+import { Cloudflare, Connect, Custody, DnsRecord, DomainKit, Principal, Provision, Vercel, Verify, VERSION } from "domainkit";
+import { Testing } from "domainkit/testing";
+import { Effect } from "effect";
+
+export const run = () => {
+  const fake = Testing.provider({ zones: ["example.com"] });
+  const program = Effect.gen(function* () {
+    const started = yield* Connect.start({
+      provider: fake.id,
+      method: Connect.Method.token("packed-token"),
+      domain: "app.example.com",
+    });
+    const plan = yield* Provision.plan({
+      domain: "app.example.com",
+      requirements: [DnsRecord.txt({ name: "_verify.app.example.com", value: "domainkit" })],
+    });
+    const receipt = yield* Provision.apply(yield* Provision.approve(plan));
+    const readiness = yield* Verify.observe({ domain: "app.example.com" });
+    return {
+      started: started._tag,
+      operations: plan.operations.map(({ _tag }) => _tag),
+      status: receipt.status,
+      overall: readiness.overall,
+      providers: [Cloudflare.provider().id, Vercel.provider().id],
+      keyLength: Custody.generateKey().length,
+      version: VERSION,
+    };
+  }).pipe(
+    Effect.provideService(Principal.Principal, Testing.principal),
+    Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
+  );
+  return Effect.runPromise(program);
+};
+`;
+
+const expected = (version: string) => ({
+  started: "Connected",
+  operations: ["Create"],
+  status: "complete",
+  overall: "ready",
+  providers: ["cloudflare", "vercel"],
+  keyLength: 43,
+  version,
+});
+
 describe("packed consumers", () => {
   it("runs public artifact code in Node 24, Bun, and workerd", async () => {
     const directory = await mkdtemp(join(tmpdir(), "domainkit-consumer-"));
@@ -43,166 +90,15 @@ describe("packed consumers", () => {
         ],
         directory,
       );
+      await writeFile(join(directory, "lifecycle.mjs"), lifecycle);
       await writeFile(
         join(directory, "consumer.mjs"),
         `
-import {
-  Cloudflare,
-  Digest,
-  DnsProvider,
-  Provisioning as EffectProvisioning,
-  Vercel,
-  VERSION,
-} from "domainkit";
-import {
-  Cloudflare as PromiseCloudflare,
-  Connection,
-  DnsResolver,
-  ManagedDnsConnections,
-  Provisioning,
-  Secret,
-  Vercel as PromiseVercel,
-  Verification,
-  VERSION as PROMISE_VERSION,
-} from "domainkit/promise";
-import { InMemoryManagedDnsConnections } from "domainkit/testing";
-import { createDomainKit, Server } from "domainkit/server";
-import { Effect, Layer } from "effect";
-
-const provider = {
-  id: "packed-consumer",
-  listRecords: async () => [],
-  createRecord: async () => ({ providerRecordId: "record-1" }),
-};
-const input = {
-  requirements: [{
-    _tag: "TXT",
-    metadata: { ownership: "consumer", provenance: "pack", purpose: "artifact proof" },
-    name: "_verify.example.com",
-    policy: "append",
-    ttl: 300,
-    value: "domainkit",
-  }],
-  target: Provisioning.Target.ExactZone({ zone: "example.com" }),
-};
-const { plan: promisePlan } = await Provisioning.create({ ...input, provider });
-const discovered = await Provisioning.create({
-  requirements: input.requirements,
-  sources: [{
-    provider,
-    listZones: async (name) => name === "example.com" ? [{
-      accountId: "packed-account",
-      id: "packed-zone",
-      name: "example.com",
-      nameservers: ["ns1.example.net"],
-      status: "active",
-    }] : [],
-  }],
-  target: Provisioning.Target.DiscoverFromDomain({ domain: "mail.example.com" }),
-});
-if (discovered._tag !== "Resolved") throw new Error("Packed discovery did not resolve");
-const repository = ManagedDnsConnections.toAsync(InMemoryManagedDnsConnections.make());
-const connected = await Connection.start({
-  authorizedById: "packed-user",
-  method: Connection.Method.Token({
-    authenticate: async () => ({
-      capabilityEvidence: [
-        { capability: "dns:read", evidence: { _tag: "Declared" } },
-        { capability: "dns:write", evidence: { _tag: "Declared" } },
-      ],
-      credential: { accessToken: Secret.make("packed-token"), expiresAt: null, refreshToken: null, tokenType: "bearer" },
-      providerAccountId: "packed-account",
-      providerContext: { value: {}, version: "packed.v1" },
-      scopes: [],
-    }),
-    providerId: provider.id,
-    requiredCapabilities: ["dns:read", "dns:write"],
-    token: Secret.make("packed-token"),
-  }),
-  ownerId: "packed-owner",
-  repository,
-});
-if (connected._tag !== "Connected") throw new Error("Packed connection did not complete");
-const attachment = {
-  connectionId: connected.connection.id,
-  createdAt: new Date(),
-  domain: "mail.example.com",
-  id: "packed-attachment",
-  target: {
-    accountId: "packed-account",
-    accountKind: "account",
-    zoneId: "packed-zone",
-    zoneName: "example.com",
-  },
-};
-await Connection.attach({
-  attachment,
-  connectionId: connected.connection.id,
-  ownerId: "packed-owner",
-  repository,
-});
-const removed = await Connection.detach({
-  attachmentId: attachment.id,
-  ownerId: "packed-owner",
-  repository,
-});
-const observed = await Verification.observe({
-  record: input.requirements[0],
-  resolvers: [{
-    id: "packed-resolver",
-    resolver: {
-      resolve: async () => DnsResolver.Resolution.answer({
-        answers: [{
-          data: "domainkit",
-          name: "_verify.example.com",
-          ttl: 60,
-          type: "TXT",
-        }],
-      }),
-    },
-  }],
-});
-const cloudflareOptions = {
-  accountId: "packed-account",
-  capabilities: ["dns:read", "dns:write"],
-  fetch: async () => { throw new Error("not called"); },
-  token: Secret.make("packed-token"),
-};
-const cloudflare = PromiseCloudflare.make(cloudflareOptions);
-const effectCloudflare = Cloudflare.make(cloudflareOptions);
-const vercelOptions = {
-  capabilities: ["dns:read", "dns:write"],
-  context: PromiseVercel.AccountContext.personal(),
-  fetch: async () => { throw new Error("not called"); },
-  token: Secret.make("packed-token"),
-};
-const vercel = PromiseVercel.make(vercelOptions);
-const effectVercel = Vercel.make(vercelOptions);
-const { plan: effectPlan } = await Effect.runPromise(
-  EffectProvisioning.create(input).pipe(
-    Effect.provide(
-      Layer.merge(DnsProvider.layerFromAsync(provider), Digest.webCryptoLayer),
-    ),
-  ),
-);
-if (
-  VERSION.length === 0 ||
-  VERSION !== PROMISE_VERSION ||
-  connected._tag !== "Connected" ||
-  removed.remainingAttachments !== 0 ||
-  discovered.plan.digest !== promisePlan.digest ||
-  observed._tag !== "Verified" ||
-  promisePlan.digest !== effectPlan.digest ||
-  cloudflare.id !== "cloudflare" ||
-  effectCloudflare.id !== "cloudflare" ||
-  vercel.id !== "vercel" ||
-  effectVercel.id !== "vercel" ||
-  typeof Server.layer !== "function" ||
-  typeof Server.make !== "function" ||
-  typeof createDomainKit !== "function" ||
-  typeof Server.toWebHandler !== "function"
-) {
-  throw new Error("Packed Promise and Effect namespaces diverged");
+import { run } from "./lifecycle.mjs";
+const result = await run();
+const expected = ${JSON.stringify(expected(packageJson.version))};
+if (JSON.stringify(result) !== JSON.stringify(expected)) {
+  throw new Error("Packed lifecycle diverged: " + JSON.stringify(result));
 }
 `,
       );
@@ -210,20 +106,22 @@ if (
       await writeFile(
         join(directory, "types.ts"),
         `
-import type { Cloudflare, DnsProvider, Vercel } from "domainkit";
-import type { Server } from "domainkit/server";
-import type {
-  Cloudflare as PromiseCloudflare,
-  Vercel as PromiseVercel,
-} from "domainkit/promise";
+import { Effect, Layer, Redacted } from "effect";
+import { Custody, DomainKit, type DomainKitError, type Provider, type Storage } from "domainkit";
+import { Testing } from "domainkit/testing";
 
-export type PublicProvider = DnsProvider.Interface;
-export type PublicServerHandler = Server.Interface;
-export type PublicProviders =
-  | Cloudflare.Interface
-  | PromiseCloudflare.Interface
-  | Vercel.Interface
-  | PromiseVercel.Interface;
+export type PublicProvider = Provider.Definition;
+export type PublicStorage = Storage.Service;
+export type PublicAsyncStorage = Storage.AsyncService;
+export type PublicError = DomainKitError.DomainKitError;
+export type Fake = Testing.FakeProvider;
+
+export const live: Layer.Layer<DomainKit.Services, DomainKitError.DomainKitError, Storage.Storage> =
+  DomainKit.layer({ providers: [Testing.provider()] }).pipe(
+    Layer.provide(Custody.layer({ key: Redacted.make(Custody.generateKey()) })),
+  );
+export const cases = Testing.conformance.storage(Testing.storage).map((item) => item.name);
+export const noRuntimeExit: Effect.Effect<void, unknown> = Effect.void;
 `,
       );
       await writeFile(
@@ -237,6 +135,7 @@ export type PublicProviders =
             skipLibCheck: true,
             strict: true,
             target: "ES2024",
+            lib: ["ES2024", "DOM"],
           },
           include: ["types.ts"],
         }),
@@ -248,32 +147,15 @@ export type PublicProviders =
 
       await run(["node", "consumer.mjs"], directory);
       await run(["bun", "consumer.mjs"], directory);
+
       await writeFile(
         join(directory, "worker.mjs"),
         `
-import { DnsRecord, DnsResolverPool, DomainName, Verification, VERSION } from "domainkit";
-import { Server } from "domainkit/server";
+import { run } from "./lifecycle.mjs";
 
 export default {
   async fetch() {
-    const domain = DomainName.parse("Example.COM.");
-    const record = DnsRecord.parse({
-      _tag: "TXT",
-      metadata: { ownership: "consumer", provenance: "workerd", purpose: "artifact proof" },
-      name: "_verify.example.com",
-      policy: "append",
-      ttl: 300,
-      value: "domainkit",
-    });
-    const policy = DnsResolverPool.Policy.AnyMatch();
-    return Response.json({
-      domain,
-      observe: typeof Verification.observe,
-      policy: policy._tag,
-      server: typeof Server.layer,
-      type: record._tag,
-      version: VERSION,
-    });
+    return Response.json(await run());
   },
 };
 `,
@@ -289,19 +171,12 @@ export default {
       });
       const response = await miniflare.dispatchFetch("https://worker.example/");
       assert.strictEqual(response.status, 200);
-      assert.deepStrictEqual(await response.json(), {
-        domain: "example.com",
-        observe: "function",
-        policy: "AnyMatch",
-        server: "function",
-        type: "TXT",
-        version: packageJson.version,
-      });
+      assert.deepStrictEqual(await response.json(), expected(packageJson.version));
     } finally {
       await miniflare?.dispose();
       await rm(directory, { force: true, recursive: true });
     }
-  }, 60_000);
+  }, 90_000);
 });
 
 async function run(command: ReadonlyArray<string>, cwd = process.cwd()): Promise<string> {

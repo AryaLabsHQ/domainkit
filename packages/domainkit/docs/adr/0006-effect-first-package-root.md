@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted; the Promise facade and provider-namespace details are superseded by
+[0009: Durable lifecycle over Principal-scoped Storage](0009-durable-lifecycle-over-principal-scoped-storage.md)
 
 ## Context
 
