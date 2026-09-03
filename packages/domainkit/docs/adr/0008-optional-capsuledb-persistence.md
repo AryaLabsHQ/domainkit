@@ -19,13 +19,7 @@ schema and typed implementation for the complete `ManagedDnsConnections.Service`
 constructs the CapsuleDB registry, supplies one `SqlClient`, calls `Registry.prepare` once during
 startup, and provides the capsule layer to API and workflow entrypoints.
 
-The package requires two semantic host capabilities:
-
-- `CredentialCustody` seals and opens credentials. Keys, KMS configuration, plaintext lifetime,
-  rotation policy, and audit remain host-owned.
-- `HostBindings` maps semantic owner/domain values to opaque host foreign-key references at
-  operation time. It is stateless and joins the active SQL transaction; the capsule never captures
-  one request's tenant identity.
+Keys, KMS configuration, plaintext lifetime, rotation policy, and audit remain host-owned.
 
 The PostgreSQL tracer adopts `domain_provider_authorizations`,
 `organization_domain_provider_connections`, and `domain_provider_attachments` in place. Existing

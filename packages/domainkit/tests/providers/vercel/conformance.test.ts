@@ -1,28 +1,16 @@
-import { assert, describe, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { describe, it } from "@effect/vitest";
+import { Redacted } from "effect";
 
-import { DomainName, Secret } from "../../../src/index.ts";
-import * as Vercel from "../../../src/providers/vercel/index.ts";
-import { ProviderConformance } from "../../../src/testing.ts";
+import { Vercel } from "../../../src/index.ts";
+import { Testing } from "../../../src/entry/testing.ts";
 import { conformanceFetch } from "./fixtures.ts";
 
 describe("Vercel provider conformance", () => {
   it.effect("passes the shared offline provider-author contract", () =>
-    Effect.gen(function* () {
-      const report = yield* ProviderConformance.run({
-        makeProvider: () =>
-          Effect.succeed(
-            Vercel.make({
-              capabilities: ["dns:read", "dns:write"],
-              context: { _tag: "team", teamId: "team-1" },
-              fetch: conformanceFetch(),
-              token: Secret.make("token"),
-            }),
-          ),
-        zone: DomainName.parse("example.com"),
-      });
-      assert.strictEqual(report.providerId, "vercel");
-      assert.strictEqual(report.cases.length, 5);
-    }),
+    Testing.conformance.provider(
+      Vercel.provider({ fetch: conformanceFetch() }),
+      { secret: Redacted.make("token"), context: { teamId: "team-1" } },
+      "example.com",
+    ),
   );
 });

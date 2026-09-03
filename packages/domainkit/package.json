@@ -33,14 +33,6 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
-    "./promise": {
-      "types": "./dist/promise.d.mts",
-      "import": "./dist/promise.mjs"
-    },
-    "./server": {
-      "types": "./dist/server.d.mts",
-      "import": "./dist/server.mjs"
-    },
     "./testing": {
       "types": "./dist/testing.d.mts",
       "import": "./dist/testing.mjs"
@@ -56,10 +48,10 @@
     "test:consumers": "vitest run tests/artifact/packed-consumers.test.ts",
     "test:live:cloudflare": "bun tests/live/cloudflare.ts",
     "test:live:vercel": "bun tests/live/vercel.ts",
-    "test:providers": "vitest run tests/providers",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "typecheck:examples": "tsc --project tsconfig.examples.json"
+    "typecheck:examples": "tsc --project tsconfig.examples.json",
+    "test:providers": "vitest run tests/providers"
   },
   "dependencies": {
     "@leichtgewicht/dns-packet": "6.0.3",

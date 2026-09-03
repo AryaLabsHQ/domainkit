@@ -13,29 +13,32 @@ handling and OAuth contain standards-sensitive behavior that should not be reimp
 ## Decision
 
 The core is provider-neutral portable ESM built on Fetch, Web Crypto, and serializable protocol
-values. It does not depend on a database, application framework, or integration runtime.
+values. It does not depend on a database, application framework, or integration runtime. Web
+Crypto supplies plan digests and credential sealing, so no host-provided crypto service is needed.
 
 `tldts` owns registrable-domain and public-suffix behavior. `oauth4webapi` owns OAuth protocol
-mechanics. Provider adapters implement DomainKit's narrow provider contract and use documented HTTP
-surfaces instead of provider SDKs when that keeps the runtime boundary smaller.
+mechanics. Provider adapters are `Provider.make` values over documented HTTP surfaces instead of
+provider SDKs, which keeps the runtime boundary small.
 
 ## Consequences
 
-- Applications can supply their own persistence, transport, and runtime composition.
-- Provider adapters must decode external responses and classify provider failures explicitly.
-- DomainKit accepts some focused HTTP implementation work in exchange for fewer runtime constraints.
+- Applications supply their own persistence, transport, and runtime composition.
+- Provider adapters decode external responses and classify provider failures into
+  `DomainKit.Error` reasons explicitly.
+- DomainKit accepts some focused HTTP implementation work in exchange for fewer runtime
+  constraints.
 
 ## Alternatives considered
 
-- Provider SDKs as the core abstraction were rejected because they leak provider-specific runtime
-  and dependency choices into the portable contract.
-- Developing the protocol inside one host application was rejected because it would couple the
-  public SDK to that application's storage and lifecycle.
+- Provider SDKs as the core abstraction leak provider-specific runtime and dependency choices
+  into the portable contract.
+- Developing the protocol inside one host application couples the public SDK to that
+  application's storage and lifecycle.
 
 ## References
 
 - `package.json`
-- `src/discovery/zones.ts`
-- `src/auth/authorization-code.ts`
-- `src/providers/cloudflare/auth.ts`
-- `src/provider/provider.ts`
+- `src/DomainName.ts`
+- `src/internal/oauth.ts`
+- `src/internal/http.ts`
+- `src/Provider.ts`

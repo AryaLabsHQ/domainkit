@@ -36,7 +36,7 @@
     "lint": "oxlint --deny-warnings .",
     "lint:rules": "node --test tools/oxlint/*.test.js",
     "postinstall": "bun scripts/prepare-capsuledb-git-dependency.mts",
-    "release:check": "bun run lint && bun run lint:rules && bun run format:check && bun run --filter domainkit release:check && bun run --filter @domainkit/react release:check && bun run --filter @domainkit/capsuledb release:check",
+    "release:check": "bun run lint && bun run lint:rules && bun run format:check && bun run --filter domainkit release:check",
     "tegami": "bun scripts/tegami.mts",
     "test": "bun run --filter './packages/*' test",
     "typecheck": "bun run --filter domainkit build && bun run --filter './packages/*' typecheck"

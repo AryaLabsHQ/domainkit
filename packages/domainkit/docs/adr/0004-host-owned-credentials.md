@@ -1,4 +1,4 @@
-# 0004: Host-owned credentials
+# 0004: Host-owned identity, library-owned credential lifecycle
 
 ## Status
 
@@ -7,60 +7,59 @@ Accepted
 ## Context
 
 DNS credentials grant externally visible authority, but a portable SDK cannot choose an
-application's database, encryption keys, routes, tenant model, audit policy, or consent interface.
-Embedding any of those choices in DomainKit would couple the protocol to one hosting model.
+application's database, routes, tenant model, audit policy, or consent interface. It can own the
+credential lifecycle itself: sealing, refresh, revocation, and the tenancy check on every read.
 
 ## Decision
 
-DomainKit defines token and interactive connection methods, a continuation store, connection
-grants, and one authorization-lifecycle repository. OAuth protocol mechanics use `oauth4webapi`.
-Hosts provide secure persistence, transport, authenticated route mounting, authorization UI, and
-operational policy. ADR 0007 permits DomainKit to supply the portable handler mechanics behind
-those host-owned routes without choosing identity, tenancy, or deployment.
+The host provides three seams. `Principal` (`ownerId`, `actorId`) is a required per-request
+service with no default; every `Storage` method and lifecycle operation requires it, so
+cross-tenant access is a type error. `Storage` persists authorizations, connections, attachments,
+continuations, attempts, and readiness scoped by that principal. `Custody` seals credentials;
+the core ships AES-256-GCM over Web Crypto from one configured key, and a host with a KMS provides
+its own implementation.
 
-ADR 0008 narrows the persistence portion of this decision: an optional DomainKit-owned CapsuleDB
-package may supply the durable schema and lifecycle implementation. The host still owns and
-supplies the database client and connection lifetime, credential encryption and keys, tenant/domain
-bindings, identity, authorization, audit, routes, and consent.
+Provider context is persisted as an envelope `{ version, value }` tagged with the definition's
+`contextVersion`; decoding a newer or unknown version fails `Unsupported` unless the definition
+migrates it. `Storage` never sees plaintext: `Connect` seals a credential through `Custody` before writing it
+and opens it after reading it. Every session handed to `Provision`, `Cleanup`, or `Verify` is re-checked against the provider:
+the attached zone must still be among the targets the credential can reach, else `NotFound`.
+Token methods declare their input once as a `fields` schema (secrets as `Redacted`, optional
+keys as optional), so the UI renders the form from the definition and `Connect.start` decodes the
+values before the provider sees them; Cloudflare takes a token and an optional account id for
+account-owned tokens. `Connect` also owns the connection lifecycle: token and interactive
+(OAuth, integration) methods, continuations stored in `Storage` and spent only after the connection
+is persisted, refresh before expiry single-flighted through `Storage.withLock`, and two-phase
+revocation on disconnect that leaves a pending row for recovery when the provider call fails.
 
-The repository owns one logical commit for the authorization aggregate, credential, and owner
-bindings. SQL hosts may transact it; hosts that split database and vault storage implement an
-idempotent recoverable saga behind the same seam. Interactive continuations are short-lived and
-one-time, but Redis or another cache is never authoritative for the durable authorization.
-
-Access-token expiry is credential metadata rather than provider-authorization expiry. A credential
-whose access token has expired remains refreshable when it retains a refresh token. Provider
-adapters may implement the protocol-specific exchange and classify terminal grant failures, while
-the host serializes concurrent attempts, persists the complete rotated credential before use, and
-decides when to present reconnect UX.
-
-Connection grants remain explicit and are enforced by DomainKit in addition to provider scopes.
-Capability evidence records whether access was declared, introspected, or exercised. Final-binding
-revocation retains durable retry state until the provider confirms revocation. The package contains
-deterministic in-memory implementations for testing, not a production credential database or
-encryption system.
+Access-token expiry is credential metadata, not authorization expiry. A credential with a refresh
+token stays refreshable after its access token expires; a credential the provider will no longer
+refresh surfaces as `Reconnect` and the host presents reconnect UX. Capabilities the session
+reports are recorded on the authorization and enforced by DomainKit in addition to provider
+scopes.
 
 ## Consequences
 
-- Hosts can integrate DomainKit with their existing security and tenancy model.
-- The core package never chooses plaintext credential persistence or a cache as durable truth.
-- Hosts are responsible for encryption, access control, rotation, audit logging, and consent UX.
-- Provider authorization remains durable across ordinary access-token refreshes.
-- DomainKit can test lifecycle semantics without claiming to supply production secret storage.
+- Hosts integrate DomainKit with their existing security and tenancy model while writing no
+  refresh, sealing, or revocation logic.
+- The core never chooses plaintext persistence; a Storage implementation stores ciphertext only.
+- Hosts own keys, KMS configuration, rotation policy, audit logging, and consent UX.
+- Interactive flows tolerate a failed provider or storage call before persistence; a provider code
+  the provider already redeemed needs a fresh start.
+- `Testing.conformance.storage` checks tenant isolation, exactly-once continuations, leases,
+  revocation recovery, and lock semantics for any Storage implementation.
 
 ## Alternatives considered
 
-- A library-owned database client or credential vault remains rejected. ADR 0008 permits a package-
-  owned schema over the host's client while keeping encryption and tenant boundaries host-owned.
-- An integration-runtime-owned provider model was rejected because it would make that runtime the
-  source of DomainKit's public provider interfaces.
+- A library-owned database client or credential vault couples the protocol to one hosting model.
+- Sealing inside each Storage implementation duplicates encryption per backend and leaves async
+  host adapters without it.
+- An unenforced `ownerId` string forces hosts to mirror tables to verify tenancy.
 
 ## References
 
-- `src/auth/connection.ts`
-- `src/auth/connect.ts`
-- `src/auth/lifecycle-repository.ts`
-- `src/auth/connection.ts`
-- `src/testing.ts`
-- `docs/adr/0007-effect-native-host-routes.md`
-- `docs/adr/0008-optional-capsuledb-persistence.md`
+- `src/Principal.ts`
+- `src/Storage.ts`
+- `src/Custody.ts`
+- `src/Connect.ts`
+- `src/internal/conformance/storage.ts`

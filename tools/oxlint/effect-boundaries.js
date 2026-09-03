@@ -3,38 +3,19 @@ import path from "node:path";
 const repoRoot = process.cwd();
 const coreSource = "packages/domainkit/src/";
 
-const runtimeExitFiles = new Set([
-  `${coreSource}provider/provider.ts`,
-  `${coreSource}provider/session.ts`,
-  `${coreSource}verification/resolver.ts`,
-  `${coreSource}stores/connection.ts`,
-  `${coreSource}stores/authorization.ts`,
-  `${coreSource}stores/credential.ts`,
-  `${coreSource}stores/oauth-state.ts`,
-  `${coreSource}stores/receipt.ts`,
-  `${coreSource}transport.ts`,
-]);
+/** Files that may leave the Effect runtime: only the test-runner registration in conformance. */
+const runtimeExitFiles = new Set([`${coreSource}internal/conformance/storage.ts`]);
 
+/** Declared foreign Promise boundaries: Web Crypto, fetch, oauth4webapi, and host async adapters. */
 const foreignPromiseFiles = new Set([
-  `${coreSource}auth/authorization-code.ts`,
-  `${coreSource}plan/canonical-json.ts`,
-  `${coreSource}provider/provider.ts`,
-  `${coreSource}provider/session.ts`,
-  `${coreSource}server/index.ts`,
-  `${coreSource}providers/cloudflare/client.ts`,
-  `${coreSource}providers/cloudflare/auth.ts`,
-  `${coreSource}providers/vercel/auth.ts`,
-  `${coreSource}providers/vercel/client.ts`,
-  `${coreSource}promise/connection-lifecycle.ts`,
-  `${coreSource}promise/token.ts`,
-  `${coreSource}stores/connection.ts`,
-  `${coreSource}stores/authorization.ts`,
-  `${coreSource}stores/credential.ts`,
-  `${coreSource}stores/oauth-state.ts`,
-  `${coreSource}stores/receipt.ts`,
-  `${coreSource}transport.ts`,
-  `${coreSource}verification/doh.ts`,
-  `${coreSource}verification/resolver.ts`,
+  `${coreSource}Custody.ts`,
+  `${coreSource}Storage.ts`,
+  `${coreSource}internal/digest.ts`,
+  `${coreSource}internal/aes.ts`,
+  `${coreSource}internal/doh.ts`,
+  `${coreSource}internal/http.ts`,
+  `${coreSource}internal/oauth.ts`,
+  `${coreSource}internal/provider-async.ts`,
 ]);
 
 function relative(filename) {
@@ -60,8 +41,6 @@ function boundaryRule(property, allowed, message) {
     create(context) {
       const filename = relative(context.filename);
       if (!filename.startsWith(coreSource)) return {};
-      if (filename.startsWith(`${coreSource}promise/`) && property === "runPromise") return {};
-      if (filename.startsWith(`${coreSource}promise/`) && property === "tryPromise") return {};
       if (allowed.has(filename)) return {};
       return {
         CallExpression(node) {
@@ -77,7 +56,7 @@ function boundaryRule(property, allowed, message) {
 export const noRuntimeExit = boundaryRule(
   "runPromise",
   runtimeExitFiles,
-  "Effect.runPromise is only allowed in the Promise facade and explicit Effect-to-Promise bridges.",
+  "Effect.runPromise is not allowed inside the core package; hosts own the runtime.",
 );
 
 export const noForeignPromiseOutsideBoundary = boundaryRule(

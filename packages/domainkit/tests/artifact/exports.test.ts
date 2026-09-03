@@ -1,101 +1,89 @@
 import { assert, describe, it } from "@effect/vitest";
+import { Schema } from "effect";
 
 import packageJson from "../../package.json" with { type: "json" };
-import * as effectApi from "../../src/index.ts";
-import * as promiseApi from "../../src/promise.ts";
-import * as serverApi from "../../src/server.ts";
-import * as testingApi from "../../src/testing.ts";
+import { Testing } from "../../src/entry/testing.ts";
+import * as root from "../../src/index.ts";
+
+const modules = [
+  "Approval",
+  "Cleanup",
+  "Cloudflare",
+  "Connect",
+  "Custody",
+  "DnsRecord",
+  "DomainKit",
+  "DomainName",
+  "Plan",
+  "Principal",
+  "Provider",
+  "Providers",
+  "Provision",
+  "Reason",
+  "Receipt",
+  "Resolver",
+  "Storage",
+  "Vercel",
+  "Verify",
+] as const;
 
 describe("public namespaces", () => {
   it("sources VERSION from the package manifest", () => {
-    assert.strictEqual(promiseApi.VERSION, packageJson.version);
-    assert.strictEqual(effectApi.VERSION, packageJson.version);
+    assert.strictEqual(root.VERSION, packageJson.version);
   });
 
-  it("keeps Effect native at the root without compatibility subpaths", () => {
-    assert.strictEqual("./effect" in packageJson.exports, false);
-    assert.strictEqual("./cloudflare" in packageJson.exports, false);
-    assert.strictEqual("./vercel" in packageJson.exports, false);
-    assert.strictEqual("./effect/cloudflare" in packageJson.exports, false);
-    assert.strictEqual("./effect/vercel" in packageJson.exports, false);
-    assert.strictEqual("./adapter" in packageJson.exports, false);
-    assert.strictEqual("./effect/adapter" in packageJson.exports, false);
+  it("exports exactly the sketched root modules plus VERSION", () => {
+    assert.deepStrictEqual(Object.keys(root).sort(), [...modules, "VERSION"].sort());
   });
 
-  it("exposes cohesive Effect, Promise, and testing namespace surfaces", () => {
-    assert.strictEqual(typeof promiseApi.Provisioning.create, "function");
-    assert.strictEqual(typeof promiseApi.ZoneDiscovery.discover, "function");
-    assert.strictEqual(typeof promiseApi.Connection.start, "function");
-    assert.strictEqual(typeof promiseApi.Connection.attach, "function");
-    assert.strictEqual(typeof promiseApi.Connection.detach, "function");
-    assert.strictEqual(typeof promiseApi.Connection.disconnect, "function");
-    assert.strictEqual(typeof effectApi.Connection.start, "function");
-    assert.strictEqual(typeof effectApi.Connection.attach, "function");
-    assert.strictEqual(typeof effectApi.Connection.detach, "function");
-    assert.strictEqual(typeof effectApi.Connection.disconnect, "function");
-    assert.strictEqual(typeof effectApi.ManagedDnsConnections.Service, "function");
-    assert.strictEqual(typeof effectApi.DnsProvider.Service, "function");
-    assert.strictEqual(typeof effectApi.ProviderSession.Resolution.Resolved, "function");
-    assert.strictEqual(typeof effectApi.Transport.Service, "function");
-    assert.strictEqual(typeof effectApi.Transport.Method.OAuth, "function");
-    assert.strictEqual(typeof effectApi.ZoneDiscovery.Service, "function");
-    assert.strictEqual(typeof effectApi.Provisioning.create, "function");
-    assert.strictEqual(typeof effectApi.CloudflareDnsOverHttps.layer, "function");
-    assert.strictEqual(typeof effectApi.GoogleDnsOverHttps.layer, "function");
-    assert.strictEqual(typeof effectApi.DnsResolverPool.defaultMake, "function");
-    assert.strictEqual(typeof effectApi.DnsRecord.A, "function");
-    assert.strictEqual(typeof effectApi.DnsRecord.Aaaa, "function");
-    assert.strictEqual(typeof effectApi.DnsRecord.Caa, "function");
-    assert.strictEqual(typeof effectApi.DnsRecord.Cname, "function");
-    assert.strictEqual(typeof effectApi.DnsRecord.Mx, "function");
-    assert.strictEqual(typeof effectApi.DnsRecord.Ns, "function");
-    assert.strictEqual(typeof effectApi.DnsRecord.Srv, "function");
-    assert.strictEqual(typeof effectApi.DnsRecord.Txt, "function");
-    assert.strictEqual(typeof effectApi.DnsRecord.Opaque, "function");
-    assert.strictEqual(typeof effectApi.DnsPlan.Operation.create, "function");
-    assert.strictEqual(typeof effectApi.DnsResolver.Resolution.answer, "function");
-    assert.strictEqual(typeof effectApi.DnsResolver.AsyncResolution.timeout, "function");
-    assert.strictEqual(typeof effectApi.ProviderAuth.Method.oauth2, "function");
-    assert.strictEqual(typeof effectApi.ProviderDiscovery.Selection.selected, "function");
-    assert.strictEqual(typeof effectApi.Transport.Connected, "function");
-    assert.strictEqual(typeof effectApi.Transport.ApplyResult.Applied, "function");
-    assert.strictEqual(typeof effectApi.Verification.observe, "function");
-    assert.strictEqual(typeof effectApi.DnsOverHttps.make, "function");
-    assert.strictEqual(typeof promiseApi.DnsOverHttps.make, "function");
-    assert.strictEqual(typeof promiseApi.ProviderSession.fromEffect, "function");
-    assert.strictEqual(typeof promiseApi.DnsResolver.Resolution.failure, "function");
-    assert.strictEqual(typeof promiseApi.GoogleDnsOverHttps.make, "function");
-    assert.strictEqual(typeof promiseApi.DnsResolverPool.defaultMake, "function");
-    assert.strictEqual(typeof promiseApi.Verification.observe, "function");
-    assert.strictEqual(typeof serverApi.Server.layer, "function");
-    assert.strictEqual(typeof serverApi.Server.make, "function");
-    assert.strictEqual(typeof serverApi.Server.toWebHandler, "function");
-    assert.strictEqual(typeof serverApi.createDomainKit, "function");
-    assert.strictEqual(typeof testingApi.InMemoryDnsProvider.layer, "function");
-    assert.strictEqual(typeof testingApi.ProviderConformance.run, "function");
-    assert.strictEqual(typeof testingApi.ProviderConformance.fromAsync, "function");
-    assert.strictEqual(typeof effectApi.Cloudflare.make, "function");
-    assert.strictEqual(typeof effectApi.Cloudflare.Auth.refreshCredential, "function");
-    assert.strictEqual(typeof promiseApi.Cloudflare.make, "function");
-    assert.strictEqual(typeof promiseApi.Cloudflare.Auth.refreshCredential, "function");
-    assert.strictEqual(typeof effectApi.Vercel.make, "function");
-    assert.strictEqual(typeof effectApi.Vercel.AccountContext.team, "function");
-    assert.strictEqual(typeof promiseApi.Vercel.make, "function");
-    assert.strictEqual(typeof promiseApi.Vercel.AccountContext.personal, "function");
+  it("keeps the entry points to the root and testing until the server layer lands", () => {
+    assert.deepStrictEqual(Object.keys(packageJson.exports), [".", "./testing", "./package.json"]);
+    assert.strictEqual("./promise" in packageJson.exports, false);
+    assert.strictEqual("./server" in packageJson.exports, false);
+    assert.strictEqual("./client" in packageJson.exports, false);
   });
 
-  it("does not flatten service tags or operations onto either entry point", () => {
-    assert.strictEqual("createPlan" in promiseApi, false);
-    assert.strictEqual("AuthorizationLifecycle" in effectApi, false);
-    assert.strictEqual("ProviderAuthorization" in effectApi, false);
-    assert.strictEqual("Grant" in effectApi.Connection, false);
-    assert.strictEqual("extend" in effectApi.Connection, false);
-    assert.strictEqual("removeDomain" in effectApi.Connection, false);
-    assert.strictEqual("DnsProviderService" in effectApi, false);
-    assert.strictEqual("layerDnsProviderFromPromise" in effectApi, false);
-    assert.strictEqual("InMemoryConnectionStore" in testingApi, false);
-    assert.strictEqual("InMemoryCredentialStore" in testingApi, false);
-    assert.strictEqual("record" in effectApi.Verification, false);
-    assert.strictEqual("record" in promiseApi.Verification, false);
+  it("names every service tag and value module after its concept", () => {
+    assert.strictEqual(typeof root.Provision.Service, "function");
+    assert.strictEqual(typeof root.Provision.plan, "function");
+    assert.strictEqual(typeof root.Cleanup.Service, "function");
+    assert.strictEqual(typeof root.Connect.Service, "function");
+    assert.strictEqual(typeof root.Connect.Method.token, "function");
+    assert.strictEqual(typeof root.Verify.Service, "function");
+    assert.strictEqual(typeof root.Verify.HostEvidence, "function");
+    assert.strictEqual(typeof root.Storage.Service, "function");
+    assert.strictEqual(typeof root.Storage.layerFromAsync, "function");
+    assert.strictEqual(typeof root.Custody.layerConfig, "function");
+    assert.strictEqual(typeof root.Principal.Service, "function");
+    assert.strictEqual(typeof root.Provider.make, "function");
+    assert.strictEqual(typeof root.Providers.layer, "function");
+    assert.strictEqual(typeof root.Cloudflare.provider, "function");
+    assert.strictEqual(typeof root.Vercel.provider, "function");
+    assert.strictEqual(typeof root.Resolver.layerWith, "function");
+    assert.strictEqual(typeof root.DomainKit.layer, "function");
+    assert.strictEqual(typeof root.DomainKit.layerMemory, "function");
+    assert.strictEqual(typeof root.DnsRecord.cname, "function");
+    assert.strictEqual(typeof root.DomainName.fromStringUnsafe, "function");
+    assert.strictEqual(typeof root.Plan.decode, "function");
+    assert.strictEqual(typeof root.Receipt.encode, "function");
+    assert.strictEqual(typeof root.DomainKit.Error, "function");
+    assert.strictEqual(typeof root.DomainKit.isError, "function");
+    assert.strictEqual(typeof root.Reason.NotFound, "function");
+    assert.isTrue(Schema.isSchema(root.Reason.Model));
+    assert.strictEqual(typeof Testing.provider, "function");
+    assert.strictEqual(typeof Testing.resolver, "function");
+    assert.strictEqual(typeof Testing.conformance.storage, "function");
+    assert.strictEqual(typeof Testing.conformance.provider, "function");
+  });
+
+  it("does not leak internals or old names", () => {
+    assert.strictEqual("Provisioning" in root, false);
+    assert.strictEqual("Deletion" in root, false);
+    assert.strictEqual("Digest" in root, false);
+    assert.strictEqual("Secret" in root, false);
+    assert.strictEqual("InvalidInput" in root, false);
+    assert.strictEqual("Transport" in root, false);
+    assert.strictEqual("webCryptoLayer" in root.DomainKit, false);
+    assert.strictEqual("InMemoryDnsProvider" in Testing, false);
   });
 });

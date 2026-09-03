@@ -3,46 +3,25 @@ import { Effect, Schema as S } from "effect";
 
 import * as LiveConfig from "./config.ts";
 
-const Schema = S.Struct({ ...LiveConfig.Fields, token: S.String });
+const schema = S.Struct(LiveConfig.Fields);
 
-const valid = {
-  allowedRecordName: "_domainkit-live.example.com",
-  allowedZone: "example.com",
-  approvedDigest: null,
-  command: "preview",
-  recordName: "_domainkit-live.example.com",
-  recordValue: "domainkit-live",
-  token: "secret",
-  zone: "example.com",
-};
-
-describe("live provider configuration", () => {
-  it.effect("decodes an explicitly allowlisted preview", () =>
+describe("live config", () => {
+  it.effect("requires the allow-listed zone to match the target zone", () =>
     Effect.gen(function* () {
-      const config = yield* LiveConfig.decode(Schema)(valid);
-      assert.strictEqual(config.zone, "example.com");
-    }),
-  );
-
-  it.effect("rejects records outside the configured zone", () =>
-    Effect.gen(function* () {
-      const failure = yield* LiveConfig.decode(Schema)({
-        ...valid,
-        allowedRecordName: "_domainkit-live.example.net",
-        recordName: "_domainkit-live.example.net",
+      const ok = yield* LiveConfig.decode(schema)({
+        allowedZone: "Example.com",
+        token: "t",
+        zone: "example.com",
+      });
+      assert.strictEqual(ok.zone, "example.com");
+      const mismatch = yield* LiveConfig.decode(schema)({
+        allowedZone: "other.com",
+        token: "t",
+        zone: "example.com",
       }).pipe(Effect.flip);
-      assert.strictEqual(failure.message, "The live record must belong to the configured zone");
-    }),
-  );
-
-  it.effect("requires an exact digest before apply", () =>
-    Effect.gen(function* () {
-      const failure = yield* LiveConfig.decode(Schema)({
-        ...valid,
-        approvedDigest: null,
-        command: "apply",
-      }).pipe(Effect.flip);
-      assert.strictEqual(failure.message, "DOMAINKIT_LIVE_APPROVED_DIGEST is required for apply");
+      assert.strictEqual(mismatch.reason._tag, "InvalidInput");
+      const missing = yield* LiveConfig.decode(schema)({ zone: "example.com" }).pipe(Effect.flip);
+      assert.strictEqual(missing.reason._tag, "InvalidInput");
     }),
   );
 });

@@ -1,34 +1,36 @@
+/**
+ * domainkit — the Effect-native root. One module per concept: services expose `Service` (the tag)
+ * and `Interface` (its shape), value modules expose `Model` (the schema).
+ *
+ * Lifecycle services: Connect, Provision, Cleanup, Verify.
+ * Host seams:         Storage, Custody, Principal.
+ * Providers:          Provider, Providers, Cloudflare, Vercel.
+ * Values:             DomainName, DnsRecord, Plan, Approval, Receipt.
+ * Everything else:    Reason, Resolver, DomainKit (the composed layer and `DomainKit.Error`).
+ *
+ * Subpath: domainkit/testing.
+ */
 import packageJson from "../package.json" with { type: "json" };
 
 /** The current package version from the package manifest. */
 export const VERSION = packageJson.version;
 
-export * as Connection from "./auth/connection-api.ts";
-export * as ManagedDnsConnections from "./auth/lifecycle-api.ts";
-export * as Diagnostic from "./auth/diagnostic.ts";
-export * as ProviderAuth from "./auth/manifest.ts";
-export * as ProviderContext from "./auth/provider-context.ts";
-export * as Secret from "./auth/secret.ts";
-export * as ProviderDiscovery from "./discovery/selection.ts";
-export * as ZoneDiscovery from "./discovery/zone-discovery.ts";
-export * as Zones from "./discovery/zones.ts";
-export * as DnsRecord from "./domain/dns-record.ts";
-export * as DomainName from "./domain/domain-name.ts";
-export * as InvalidInput from "./invalid-input.ts";
-export * as DnsProvider from "./provider/provider.ts";
-export * as ProviderSession from "./provider/session.ts";
-export * as ConnectionAuthorization from "./plan/connection-authorization.ts";
-export * as Digest from "./plan/canonical-json.ts";
-export * as Deletion from "./plan/deletion.ts";
-export * as Provisioning from "./plan/plan.ts";
-export * as DnsPlan from "./plan/types.ts";
-export * as Cloudflare from "./providers/cloudflare/index.ts";
-export * as Vercel from "./providers/vercel/index.ts";
-export * as Transport from "./transport.ts";
-export * as CloudflareDnsOverHttps from "./verification/cloudflare-doh.ts";
-export * as DnsData from "./verification/dns-data.ts";
-export * as DnsOverHttps from "./verification/doh.ts";
-export * as GoogleDnsOverHttps from "./verification/google-doh.ts";
-export * as DnsResolverPool from "./verification/resolver-pool.ts";
-export * as DnsResolver from "./verification/resolver.ts";
-export * as Verification from "./verification/verify.ts";
+export * as Approval from "./Approval.ts";
+export * as Cleanup from "./Cleanup.ts";
+export * as Cloudflare from "./Cloudflare.ts";
+export * as Connect from "./Connect.ts";
+export * as Custody from "./Custody.ts";
+export * as DnsRecord from "./DnsRecord.ts";
+export * as DomainKit from "./DomainKit.ts";
+export * as DomainName from "./DomainName.ts";
+export * as Plan from "./Plan.ts";
+export * as Principal from "./Principal.ts";
+export * as Provider from "./Provider.ts";
+export * as Providers from "./Providers.ts";
+export * as Provision from "./Provision.ts";
+export * as Reason from "./Reason.ts";
+export * as Receipt from "./Receipt.ts";
+export * as Resolver from "./Resolver.ts";
+export * as Storage from "./Storage.ts";
+export * as Vercel from "./Vercel.ts";
+export * as Verify from "./Verify.ts";
