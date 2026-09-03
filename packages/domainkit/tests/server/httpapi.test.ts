@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { HttpApi, OpenApi } from "effect/unstable/httpapi";
 
-import { DnsRecord, DomainKit } from "../../src/index.ts";
+import { DnsRecord, DomainKit, DomainKitError, Plan } from "../../src/index.ts";
 import { Server } from "../../src/entry/server.ts";
 import { Testing } from "../../src/entry/testing.ts";
 
@@ -309,6 +309,40 @@ describe("Server.api", () => {
         "domainkit.start",
       ],
     );
+  });
+
+  it("declares a response for every status a DomainKitError reason produces", () => {
+    const spec = OpenApi.fromApi(Server.api);
+    const inspect = spec.paths["/domains/{domain}"]?.get;
+    assert.isDefined(inspect);
+    const declared = Object.keys(inspect?.responses ?? {})
+      .map(Number)
+      .filter((status) => status >= 400);
+
+    const reasons: ReadonlyArray<DomainKitError.Reason> = [
+      new DomainKitError.InvalidInput({ message: "bad" }),
+      new DomainKitError.Unauthenticated({ message: "no" }),
+      new DomainKitError.Forbidden({ message: "no" }),
+      new DomainKitError.NotFound({ entity: "plan", id: "plan_1" }),
+      new DomainKitError.Conflict({ planId: Plan.PlanId.make("plan_1"), operations: [] }),
+      new DomainKitError.Stale({
+        planId: Plan.PlanId.make("plan_1"),
+        digest: Plan.Digest.make("digest"),
+      }),
+      new DomainKitError.Expired({ entity: "plan", id: "plan_1" }),
+      new DomainKitError.Busy({ key: "apply" }),
+      new DomainKitError.ProviderRejected({ provider: "fake", message: "no" }),
+      new DomainKitError.ProviderUnavailable({ provider: "fake", message: "later" }),
+      new DomainKitError.Reconnect({ provider: "fake", connectionId: "conn_1" }),
+      new DomainKitError.StorageFailed({ operation: "put", message: "no" }),
+      new DomainKitError.CryptoFailed({ operation: "seal" }),
+      new DomainKitError.ResolverFailed({ resolver: "fake", message: "no" }),
+    ];
+    const unserved = reasons
+      .map((reason) => new DomainKitError.DomainKitError({ reason }))
+      .filter((error) => !declared.includes(error.httpStatus))
+      .map((error) => `${error.reason._tag} -> ${error.httpStatus}`);
+    assert.deepStrictEqual(unserved, []);
   });
 
   it("mounts under a prefix without rebuilding the group", () => {
