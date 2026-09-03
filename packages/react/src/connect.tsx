@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState, type ReactElement, type React
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
-import { useDomainKit } from "./domain-kit.tsx";
+import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
 import { useIcons } from "./icons.tsx";
 import { failure as describeFailure } from "./messages.ts";
@@ -389,6 +389,7 @@ export function Status({ controller, ...props }: StatusProps): ReactElement {
       case "SelectionRequired":
         return messages.chooseZone;
       case "Disconnected":
+        return messages.notConnected;
       case "Failure":
         return "";
     }
@@ -618,6 +619,7 @@ export function Dialog({
   trigger,
 }: DialogProps): ReactElement {
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
+  const readOnly = useReadOnly();
   const [open, setOpen] = useState(false);
   const busy = controller.state._tag === "Submitting";
   const snapshot = controller.snapshot;
@@ -628,6 +630,8 @@ export function Dialog({
       ? messages.connectAnyTitle
       : messages.connectTitle(provider));
   const body = children ?? <Form controller={controller} />;
+  // Connecting is a write, so the whole surface goes rather than a disabled trigger.
+  if (readOnly) return <></>;
   if (render !== undefined) {
     return (
       <>
@@ -707,6 +711,7 @@ export interface CardProps extends PartProps<"div", RootState> {
 /** A connected domain: which provider holds it, and how to let it go. */
 export function Card({ controller, ...props }: CardProps): ReactElement {
   const { messages } = useDomainKit();
+  const readOnly = useReadOnly();
   const state = controller.state;
   const snapshot = controller.snapshot;
   const provider = controller.providers.find((entry) => entry.id === snapshot?.provider);
@@ -721,24 +726,26 @@ export function Card({ controller, ...props }: CardProps): ReactElement {
             {provider === undefined ? null : <Provider.Mark provider={provider} />}
             <Status controller={controller} />
           </div>
-          <div data-domainkit-part="connected-actions">
-            <button
-              data-domainkit-part="disconnect-trigger"
-              disabled={state._tag === "Submitting"}
-              onClick={controller.detach}
-              type="button"
-            >
-              {messages.detach}
-            </button>
-            <button
-              data-domainkit-part="disconnect-action"
-              disabled={state._tag === "Submitting"}
-              onClick={controller.disconnect}
-              type="button"
-            >
-              {messages.disconnect}
-            </button>
-          </div>
+          {readOnly ? null : (
+            <div data-domainkit-part="connected-actions">
+              <button
+                data-domainkit-part="disconnect-trigger"
+                disabled={state._tag === "Submitting"}
+                onClick={controller.detach}
+                type="button"
+              >
+                {messages.detach}
+              </button>
+              <button
+                data-domainkit-part="disconnect-action"
+                disabled={state._tag === "Submitting"}
+                onClick={controller.disconnect}
+                type="button"
+              >
+                {messages.disconnect}
+              </button>
+            </div>
+          )}
           <Outcome controller={controller} />
         </>
       ),

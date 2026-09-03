@@ -109,6 +109,27 @@ if (container === null) throw new Error("The fixture has no #root");
 
 const view = parameters.get("view");
 
+/**
+ * The flag flips in place rather than on reload: the fake transport keeps its state in memory, so
+ * a reload would forget the connection this view is meant to show.
+ */
+function FlowWithReadOnlyToggle() {
+  const [readOnly, setReadOnly] = useState(false);
+  return (
+    <>
+      <button data-testid="toggle-readonly" onClick={() => setReadOnly(!readOnly)} type="button">
+        Toggle read-only
+      </button>
+      <Domain.Flow
+        className="host-flow"
+        domain={domain}
+        readOnly={readOnly}
+        requirements={requirements}
+      />
+    </>
+  );
+}
+
 createRoot(container).render(
   <StrictMode>
     {view === "returnto" ? (
@@ -118,7 +139,7 @@ createRoot(container).render(
         {view === "evidence" ? (
           <VerifyUi.Evidence readiness={mismatched} />
         ) : (
-          <Domain.Flow className="host-flow" domain={domain} requirements={requirements} />
+          <FlowWithReadOnlyToggle />
         )}
       </DomainKit.Root>
     )}

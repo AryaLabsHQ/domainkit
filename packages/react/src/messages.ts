@@ -49,6 +49,8 @@ export interface Catalog {
   readonly connectAnyTitle: string;
   readonly connectDescription: (domain: string) => string;
   readonly connectedTo: (provider: string) => string;
+  /** Shown where a connect control would be when the customer may not connect. */
+  readonly notConnected: string;
   readonly reconnectRequired: (provider: string) => string;
   readonly disconnectTitle: (provider: string) => string;
   readonly disconnectConsent: string;
@@ -215,6 +217,7 @@ export const english: Catalog = {
   connectAnyTitle: "Connect your DNS provider",
   connectDescription: (domain) => `Authorize DNS changes for ${domain}.`,
   connectedTo: (provider) => `${provider} connected`,
+  notConnected: "No DNS provider is connected.",
   reconnectRequired: (provider) => `${provider} needs to be reconnected`,
   disconnectTitle: (provider) => `Disconnect ${provider}?`,
   disconnectConsent: "The provider connection is removed. Existing DNS records are preserved.",

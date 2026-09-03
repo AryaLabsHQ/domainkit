@@ -208,3 +208,78 @@ describe("Domain.Flow", () => {
     expect(screen.getByLabelText(/Token/)).toBeDefined();
   });
 });
+
+describe("Domain.Flow read-only", () => {
+  const connected = async () => {
+    const scenarioed = scenario();
+    await (async () => {
+      const view = render(
+        <DomainKit.Root transport={scenarioed.transport}>
+          <Domain.Flow domain={scenarioed.domain} requirements={scenarioed.requirements} />
+        </DomainKit.Root>,
+      );
+      await connect();
+      view.unmount();
+    })();
+    return scenarioed;
+  };
+
+  it("keeps the state and drops every control that would change it", async () => {
+    const { domain, requirements, transport } = await connected();
+    render(
+      <DomainKit.Root readOnly transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    // The state a member may see.
+    await screen.findByText("fake connected");
+    expect(screen.getByRole("columnheader", { name: "Type" })).toBeDefined();
+    expect(screen.getByRole("cell", { name: "CNAME" })).toBeDefined();
+    // The writes they may not start.
+    for (const name of [
+      "Connect",
+      "Detach domain",
+      "Disconnect",
+      "Review changes",
+      "Approve",
+      "Decline",
+      "Remove records",
+    ]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+  });
+
+  it("says a domain has no provider rather than offering to connect one", async () => {
+    const { domain, requirements, transport } = scenario();
+    render(
+      <DomainKit.Root readOnly transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await screen.findByText("No DNS provider is connected.");
+    expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
+  });
+
+  it("scopes the flag to one flow when the root is writable", async () => {
+    const { domain, requirements, transport } = await connected();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} readOnly requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await screen.findByText("fake connected");
+    expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Detach domain" })).toBeNull();
+  });
+
+  it("still offers the writes when the flag is off", async () => {
+    const { domain, requirements, transport } = await connected();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    expect(await screen.findByRole("button", { name: "Review changes" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Detach domain" })).toBeDefined();
+  });
+});

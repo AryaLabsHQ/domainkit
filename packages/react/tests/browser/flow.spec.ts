@@ -115,6 +115,25 @@ test("sends the page the customer started from as the interactive return destina
   expect(method.returnTo).toBe(page.url());
 });
 
+test("renders a read-only domain as state with no controls", async ({ page }) => {
+  // Connect while writable, then flip the flag: the state stays, the controls go.
+  await open(page, "browser9.example");
+  await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByRole("dialog").getByLabel("Token").fill("tok");
+  await page.getByRole("button", { name: "Token (fake)" }).click();
+  await expect(page.getByText("fake connected")).toBeVisible();
+
+  await page.getByTestId("toggle-readonly").click();
+  await expect(page.getByText("fake connected")).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Type" })).toBeVisible();
+  await Promise.all(
+    ["Connect", "Detach domain", "Disconnect", "Review changes"].map((name) =>
+      expect(page.getByRole("button", { name })).toHaveCount(0),
+    ),
+  );
+  await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("read-only") });
+});
+
 test("takes theme tokens and the color scheme from the root", async ({ page }) => {
   await open(page, "browser4.example", "dark");
   const root = page.locator("[data-domainkit-root]").first();
