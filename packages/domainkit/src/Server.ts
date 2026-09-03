@@ -53,6 +53,23 @@ export class Identity extends Context.Service<Identity, IdentityService>()(
 export const ConnectionStatus = Schema.Literals(["disconnected", "connected", "reconnect"]);
 export type ConnectionStatus = typeof ConnectionStatus.Type;
 
+/** One value a token method needs, so a form renders without knowing the provider. */
+export const Field = Schema.Struct({
+  name: Schema.String,
+  required: Schema.Boolean,
+  secret: Schema.Boolean,
+});
+export type Field = typeof Field.Type;
+
+/** How a provider can be connected; `fields` is `null` for the interactive methods. */
+export const MethodDescriptor = Schema.Struct({
+  kind: Storage.AuthMethod,
+  label: Schema.String,
+  docsUrl: Schema.NullOr(Schema.String),
+  fields: Schema.NullOr(Schema.Array(Field)),
+});
+export type MethodDescriptor = typeof MethodDescriptor.Type;
+
 /** Everything the UI needs about a domain, flattened; provider context never crosses the wire. */
 export const Snapshot = Schema.Struct({
   domain: Schema.String,
@@ -73,15 +90,19 @@ export const Snapshot = Schema.Struct({
     Schema.Struct({
       id: Schema.String,
       name: Schema.String,
-      methods: Schema.Array(Storage.AuthMethod),
+      methods: Schema.Array(MethodDescriptor),
     }),
   ),
 });
 export type Snapshot = typeof Snapshot.Type;
 
-/** How the client asks to connect. The token is plaintext in transit and never comes back out. */
+/**
+ * How the client asks to connect. `values` is keyed by the provider's declared token fields, as
+ * `Snapshot.providers[].methods[].fields` names them. Secrets are plaintext in transit and never
+ * come back out.
+ */
 export class Token extends Schema.TaggedClass<Token>("@domainkit/server/Method/Token")("Token", {
-  token: Schema.String,
+  values: Schema.Record(Schema.String, Schema.String),
 }) {}
 export class OAuth extends Schema.TaggedClass<OAuth>("@domainkit/server/Method/OAuth")("OAuth", {
   returnTo: Schema.optionalKey(Schema.String),
@@ -119,6 +140,31 @@ export class SelectionRequired extends Schema.TaggedClass<SelectionRequired>(
 export const Started = Schema.Union([Connected, Redirect, SelectionRequired]);
 export type Started = typeof Started.Type;
 
+/**
+ * Which of the principal's connections already reaches a domain. The class names carry a
+ * `Discovery` prefix because `Started` owns the unprefixed `SelectionRequired`; the wire tags are
+ * the ones `Connect.Discovery` uses.
+ */
+export class DiscoveryResolved extends Schema.TaggedClass<DiscoveryResolved>(
+  "@domainkit/server/Discovery/Resolved",
+)("Resolved", { connectionId: Schema.String, zone: Schema.String, label: Schema.String }) {}
+export class DiscoverySelectionRequired extends Schema.TaggedClass<DiscoverySelectionRequired>(
+  "@domainkit/server/Discovery/SelectionRequired",
+)("SelectionRequired", {
+  candidates: Schema.Array(
+    Schema.Struct({ connectionId: Schema.String, zone: Schema.String, label: Schema.String }),
+  ),
+}) {}
+export class DiscoveryNotFound extends Schema.TaggedClass<DiscoveryNotFound>(
+  "@domainkit/server/Discovery/NotFound",
+)("NotFound", { nameservers: Schema.Array(Schema.String) }) {}
+export const Discovery = Schema.Union([
+  DiscoveryResolved,
+  DiscoverySelectionRequired,
+  DiscoveryNotFound,
+]);
+export type Discovery = typeof Discovery.Type;
+
 export const AttachPayload = Schema.Struct({
   domain: Schema.String,
   /** Which candidate zone to attach when `SelectionRequired` came back. */
@@ -155,7 +201,8 @@ export type Attempt = typeof Attempt.Type;
 
 /** `Verify.Readiness` on the wire; timestamps encode as ISO strings. */
 export const Readiness = Schema.Struct({
-  attachmentId: Schema.String,
+  domain: Schema.String,
+  attachmentId: Schema.NullOr(Schema.String),
   overall: Storage.Overall,
   requirements: Schema.Array(
     Schema.Struct({
@@ -185,7 +232,7 @@ const errorAt = (status: number) =>
     Schema.makeFilter((error: DomainKitError.DomainKitError) => error.httpStatus === status),
   ).pipe(HttpApiSchema.status(status));
 
-const errors = [400, 401, 403, 404, 409, 500, 502, 503].map(errorAt);
+const errors = [400, 401, 403, 404, 409, 500, 501, 502, 503].map(errorAt);
 
 // ---------------------------------------------------------------------------------------------
 // The group
@@ -196,6 +243,13 @@ export const group = HttpApiGroup.make("domainkit")
     HttpApiEndpoint.get("inspect", "/domains/:domain", {
       params: { domain: Schema.String },
       success: Snapshot,
+      error: errors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("discover", "/domains/:domain/discovery", {
+      params: { domain: Schema.String },
+      success: Discovery,
       error: errors,
     }),
   )
@@ -377,9 +431,11 @@ const callbackUrlFor = (input: {
  * supplied it.
  */
 const sameOrigin = (destination: string, callback: URL): string | null => {
-  if (destination.startsWith("/") && !destination.startsWith("//")) return destination;
   try {
-    const url = new URL(destination);
+    // Resolving against the callback is what makes this safe: the URL parser normalizes the forms
+    // a browser would follow off-origin (`//host`, `/\host`, `\/host`, encoded hosts) into a real
+    // origin, so comparing origins catches every one of them.
+    const url = new URL(destination, callback);
     return url.origin === callback.origin ? url.toString() : null;
   } catch {
     return null;
@@ -411,7 +467,7 @@ const snapshotOf = (snapshot: ConnectModule.Snapshot): Snapshot => ({
 const methodOf = (method: Method): ConnectModule.Method => {
   switch (method._tag) {
     case "Token":
-      return ConnectModule.Method.token(method.token);
+      return ConnectModule.Method.token(method.values);
     case "OAuth":
       return ConnectModule.Method.oauth(
         method.returnTo === undefined ? {} : { returnTo: method.returnTo },
@@ -456,6 +512,27 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         );
 
       const snapshot = (domain: string) => Effect.map(connect.inspect(domain), snapshotOf);
+
+      const discovered = (discovery: ConnectModule.Discovery): Discovery => {
+        switch (discovery._tag) {
+          case "Resolved":
+            return new DiscoveryResolved({
+              connectionId: discovery.connectionId,
+              zone: discovery.target.zone,
+              label: discovery.target.label,
+            });
+          case "SelectionRequired":
+            return new DiscoverySelectionRequired({
+              candidates: discovery.candidates.map(({ connectionId, target }) => ({
+                connectionId,
+                zone: target.zone,
+                label: target.label,
+              })),
+            });
+          case "NotFound":
+            return new DiscoveryNotFound({ nameservers: discovery.nameservers });
+        }
+      };
 
       const connected = (domain: string) =>
         Effect.map(snapshot(domain), (value) => new Connected({ snapshot: value }));
@@ -520,6 +597,9 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
 
       return handlers
         .handle("inspect", ({ params, request }) => as(request, snapshot(params.domain)))
+        .handle("discover", ({ params, request }) =>
+          as(request, Effect.map(connect.discover(params.domain), discovered)),
+        )
         .handle("start", ({ payload, request }) =>
           as(
             request,

@@ -129,12 +129,13 @@ export const ApiLive = HttpApiBuilder.layer(Api).pipe(
 );
 ```
 
-`Identity` fails closed: a request DomainKit cannot attribute never runs under another tenant's
-principal.
+`Identity` verifies a credential you issued and looks the tenant up yourself; a request never names
+its own `ownerId`, and one you cannot attribute fails `Unauthenticated` rather than running under
+another tenant's principal.
 
-`Server.group` is one `HttpApiGroup` with fourteen typed endpoints covering the whole lifecycle:
-inspect, connect, callback, attach, detach, disconnect, plan, approve, reject, apply, read a plan or
-a receipt, observe, and build a cleanup plan. `Identity` is the only service you write; every handler
+`Server.group` is one `HttpApiGroup` with fifteen typed endpoints covering the whole lifecycle:
+inspect, discover, connect, callback, attach, detach, disconnect, plan, approve, reject, apply, read
+a plan or a receipt, observe, and build a cleanup plan. `Identity` is the only service you write; every handler
 derives the `Principal` for the request it is serving. `Server.group.prefix("/internal/dns")` moves
 every route, and the OAuth callback URL follows the mount. `OpenApi.fromApi(Server.api)` documents
 the group.
@@ -171,6 +172,11 @@ const started =
     method: Transport.Method.oauth({ returnTo: "/settings/domains" }),
   });
 ```
+
+`connection.discover(domain)` answers which of the customer's existing connections already reaches
+the domain, so a second domain on a connected provider skips the connect step entirely.
+`Snapshot.providers[].methods[]` carries each method's label, docs URL, and token fields, so a
+connect form renders from the response instead of hard-coding provider names.
 
 Capability groups are optional. A host that mounts only the connection routes declares
 `Transport.fromFetch(url, { capabilities: ["connection"] })`, `Transport.capabilities(transport)`

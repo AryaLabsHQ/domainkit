@@ -1,7 +1,15 @@
 // Add custom domains to an Effect app: providers, storage, routes. Nothing else to write.
 import { Config, Effect, Layer } from "effect";
 import { HttpApi, HttpApiBuilder } from "effect/unstable/httpapi";
-import { Cloudflare, Custody, DomainKit, DomainKitError, Storage, Vercel } from "domainkit";
+import {
+  Cloudflare,
+  Custody,
+  DomainKit,
+  DomainKitError,
+  type Principal,
+  Storage,
+  Vercel,
+} from "domainkit";
 import { Server } from "domainkit/server";
 
 const DomainKitLive = DomainKit.layer({
@@ -19,18 +27,26 @@ const DomainKitLive = DomainKit.layer({
   Layer.provideMerge(Layer.mergeAll(Storage.layerMemory, Custody.layerConfig())),
 );
 
-// Who is calling: your session, your tenant model. Fail closed — a request DomainKit cannot
-// attribute must not run under someone else's principal.
+// Who is calling: your session, your tenant model. Verify a credential you issued and look the
+// tenant up yourself — a request never names its own `ownerId` — and fail closed when it does not
+// check out. Every Storage read and write is scoped by whatever this returns.
+declare const sessions: {
+  readonly verify: (token: string) => Effect.Effect<Principal.Shape | null>;
+};
+
 const IdentityLive = Layer.succeed(Server.Identity)({
-  principal: (request) => {
-    const ownerId = request.headers["x-org-id"];
-    const actorId = request.headers["x-user-id"];
-    return ownerId === undefined || actorId === undefined
-      ? DomainKitError.fail(
-          new DomainKitError.Unauthenticated({ message: "The request carries no session" }),
-        )
-      : Effect.succeed({ ownerId, actorId });
-  },
+  principal: (request) =>
+    Effect.gen(function* () {
+      const header = request.headers.authorization ?? "";
+      const session = header.startsWith("Bearer ")
+        ? yield* sessions.verify(header.slice("Bearer ".length))
+        : null;
+      return session === null
+        ? yield* DomainKitError.fail(
+            new DomainKitError.Unauthenticated({ message: "The request carries no session" }),
+          )
+        : session;
+    }),
 });
 
 // Mount the group in your API. Every route, typed, with OpenAPI for free.

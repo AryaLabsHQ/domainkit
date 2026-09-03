@@ -172,6 +172,7 @@ export type PublicTransport = Transport.Transport;
 export const connectionOnly: Transport.Transport = {
   connection: {
     inspect: () => Effect.die("unused"),
+    discover: () => Effect.die("unused"),
     start: () => Effect.die("unused"),
     attach: () => Effect.die("unused"),
     detach: () => Effect.die("unused"),

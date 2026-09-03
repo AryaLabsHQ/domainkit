@@ -25,11 +25,16 @@ export type Started = Server.Started;
 export type Readiness = Server.Readiness;
 export type Attempt = Server.Attempt;
 export type Candidate = Server.Candidate;
+export type Discovery = Server.Discovery;
+export type Field = Server.Field;
+export type MethodDescriptor = Server.MethodDescriptor;
 export type Method = Server.Method;
 
 /** How a client asks to connect. Mirrors `Connect.Method`, over the wire. */
 export const Method = {
-  token: (token: string): Method => new Server.Token({ token }),
+  /** A lone string for the common one-field provider, or the values its descriptor names. */
+  token: (values: string | Readonly<Record<string, string>>): Method =>
+    new Server.Token({ values: typeof values === "string" ? { token: values } : values }),
   oauth: (options: { readonly returnTo?: string } = {}): Method => new Server.OAuth(options),
   integration: (options: { readonly returnTo?: string } = {}): Method =>
     new Server.Integration(options),
@@ -37,6 +42,8 @@ export const Method = {
 
 export interface ConnectionGroup {
   readonly inspect: (domain: string) => Fx<Snapshot>;
+  /** Which of this owner's existing connections already reaches the domain. */
+  readonly discover: (domain: string) => Fx<Discovery>;
   readonly start: (input: {
     readonly domain: string;
     readonly provider: string;
@@ -204,6 +211,12 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
         method: "GET",
         path: `/domains/${encodeURIComponent(domain)}`,
         success: Server.Snapshot,
+      }),
+    discover: (domain) =>
+      request({
+        method: "GET",
+        path: `/domains/${encodeURIComponent(domain)}/discovery`,
+        success: Server.Discovery,
       }),
     start: (input) =>
       request({

@@ -53,7 +53,7 @@ const connected = async (call: ReturnType<typeof server>["call"], provider: stri
   const started = await call("POST", "/connections", {
     domain: "app.example.com",
     provider,
-    method: { _tag: "Token", token: "token" },
+    method: { _tag: "Token", values: { token: "token" } },
   });
   assert.strictEqual(started.status, 200);
   return started.body as { readonly _tag: string; readonly snapshot: Server.Snapshot };
@@ -140,6 +140,52 @@ describe("Server.group over the lifecycle", () => {
     }
   });
 
+  it("discovers which connection already reaches a domain", async () => {
+    const { fake, call, dispose } = server();
+    try {
+      const before = await call("GET", "/domains/app.example.com/discovery");
+      assert.strictEqual(before.status, 200);
+      assert.strictEqual((before.body as { readonly _tag: string })._tag, "NotFound");
+
+      await connected(call, fake.id);
+
+      const after = await call("GET", "/domains/app.example.com/discovery");
+      assert.strictEqual(after.status, 200);
+      const resolved = after.body as {
+        readonly _tag: string;
+        readonly connectionId: string;
+        readonly zone: string;
+        readonly label: string;
+      };
+      assert.strictEqual(resolved._tag, "Resolved");
+      assert.strictEqual(resolved.zone, "example.com");
+      assert.strictEqual(resolved.label, "example.com");
+      assert.notStrictEqual(resolved.connectionId, "");
+      assert.strictEqual("target" in resolved, false);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("renders the provider's token fields in the snapshot", async () => {
+    const { fake, call, dispose } = server();
+    try {
+      const inspected = await call("GET", "/domains/app.example.com");
+      const snapshot = inspected.body as Server.Snapshot;
+      const provider = snapshot.providers.find(({ id }) => id === fake.id);
+      assert.isDefined(provider);
+      assert.deepStrictEqual(
+        provider?.methods.map(({ kind }) => kind),
+        ["token", "oauth"],
+      );
+      const token = provider?.methods.find(({ kind }) => kind === "token");
+      assert.deepStrictEqual(token?.fields, [{ name: "token", required: true, secret: true }]);
+      assert.strictEqual(provider?.methods.find(({ kind }) => kind === "oauth")?.fields, null);
+    } finally {
+      await dispose();
+    }
+  });
+
   it("records a rejection as a terminal attempt state", async () => {
     const { fake, call, dispose } = server();
     try {
@@ -188,7 +234,7 @@ describe("Server.group over the lifecycle", () => {
       const badToken = await call("POST", "/connections", {
         domain: "app.example.com",
         provider: "fake",
-        method: { _tag: "Token", token: "" },
+        method: { _tag: "Token", values: { token: "" } },
       });
       assert.strictEqual(badToken.status, 401);
       assert.strictEqual(
@@ -199,7 +245,7 @@ describe("Server.group over the lifecycle", () => {
       const unknownProvider = await call("POST", "/connections", {
         domain: "app.example.com",
         provider: "nope",
-        method: { _tag: "Token", token: "token" },
+        method: { _tag: "Token", values: { token: "token" } },
       });
       assert.strictEqual(unknownProvider.status, 404);
     } finally {
@@ -238,7 +284,7 @@ describe("Server.group over the lifecycle", () => {
       await call("POST", "/connections", {
         domain: "app.example.com",
         provider: fake.id,
-        method: { _tag: "Token", token: "token" },
+        method: { _tag: "Token", values: { token: "token" } },
       });
       const planned = await call("POST", "/domains/app.example.com/plans", {
         requirements: [JSON.parse(JSON.stringify(requirements[0]))],
@@ -272,7 +318,7 @@ describe("Server.group over the lifecycle", () => {
 
       const callback = await handler(new Request(authorizationUrl, { redirect: "manual" }));
       assert.strictEqual(callback.status, 302);
-      assert.strictEqual(callback.headers.get("location"), "/settings/domains");
+      assert.strictEqual(callback.headers.get("location"), `${host}/settings/domains`);
 
       const inspected = await call("GET", "/domains/app.example.com");
       assert.strictEqual((inspected.body as Server.Snapshot).status, "connected");
@@ -309,6 +355,30 @@ describe("Server.group over the lifecycle", () => {
     }
   });
 
+  it.each(["//evil.example", "/\\evil.example", "https://evil.example/steal", "\\/evil.example"])(
+    "refuses %s as a callback destination",
+    async (returnTo) => {
+      const { fake, call, handler, dispose } = server({ defaultReturnTo: "/dashboard" });
+      try {
+        const started = await call("POST", "/connections", {
+          domain: "app.example.com",
+          provider: fake.id,
+          method: { _tag: "OAuth", returnTo },
+        });
+        const { authorizationUrl } = started.body as { readonly authorizationUrl: string };
+        const callback = await handler(new Request(authorizationUrl, { redirect: "manual" }));
+        assert.strictEqual(callback.status, 400);
+        assert.strictEqual(callback.headers.get("location"), null);
+        const refused = JSON.parse(await callback.text()) as {
+          readonly reason: { readonly field?: string };
+        };
+        assert.strictEqual(refused.reason.field, "returnTo");
+      } finally {
+        await dispose();
+      }
+    },
+  );
+
   it("falls back to defaultReturnTo when the flow named no destination", async () => {
     const { fake, call, handler, dispose } = server({ defaultReturnTo: "/dashboard" });
     try {
@@ -320,7 +390,7 @@ describe("Server.group over the lifecycle", () => {
       const { authorizationUrl } = started.body as { readonly authorizationUrl: string };
       const callback = await handler(new Request(authorizationUrl, { redirect: "manual" }));
       assert.strictEqual(callback.status, 302);
-      assert.strictEqual(callback.headers.get("location"), "/dashboard");
+      assert.strictEqual(callback.headers.get("location"), `${host}/dashboard`);
     } finally {
       await dispose();
     }
@@ -340,7 +410,7 @@ describe("Server.group over the lifecycle", () => {
 
       const callback = await handler(new Request(tampered, { redirect: "manual" }));
       assert.strictEqual(callback.status, 302);
-      assert.strictEqual(callback.headers.get("location"), "/settings/domains");
+      assert.strictEqual(callback.headers.get("location"), `${host}/settings/domains`);
     } finally {
       await dispose();
     }
@@ -387,7 +457,7 @@ describe("Server.api", () => {
   it("generates an OpenAPI document covering every route", () => {
     const spec = OpenApi.fromApi(Server.api);
     const operations = Object.values(spec.paths).flatMap((item) => Object.values(item));
-    assert.strictEqual(operations.length, 14);
+    assert.strictEqual(operations.length, 15);
     assert.deepStrictEqual(
       operations
         .map((operation) => (operation as { readonly operationId: string }).operationId)
@@ -401,6 +471,7 @@ describe("Server.api", () => {
         "domainkit.createPlan",
         "domainkit.detach",
         "domainkit.disconnect",
+        "domainkit.discover",
         "domainkit.inspect",
         "domainkit.observe",
         "domainkit.plan",
@@ -432,6 +503,8 @@ describe("Server.api", () => {
       new DomainKitError.Expired({ entity: "plan", id: "plan_1" }),
       new DomainKitError.Busy({ key: "apply" }),
       new DomainKitError.ProviderRejected({ provider: "fake", message: "no" }),
+      new DomainKitError.ProviderConflict({ provider: "fake", message: "taken" }),
+      new DomainKitError.Unsupported({ provider: "fake", operation: "dns:write", message: "no" }),
       new DomainKitError.ProviderUnavailable({ provider: "fake", message: "later" }),
       new DomainKitError.Reconnect({ provider: "fake", connectionId: "conn_1" }),
       new DomainKitError.StorageFailed({ operation: "put", message: "no" }),

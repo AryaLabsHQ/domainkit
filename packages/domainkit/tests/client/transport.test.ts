@@ -71,6 +71,13 @@ describe("Transport.fromFetch", () => {
       const attachmentId = started.snapshot.attachmentId;
       assert.isNotNull(attachmentId);
 
+      const discovery = yield* connection.discover("app.example.com");
+      assert.strictEqual(discovery._tag, "Resolved");
+      if (discovery._tag === "Resolved") {
+        assert.strictEqual(discovery.zone, "example.com");
+        assert.strictEqual(discovery.connectionId, started.snapshot.connectionId);
+      }
+
       const snapshot = yield* connection.inspect("app.example.com");
       assert.deepStrictEqual(snapshot, started.snapshot);
       assert.deepStrictEqual(
@@ -222,6 +229,7 @@ describe("Transport.fromFetch", () => {
     const connectionOnly: Transport.Transport = {
       connection: {
         inspect: () => Effect.die("unused"),
+        discover: () => Effect.die("unused"),
         start: () => Effect.die("unused"),
         attach: () => Effect.die("unused"),
         detach: () => Effect.die("unused"),
@@ -269,11 +277,16 @@ describe("Testing.transport", () => {
       const provider = snapshot.providers[0];
       assert.isDefined(provider);
       if (provider === undefined) return;
+      // The form a UI renders comes straight off the descriptor.
+      assert.deepStrictEqual(provider.methods.find(({ kind }) => kind === "token")?.fields, [
+        { name: "token", required: true, secret: true },
+      ]);
 
+      yield* connection.discover("app.example.com");
       yield* connection.start({
         domain: "app.example.com",
         provider: provider.id,
-        method: Transport.Method.token("token"),
+        method: Transport.Method.token({ token: "token" }),
       });
       const plan = yield* provisioning.plan({ domain: "app.example.com", requirements });
       yield* provisioning.apply((yield* provisioning.approve({ planId: plan.id })).id);
@@ -284,6 +297,7 @@ describe("Testing.transport", () => {
         transport.calls.map(({ method }) => method),
         [
           "connection.inspect",
+          "connection.discover",
           "connection.start",
           "provisioning.plan",
           "provisioning.approve",
@@ -293,8 +307,8 @@ describe("Testing.transport", () => {
         ],
       );
       assert.deepStrictEqual(transport.calls[0]?.input, "app.example.com");
-      assert.deepStrictEqual(transport.calls[3]?.input, { planId: plan.id });
-      assert.deepStrictEqual(transport.calls[6]?.input, { planId: second.id });
+      assert.deepStrictEqual(transport.calls[4]?.input, { planId: plan.id });
+      assert.deepStrictEqual(transport.calls[7]?.input, { planId: second.id });
     });
   });
 
