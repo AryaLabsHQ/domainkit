@@ -7,6 +7,7 @@ import { DateTime, Effect, Layer, Redacted, Schema } from "effect";
 import * as DnsRecord from "./DnsRecord.ts";
 import * as DomainKitError from "./DomainKitError.ts";
 import * as DomainName from "./DomainName.ts";
+import { provider as providerCases } from "./internal/conformance/provider.ts";
 import { storage as storageCases } from "./internal/conformance/storage.ts";
 import * as Principal from "./Principal.ts";
 import * as Provider from "./Provider.ts";
@@ -241,4 +242,6 @@ export const resolver = (
 export const conformance = {
   /** Runs every Storage invariant (tenant isolation, leases, exactly-once continuations, revocation recovery). */
   storage: storageCases,
+  /** Runs create/readback/cleanup, exact-noop, conflict, stale-plan, partial-apply against a real provider definition. */
+  provider: providerCases,
 };
