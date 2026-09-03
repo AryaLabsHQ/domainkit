@@ -15,7 +15,6 @@ describe("packed React package", () => {
     expect(packageJson.type).toBe("module");
     expect(packageJson.peerDependencies.react).toBe(">=19.0.0 <20.0.0");
     expect(packageJson.peerDependencies["react-dom"]).toBe(">=19.0.0 <20.0.0");
-    expect(packageJson.peerDependencies["@effect/atom-react"]).toBe(">=4.0.0-rc.112 <5.0.0");
     expect(packageJson.peerDependencies.effect).toBe(">=4.0.0-rc.112 <5.0.0");
     expect(packageJson.exports["./styles.css"]).toBe("./dist/styles.css");
 

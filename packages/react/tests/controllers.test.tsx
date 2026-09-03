@@ -1,0 +1,212 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { DnsRecord } from "domainkit";
+import type { Transport } from "domainkit/client";
+import { useEffect, useState, type ReactNode } from "react";
+
+import { Cleanup, Connect, DomainKit, Provision, Testing, Verify } from "../src/index.ts";
+
+const requirements = [
+  DnsRecord.cname({
+    name: "app.example.com",
+    purpose: "Serve your site",
+    target: "edge.example.com",
+  }),
+];
+
+const wrap = (transport: Transport.Transport) =>
+  function Wrapper({ children }: { readonly children: ReactNode }) {
+    return <DomainKit.Root transport={transport}>{children}</DomainKit.Root>;
+  };
+
+/** Connect a domain with the fake provider's token method and wait for the snapshot. */
+const connectDomain = async (transport: Transport.Transport, domain: string) => {
+  const view = render(
+    <DomainKit.Root transport={transport}>
+      <Connect.Flow domain={domain} />
+    </DomainKit.Root>,
+  );
+  await screen.findByRole("button", { name: "Connect" });
+  await userEvent.click(screen.getByRole("button", { name: "Connect" }));
+  await userEvent.type(await screen.findByLabelText(/Token/), "secret-token");
+  await userEvent.click(screen.getByRole("button", { name: "Token (fake)" }));
+  await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
+  view.unmount();
+};
+
+describe("DomainKit.Root", () => {
+  it("keeps transport identity across renders, so an inline value does not restart controllers", async () => {
+    const base = Testing.transport();
+    const { calls, ...groups } = base;
+    function Harness() {
+      const [, setTick] = useState(0);
+      useEffect(() => {
+        setTick(1);
+        setTick(2);
+      }, []);
+      // A new object every render: exactly what writing the transport inline in JSX produces.
+      return (
+        <DomainKit.Root transport={{ ...groups }}>
+          <Connect.Flow domain="app.example.com" />
+        </DomainKit.Root>
+      );
+    }
+    render(<Harness />);
+    await screen.findByRole("button", { name: "Connect" });
+    await waitFor(() =>
+      expect(calls.filter((call) => call.method === "connection.inspect")).toHaveLength(1),
+    );
+    expect(calls.filter((call) => call.method === "connection.inspect")).toHaveLength(1);
+  });
+
+  it("exposes the transport and the capabilities the host declared", async () => {
+    const transport = Testing.transport({ capabilities: ["connection", "verification"] });
+    function Probe() {
+      const held = DomainKit.useTransport();
+      return <output>{Object.keys(held).sort().join(",")}</output>;
+    }
+    render(
+      <DomainKit.Root transport={transport}>
+        <Probe />
+      </DomainKit.Root>,
+    );
+    expect(screen.getByRole("status").textContent).toBe("connection,verification");
+  });
+});
+
+describe("Connect.useController", () => {
+  it("renders the token fields the provider declares and connects with their values", async () => {
+    const transport = Testing.transport();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Connect.Flow domain="app.example.com" />
+      </DomainKit.Root>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Connect" }));
+    const field = await screen.findByLabelText(/Token/);
+    expect(field.getAttribute("type")).toBe("password");
+    expect(field.getAttribute("name")).toBe("token");
+    await userEvent.type(field, "secret-token");
+    await userEvent.click(screen.getByRole("button", { name: "Token (fake)" }));
+    await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
+    const start = transport.calls.find((call) => call.method === "connection.start");
+    expect(start?.input).toMatchObject({
+      domain: "app.example.com",
+      method: { _tag: "Token", values: { token: "secret-token" } },
+      provider: "fake",
+    });
+  });
+
+  it("renders a failure from the error's reason, never from its tag", async () => {
+    const transport = Testing.transport();
+    function Panel() {
+      const controller = Connect.useController({ domain: "app.example.com" });
+      return (
+        <>
+          <button
+            onClick={() =>
+              controller.connect({ method: "token", provider: "absent", values: { token: "x" } })
+            }
+            type="button"
+          >
+            go
+          </button>
+          <Connect.Outcome controller={controller} />
+        </>
+      );
+    }
+    render(<Panel />, { wrapper: wrap(transport) });
+    await userEvent.click(screen.getByRole("button", { name: "go" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("That provider no longer exists.");
+    expect(alert.textContent).not.toContain("NotFound");
+  });
+
+  it("preselects a connection discovery already found for the zone", async () => {
+    const transport = Testing.transport();
+    await connectDomain(transport, "app.example.com");
+    render(
+      <DomainKit.Root transport={transport}>
+        <Connect.Flow domain="mail.example.com" />
+      </DomainKit.Root>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Connect" }));
+    await screen.findByText("example.com already serves this domain");
+    await userEvent.click(screen.getByRole("button", { name: "Use example.com" }));
+    await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
+    expect(transport.calls.some((call) => call.method === "connection.discover")).toBe(true);
+  });
+});
+
+describe("Provision.useController", () => {
+  it("plans, approves, and applies, handing the receipt to the host", async () => {
+    const transport = Testing.transport();
+    await connectDomain(transport, "app.example.com");
+    const applied: Array<string> = [];
+    render(
+      <DomainKit.Root transport={transport}>
+        <Provision.Flow
+          domain="app.example.com"
+          onApplied={(receipt) => applied.push(receipt.status)}
+          requirements={requirements}
+        />
+      </DomainKit.Root>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Review changes" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    await waitFor(() => expect(applied).toEqual(["complete"]));
+    expect(transport.calls.map((call) => call.method)).toContain("provisioning.approve");
+    expect(transport.calls.map((call) => call.method)).toContain("provisioning.apply");
+  });
+
+  it("declines a plan and reports the attempt as declined", async () => {
+    const transport = Testing.transport();
+    await connectDomain(transport, "app.example.com");
+    render(
+      <DomainKit.Root transport={transport}>
+        <Provision.Flow domain="app.example.com" requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Review changes" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Decline" }));
+    await waitFor(() => expect(screen.getByText(/Declined by/)).toBeDefined());
+    expect(transport.calls.map((call) => call.method)).toContain("provisioning.reject");
+  });
+});
+
+describe("Verify.useController", () => {
+  it("observes on mount and reports readiness per requirement", async () => {
+    const transport = Testing.transport();
+    await connectDomain(transport, "app.example.com");
+    function Panel() {
+      const controller = Verify.useController({ domain: "app.example.com", polling: false });
+      return <Verify.Status controller={controller} />;
+    }
+    render(<Panel />, { wrapper: wrap(transport) });
+    await waitFor(() =>
+      expect(transport.calls.some((call) => call.method === "verification.observe")).toBe(true),
+    );
+  });
+});
+
+describe("Cleanup.useController", () => {
+  it("fails with a rendered reason when the domain has no receipt to undo", async () => {
+    const transport = Testing.transport();
+    await connectDomain(transport, "app.example.com");
+    function Panel() {
+      const controller = Cleanup.useController({ domain: "app.example.com" });
+      return (
+        <>
+          <button onClick={controller.plan} type="button">
+            plan
+          </button>
+          <Cleanup.Outcome controller={controller} />
+        </>
+      );
+    }
+    render(<Panel />, { wrapper: wrap(transport) });
+    await userEvent.click(screen.getByRole("button", { name: "plan" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("That receipt no longer exists.");
+  });
+});

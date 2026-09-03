@@ -1,34 +1,20 @@
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
-import type { Transport } from "domainkit";
+import { DnsRecord } from "domainkit";
+import type { Transport } from "domainkit/client";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 
 import type { PartProps } from "./composition.tsx";
-import { usePart } from "./composition.tsx";
+import { leafPart, usePart } from "./composition.tsx";
+import { useDomainKit } from "./domain-kit.tsx";
 import { useIcons } from "./icons.tsx";
 
-export const copyText = (value: string): Promise<boolean> => {
-  if (typeof navigator === "undefined" || navigator.clipboard === undefined) {
-    return Promise.resolve(false);
-  }
-  return navigator.clipboard.writeText(value).then(
-    () => true,
-    () => false,
-  );
-};
+export type Readiness = Transport.Readiness;
+export type RequirementStatus = Readiness["requirements"][number]["status"];
 
-const downloadText = (filename: string, contents: string): void => {
-  if (typeof document === "undefined") return;
-  const blob = new Blob([contents], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.download = filename;
-  anchor.href = url;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-};
+// ---------------------------------------------------------------------------------------------
+// Zone file
+// ---------------------------------------------------------------------------------------------
 
-const absoluteDomainName = (value: string): string => (value.endsWith(".") ? value : `${value}.`);
+const absolute = (value: string): string => (value.endsWith(".") ? value : `${value}.`);
 
 const textEncoder = new TextEncoder();
 
@@ -41,6 +27,7 @@ const escapeTxtCharacter = (character: string): string => {
   return character;
 };
 
+/** TXT strings are capped at 255 bytes each, so long values are split and quoted per chunk. */
 const txtValue = (value: string): string => {
   const chunks: Array<string> = [];
   let chunk = "";
@@ -59,42 +46,65 @@ const txtValue = (value: string): string => {
   return chunks.map((part) => `"${part}"`).join(" ");
 };
 
-const srvValue = (value: string): string => {
-  const fields = value.trim().split(/\s+/);
-  if (fields.length !== 3) throw new Error(`Invalid SRV value: ${value}`);
-  const [weight, port, target] = fields;
-  if (weight === undefined || port === undefined || target === undefined) {
-    throw new Error(`Invalid SRV value: ${value}`);
-  }
-  return `${weight} ${port} ${absoluteDomainName(target)}`;
-};
-
-const zoneValue = (record: Transport.DnsRecord): string => {
-  switch (record.type.toUpperCase()) {
+const zoneData = (record: DnsRecord.DnsRecord): string => {
+  switch (record._tag) {
+    case "A":
+    case "AAAA":
+      return record.address;
     case "CNAME":
-    case "MX":
+      return absolute(record.target);
     case "NS":
-    case "PTR":
-      return absoluteDomainName(record.value);
-    case "SRV":
-      return srvValue(record.value);
+      return absolute(record.nameserver);
     case "TXT":
       return txtValue(record.value);
-    default:
-      return record.value;
+    case "MX":
+      return `${record.priority} ${absolute(record.exchange)}`;
+    case "CAA":
+      return `${record.flags} ${record.tag} "${record.value}"`;
+    case "SRV":
+      return `${record.priority} ${record.weight} ${record.port} ${absolute(record.target)}`;
   }
 };
 
-type LeafState = Record<string, unknown>;
+export const toZoneFile = (records: ReadonlyArray<DnsRecord.DnsRecord>): string =>
+  `${records
+    .map(
+      (record) =>
+        `${absolute(record.name)}${record.ttl === null ? "" : ` ${record.ttl}`} IN ${record._tag} ${zoneData(record)}`,
+    )
+    .join("\n")}\n`;
 
-function leafPart<Tag extends keyof React.JSX.IntrinsicElements>(
-  defaultTagName: Tag,
-  part: string,
-) {
-  return function Leaf(props: PartProps<Tag, LeafState>): ReactElement {
-    return usePart(defaultTagName, props, {}, { "data-domainkit-part": part });
-  };
-}
+const downloadText = (filename: string, contents: string): void => {
+  if (typeof document === "undefined") return;
+  const blob = new Blob([contents], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.download = filename;
+  anchor.href = url;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+};
+
+export const downloadZoneFile = (
+  domain: string,
+  records: ReadonlyArray<DnsRecord.DnsRecord>,
+): void => downloadText(`${domain}.txt`, toZoneFile(records));
+
+// ---------------------------------------------------------------------------------------------
+// Copy
+// ---------------------------------------------------------------------------------------------
+
+export const copyText = (value: string): Promise<boolean> => {
+  if (typeof navigator === "undefined" || navigator.clipboard === undefined) {
+    return Promise.resolve(false);
+  }
+  return navigator.clipboard.writeText(value).then(
+    () => true,
+    () => false,
+  );
+};
 
 export interface CopyController {
   readonly copied: boolean;
@@ -119,24 +129,13 @@ export function useCopy(value: string, resetAfter = 2000): CopyController {
 }
 
 export interface CopyValueProps extends PartProps<"span", { readonly copied: boolean }> {
-  readonly copiedIcon?: ReactNode;
-  readonly copiedLabel?: string;
-  readonly copyIcon?: ReactNode;
-  readonly copyLabel?: string;
   readonly value: string;
 }
 
-export function CopyValue({
-  copiedIcon,
-  copiedLabel = "Copied",
-  copyIcon,
-  copyLabel = "Copy",
-  value,
-  ...props
-}: CopyValueProps) {
+export function CopyValue({ value, ...props }: CopyValueProps) {
+  const { messages } = useDomainKit();
   const icons = useIcons();
-  const controller = useCopy(value);
-  const copied = controller.copied;
+  const { copied, copy } = useCopy(value);
   return usePart(
     "span",
     props,
@@ -146,9 +145,9 @@ export function CopyValue({
         <>
           <code>{value}</code>
           <button
-            aria-label={`${copied ? copiedLabel : copyLabel} ${value}`}
+            aria-label={`${copied ? messages.copied : messages.copy} ${value}`}
             data-domainkit-part="copy-action"
-            onClick={controller.copy}
+            onClick={copy}
             type="button"
           >
             <span
@@ -157,7 +156,7 @@ export function CopyValue({
               data-icon=""
               data-state="idle"
             >
-              {copyIcon ?? icons.copy}
+              {icons.copy}
             </span>
             <span
               aria-hidden="true"
@@ -165,7 +164,7 @@ export function CopyValue({
               data-icon=""
               data-state="done"
             >
-              {copiedIcon ?? icons.copied}
+              {icons.copied}
             </span>
           </button>
         </>
@@ -177,31 +176,15 @@ export function CopyValue({
 }
 
 export interface ZoneFileProps extends PartProps<"div", { readonly count: number }> {
-  readonly copiedIcon?: ReactNode;
-  readonly copiedLabel?: string;
-  readonly copyIcon?: ReactNode;
-  readonly copyLabel?: string;
   readonly domain: string;
-  readonly downloadIcon?: ReactNode;
-  readonly downloadLabel?: string;
-  readonly records: ReadonlyArray<Transport.DnsRecord>;
+  readonly records: ReadonlyArray<DnsRecord.DnsRecord>;
 }
 
-export function ZoneFile({
-  copiedIcon,
-  copiedLabel = "Copied",
-  copyIcon,
-  copyLabel = "Copy zone",
-  domain,
-  downloadIcon,
-  downloadLabel = "Download",
-  records,
-  ...props
-}: ZoneFileProps) {
+export function ZoneFile({ domain, records, ...props }: ZoneFileProps) {
+  const { messages } = useDomainKit();
   const icons = useIcons();
   const zone = toZoneFile(records);
-  const controller = useCopy(zone);
-  const copied = controller.copied;
+  const { copied, copy } = useCopy(zone);
   return usePart(
     "div",
     props,
@@ -210,26 +193,26 @@ export function ZoneFile({
       children: (
         <>
           <button
-            aria-label={copied ? copiedLabel : copyLabel}
+            aria-label={copied ? messages.copied : messages.copyZone}
             data-domainkit-part="zone-copy"
-            onClick={controller.copy}
+            onClick={copy}
             type="button"
           >
             <span aria-hidden="true" data-icon="inline-start">
-              {copied ? (copiedIcon ?? icons.copied) : (copyIcon ?? icons.copy)}
+              {copied ? icons.copied : icons.copy}
             </span>
-            {copied ? copiedLabel : copyLabel}
+            {copied ? messages.copied : messages.copyZone}
           </button>
           <button
-            aria-label={downloadLabel}
+            aria-label={messages.download}
             data-domainkit-part="zone-download"
             onClick={() => downloadZoneFile(domain, records)}
             type="button"
           >
             <span aria-hidden="true" data-icon="inline-start">
-              {downloadIcon ?? icons.download}
+              {icons.download}
             </span>
-            {downloadLabel}
+            {messages.download}
           </button>
         </>
       ),
@@ -238,41 +221,49 @@ export function ZoneFile({
   );
 }
 
-export interface StatusProps extends PartProps<
-  "span",
-  { readonly status: Transport.ObservationEvidence["_tag"] }
-> {
-  readonly evidence: Transport.ObservationEvidence;
+// ---------------------------------------------------------------------------------------------
+// Status
+// ---------------------------------------------------------------------------------------------
+
+/** The readiness this record reached, or `null` when nothing has observed it. */
+export const statusOf = (
+  record: DnsRecord.DnsRecord,
+  readiness: Readiness | null | undefined,
+): RequirementStatus | null =>
+  readiness?.requirements.find((requirement) => DnsRecord.equals(requirement.record, record))
+    ?.status ?? null;
+
+export interface StatusProps extends PartProps<"span", { readonly status: RequirementStatus }> {
+  readonly status: RequirementStatus;
 }
 
-export function Status({ evidence, ...props }: StatusProps) {
+export function Status({ status, ...props }: StatusProps) {
+  const { messages } = useDomainKit();
+  const icons = useIcons();
+  const glyph =
+    status === "satisfied" ? icons.success : status === "unknown" ? icons.pending : icons.failure;
   return usePart(
     "span",
     props,
-    { status: evidence._tag },
+    { status },
     {
-      children: evidence._tag,
+      children: (
+        <>
+          <span aria-hidden="true" data-icon="inline-start">
+            {glyph}
+          </span>
+          {messages.requirementStatus(status)}
+        </>
+      ),
       "data-domainkit-part": "record-status",
-      "data-status": evidence._tag,
+      "data-status": status,
     },
   );
 }
 
-export interface PriorityProps extends PartProps<"span", { readonly priority: number }> {
-  readonly priority?: number;
-}
-
-export function Priority({ children, priority = 0, ...props }: PriorityProps) {
-  return usePart(
-    "span",
-    props,
-    { priority },
-    {
-      children: children ?? `Priority ${priority}`,
-      "data-domainkit-part": "record-priority",
-    },
-  );
-}
+// ---------------------------------------------------------------------------------------------
+// Parts
+// ---------------------------------------------------------------------------------------------
 
 export const Header = leafPart("thead", "records-header");
 export const Body = leafPart("tbody", "records-body");
@@ -282,6 +273,7 @@ export const Head = leafPart("th", "records-head");
 export const Cell = leafPart("td", "records-cell");
 export const Caption = leafPart("caption", "records-caption");
 export const Value = leafPart("span", "record-value");
+export const Purpose = leafPart("span", "record-purpose");
 export const CardHeader = leafPart("div", "record-card-head");
 export const CardTitle = leafPart("strong", "record-card-title");
 export const CardContent = leafPart("dl", "record-card-content");
@@ -298,43 +290,49 @@ export function Root({ count = 0, ...props }: RootProps) {
   );
 }
 
-export interface CardProps extends PartProps<"section", { readonly recordId: string }> {
-  readonly copiedIcon?: ReactNode;
-  readonly copyIcon?: ReactNode;
-  readonly evidence?: ReadonlyArray<Transport.ObservationEvidence>;
-  readonly record: Transport.DnsRecord;
+const identity = (record: DnsRecord.DnsRecord): string =>
+  `${record._tag}:${record.name}:${DnsRecord.data(record)}`;
+
+export interface CardProps extends PartProps<"section", { readonly record: string }> {
+  readonly readiness?: Readiness | null;
+  readonly record: DnsRecord.DnsRecord;
 }
 
-export function Card({ copiedIcon, copyIcon, evidence, record, ...props }: CardProps) {
-  const matching =
-    evidence === undefined ? [] : evidence.filter((item) => item.recordId === record.id);
+export function Card({ readiness, record, ...props }: CardProps): ReactElement {
+  const { messages } = useDomainKit();
+  const status = statusOf(record, readiness);
   return usePart(
     "section",
     props,
-    { recordId: record.id },
+    { record: identity(record) },
     {
       children: (
         <>
           <CardHeader>
-            <CardTitle>{record.type}</CardTitle>
-            {matching.map((item, index) => (
-              <Status evidence={item} key={`${item._tag}-${index}`} />
-            ))}
+            <CardTitle>{messages.recordType(record)}</CardTitle>
+            {status === null ? null : <Status status={status} />}
           </CardHeader>
           <CardContent>
             <div>
-              <dt>Name</dt>
+              <dt>{messages.headingName}</dt>
               <dd>
-                <CopyValue copiedIcon={copiedIcon} copyIcon={copyIcon} value={record.name} />
+                <CopyValue value={record.name} />
               </dd>
             </div>
             <div>
-              <dt>Value</dt>
+              <dt>{messages.headingValue}</dt>
               <dd>
-                <CopyValue copiedIcon={copiedIcon} copyIcon={copyIcon} value={record.value} />
-                {record.priority === undefined ? null : <Priority priority={record.priority} />}
+                <CopyValue value={DnsRecord.data(record)} />
               </dd>
             </div>
+            {record.purpose === undefined ? null : (
+              <div>
+                <dt>{messages.headingPurpose}</dt>
+                <dd>
+                  <Purpose>{record.purpose}</Purpose>
+                </dd>
+              </div>
+            )}
           </CardContent>
         </>
       ),
@@ -344,69 +342,54 @@ export function Card({ copiedIcon, copyIcon, evidence, record, ...props }: CardP
 }
 
 export interface TableProps extends PartProps<"table", { readonly count: number }> {
-  readonly copiedIcon?: ReactNode;
-  readonly copyIcon?: ReactNode;
-  readonly evidence?: ReadonlyArray<Transport.ObservationEvidence>;
-  readonly records: ReadonlyArray<Transport.DnsRecord>;
+  readonly caption?: string;
+  readonly readiness?: Readiness | null;
+  readonly records: ReadonlyArray<DnsRecord.DnsRecord>;
 }
 
-export function Table({ copiedIcon, copyIcon, evidence, records, ...props }: TableProps) {
-  const status = evidence !== undefined;
+/** The default records presentation: one row per requirement, with readiness when there is any. */
+export function Table({ caption, readiness, records, ...props }: TableProps): ReactElement {
+  const { messages } = useDomainKit();
+  const withStatus = readiness !== null && readiness !== undefined;
   return (
     <Root count={records.length} {...props}>
+      {caption === undefined ? null : <Caption>{caption}</Caption>}
       <Header>
         <Row>
-          <Head scope="col">Type</Head>
-          <Head scope="col">Name</Head>
-          <Head scope="col">Value</Head>
-          {status ? (
+          <Head scope="col">{messages.headingType}</Head>
+          <Head scope="col">{messages.headingName}</Head>
+          <Head scope="col">{messages.headingValue}</Head>
+          {withStatus ? (
             <Head data-column="status" scope="col">
-              Status
+              {messages.headingStatus}
             </Head>
           ) : null}
         </Row>
       </Header>
       <Body>
-        {records.map((record) => (
-          <Row key={record.id}>
-            <Cell>{record.type}</Cell>
-            <Cell>
-              <CopyValue copiedIcon={copiedIcon} copyIcon={copyIcon} value={record.name} />
-            </Cell>
-            <Cell>
-              <Value>
-                <CopyValue copiedIcon={copiedIcon} copyIcon={copyIcon} value={record.value} />
-                {record.priority === undefined ? null : <Priority priority={record.priority} />}
-              </Value>
-            </Cell>
-            {status ? (
-              <Cell data-column="status">
-                {evidence
-                  .filter((item) => item.recordId === record.id)
-                  .map((item, index) => (
-                    <Status evidence={item} key={`${item._tag}-${index}`} />
-                  ))}
+        {records.map((record) => {
+          const status = statusOf(record, readiness);
+          return (
+            <Row key={identity(record)}>
+              <Cell>{messages.recordType(record)}</Cell>
+              <Cell>
+                <CopyValue value={record.name} />
               </Cell>
-            ) : null}
-          </Row>
-        ))}
+              <Cell>
+                <Value>
+                  <CopyValue value={DnsRecord.data(record)} />
+                  {record.purpose === undefined ? null : <Purpose>{record.purpose}</Purpose>}
+                </Value>
+              </Cell>
+              {withStatus ? (
+                <Cell data-column="status">
+                  {status === null ? null : <Status status={status} />}
+                </Cell>
+              ) : null}
+            </Row>
+          );
+        })}
       </Body>
     </Root>
   );
 }
-
-export const toZoneFile = (records: ReadonlyArray<Transport.DnsRecord>): string =>
-  `${records
-    .map(
-      (record) =>
-        `${absoluteDomainName(record.name)} IN ${record.type} ${record.priority === undefined ? "" : `${record.priority} `}${zoneValue(record)}`,
-    )
-    .join("\n")}\n`;
-
-export const downloadZoneFile = (
-  domain: string,
-  records: ReadonlyArray<Transport.DnsRecord>,
-): void => downloadText(`${domain}.txt`, toZoneFile(records));
-
-export type DnsRecord = Transport.DnsRecord;
-export type ObservationEvidence = Transport.ObservationEvidence;

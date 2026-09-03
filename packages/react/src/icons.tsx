@@ -1,10 +1,19 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 
-export type Icons = {
+/**
+ * Every glyph the package draws, in one place. Parts read them from context; none of them takes
+ * an icon prop of its own, so a host swaps the whole set once on `DomainKit.Root`.
+ */
+export interface Icons {
+  readonly close: ReactNode;
   readonly copied: ReactNode;
   readonly copy: ReactNode;
   readonly download: ReactNode;
-};
+  readonly external: ReactNode;
+  readonly failure: ReactNode;
+  readonly pending: ReactNode;
+  readonly success: ReactNode;
+}
 
 function Glyph({ children }: { readonly children: ReactNode }) {
   return (
@@ -23,6 +32,12 @@ function Glyph({ children }: { readonly children: ReactNode }) {
 }
 
 export const defaultIcons = {
+  close: (
+    <Glyph>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </Glyph>
+  ),
   copied: (
     <Glyph>
       <path d="M20 6 9 17l-5-5" />
@@ -41,6 +56,32 @@ export const defaultIcons = {
       <path d="M12 15V3" />
     </Glyph>
   ),
+  external: (
+    <Glyph>
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
+    </Glyph>
+  ),
+  failure: (
+    <Glyph>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M15 9 9 15" />
+      <path d="m9 9 6 6" />
+    </Glyph>
+  ),
+  pending: (
+    <Glyph>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </Glyph>
+  ),
+  success: (
+    <Glyph>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+    </Glyph>
+  ),
 } as const satisfies Icons;
 
 const IconsContext = createContext<Icons>(defaultIcons);
@@ -52,14 +93,7 @@ export function IconsProvider({
   readonly children: ReactNode;
   readonly icons?: Partial<Icons>;
 }) {
-  const value = useMemo<Icons>(
-    () => ({
-      copied: icons?.copied ?? defaultIcons.copied,
-      copy: icons?.copy ?? defaultIcons.copy,
-      download: icons?.download ?? defaultIcons.download,
-    }),
-    [icons],
-  );
+  const value = useMemo<Icons>(() => ({ ...defaultIcons, ...icons }), [icons]);
   return <IconsContext.Provider value={value}>{children}</IconsContext.Provider>;
 }
 
