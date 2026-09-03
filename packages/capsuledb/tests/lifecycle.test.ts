@@ -11,7 +11,7 @@ import {
   Verify,
 } from "domainkit";
 import { Testing } from "domainkit/testing";
-import { Effect, Layer, Option, Redacted } from "effect";
+import { DateTime, Effect, Layer, Option, Redacted } from "effect";
 import { afterAll, assert, beforeAll, describe, it } from "@effect/vitest";
 
 import { PgStorage } from "../src/index.ts";
@@ -137,6 +137,71 @@ describe("lifecycle on PgStorage", () => {
             (yield* storage.connections.get(started.connection.id)).authorizationId,
           );
           assert.strictEqual(after.ciphertext, before.ciphertext);
+        }),
+      ),
+    180_000,
+  );
+  it(
+    "keeps a revocation pending when a refresh rotates the credential mid-revoke",
+    () =>
+      run(
+        "org-rotate",
+        Effect.gen(function* () {
+          const storage = yield* Storage.Storage;
+          const now = yield* DateTime.now;
+          const id = "auth-rotate";
+          yield* storage.authorizations.upsert({
+            authorization: new Storage.Authorization({
+              id,
+              ownerId: "org-rotate",
+              provider: "fake",
+              method: "oauth",
+              capabilities: ["dns:read", "dns:write"],
+              context: { account: "fake" },
+              revocation: "active",
+              createdBy: "actor",
+              createdAt: now,
+            }),
+            credential: new Storage.Credential({
+              ciphertext: "sealed-old",
+              expiresAt: null,
+              rotatedAt: now,
+            }),
+          });
+
+          // The provider call is where a concurrent refresh lands: it issues a replacement
+          // credential and rotates the row after revocation already picked the old one.
+          const revoked: Array<string> = [];
+          yield* storage.authorizations.revoke(
+            id,
+            Effect.gen(function* () {
+              revoked.push((yield* storage.authorizations.credential(id)).ciphertext);
+              yield* storage.authorizations.rotate(
+                id,
+                new Storage.Credential({
+                  ciphertext: "sealed-new",
+                  expiresAt: null,
+                  rotatedAt: yield* DateTime.now,
+                }),
+              );
+            }),
+          );
+
+          // Deleting here would leave sealed-new live at the provider with nothing to revoke it
+          // from, so the row stays pending for recovery.
+          const still = yield* storage.authorizations.get(id);
+          assert.strictEqual(still.revocation, "pending");
+
+          const recovered = yield* storage.authorizations.recoverRevocations((authorization) =>
+            Effect.map(
+              storage.authorizations.credential(authorization.id),
+              (credential) => void revoked.push(credential.ciphertext),
+            ),
+          );
+          assert.strictEqual(recovered, 1);
+          assert.deepStrictEqual(revoked, ["sealed-old", "sealed-new"]);
+          const gone = yield* Effect.flip(storage.authorizations.get(id));
+          assert.strictEqual(gone.reason._tag, "NotFound");
         }),
       ),
     180_000,

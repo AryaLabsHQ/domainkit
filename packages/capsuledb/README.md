@@ -96,8 +96,10 @@ change it after. `registryPrefix` does the same for CapsuleDB's own ledger table
   replacement — run in one transaction over a `FOR UPDATE` row.
 - A continuation is consumed by `DELETE ... RETURNING`, so a replayed OAuth callback fails
   `NotFound` instead of connecting twice.
-- Revocation is two-phase: mark `pending`, call the provider outside the transaction, then delete.
-  A crash in between leaves a row `recoverRevocations` finishes later.
+- Revocation is two-phase: mark `pending`, call the provider outside the transaction, then delete
+  the row only while it still holds the credential that was revoked. A crash in between, or a
+  refresh that rotated the credential mid-revoke, leaves a row `recoverRevocations` finishes later,
+  so a newly issued credential is never orphaned at the provider.
 - `withLock` takes a session advisory lock on a reserved connection and fails `Busy` rather than
   waiting, so a credential refresh single-flights without holding a transaction across an HTTP call.
 

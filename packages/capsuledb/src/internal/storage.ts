@@ -361,23 +361,39 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
         secret: credentialCodec.write(credential),
       });
 
-    const deleteAuthorization = (owner: string, id: string) =>
-      sql`DELETE FROM ${authorizations} WHERE id = ${id} AND owner_id = ${owner}`;
-
     /**
      * Phase one of revocation: mark the row `pending` so a crash between the provider call and the
      * delete is recoverable. Idempotent, and it never widens the row's state.
+     *
+     * Returns the ciphertext the caller is about to have revoked, which phase two checks.
      */
     const prepareRevocation = (owner: string, id: string) =>
       sql.withTransaction(
         Effect.gen(function* () {
-          yield* lockedAuthorization(owner, id);
+          const row = yield* lockedAuthorization(owner, id);
           yield* sql`
             UPDATE ${authorizations} SET revocation = 'pending', updated_at = ${yield* now}
             WHERE id = ${id} AND owner_id = ${owner}
           `;
+          return row.credential_ciphertext;
         }),
       );
+
+    /**
+     * Phase two: delete the row, but only while it still holds the credential the provider was
+     * asked to revoke.
+     *
+     * A credential refresh runs concurrently with revocation and rotates the row after the provider
+     * call selected the old ciphertext. Deleting unconditionally would drop the row while the newly
+     * issued credential is still live at the provider, with no local state left to revoke it from.
+     * Leaving the row `pending` instead hands it to `recoverRevocations`, which revokes what the
+     * row now holds. Every ciphertext is AES-GCM with a fresh IV, so equality here is exact.
+     */
+    const completeRevocation = (owner: string, id: string, ciphertext: string) =>
+      sql`
+        DELETE FROM ${authorizations}
+        WHERE id = ${id} AND owner_id = ${owner} AND credential_ciphertext = ${ciphertext}
+      `;
 
     const service: Storage.Service = {
       authorizations: {
@@ -494,9 +510,11 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
         revoke: (id, revoke) =>
           Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.gen(function* () {
-              yield* prepareRevocation(ownerId, id).pipe(guard("authorizations.revoke"));
+              const ciphertext = yield* prepareRevocation(ownerId, id).pipe(
+                guard("authorizations.revoke"),
+              );
               yield* revoke;
-              yield* deleteAuthorization(ownerId, id).pipe(
+              yield* completeRevocation(ownerId, id, ciphertext).pipe(
                 guard("authorizations.completeRevocation"),
               );
             }),
@@ -509,15 +527,15 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
                 WHERE owner_id = ${ownerId} AND revocation = 'pending'
                 ORDER BY created_at
               `.pipe(guard("authorizations.pendingRevocations"));
-              const pending = yield* Effect.forEach(rows, authorizationOf);
-              yield* Effect.forEach(pending, (authorization) =>
-                Effect.flatMap(revoke(authorization), () =>
-                  deleteAuthorization(ownerId, authorization.id).pipe(
+              yield* Effect.forEach(rows, (row) =>
+                Effect.gen(function* () {
+                  yield* revoke(yield* authorizationOf(row));
+                  yield* completeRevocation(ownerId, row.id, row.credential_ciphertext).pipe(
                     guard("authorizations.completeRevocation"),
-                  ),
-                ),
+                  );
+                }),
               );
-              return pending.length;
+              return rows.length;
             }),
           ),
       },
