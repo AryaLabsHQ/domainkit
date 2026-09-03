@@ -1,7 +1,7 @@
 {
   "name": "@domainkit/capsuledb",
   "version": "0.1.2",
-  "description": "Optional PostgreSQL storage for DomainKit's Effect apps",
+  "description": "DomainKit Storage on PostgreSQL, as one declarative CapsuleDB capsule",
   "keywords": [
     "dns",
     "domainkit",

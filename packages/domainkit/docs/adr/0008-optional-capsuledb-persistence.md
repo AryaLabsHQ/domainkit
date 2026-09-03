@@ -6,61 +6,50 @@ Accepted
 
 ## Context
 
-ADR 0004 assigned durable persistence to each host because DomainKit could not choose an
-application's database, keys, tenant model, routes, or policy. That boundary also forced every SQL
-host to reimplement the same authorization aggregate, concurrency, and resumable-revocation
-semantics. Samva now provides a production-shaped PostgreSQL tracer and already owns the exact
-tenant/domain foreign keys and encrypted credential ciphertext that must survive adoption.
+`Storage` is the durable seam every lifecycle operation goes through: authorizations with sealed
+credentials, connections, attachments, interactive-flow continuations, attempts carrying a plan,
+approval and receipt, and observed readiness. A host implementing that itself has to reproduce
+tenant scoping on every query, single-flight credential refresh, attempt leases and replay, and
+resumable revocation. Those are protocol invariants, not application choices, and a conformance
+suite is a poor substitute for shipping one implementation that holds them.
 
 ## Decision
 
-DomainKit supplies an independent optional `@domainkit/capsuledb` package. It owns the PostgreSQL
-schema and typed implementation for the complete `ManagedDnsConnections.Service`, while the host
-constructs the CapsuleDB registry, supplies one `SqlClient`, calls `Registry.prepare` once during
-startup, and provides the capsule layer to API and workflow entrypoints.
+DomainKit ships one optional package, `@domainkit/capsuledb`, that implements `Storage.Storage` on
+PostgreSQL through a declarative CapsuleDB capsule. The `domainkit` root has no dependency on it;
+a host that persists elsewhere provides its own `Storage`, in Effect or through the async adapter.
 
-Keys, KMS configuration, plaintext lifetime, rotation policy, and audit remain host-owned.
+The capsule declares six tables under a `domainkit` prefix — authorizations, connections,
+attachments, continuations, attempts, readiness — and one additive migration. Every table carries
+`owner_id`, and every query filters by the `Principal`, so a row belonging to another tenant reads
+as absent rather than forbidden. The package declares no foreign keys, to host tables or between its
+own; a host adds the ones it wants in the SQL it applies.
 
-The PostgreSQL tracer adopts `domain_provider_authorizations`,
-`organization_domain_provider_connections`, and `domain_provider_attachments` in place. Existing
-ciphertext and host foreign keys are preserved. Portable domain and target semantics are decoded
-from existing columns and versioned JSON. One final host migration may backfill that projection
-before CapsuleDB becomes the single migration owner. There is no indefinite dual write or parallel
-copy.
+`PgStorage.layer()` composes the capsule through CapsuleDB's registry: create the ledger, apply
+pending migrations, then provide `Storage`. It requires only the host's `SqlClient`, because
+credentials are sealed through `Custody` before they reach a row and Storage never handles
+plaintext. A host that owns its migration pipeline runs `capsuledb emit`, applies the SQL itself,
+and boots with `mode: "assert"`, which touches no schema and fails unless the database already
+matches the capsule.
 
-Provider revocation and credential custody calls never run inside a database transaction. The
-repository durably prepares final revocation, releases the transaction, calls the provider, and
-then atomically completes deletion; failure leaves resumable pending state. PostgreSQL row locks and
-advisory locking serialize aggregate mutation, while reads lock the aggregate root for atomic
-visibility.
+Concurrency is the database's, not the process's. Aggregate transitions run in one transaction over
+a `FOR UPDATE` row; duplicates are decided by unique constraints through `ON CONFLICT ... DO
+NOTHING`; a continuation is claimed by `DELETE ... RETURNING`, which is what makes it exactly once.
+Provider revocation and custody calls never run inside a transaction: the row is durably marked
+`pending`, the transaction closes, the provider is called, and a second transaction deletes the row.
+A failure between the two leaves recoverable state. The single-flight guard is a session advisory
+lock held on a reserved connection, so a credential refresh can call the provider without holding a
+transaction open.
+
+PostgreSQL is the only engine shipped. The `Storage` contract and its conformance suite are
+engine-neutral, and further engines are layers in the same package.
 
 ## Consequences
 
-- The `domainkit` root stays lightweight and has no CapsuleDB dependency.
-- Hosts may continue implementing `ManagedDnsConnections.Service` themselves.
-- CapsuleDB and Effect Drizzle can share the exact host `PgClient` and transaction context.
-- PostgreSQL is the only supported provider in the first tracer. Bun SQLite, libSQL, and D1 are
-  deferred.
-- Package release cadence is independent from the synchronized `domainkit` and `@domainkit/react`
-  group.
-- A host must converge legacy rows before readiness; incompatible ciphertext or attachment context
-  fails closed.
-
-## Alternatives considered
-
-- Adding CapsuleDB to the root package was rejected because every consumer would pay the dependency
-  and release coupling.
-- A Samva-owned capsule was rejected because it would make the durable lifecycle non-portable and
-  keep DomainKit semantics duplicated in the host.
-- A new namespaced attachment table was rejected because Samva already has authoritative rows and
-  foreign keys; a second table would create competing state.
-- A portable SQL DSL or Drizzle adapter was rejected. The capsule owns explicit PostgreSQL SQL and
-  exposes only the semantic Effect service.
-
-## References
-
-- `src/auth/lifecycle-repository.ts`
-- `packages/capsuledb/src/persistence.ts`
-- `packages/capsuledb/src/custody.ts`
-- `packages/capsuledb/src/host-bindings.ts`
-- `docs/adr/0004-host-owned-credentials.md`
+- The host owns its `SqlClient` and its lifetime. The package never opens, replaces, or closes it.
+- The table prefix is part of the physical layout and is fixed at the first deploy; changing it
+  changes the rendered DDL and the migration checksum.
+- A host that wants foreign keys, partitioning, or row-level security adds them to the emitted SQL
+  and boots in assert mode.
+- Both implementations of `Storage` — this one and the in-memory one in `domainkit/testing` — are
+  held to `Testing.conformance.storage`, so a host can swap them without changing behavior.
