@@ -22,6 +22,7 @@
   },
   "workspaces": [
     "apps/*",
+    "examples",
     "packages/*"
   ],
   "type": "module",
@@ -38,7 +39,8 @@
     "release:check": "bun run lint && bun run lint:rules && bun run format:check && bun run --filter domainkit release:check && bun run --filter @domainkit/capsuledb release:check && bun run --filter @domainkit/react release:check",
     "tegami": "bun scripts/tegami.mts",
     "test": "bun run --filter './packages/*' test",
-    "typecheck": "bun run --filter domainkit build && bun run --filter './packages/*' typecheck"
+    "typecheck": "bun run --filter domainkit build && bun run --filter './packages/*' typecheck",
+    "typecheck:examples": "bun run build && bun run --filter @domainkit/examples typecheck"
   },
   "devDependencies": {
     "@types/semver": "^7.8.0",

@@ -1,63 +1,55 @@
-import type { Transport } from "domainkit";
+import { DnsRecord } from "domainkit";
 
 import { isWorkshopThemeId, type WorkshopThemeId } from "./themes.ts";
 
-export const defaultRecords: ReadonlyArray<Transport.DnsRecord> = [
-  {
-    id: "mx",
-    name: "mail.example.com",
-    priority: 10,
-    type: "MX",
-    value: "feedback-smtp.example.net",
-  },
-  {
-    id: "spf",
-    name: "mail.example.com",
-    type: "TXT",
-    value: "v=spf1 include:example.net ~all",
-  },
+/** The zone the fake provider serves. Every preview domain sits inside it. */
+export const previewZone = "example.com";
+
+export const defaultRequirements: ReadonlyArray<DnsRecord.Model> = [
+  DnsRecord.cname({
+    name: "app.example.com",
+    purpose: "Serve your site",
+    target: "edge.acme.dev",
+  }),
+  DnsRecord.txt({
+    name: "_acme.app.example.com",
+    purpose: "Prove ownership",
+    value: "acme-verify=7f3a",
+  }),
 ];
 
-export type StoryId =
-  | "card"
-  | "connection"
-  | "domain"
-  | "host-connection"
-  | "host-lifecycle"
-  | "lifecycle"
-  | "provider"
-  | "records"
-  | "verification";
+export const stories = [
+  "cleanup",
+  "connect",
+  "domain-flow",
+  "provider-mark",
+  "provision",
+  "record-card",
+  "records",
+  "slots",
+  "verification",
+] as const;
+export type StoryId = (typeof stories)[number];
 
 export interface PreviewState {
   readonly colorScheme: "dark" | "light";
   readonly domain: string;
+  /** Offer OAuth beside the token method, so the connect dialog shows both. */
+  readonly oauth: boolean;
   readonly providerId: string;
-  readonly providerName: string;
-  readonly receipt: boolean;
-  readonly records: ReadonlyArray<Transport.DnsRecord>;
+  readonly requirements: ReadonlyArray<DnsRecord.Model>;
+  /** Seed the zone with the TXT requirement, so the plan shows one Create and one Noop. */
+  readonly seeded: boolean;
   readonly story: StoryId;
-  readonly targetState: "ambiguous" | "unavailable" | "unique";
   readonly theme: WorkshopThemeId;
 }
 
 const isStoryId = (value: string): value is StoryId =>
-  [
-    "card",
-    "connection",
-    "domain",
-    "host-connection",
-    "host-lifecycle",
-    "lifecycle",
-    "provider",
-    "records",
-    "verification",
-  ].includes(value);
+  (stories as ReadonlyArray<string>).includes(value);
 
 export function stateFromSearch(search: string): PreviewState {
   const parameters = new URLSearchParams(search);
   const story = parameters.get("story");
-  const targetState = parameters.get("targets");
   const mode = parameters.get("mode");
   const theme = parameters.get("theme");
   const colorScheme =
@@ -69,14 +61,12 @@ export function stateFromSearch(search: string): PreviewState {
       : "light";
   return {
     colorScheme,
-    domain: "mail.example.com",
+    domain: "app.example.com",
+    oauth: true,
     providerId: "cloudflare",
-    providerName: "Cloudflare",
-    receipt: true,
-    records: defaultRecords,
-    story: story !== null && isStoryId(story) ? story : "connection",
-    targetState:
-      targetState === "ambiguous" || targetState === "unavailable" ? targetState : "unique",
+    requirements: defaultRequirements,
+    seeded: true,
+    story: story !== null && isStoryId(story) ? story : "domain-flow",
     theme: theme !== null && isWorkshopThemeId(theme) ? theme : "neutral",
   };
 }

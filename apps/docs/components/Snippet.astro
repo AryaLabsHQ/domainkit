@@ -1,0 +1,19 @@
+---
+import CodeBlock from "blume/components/content/CodeBlock.astro";
+
+import { languageOf, snippet } from "./snippets.ts";
+
+interface Props {
+  /** Repository-relative path inside a typechecked example tree. */
+  readonly file: string;
+  /** A `// #region name` slice of it; omit for the whole file. */
+  readonly region?: string;
+  /** Header label. Defaults to the file path, so a reader can open the source. */
+  readonly title?: string;
+}
+
+const { file, region, title } = Astro.props;
+const code = snippet(file, region);
+---
+
+<CodeBlock code={code} lang={languageOf(file)} title={title ?? file} />
