@@ -16,10 +16,14 @@ import packageJson from "../package.json" with { type: "json" };
 export const VERSION = packageJson.version;
 
 export * as Approval from "./Approval.ts";
+export * as Cloudflare from "./Cloudflare.ts";
 export * as DnsRecord from "./DnsRecord.ts";
 export * as DomainKitError from "./DomainKitError.ts";
 export * as DomainName from "./DomainName.ts";
 export * as Plan from "./Plan.ts";
 export * as Principal from "./Principal.ts";
+export * as Provider from "./Provider.ts";
+export * as Providers from "./Providers.ts";
 export * as Receipt from "./Receipt.ts";
 export * as Storage from "./Storage.ts";
+export * as Vercel from "./Vercel.ts";

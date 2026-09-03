@@ -1,0 +1,211 @@
+import { DateTime, Effect, Redacted } from "effect";
+import * as oauth from "oauth4webapi";
+
+import * as DomainKitError from "../DomainKitError.ts";
+import type { Fetch } from "./http.ts";
+
+export interface Server {
+  readonly issuer: string;
+  readonly authorization_endpoint: string;
+  readonly token_endpoint: string;
+  readonly revocation_endpoint?: string;
+}
+
+export type ClientAuth = "client_secret_basic" | "client_secret_post" | "none";
+
+export interface Client {
+  readonly clientId: string;
+  readonly clientSecret: Redacted.Redacted<string> | null;
+  readonly clientAuth: ClientAuth;
+}
+
+/** A PKCE pair: the verifier stays in the continuation, the challenge goes to the provider. */
+export const pkce = (): Effect.Effect<
+  { readonly codeVerifier: string; readonly codeChallenge: string },
+  DomainKitError.DomainKitError
+> =>
+  Effect.tryPromise({
+    try: async () => {
+      const codeVerifier = oauth.generateRandomCodeVerifier();
+      return { codeVerifier, codeChallenge: await oauth.calculatePKCECodeChallenge(codeVerifier) };
+    },
+    catch: () =>
+      new DomainKitError.DomainKitError({
+        reason: new DomainKitError.CryptoFailed({ operation: "digest" }),
+      }),
+  });
+
+export const authorizationUrl = (input: {
+  readonly server: Server;
+  readonly clientId: string;
+  readonly scopes: ReadonlyArray<string>;
+  readonly state: string;
+  readonly callbackUrl: string;
+  readonly codeChallenge: string;
+}): string => {
+  const url = new URL(input.server.authorization_endpoint);
+  url.search = new URLSearchParams({
+    client_id: input.clientId,
+    code_challenge: input.codeChallenge,
+    code_challenge_method: "S256",
+    redirect_uri: input.callbackUrl,
+    response_type: "code",
+    scope: input.scopes.join(" "),
+    state: input.state,
+  }).toString();
+  return url.toString();
+};
+
+export interface Tokens {
+  readonly accessToken: string;
+  readonly refreshToken: string | null;
+  readonly expiresAt: DateTime.Utc | null;
+  readonly scope: string | null;
+}
+
+const clientAuth = (client: Client): oauth.ClientAuth => {
+  if (client.clientAuth === "none") return oauth.None();
+  const secret = client.clientSecret === null ? "" : Redacted.value(client.clientSecret);
+  return client.clientAuth === "client_secret_basic"
+    ? oauth.ClientSecretBasic(secret)
+    : oauth.ClientSecretPost(secret);
+};
+
+const requestOptions = (
+  fetch: Fetch | undefined,
+  signal: AbortSignal,
+): oauth.TokenEndpointRequestOptions =>
+  fetch === undefined
+    ? { signal }
+    : { signal, [oauth.customFetch]: (url, init) => fetch(url, { ...init, body: init.body }) };
+
+const tokens = (response: oauth.TokenEndpointResponse, now: DateTime.Utc): Tokens => ({
+  accessToken: response.access_token,
+  refreshToken: response.refresh_token ?? null,
+  expiresAt:
+    typeof response.expires_in === "number"
+      ? DateTime.add(now, { seconds: response.expires_in })
+      : null,
+  scope: response.scope ?? null,
+});
+
+const failure = (provider: string, cause: unknown): DomainKitError.DomainKitError => {
+  if (cause instanceof oauth.ResponseBodyError) {
+    const terminal = ["invalid_grant", "invalid_client", "unauthorized_client"].includes(
+      cause.error,
+    );
+    return new DomainKitError.DomainKitError({
+      reason: terminal
+        ? new DomainKitError.Unauthenticated({
+            message: `${provider} rejected the grant: ${cause.error}`,
+          })
+        : new DomainKitError.ProviderRejected({
+            provider,
+            code: cause.error,
+            message: cause.error_description ?? cause.error,
+          }),
+    });
+  }
+  if (cause instanceof oauth.AuthorizationResponseError) {
+    return new DomainKitError.DomainKitError({
+      reason: new DomainKitError.Unauthenticated({
+        message: `${provider} authorization failed: ${cause.error}`,
+      }),
+    });
+  }
+  return new DomainKitError.DomainKitError({
+    reason: new DomainKitError.ProviderUnavailable({
+      provider,
+      message: cause instanceof Error ? cause.message : `${provider} OAuth request failed`,
+    }),
+  });
+};
+
+export const exchangeCode = (input: {
+  readonly provider: string;
+  readonly server: Server;
+  readonly client: Client;
+  readonly code: string;
+  readonly state: string;
+  readonly callbackUrl: string;
+  readonly codeVerifier: string;
+  readonly fetch?: Fetch;
+}): Effect.Effect<Tokens, DomainKitError.DomainKitError> =>
+  Effect.gen(function* () {
+    const now = yield* DateTime.now;
+    const server = input.server as oauth.AuthorizationServer;
+    const client: oauth.Client = { client_id: input.client.clientId };
+    const response = yield* Effect.tryPromise({
+      try: async (signal) => {
+        const params = oauth.validateAuthResponse(
+          server,
+          client,
+          new URLSearchParams({ code: input.code, state: input.state }),
+          input.state,
+        );
+        const reply = await oauth.authorizationCodeGrantRequest(
+          server,
+          client,
+          clientAuth(input.client),
+          params,
+          input.callbackUrl,
+          input.codeVerifier,
+          requestOptions(input.fetch, signal),
+        );
+        return oauth.processAuthorizationCodeResponse(server, client, reply);
+      },
+      catch: (cause) => failure(input.provider, cause),
+    });
+    return tokens(response, now);
+  });
+
+export const refresh = (input: {
+  readonly provider: string;
+  readonly server: Server;
+  readonly client: Client;
+  readonly refreshToken: string;
+  readonly fetch?: Fetch;
+}): Effect.Effect<Tokens, DomainKitError.DomainKitError> =>
+  Effect.gen(function* () {
+    const now = yield* DateTime.now;
+    const server = input.server as oauth.AuthorizationServer;
+    const client: oauth.Client = { client_id: input.client.clientId };
+    const response = yield* Effect.tryPromise({
+      try: async (signal) => {
+        const reply = await oauth.refreshTokenGrantRequest(
+          server,
+          client,
+          clientAuth(input.client),
+          input.refreshToken,
+          requestOptions(input.fetch, signal),
+        );
+        return oauth.processRefreshTokenResponse(server, client, reply);
+      },
+      catch: (cause) => failure(input.provider, cause),
+    });
+    const next = tokens(response, now);
+    return { ...next, refreshToken: next.refreshToken ?? input.refreshToken };
+  });
+
+export const revoke = (input: {
+  readonly provider: string;
+  readonly server: Server;
+  readonly client: Client;
+  readonly token: string;
+  readonly fetch?: Fetch;
+}): Effect.Effect<void, DomainKitError.DomainKitError> =>
+  Effect.tryPromise({
+    try: async (signal) => {
+      const server = input.server as oauth.AuthorizationServer;
+      const client: oauth.Client = { client_id: input.client.clientId };
+      const reply = await oauth.revocationRequest(
+        server,
+        client,
+        clientAuth(input.client),
+        input.token,
+        requestOptions(input.fetch, signal),
+      );
+      await oauth.processRevocationResponse(reply);
+    },
+    catch: (cause) => failure(input.provider, cause),
+  });
