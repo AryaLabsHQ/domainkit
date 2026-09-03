@@ -4,7 +4,9 @@ export default defineConfig({
   clean: true,
   dts: true,
   entry: {
+    client: "src/entry/client.ts",
     index: "src/index.ts",
+    server: "src/entry/server.ts",
     testing: "src/entry/testing.ts",
   },
   fixedExtension: true,

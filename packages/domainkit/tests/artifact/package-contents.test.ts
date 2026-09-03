@@ -14,8 +14,12 @@ const PackResult = Schema.Array(
 const requiredFiles = new Set([
   "LICENSE",
   "README.md",
+  "dist/client.d.mts",
+  "dist/client.mjs",
   "dist/index.d.mts",
   "dist/index.mjs",
+  "dist/server.d.mts",
+  "dist/server.mjs",
   "dist/testing.d.mts",
   "dist/testing.mjs",
   "package.json",

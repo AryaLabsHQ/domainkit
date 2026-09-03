@@ -13,14 +13,20 @@ const execFileAsync = promisify(execFile);
 
 const PackResult = Schema.Array(Schema.Struct({ filename: Schema.String }));
 
-/** The lifecycle every consumer runs: connect a fake provider, plan, approve, apply, observe. */
+/**
+ * The lifecycle every consumer runs: connect a fake provider, plan, approve, apply, observe, then
+ * read the same domain back through the mounted server group.
+ */
 const lifecycle = `
 import { Cloudflare, Connect, Custody, DnsRecord, DomainKit, Principal, Provision, Vercel, Verify, VERSION } from "domainkit";
+import { Transport } from "domainkit/client";
+import { Server } from "domainkit/server";
 import { Testing } from "domainkit/testing";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 
-export const run = () => {
+export const run = async () => {
   const fake = Testing.provider({ zones: ["example.com"] });
+  const services = DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() });
   const program = Effect.gen(function* () {
     const started = yield* Connect.start({
       provider: fake.id,
@@ -44,9 +50,39 @@ export const run = () => {
     };
   }).pipe(
     Effect.provideService(Principal.Service, Testing.principal),
-    Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
+    Effect.provide(services),
   );
-  return Effect.runPromise(program);
+  const lifecycleResult = await Effect.runPromise(program);
+
+  // The mounted group and the fetch transport over their own store: a second connect, over HTTP.
+  const { handler, dispose } = Server.toWebHandler(
+    DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() }).pipe(
+      Layer.merge(
+        Layer.succeed(Server.Identity)({ principal: () => Effect.succeed(Testing.principal) }),
+      ),
+    ),
+    { prefix: "/api/domainkit" },
+  );
+  try {
+    const transport = Transport.fromFetch("https://consumer.example/api/domainkit", {
+      fetch: (input, init) => handler(new Request(input, init)),
+    });
+    const wired = await Effect.runPromise(
+      transport.connection.start({
+        domain: "site.example.com",
+        provider: fake.id,
+        method: Transport.Method.token("packed-token"),
+      }),
+    );
+    return {
+      ...lifecycleResult,
+      wired: wired._tag,
+      snapshot: wired.snapshot.status,
+      capabilities: Transport.capabilities(transport),
+    };
+  } finally {
+    await dispose();
+  }
 };
 `;
 
@@ -58,6 +94,9 @@ const expected = (version: string) => ({
   providers: ["cloudflare", "vercel"],
   keyLength: 43,
   version,
+  wired: "Connected",
+  snapshot: "connected",
+  capabilities: ["connection", "provisioning", "verification", "cleanup"],
 });
 
 describe("packed consumers", () => {
@@ -108,6 +147,8 @@ if (JSON.stringify(result) !== JSON.stringify(expected)) {
         `
 import { Effect, Layer, Redacted } from "effect";
 import { Custody, DomainKit, type Provider, type Storage } from "domainkit";
+import { Transport } from "domainkit/client";
+import { Server } from "domainkit/server";
 import { Testing } from "domainkit/testing";
 
 export type PublicProvider = Provider.Definition;
@@ -121,6 +162,24 @@ export const live: Layer.Layer<DomainKit.Services, DomainKit.Error, Storage.Serv
     Layer.provide(Custody.layer({ key: Redacted.make(Custody.generateKey()) })),
   );
 export const cases = Testing.conformance.storage(Testing.storage).map((item) => item.name);
+export type PublicIdentity = Server.IdentityService;
+export type PublicSnapshot = Server.Snapshot;
+export type PublicStarted = Server.Started;
+export type PublicReadiness = Server.Readiness;
+export const routes = Object.keys(Server.api.groups);
+export type PublicTransport = Transport.Interface;
+/** A host that exposes only connection routes still gets a transport that typechecks. */
+export const connectionOnly: Transport.Interface = {
+  connection: {
+    inspect: () => Effect.die("unused"),
+    discover: () => Effect.die("unused"),
+    start: () => Effect.die("unused"),
+    attach: () => Effect.die("unused"),
+    detach: () => Effect.die("unused"),
+    disconnect: () => Effect.die("unused"),
+  },
+};
+export const groups = Transport.capabilities(connectionOnly);
 export const noRuntimeExit: Effect.Effect<void, unknown> = Effect.void;
 `,
       );

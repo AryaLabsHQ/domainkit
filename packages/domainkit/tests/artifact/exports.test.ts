@@ -2,6 +2,8 @@ import { assert, describe, it } from "@effect/vitest";
 import { Schema } from "effect";
 
 import packageJson from "../../package.json" with { type: "json" };
+import { Transport } from "../../src/entry/client.ts";
+import { Server } from "../../src/entry/server.ts";
 import { Testing } from "../../src/entry/testing.ts";
 import * as root from "../../src/index.ts";
 
@@ -36,11 +38,67 @@ describe("public namespaces", () => {
     assert.deepStrictEqual(Object.keys(root).sort(), [...modules, "VERSION"].sort());
   });
 
-  it("keeps the entry points to the root and testing until the server layer lands", () => {
-    assert.deepStrictEqual(Object.keys(packageJson.exports), [".", "./testing", "./package.json"]);
+  it("publishes the root, client, server, and testing entry points", () => {
+    assert.deepStrictEqual(Object.keys(packageJson.exports), [
+      ".",
+      "./client",
+      "./server",
+      "./testing",
+      "./package.json",
+    ]);
     assert.strictEqual("./promise" in packageJson.exports, false);
-    assert.strictEqual("./server" in packageJson.exports, false);
-    assert.strictEqual("./client" in packageJson.exports, false);
+  });
+
+  it("keeps the client surface to the transport, its adapters, and the capability list", () => {
+    assert.deepStrictEqual(Object.keys(Transport).sort(), [
+      "Method",
+      "allCapabilities",
+      "capabilities",
+      "fromAsync",
+      "fromFetch",
+      "toAsync",
+    ]);
+    assert.deepStrictEqual(Transport.allCapabilities, [
+      "connection",
+      "provisioning",
+      "verification",
+      "cleanup",
+    ]);
+    assert.strictEqual(typeof Testing.transport, "function");
+  });
+
+  it("keeps the server surface to the group, its layers, and the wire schemas", () => {
+    assert.deepStrictEqual(Object.keys(Server).sort(), [
+      "ApprovePayload",
+      "AttachPayload",
+      "Attempt",
+      "Candidate",
+      "Connected",
+      "ConnectionStatus",
+      "Discovery",
+      "DiscoveryNotFound",
+      "DiscoveryResolved",
+      "DiscoverySelectionRequired",
+      "Field",
+      "Identity",
+      "Integration",
+      "Method",
+      "MethodDescriptor",
+      "OAuth",
+      "PlanPayload",
+      "Readiness",
+      "Redirect",
+      "RejectPayload",
+      "SelectionRequired",
+      "Snapshot",
+      "StartPayload",
+      "Started",
+      "Token",
+      "api",
+      "group",
+      "layer",
+      "toWebHandler",
+    ]);
   });
 
   it("names every service tag and value module after its concept", () => {

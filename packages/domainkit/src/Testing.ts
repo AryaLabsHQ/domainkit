@@ -5,6 +5,7 @@
 import { DateTime, Effect, Layer, Redacted, Schema } from "effect";
 
 import * as DnsRecord from "./DnsRecord.ts";
+import * as DomainKit from "./DomainKit.ts";
 import * as Errors from "./internal/error.ts";
 import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
@@ -13,7 +14,9 @@ import { storage as storageCases } from "./internal/conformance/storage.ts";
 import * as Principal from "./Principal.ts";
 import * as Provider from "./Provider.ts";
 import * as Resolver from "./Resolver.ts";
+import * as Server from "./Server.ts";
 import * as Storage from "./Storage.ts";
+import * as Transport from "./Transport.ts";
 
 /** In-memory Storage. Same as `Storage.layerMemory`; re-exported for discoverability. */
 export const storage: Layer.Layer<Storage.Service> = Storage.layerMemory;
@@ -259,6 +262,64 @@ export const resolver = (
         ];
       }),
   });
+
+export interface TransportOptions {
+  /** Which groups the fake server exposes, so a UI can be tested against a partial host. */
+  readonly capabilities?: ReadonlyArray<Transport.Capability>;
+  readonly provider?: FakeProviderOptions;
+}
+
+export interface RecordedCall {
+  /** `connection.inspect`, `provisioning.approve`, ... */
+  readonly method: string;
+  readonly input: unknown;
+}
+
+type TransportMethod = (
+  ...args: ReadonlyArray<never>
+) => Effect.Effect<unknown, Errors.DomainKitError>;
+
+export interface RecordingTransport extends Transport.Interface {
+  readonly calls: ReadonlyArray<RecordedCall>;
+}
+
+/**
+ * A transport over an in-memory `domainkit/server` and memory Storage, recording every call. What
+ * `@domainkit/react` tests render against, instead of stubbing global `fetch`.
+ */
+export const transport = (options: TransportOptions = {}): RecordingTransport => {
+  const fake = provider(options.provider);
+  // The handler's layer holds memory Storage and a throwaway custody key, so there is nothing to
+  // release; a test that wants the server disposed builds `Server.toWebHandler` itself.
+  const { handler } = Server.toWebHandler(
+    DomainKit.layerMemory({ providers: [fake], resolver: resolver() }).pipe(
+      Layer.merge(Layer.succeed(Server.Identity)({ principal: () => Effect.succeed(principal) })),
+    ),
+  );
+  const live = Transport.fromFetch("http://domainkit.test", {
+    fetch: (input, init) => handler(new Request(input, init)),
+    ...(options.capabilities === undefined ? {} : { capabilities: options.capabilities }),
+  });
+  const calls: Array<RecordedCall> = [];
+  const recorded = Object.fromEntries(
+    Transport.capabilities(live).map((capability) => [
+      capability,
+      Object.fromEntries(
+        Object.entries(live[capability] as unknown as Record<string, TransportMethod>).map(
+          ([name, method]) => [
+            name,
+            (...args: ReadonlyArray<never>) =>
+              Effect.suspend(() => {
+                calls.push({ method: `${capability}.${name}`, input: args[0] });
+                return method(...args);
+              }),
+          ],
+        ),
+      ),
+    ]),
+  ) as Transport.Interface;
+  return { ...recorded, calls };
+};
 
 export const conformance = {
   /** Runs every Storage invariant (tenant isolation, leases, exactly-once continuations, revocation recovery). */
