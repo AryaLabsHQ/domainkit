@@ -30,5 +30,7 @@ export * as Provider from "./Provider.ts";
 export * as Providers from "./Providers.ts";
 export * as Provision from "./Provision.ts";
 export * as Receipt from "./Receipt.ts";
+export * as Resolver from "./Resolver.ts";
 export * as Storage from "./Storage.ts";
 export * as Vercel from "./Vercel.ts";
+export * as Verify from "./Verify.ts";

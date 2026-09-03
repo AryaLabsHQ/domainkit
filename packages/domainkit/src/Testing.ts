@@ -10,6 +10,7 @@ import * as DomainName from "./DomainName.ts";
 import { storage as storageCases } from "./internal/conformance/storage.ts";
 import * as Principal from "./Principal.ts";
 import * as Provider from "./Provider.ts";
+import * as Resolver from "./Resolver.ts";
 import * as Storage from "./Storage.ts";
 
 /** In-memory Storage. Same as `Storage.layerMemory`; re-exported for discoverability. */
@@ -205,6 +206,37 @@ export const fakeRecords = (name: string): ReadonlyArray<DnsRecord.Observed> =>
   [...registry]
     .flatMap((zone) => zone.rows.map(({ record }) => record))
     .filter((record) => record.name === name);
+
+/**
+ * A resolver answering from the fake providers' zones, or from an explicit table. Every answer
+ * is attributed to the resolver named `fake`.
+ */
+export const resolver = (
+  answers?: ReadonlyArray<{
+    readonly name: string;
+    readonly records: ReadonlyArray<DnsRecord.Observed>;
+  }>,
+): Layer.Layer<Resolver.Resolver> =>
+  Layer.succeed(Resolver.Resolver)({
+    resolve: (name, type) =>
+      Effect.sync(() => {
+        const normalized = DomainName.fromString(name);
+        const lookup = normalized._tag === "Some" ? normalized.value : name;
+        const table =
+          answers === undefined
+            ? fakeRecords(lookup)
+            : answers.filter((entry) => entry.name === lookup).flatMap((entry) => entry.records);
+        const records = table.filter(
+          (record) => (record._tag === "Opaque" ? record.type : record._tag) === type,
+        );
+        return [
+          {
+            _tag: "Answered",
+            answer: { resolver: "fake", records, negative: records.length === 0, ttl: 60 },
+          },
+        ];
+      }),
+  });
 
 export const conformance = {
   /** Runs every Storage invariant (tenant isolation, leases, exactly-once continuations, revocation recovery). */

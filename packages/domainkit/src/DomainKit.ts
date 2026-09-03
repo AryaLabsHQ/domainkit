@@ -15,24 +15,32 @@ import type * as DomainKitError from "./DomainKitError.ts";
 import type * as Provider from "./Provider.ts";
 import * as Providers from "./Providers.ts";
 import * as Provision from "./Provision.ts";
+import * as Resolver from "./Resolver.ts";
 import * as Storage from "./Storage.ts";
+import * as Verify from "./Verify.ts";
 
 export interface Options {
   readonly providers: ReadonlyArray<Provider.Definition>;
+  /** Replace the public DNS pool (e.g. `Testing.resolver()`); default `Resolver.layer`. */
+  readonly resolver?: Layer.Layer<Resolver.Resolver>;
 }
 
 export type Services =
   | Provision.Provision
   | Cleanup.Cleanup
   | Connect.Connect
-  | Providers.Providers;
+  | Verify.Verify
+  | Providers.Providers
+  | Resolver.Resolver;
 
 export const layer = (
   options: Options,
 ): Layer.Layer<Services, never, Storage.Storage | Custody.Custody> =>
-  Layer.mergeAll(Provision.layer, Cleanup.layer).pipe(
+  Layer.mergeAll(Provision.layer, Cleanup.layer, Verify.layer).pipe(
     Layer.provideMerge(Connect.layer),
-    Layer.provideMerge(Providers.layer(options.providers)),
+    Layer.provideMerge(
+      Layer.mergeAll(Providers.layer(options.providers), options.resolver ?? Resolver.layer),
+    ),
   );
 
 /** `layer` with `Storage.layerMemory` and a throwaway custody key. Tests and playgrounds only. */
