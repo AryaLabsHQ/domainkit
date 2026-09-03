@@ -100,6 +100,11 @@ export interface Catalog {
   readonly overall: (overall: Storage.Overall) => string;
   readonly evidenceSource: (evidence: EvidenceLike) => string;
   readonly hostEvidenceStatus: (status: "failed" | "ok" | "pending") => string;
+  /** What the requirement asks for, shown when an observation disagrees with it. */
+  readonly expectedValue: (value: string) => string;
+  /** What one observer actually read back for that name. */
+  readonly observedValues: (values: ReadonlyArray<string>) => string;
+  readonly observedNothing: string;
   readonly checkedAt: (at: string) => string;
   readonly nextCheckAt: (at: string) => string;
   readonly hostEvidence: string;
@@ -361,6 +366,9 @@ export const english: Catalog = {
         return "Failed";
     }
   },
+  expectedValue: (value) => `Expected ${value}`,
+  observedValues: (values) => `Found ${values.join(", ")}`,
+  observedNothing: "Found nothing",
   checkedAt: (at) => `Checked ${at}`,
   nextCheckAt: (at) => `Next check ${at}`,
   hostEvidence: "Other checks",
