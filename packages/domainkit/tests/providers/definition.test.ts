@@ -21,12 +21,16 @@ const tokenOnly = Provider.make({
   name: "Porkbun",
   context: Schema.Struct({ apiKey: Schema.String }),
   auth: {
-    token: {
+    token: Provider.tokenAuth({
       label: "API key",
       requiredCapabilities: ["dns:read", "dns:write"],
-      authenticate: (token) =>
-        Effect.succeed({ secret: token, context: { apiKey: "pk" }, expiresAt: null }),
-    },
+      fields: Schema.Struct({
+        token: Schema.RedactedFromValue(Schema.String),
+        region: Schema.optionalKey(Schema.String),
+      }),
+      authenticate: ({ token, region }) =>
+        Effect.succeed({ secret: token, context: { apiKey: region ?? "pk" }, expiresAt: null }),
+    }),
   },
   session,
 });
@@ -62,10 +66,25 @@ describe("Provider.make and Providers", () => {
       assert.deepStrictEqual(context, { apiKey: "k" });
       const invalid = yield* Provider.decodeContext(tokenOnly, {}).pipe(Effect.flip);
       assert.strictEqual(invalid.reason._tag, "InvalidInput");
-      const issued = yield* (tokenOnly.auth.token ?? bail("token")).authenticate(
-        Redacted.make("t"),
-      );
+      const issued = yield* (tokenOnly.auth.token ?? bail("token")).authenticate({
+        token: Redacted.make("t"),
+      });
       assert.strictEqual(Redacted.value(issued.secret), "t");
+      assert.deepStrictEqual(Provider.describeMethods(tokenOnly), [
+        {
+          kind: "token",
+          label: "API key",
+          docsUrl: null,
+          fields: [
+            { name: "token", required: true, secret: true },
+            { name: "region", required: false, secret: false },
+          ],
+        },
+      ]);
+      const noToken = yield* (tokenOnly.auth.token ?? bail("token"))
+        .authenticate({ region: Redacted.make("eu") })
+        .pipe(Effect.flip);
+      assert.strictEqual(noToken.reason._tag, "InvalidInput");
     }).pipe(Effect.provide(Providers.layer([tokenOnly]))),
   );
 });

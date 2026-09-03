@@ -36,8 +36,8 @@ describe("Cloudflare.provider", () => {
     ]);
     const definition = Cloudflare.provider({ fetch: recording.fetch });
     return Effect.gen(function* () {
-      const issued = yield* (definition.auth.token ?? bail("token")).authenticate(token);
-      assert.deepStrictEqual(issued.context, { accountId: "account-1" });
+      const issued = yield* (definition.auth.token ?? bail("token")).authenticate({ token });
+      assert.deepStrictEqual(issued.context, { accountId: "account-1", tokenKind: "user" });
       assert.strictEqual(Redacted.value(issued.secret), "cf-token");
       assert.ok(issued.expiresAt !== null);
       assert.strictEqual(
@@ -58,9 +58,28 @@ describe("Cloudflare.provider", () => {
     ]);
     return Effect.gen(function* () {
       const definition = Cloudflare.provider({ fetch: recording.fetch });
-      const issued = yield* (definition.auth.token ?? bail("token")).authenticate(token);
+      const issued = yield* (definition.auth.token ?? bail("token")).authenticate({ token });
       assert.strictEqual(issued.expiresAt, null);
-      assert.deepStrictEqual(issued.context, { accountId: "account-1" });
+      assert.deepStrictEqual(issued.context, { accountId: "account-1", tokenKind: "account" });
+    });
+  });
+
+  it.effect("verifies an account-owned token against the declared account id", () => {
+    const recording = recordedFetch([
+      { body: activeToken, expect: { pathname: "/client/v4/accounts/account-9/tokens/verify" } },
+    ]);
+    const definition = Cloudflare.provider({ fetch: recording.fetch });
+    return Effect.gen(function* () {
+      const issued = yield* (definition.auth.token ?? bail("token")).authenticate({
+        token,
+        accountId: Redacted.make("account-9"),
+      });
+      assert.deepStrictEqual(issued.context, { accountId: "account-9", tokenKind: "account" });
+      assert.ok(issued.expiresAt !== null);
+      assert.deepStrictEqual(Provider.describeMethods(definition)[0]?.fields, [
+        { name: "token", required: true, secret: true },
+        { name: "accountId", required: false, secret: false },
+      ]);
     });
   });
 
@@ -71,7 +90,7 @@ describe("Cloudflare.provider", () => {
     return Effect.gen(function* () {
       const definition = Cloudflare.provider({ fetch: recording.fetch });
       const error = yield* (definition.auth.token ?? bail("token"))
-        .authenticate(token)
+        .authenticate({ token })
         .pipe(Effect.flip);
       assert.strictEqual(error.reason._tag, "Unauthenticated");
     });

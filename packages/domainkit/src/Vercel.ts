@@ -13,6 +13,12 @@ import * as Provider from "./Provider.ts";
 export const TeamContext = Schema.Struct({ teamId: Schema.NullOr(Schema.String) });
 export type TeamContext = typeof TeamContext.Type;
 
+/** Token-method input: the access token, and a team id to scope the connection to one team. */
+export const TokenFields = Schema.Struct({
+  token: Schema.RedactedFromValue(Schema.String),
+  teamId: Schema.optionalKey(Schema.String),
+});
+
 export interface Options {
   /** Omit to offer tokens only. */
   readonly integration?: {
@@ -86,19 +92,20 @@ export const provider = (options: Options = {}): Provider.Definition<TeamContext
     name: "Vercel",
     context: TeamContext,
     auth: {
-      token: {
+      token: Provider.tokenAuth({
         label: "Access token",
         docsUrl: "https://vercel.com/account/settings/tokens",
         requiredCapabilities: capabilities,
-        authenticate: (token) =>
+        fields: TokenFields,
+        authenticate: ({ token, teamId }) =>
           Client.user(client(Redacted.value(token))).pipe(
             Effect.map(() => ({
               secret: token,
-              context: { teamId: null } satisfies TeamContext,
+              context: { teamId: teamId ?? null } satisfies TeamContext,
               expiresAt: null,
             })),
           ),
-      },
+      }),
       ...(integration === undefined ? {} : { integration }),
     },
     session: (credential) => {

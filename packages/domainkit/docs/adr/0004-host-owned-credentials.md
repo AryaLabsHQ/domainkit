@@ -22,7 +22,10 @@ its own implementation.
 `Storage` never sees plaintext: `Connect` seals a credential through `Custody` before writing it
 and opens it after reading it. Every session handed to `Provision`, `Cleanup`, or `Verify` is re-checked against the provider:
 the attached zone must still be among the targets the credential can reach, else `NotFound`.
-`Connect` also owns the connection lifecycle: token and interactive
+Token methods declare their input once as a `fields` schema (secrets as `Redacted`, optional
+keys as optional), so the UI renders the form from the definition and `Connect.start` decodes the
+values before the provider sees them; Cloudflare takes a token and an optional account id for
+account-owned tokens. `Connect` also owns the connection lifecycle: token and interactive
 (OAuth, integration) methods, continuations stored in `Storage` and spent only after the connection
 is persisted, refresh before expiry single-flighted through `Storage.withLock`, and two-phase
 revocation on disconnect that leaves a pending row for recovery when the provider call fails.

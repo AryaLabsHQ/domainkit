@@ -45,7 +45,18 @@ describe("Connect", () => {
       assert.deepStrictEqual(snapshot.authorization?.capabilities, ["dns:read", "dns:write"]);
       assert.deepStrictEqual(snapshot.reusable, []);
       assert.deepStrictEqual(snapshot.providers, [
-        { id: "fake", name: "Fake fake", methods: ["token"] },
+        {
+          id: "fake",
+          name: "Fake fake",
+          methods: [
+            {
+              kind: "token",
+              label: "Token (fake)",
+              docsUrl: null,
+              fields: [{ name: "token", required: true, secret: true }],
+            },
+          ],
+        },
       ]);
       const storage = yield* Storage.Storage;
       const credential = yield* storage.authorizations.credential(

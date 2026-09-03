@@ -44,11 +44,11 @@ describe("Vercel.provider", () => {
     ]);
     const definition = Vercel.provider({ fetch: recording.fetch });
     return Effect.gen(function* () {
-      const issued = yield* (definition.auth.token ?? bail("token")).authenticate(token);
+      const issued = yield* (definition.auth.token ?? bail("token")).authenticate({ token });
       assert.deepStrictEqual(issued.context, { teamId: null });
       assert.strictEqual(issued.expiresAt, null);
       const denied = yield* (definition.auth.token ?? bail("token"))
-        .authenticate(token)
+        .authenticate({ token })
         .pipe(Effect.flip);
       assert.strictEqual(denied.reason._tag, "Forbidden");
     });

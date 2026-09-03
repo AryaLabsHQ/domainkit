@@ -12,7 +12,9 @@ const program = Effect.gen(function* () {
     token: process.env.DOMAINKIT_LIVE_VERCEL_TOKEN,
   });
   const definition = Vercel.provider();
-  const issued = yield* (definition.auth.token ?? bail()).authenticate(Redacted.make(config.token));
+  const issued = yield* (definition.auth.token ?? bail()).authenticate({
+    token: Redacted.make(config.token),
+  });
   const credential = {
     ...issued,
     context: { teamId: process.env.DOMAINKIT_LIVE_VERCEL_TEAM_ID ?? null },

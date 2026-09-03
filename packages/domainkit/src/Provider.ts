@@ -3,7 +3,7 @@
  * only issues personal tokens declares `token` and nothing else. The definition drives connection
  * routes, refresh, the UI method catalog, and rebuilding a session from stored context.
  */
-import { Data, type DateTime, type Effect, type Redacted, type Schema } from "effect";
+import { Data, type DateTime, Effect, Redacted, Schema } from "effect";
 
 import type * as DnsRecord from "./DnsRecord.ts";
 import * as DomainKitError from "./DomainKitError.ts";
@@ -67,14 +67,106 @@ export interface IssuedCredential extends Credential {
   readonly expiresAt: DateTime.Utc | null;
 }
 
+/** Raw token-method input keyed by the provider's declared field names. */
+export type TokenValues = Readonly<Record<string, Redacted.Redacted<string> | undefined>>;
+
 export interface TokenAuth {
   readonly label: string;
   /** Where the customer creates the token; shown in the UI. */
   readonly docsUrl?: string;
   readonly requiredCapabilities: ReadonlyArray<Capability>;
-  /** Validate the token and return account context. */
-  readonly authenticate: (token: Redacted.Redacted<string>) => Fx<IssuedCredential>;
+  /**
+   * The values this method needs, declared once so forms render from it: secrets as
+   * `Schema.RedactedFromValue(Schema.String)`, optional ones through `Schema.optionalKey`.
+   */
+  readonly fields: Schema.Struct<Schema.Struct.Fields>;
+  /** Validate the values (already decoded with `fields`) and return account context. */
+  readonly authenticate: (values: TokenValues) => Fx<IssuedCredential>;
 }
+
+/** Build a `TokenAuth` whose `authenticate` receives the record decoded by `fields`. */
+/** Field schemas whose decoding needs no services, so `authenticate` stays a plain `Fx`. */
+export type TokenFieldSchemas = { readonly [name: string]: Schema.ConstraintDecoder<unknown> };
+
+export const tokenAuth = <const Fields extends TokenFieldSchemas>(input: {
+  readonly label: string;
+  readonly docsUrl?: string;
+  readonly requiredCapabilities: ReadonlyArray<Capability>;
+  readonly fields: Schema.Struct<Fields>;
+  readonly authenticate: (values: Schema.Struct<Fields>["Type"]) => Fx<IssuedCredential>;
+}): TokenAuth => ({
+  label: input.label,
+  ...(input.docsUrl === undefined ? {} : { docsUrl: input.docsUrl }),
+  requiredCapabilities: input.requiredCapabilities,
+  fields: input.fields as Schema.Struct<Schema.Struct.Fields>,
+  authenticate: (values) =>
+    decodeTokenValues(input.fields, values).pipe(Effect.flatMap(input.authenticate)),
+});
+
+const decodeTokenValues = <Fields extends TokenFieldSchemas>(
+  fields: Schema.Struct<Fields>,
+  values: TokenValues,
+): Effect.Effect<Schema.Struct<Fields>["Type"], DomainKitError.DomainKitError> => {
+  const raw: Record<string, string> = {};
+  for (const [name, value] of Object.entries(values)) {
+    if (value !== undefined) raw[name] = Redacted.value(value);
+  }
+  return DomainKitError.decode(fields, raw, "method");
+};
+
+export interface FieldDescriptor {
+  readonly name: string;
+  readonly required: boolean;
+  readonly secret: boolean;
+}
+
+/** What a UI needs to render one auth method; `fields` is `null` for interactive methods. */
+export interface MethodDescriptor {
+  readonly kind: AuthMethod;
+  readonly label: string;
+  readonly docsUrl: string | null;
+  readonly fields: ReadonlyArray<FieldDescriptor> | null;
+}
+
+/** Field descriptors derived from `TokenAuth.fields`: optional keys are not required, `Redacted` values are secret. */
+export const tokenFields = (auth: TokenAuth): ReadonlyArray<FieldDescriptor> =>
+  Object.entries(auth.fields.fields).map(([name, field]) => {
+    const ast = (field as { readonly ast: FieldAst }).ast;
+    return {
+      name,
+      required: ast.context?.isOptional !== true,
+      secret: ast._tag === "Declaration",
+    };
+  });
+
+interface FieldAst {
+  readonly _tag: string;
+  readonly context?: { readonly isOptional?: boolean } | undefined;
+}
+
+export const describeMethods = (definition: Definition): ReadonlyArray<MethodDescriptor> => {
+  const found: Array<MethodDescriptor> = [];
+  if (definition.auth.token !== undefined) {
+    found.push({
+      kind: "token",
+      label: definition.auth.token.label,
+      docsUrl: definition.auth.token.docsUrl ?? null,
+      fields: tokenFields(definition.auth.token),
+    });
+  }
+  if (definition.auth.oauth !== undefined) {
+    found.push({ kind: "oauth", label: definition.auth.oauth.label, docsUrl: null, fields: null });
+  }
+  if (definition.auth.integration !== undefined) {
+    found.push({
+      kind: "integration",
+      label: definition.auth.integration.label,
+      docsUrl: null,
+      fields: null,
+    });
+  }
+  return found;
+};
 
 export interface CallbackInput {
   readonly code: string;

@@ -16,7 +16,15 @@ import * as Provider from "./Provider.ts";
  */
 export const AccountContext = Schema.Struct({
   accountId: Schema.NullOr(Schema.String),
+  /** How the token was verified: user tokens span accounts, account tokens are pinned. */
+  tokenKind: Schema.optionalKey(Schema.Literals(["user", "account"])),
   zoneId: Schema.optionalKey(Schema.String),
+});
+
+/** Token-method input: the API token, and the account id for account-owned tokens. */
+export const TokenFields = Schema.Struct({
+  token: Schema.RedactedFromValue(Schema.String),
+  accountId: Schema.optionalKey(Schema.String),
 });
 export type AccountContext = typeof AccountContext.Type;
 
@@ -185,18 +193,34 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
     name: "Cloudflare",
     context: AccountContext,
     auth: {
-      token: {
+      token: Provider.tokenAuth({
         label: "API token",
         docsUrl: "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/",
         requiredCapabilities: capabilities,
-        authenticate: (token) =>
+        fields: TokenFields,
+        authenticate: ({ token, accountId }) =>
           Effect.gen(function* () {
             const raw = Redacted.value(token);
-            const accountId = yield* discoverAccount(raw);
-            const expiresAt = yield* Client.tokenExpiry(client(raw), accountId);
-            return { secret: token, context: { accountId } satisfies AccountContext, expiresAt };
+            if (accountId !== undefined) {
+              const expiresAt = yield* Client.verifyToken(
+                client(raw),
+                `/accounts/${encodeURIComponent(accountId)}/tokens/verify`,
+              );
+              return {
+                secret: token,
+                context: { accountId, tokenKind: "account" } satisfies AccountContext,
+                expiresAt,
+              };
+            }
+            const discovered = yield* discoverAccount(raw);
+            const verified = yield* Client.tokenExpiry(client(raw), discovered);
+            return {
+              secret: token,
+              context: { accountId: discovered, tokenKind: verified.kind } satisfies AccountContext,
+              expiresAt: verified.expiresAt,
+            };
           }),
-      },
+      }),
       ...(oauth === undefined ? {} : { oauth }),
     },
     session: (credential) => {

@@ -18,16 +18,29 @@ import * as Storage from "./Storage.ts";
 type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError, Principal>;
 
 export type Method = Data.TaggedEnum<{
-  Token: { readonly token: Redacted.Redacted<string> };
+  /** Values keyed by the provider's declared `auth.token.fields`. */
+  Token: { readonly values: Provider.TokenValues };
   OAuth: { readonly returnTo?: string };
   Integration: { readonly returnTo?: string };
 }>;
 const MethodEnum = Data.taggedEnum<Method>();
-/** Lowercase constructors accept a plain token string and wrap it in `Redacted`. */
+/** `token` accepts a lone string (`{ token }`) or a record; every value is wrapped in `Redacted`. */
 export const Method = {
   ...MethodEnum,
-  token: (token: Redacted.Redacted<string> | string): Method =>
-    MethodEnum.Token({ token: typeof token === "string" ? Redacted.make(token) : token }),
+  token: (
+    values: string | Readonly<Record<string, Redacted.Redacted<string> | string | undefined>>,
+  ): Method =>
+    MethodEnum.Token({
+      values:
+        typeof values === "string"
+          ? { token: Redacted.make(values) }
+          : Object.fromEntries(
+              Object.entries(values).map(([name, value]) => [
+                name,
+                typeof value === "string" ? Redacted.make(value) : value,
+              ]),
+            ),
+    }),
   oauth: (options: { readonly returnTo?: string } = {}): Method => MethodEnum.OAuth(options),
   integration: (options: { readonly returnTo?: string } = {}): Method =>
     MethodEnum.Integration(options),
@@ -52,7 +65,7 @@ export interface Snapshot {
   readonly providers: ReadonlyArray<{
     readonly id: string;
     readonly name: string;
-    readonly methods: ReadonlyArray<Provider.AuthMethod>;
+    readonly methods: ReadonlyArray<Provider.MethodDescriptor>;
   }>;
 }
 
@@ -389,7 +402,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
           providers: providers.list().map((definition) => ({
             id: definition.id,
             name: definition.name,
-            methods: methodsOf(definition),
+            methods: Provider.describeMethods(definition),
           })),
         };
       });
@@ -407,7 +420,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
             if (token === undefined) {
               return yield* invalid(`${definition.name} does not accept tokens`, "method");
             }
-            const issued = yield* token.authenticate(input.method.token);
+            const issued = yield* token.authenticate(input.method.values);
             const { connection, session } = yield* connectWith({
               definition,
               method: "token",
@@ -625,14 +638,6 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
 
 export const layer: Layer.Layer<Connect, never, Storage.Storage | Custody | Providers> =
   Layer.effect(Connect)(make);
-
-const methodsOf = (definition: Provider.Definition): ReadonlyArray<Provider.AuthMethod> => {
-  const found: Array<Provider.AuthMethod> = [];
-  if (definition.auth.token !== undefined) found.push("token");
-  if (definition.auth.oauth !== undefined) found.push("oauth");
-  if (definition.auth.integration !== undefined) found.push("integration");
-  return found;
-};
 
 const accessor =
   <Args extends ReadonlyArray<unknown>, A>(

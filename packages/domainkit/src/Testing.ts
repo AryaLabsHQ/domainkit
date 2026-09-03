@@ -130,10 +130,11 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
     name: `Fake ${id}`,
     context: Context,
     auth: {
-      token: {
+      token: Provider.tokenAuth({
         label: "Token (fake)",
         requiredCapabilities: ["dns:read", "dns:write"],
-        authenticate: (token) =>
+        fields: Schema.Struct({ token: Schema.RedactedFromValue(Schema.String) }),
+        authenticate: ({ token }) =>
           Redacted.value(token).length === 0
             ? DomainKitError.fail(
                 new DomainKitError.Unauthenticated({
@@ -141,7 +142,7 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
                 }),
               )
             : Effect.succeed({ secret: token, context: { account: id }, expiresAt: null }),
-      },
+      }),
       ...(options.oauth === true ? { oauth } : {}),
     },
     session: () => ({

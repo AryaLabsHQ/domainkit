@@ -12,7 +12,9 @@ const program = Effect.gen(function* () {
     token: process.env.DOMAINKIT_LIVE_CLOUDFLARE_TOKEN,
   });
   const definition = Cloudflare.provider();
-  const issued = yield* (definition.auth.token ?? bail()).authenticate(Redacted.make(config.token));
+  const issued = yield* (definition.auth.token ?? bail()).authenticate({
+    token: Redacted.make(config.token),
+  });
   yield* Testing.conformance.provider(definition, issued, config.zone);
   console.log(`cloudflare conformance passed for ${config.zone}`);
 });

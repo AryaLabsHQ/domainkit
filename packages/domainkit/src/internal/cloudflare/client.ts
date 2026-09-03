@@ -102,10 +102,26 @@ export const listZones = (options: Options, accountId?: string): Fx<ReadonlyArra
   ).pipe(Effect.map((zones) => zones.filter((zone) => zone.type !== "internal")));
 
 /** Token expiry from the verify endpoint; `null` when the token never expires or verification is unavailable. */
+/** Token status and expiry from a verify endpoint; an inactive token is `Unauthenticated`. */
+export const verifyToken = (options: Options, path: string): Fx<DateTime.Utc | null> =>
+  call(options, path, Protocol.Token).pipe(
+    Effect.flatMap(({ result }) =>
+      result.status === "active"
+        ? Effect.succeed(
+            typeof result.expires_on === "string" ? DateTime.makeUnsafe(result.expires_on) : null,
+          )
+        : DomainKitError.fail(
+            new DomainKitError.Unauthenticated({
+              message: `Cloudflare token is ${result.status}`,
+            }),
+          ),
+    ),
+  );
+
 export const tokenExpiry = (
   options: Options,
   accountId: string | null,
-): Fx<DateTime.Utc | null> => {
+): Fx<{ readonly expiresAt: DateTime.Utc | null; readonly kind: "user" | "account" }> => {
   const verify = (path: string) =>
     call(options, path, Protocol.Token).pipe(
       Effect.flatMap(({ result }) =>
@@ -121,15 +137,17 @@ export const tokenExpiry = (
       ),
     );
   return verify("/user/tokens/verify").pipe(
+    Effect.map((expiresAt) => ({ expiresAt, kind: "user" as const })),
     Effect.catchIf(
       (error) => error.reason._tag !== "Unauthenticated" || accountId !== null,
       () =>
         accountId === null
-          ? Effect.succeed(null)
+          ? Effect.succeed({ expiresAt: null, kind: "user" as const })
           : verify(`/accounts/${encodeURIComponent(accountId)}/tokens/verify`).pipe(
+              Effect.map((expiresAt) => ({ expiresAt, kind: "account" as const })),
               Effect.catchIf(
                 (error) => error.reason._tag !== "Unauthenticated",
-                () => Effect.succeed(null),
+                () => Effect.succeed({ expiresAt: null, kind: "user" as const }),
               ),
             ),
     ),
