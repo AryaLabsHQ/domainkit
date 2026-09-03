@@ -32,11 +32,14 @@ const wrap = (transport: Transport.Transport) =>
     return <DomainKit.Root transport={transport}>{children}</DomainKit.Root>;
   };
 
+/** No inter-event delay: every keystroke re-renders the whole flow. */
+const user = userEvent.setup({ delay: null });
+
 /** A button that exists is not always ready: the review actions render disabled while planning. */
 const click = async (name: string | RegExp) => {
   const button = await screen.findByRole("button", { name });
   await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
-  await userEvent.click(button);
+  await user.click(button);
 };
 
 /** Connect a domain with the fake provider's token method and wait for the snapshot. */
@@ -47,9 +50,9 @@ const connectDomain = async (transport: Transport.Transport, domain: string) => 
     </DomainKit.Root>,
   );
   await screen.findByRole("button", { name: "Connect" });
-  await userEvent.click(screen.getByRole("button", { name: "Connect" }));
-  await userEvent.type(await screen.findByLabelText(/Token/), "secret-token");
-  await userEvent.click(screen.getByRole("button", { name: "Token (fake)" }));
+  await user.click(screen.getByRole("button", { name: "Connect" }));
+  await user.type(await screen.findByLabelText(/Token/), "tok");
+  await user.click(screen.getByRole("button", { name: "Token (fake)" }));
   await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
   view.unmount();
 };
@@ -124,13 +127,13 @@ describe("Connect.useController", () => {
     const field = await screen.findByLabelText(/Token/);
     expect(field.getAttribute("type")).toBe("password");
     expect(field.getAttribute("name")).toBe("token");
-    await userEvent.type(field, "secret-token");
-    await userEvent.click(screen.getByRole("button", { name: "Token (fake)" }));
+    await user.type(field, "tok");
+    await user.click(screen.getByRole("button", { name: "Token (fake)" }));
     await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
     const start = transport.calls.find((call) => call.method === "connection.start");
     expect(start?.input).toMatchObject({
       domain,
-      method: { _tag: "Token", values: { token: "secret-token" } },
+      method: { _tag: "Token", values: { token: "tok" } },
       provider: "fake",
     });
   });
@@ -154,7 +157,7 @@ describe("Connect.useController", () => {
       );
     }
     render(<Panel />, { wrapper: wrap(transport) });
-    await userEvent.click(screen.getByRole("button", { name: "go" }));
+    await user.click(screen.getByRole("button", { name: "go" }));
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("That provider no longer exists.");
     expect(alert.textContent).not.toContain("NotFound");
@@ -170,7 +173,7 @@ describe("Connect.useController", () => {
     );
     await click("Connect");
     await screen.findByText(`${zone} already serves this domain`);
-    await userEvent.click(screen.getByRole("button", { name: `Use ${zone}` }));
+    await user.click(screen.getByRole("button", { name: `Use ${zone}` }));
     await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
     expect(transport.calls.some((call) => call.method === "connection.discover")).toBe(true);
   });
@@ -243,7 +246,7 @@ describe("Cleanup.useController", () => {
       );
     }
     render(<Panel />, { wrapper: wrap(transport) });
-    await userEvent.click(screen.getByRole("button", { name: "plan" }));
+    await user.click(screen.getByRole("button", { name: "plan" }));
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("That receipt no longer exists.");
   });

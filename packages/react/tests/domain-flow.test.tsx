@@ -26,71 +26,70 @@ const scenario = () => {
   };
 };
 
+/** No inter-event delay: every keystroke re-renders the whole flow. */
+const user = userEvent.setup({ delay: null });
+
 /** A button that exists is not always ready: the review actions render disabled while planning. */
 const click = async (name: string | RegExp) => {
   const button = await screen.findByRole("button", { name });
   await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
-  await userEvent.click(button);
+  await user.click(button);
 };
 
 const connect = async () => {
   await click("Connect");
-  await userEvent.type(await screen.findByLabelText(/Token/), "secret-token");
-  await userEvent.click(screen.getByRole("button", { name: "Token (fake)" }));
+  await user.type(await screen.findByLabelText(/Token/), "tok");
+  await user.click(screen.getByRole("button", { name: "Token (fake)" }));
   await screen.findByText("fake connected");
 };
 
 describe("Domain.Flow", () => {
-  it(
-    "runs connect, plan, approve, apply, verify, and cleanup over the fake transport",
-    { timeout: 20000 },
-    async () => {
-      const { domain, requirements, transport } = scenario();
-      const applied: Array<Receipt.Receipt> = [];
-      const cleaned: Array<Receipt.Receipt> = [];
-      render(
-        <DomainKit.Root transport={transport}>
-          <Domain.Flow
-            domain={domain}
-            onApplied={(receipt) => applied.push(receipt)}
-            onCleaned={(receipt) => cleaned.push(receipt)}
-            requirements={requirements}
-          />
-        </DomainKit.Root>,
-      );
+  it("runs connect, plan, approve, apply, verify, and cleanup over the fake transport", async () => {
+    const { domain, requirements, transport } = scenario();
+    const applied: Array<Receipt.Receipt> = [];
+    const cleaned: Array<Receipt.Receipt> = [];
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow
+          domain={domain}
+          onApplied={(receipt) => applied.push(receipt)}
+          onCleaned={(receipt) => cleaned.push(receipt)}
+          requirements={requirements}
+        />
+      </DomainKit.Root>,
+    );
 
-      await connect();
+    await connect();
 
-      await click("Review changes");
-      await click("Approve");
-      await waitFor(() => expect(applied).toHaveLength(1));
-      expect(applied[0]?.status).toBe("complete");
+    await click("Review changes");
+    await click("Approve");
+    await waitFor(() => expect(applied).toHaveLength(1));
+    expect(applied[0]?.status).toBe("complete");
 
-      await click(/Check/);
-      await waitFor(() =>
-        expect(transport.calls.some((call) => call.method === "verification.observe")).toBe(true),
-      );
+    await click(/Check/);
+    await waitFor(() =>
+      expect(transport.calls.some((call) => call.method === "verification.observe")).toBe(true),
+    );
 
-      await click("Remove records");
-      await click("Approve");
-      await waitFor(() => expect(cleaned).toHaveLength(1));
+    await click("Remove records");
+    await click("Approve");
+    await waitFor(() => expect(cleaned).toHaveLength(1));
 
-      expect(transport.calls.map((call) => call.method)).toEqual(
-        expect.arrayContaining([
-          "connection.inspect",
-          "connection.discover",
-          "connection.start",
-          "provisioning.plan",
-          "provisioning.approve",
-          "provisioning.apply",
-          "verification.observe",
-          "cleanup.plan",
-          "cleanup.approve",
-          "cleanup.apply",
-        ]),
-      );
-    },
-  );
+    expect(transport.calls.map((call) => call.method)).toEqual(
+      expect.arrayContaining([
+        "connection.inspect",
+        "connection.discover",
+        "connection.start",
+        "provisioning.plan",
+        "provisioning.approve",
+        "provisioning.apply",
+        "verification.observe",
+        "cleanup.plan",
+        "cleanup.approve",
+        "cleanup.apply",
+      ]),
+    );
+  });
 
   it("replaces the records slot with a host table and the rest of the flow still works", async () => {
     const { domain, requirements, transport } = scenario();
