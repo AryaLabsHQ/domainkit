@@ -35,18 +35,91 @@
     },
     "./client": {
       "types": "./dist/types/entry/client.d.ts",
-      "import": "./dist/client.mjs"
+      "import": "./dist/entry/client.mjs"
     },
     "./server": {
       "types": "./dist/types/entry/server.d.ts",
-      "import": "./dist/server.mjs"
+      "import": "./dist/entry/server.mjs"
     },
     "./testing": {
       "types": "./dist/types/entry/testing.d.ts",
-      "import": "./dist/testing.mjs"
+      "import": "./dist/entry/testing.mjs"
     },
-    "./dist/types/*": {
-      "types": "./dist/types/*.d.ts"
+    "./Approval": {
+      "types": "./dist/types/Approval.d.ts",
+      "import": "./dist/Approval.mjs"
+    },
+    "./Cleanup": {
+      "types": "./dist/types/Cleanup.d.ts",
+      "import": "./dist/Cleanup.mjs"
+    },
+    "./Cloudflare": {
+      "types": "./dist/types/Cloudflare.d.ts",
+      "import": "./dist/Cloudflare.mjs"
+    },
+    "./Connect": {
+      "types": "./dist/types/Connect.d.ts",
+      "import": "./dist/Connect.mjs"
+    },
+    "./Custody": {
+      "types": "./dist/types/Custody.d.ts",
+      "import": "./dist/Custody.mjs"
+    },
+    "./DnsRecord": {
+      "types": "./dist/types/DnsRecord.d.ts",
+      "import": "./dist/DnsRecord.mjs"
+    },
+    "./DomainKit": {
+      "types": "./dist/types/DomainKit.d.ts",
+      "import": "./dist/DomainKit.mjs"
+    },
+    "./DomainName": {
+      "types": "./dist/types/DomainName.d.ts",
+      "import": "./dist/DomainName.mjs"
+    },
+    "./Plan": {
+      "types": "./dist/types/Plan.d.ts",
+      "import": "./dist/Plan.mjs"
+    },
+    "./Principal": {
+      "types": "./dist/types/Principal.d.ts",
+      "import": "./dist/Principal.mjs"
+    },
+    "./Provider": {
+      "types": "./dist/types/Provider.d.ts",
+      "import": "./dist/Provider.mjs"
+    },
+    "./Providers": {
+      "types": "./dist/types/Providers.d.ts",
+      "import": "./dist/Providers.mjs"
+    },
+    "./Provision": {
+      "types": "./dist/types/Provision.d.ts",
+      "import": "./dist/Provision.mjs"
+    },
+    "./Reason": {
+      "types": "./dist/types/Reason.d.ts",
+      "import": "./dist/Reason.mjs"
+    },
+    "./Receipt": {
+      "types": "./dist/types/Receipt.d.ts",
+      "import": "./dist/Receipt.mjs"
+    },
+    "./Resolver": {
+      "types": "./dist/types/Resolver.d.ts",
+      "import": "./dist/Resolver.mjs"
+    },
+    "./Storage": {
+      "types": "./dist/types/Storage.d.ts",
+      "import": "./dist/Storage.mjs"
+    },
+    "./Vercel": {
+      "types": "./dist/types/Vercel.d.ts",
+      "import": "./dist/Vercel.mjs"
+    },
+    "./Verify": {
+      "types": "./dist/types/Verify.d.ts",
+      "import": "./dist/Verify.mjs"
     },
     "./package.json": "./package.json"
   },

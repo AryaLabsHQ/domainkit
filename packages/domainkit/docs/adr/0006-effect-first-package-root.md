@@ -29,8 +29,12 @@ Every failure is a `DomainKit.Error` whose `reason` union derives `category`, `i
 
 Promise support is limited to edge adapters: `Storage.layerFromAsync`, `Custody.layerFromAsync`,
 and the server layer's Web handler. `domainkit/testing` ships the fakes and conformance runners;
-`domainkit/server` and `domainkit/client` are the host route and browser transport entries. No
-provider, adapter, or compatibility subpaths exist.
+`domainkit/server` and `domainkit/client` are the host route and browser transport entries. Every
+root namespace is also its own subpath (`domainkit/Principal`, `domainkit/DnsRecord`, ...), built
+as one ESM file per module so the root and the subpath share module instances; a consumer's
+declaration emit names types by that subpath. `package.json` lists each subpath explicitly and
+`tests/artifact/exports.test.ts` pins the list to `src/index.ts`. No adapter or compatibility
+subpaths exist.
 
 ## Consequences
 
@@ -43,7 +47,8 @@ provider, adapter, or compatibility subpaths exist.
 
 - A single aggregate service hides the seams hosts need to override.
 - A Promise mirror of the root doubles the surface without adding capability.
-- Provider subpaths duplicate what the root namespaces already provide.
+- A `./dist/types/*` types-only export makes declarations nameable but exposes the build layout
+  and fails at runtime when imported.
 
 ## References
 

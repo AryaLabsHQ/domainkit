@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+import { readFile } from "node:fs/promises";
 import { Schema } from "effect";
 
 import packageJson from "../../package.json" with { type: "json" };
@@ -38,18 +39,27 @@ describe("public namespaces", () => {
     assert.deepStrictEqual(Object.keys(root).sort(), [...modules, "VERSION"].sort());
   });
 
-  it("publishes the entry points and a types-only path to every declaration file", () => {
+  it("publishes the four entry points plus one subpath per root namespace", async () => {
+    const source = await readFile(new URL("../../src/index.ts", import.meta.url), "utf8");
+    const namespaces = [...source.matchAll(/^export \* as (\w+) from "\.\/\1\.ts";$/gm)].map(
+      ([, name]) => name,
+    );
+    assert.deepStrictEqual(namespaces, [...modules]);
     assert.deepStrictEqual(Object.keys(packageJson.exports), [
       ".",
       "./client",
       "./server",
       "./testing",
-      "./dist/types/*",
+      ...namespaces.map((name) => `./${name}`),
       "./package.json",
     ]);
-    // Declaration emit in a consumer names DomainKit types by their declaring file; the wildcard
-    // keeps those references resolvable through the exports map without exposing runtime entries.
-    assert.deepStrictEqual(packageJson.exports["./dist/types/*"], { types: "./dist/types/*.d.ts" });
+    const subpaths: Record<string, unknown> = packageJson.exports;
+    for (const name of namespaces) {
+      assert.deepStrictEqual(subpaths[`./${name}`], {
+        types: `./dist/types/${name}.d.ts`,
+        import: `./dist/${name}.mjs`,
+      });
+    }
     assert.strictEqual("./promise" in packageJson.exports, false);
   });
 

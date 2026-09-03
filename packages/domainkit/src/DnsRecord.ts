@@ -10,6 +10,10 @@ import { Schema } from "effect";
 
 import * as DomainName from "./DomainName.ts";
 
+// DomainName, internal/error, Reason, Plan, and DnsRecord form an import cycle. Field schemas
+// that cross it are read lazily so any module can be the first one evaluated.
+const Name = Schema.suspend(() => DomainName.Model);
+
 export const Type = Schema.Literals(["A", "AAAA", "CNAME", "TXT", "MX", "CAA", "NS", "SRV"]);
 export type Type = typeof Type.Type;
 
@@ -30,7 +34,7 @@ const Ipv6 = Schema.String.check(
 const NonEmpty = Schema.String.check(Schema.isMinLength(1));
 
 const Common = {
-  name: DomainName.Model,
+  name: Name,
   ttl: Ttl,
   policy: Policy,
   purpose: Schema.optionalKey(Schema.String),
@@ -46,7 +50,7 @@ export class AAAA extends Schema.TaggedClass<AAAA>("@domainkit/DnsRecord/AAAA")(
 }) {}
 export class CNAME extends Schema.TaggedClass<CNAME>("@domainkit/DnsRecord/CNAME")("CNAME", {
   ...Common,
-  target: DomainName.Model,
+  target: Name,
 }) {}
 export class TXT extends Schema.TaggedClass<TXT>("@domainkit/DnsRecord/TXT")("TXT", {
   ...Common,
@@ -54,7 +58,7 @@ export class TXT extends Schema.TaggedClass<TXT>("@domainkit/DnsRecord/TXT")("TX
 }) {}
 export class MX extends Schema.TaggedClass<MX>("@domainkit/DnsRecord/MX")("MX", {
   ...Common,
-  exchange: DomainName.Model,
+  exchange: Name,
   priority: Priority,
 }) {}
 export class CAA extends Schema.TaggedClass<CAA>("@domainkit/DnsRecord/CAA")("CAA", {
@@ -65,11 +69,11 @@ export class CAA extends Schema.TaggedClass<CAA>("@domainkit/DnsRecord/CAA")("CA
 }) {}
 export class NS extends Schema.TaggedClass<NS>("@domainkit/DnsRecord/NS")("NS", {
   ...Common,
-  nameserver: DomainName.Model,
+  nameserver: Name,
 }) {}
 export class SRV extends Schema.TaggedClass<SRV>("@domainkit/DnsRecord/SRV")("SRV", {
   ...Common,
-  target: DomainName.Model,
+  target: Name,
   port: Port,
   priority: Priority,
   weight: Priority,
