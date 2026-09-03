@@ -26,6 +26,10 @@ verifying a credential the host issued, never by reading a tenant id off the req
 to `Connect`, `Provision`, `Cleanup`, and `Verify`, so no route can read across owners. Everything
 else comes from `DomainKit.layer` plus `Storage`.
 
+`/callback/:provider` is a top-level navigation the provider sends the browser on, so a host's
+`Identity` must recognise a credential the browser attaches by itself; a header-only scheme fails
+every interactive connection at completion.
+
 The OAuth callback redirects to the destination stored on the continuation the customer's own
 request created, or to `defaultReturnTo`, and only after checking it is a path on this server or a
 URL on the callback's origin. The provider's query string never chooses where the customer lands.

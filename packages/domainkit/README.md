@@ -115,10 +115,11 @@ import { DomainKitError } from "domainkit";
 import { Server } from "domainkit/server";
 
 // Verify a credential you issued and look the tenant up yourself. A request never names its own
-// `ownerId`, and one you cannot attribute fails closed.
+// `ownerId`, and one you cannot attribute fails closed. Read it from a cookie: `/callback/:provider`
+// is a browser navigation, so only what the browser sends by itself arrives with it.
 const IdentityLive = Layer.succeed(Server.Identity)({
   principal: (request) =>
-    Effect.flatMap(yourSessions.verify(request.headers.authorization), (session) =>
+    Effect.flatMap(yourSessions.verify(request.cookies.session), (session) =>
       session === null
         ? DomainKitError.fail(new DomainKitError.Unauthenticated({ message: "No session" }))
         : Effect.succeed({ ownerId: session.orgId, actorId: session.userId }),
@@ -139,6 +140,9 @@ a plan or a receipt, observe, and build a cleanup plan. `Identity` is the only s
 every handler derives the `Principal` for the request it is serving. `Server.group.prefix("/internal/dns")` moves
 every route, and the OAuth callback URL follows the mount. `OpenApi.fromApi(Server.api)` documents
 the group.
+
+`/callback/:provider` is the one route the provider drives the browser to, so `Identity` has to
+recognise a credential the browser sends on a top-level navigation.
 
 After an interactive connection completes, the callback redirects to the `returnTo` the flow was
 started with, or to `defaultReturnTo`. The destination is resolved against the callback URL and must

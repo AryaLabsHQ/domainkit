@@ -34,13 +34,14 @@ declare const sessions: {
   readonly verify: (token: string) => Effect.Effect<Principal.Shape | null>;
 };
 
+// Read the credential from a cookie, not an `Authorization` header: `/callback/:provider` is a
+// top-level navigation the provider sends the browser on, so only what the browser attaches by
+// itself arrives with it. A header-only scheme fails every interactive connection at completion.
 const IdentityLive = Layer.succeed(Server.Identity)({
   principal: (request) =>
     Effect.gen(function* () {
-      const header = request.headers.authorization ?? "";
-      const session = header.startsWith("Bearer ")
-        ? yield* sessions.verify(header.slice("Bearer ".length))
-        : null;
+      const token = request.cookies.session;
+      const session = token === undefined ? null : yield* sessions.verify(token);
       return session === null
         ? yield* DomainKitError.fail(
             new DomainKitError.Unauthenticated({ message: "The request carries no session" }),

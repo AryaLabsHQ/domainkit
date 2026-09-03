@@ -328,6 +328,52 @@ describe("Server.group over the lifecycle", () => {
     }
   });
 
+  it("completes the callback under an identity the browser can satisfy", async () => {
+    // The provider drives a top-level navigation to /callback/:provider, so only a credential the
+    // browser attaches by itself reaches it. A cookie identity has to work end to end.
+    const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+    const cookieIdentity = Layer.succeed(Server.Identity)({
+      principal: (request) =>
+        request.cookies.session === "s3cret"
+          ? Effect.succeed(Testing.principal)
+          : DomainKitError.fail(new DomainKitError.Unauthenticated({ message: "No session" })),
+    });
+    const { handler, dispose } = Server.toWebHandler(
+      DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() }).pipe(
+        Layer.merge(cookieIdentity),
+      ),
+      { defaultReturnTo: "/dashboard" },
+    );
+    const cookie = { cookie: "session=s3cret" };
+    try {
+      const started = await handler(
+        new Request(`${host}/connections`, {
+          method: "POST",
+          headers: { ...cookie, "content-type": "application/json" },
+          body: JSON.stringify({
+            domain: "app.example.com",
+            provider: fake.id,
+            method: { _tag: "OAuth", returnTo: "/settings/domains" },
+          }),
+        }),
+      );
+      assert.strictEqual(started.status, 200);
+      const { authorizationUrl } = (await started.json()) as { readonly authorizationUrl: string };
+
+      // The provider's redirect carries the cookie but no Authorization header.
+      const callback = await handler(
+        new Request(authorizationUrl, { headers: cookie, redirect: "manual" }),
+      );
+      assert.strictEqual(callback.status, 302);
+      assert.strictEqual(callback.headers.get("location"), `${host}/settings/domains`);
+
+      const anonymous = await handler(new Request(`${host}/domains/app.example.com`));
+      assert.strictEqual(anonymous.status, 401);
+    } finally {
+      await dispose();
+    }
+  });
+
   it("refuses a callback whose flow points off this origin", async () => {
     const { fake, call, handler, dispose } = server({ defaultReturnTo: "/dashboard" });
     try {
