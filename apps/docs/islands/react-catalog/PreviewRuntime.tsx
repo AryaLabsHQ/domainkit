@@ -42,9 +42,16 @@ const makeTransport = (settings: ProviderSettings) =>
 const seedOf = (state: PreviewState): ReadonlyArray<DnsRecord.Model> =>
   state.seeded ? state.requirements.filter((record) => record._tag === "TXT") : [];
 
-/** The seed's content, so editing a seeded record rebuilds the provider that already holds it. */
-const seedKey = (seed: ReadonlyArray<DnsRecord.Model>): string =>
-  seed.map((record) => `${record._tag} ${record.name} ${DnsRecord.data(record)}`).join("\n");
+/**
+ * Everything the fake server is built from. Editing a seeded record has to reach the provider that
+ * already holds it, so the key carries the seed's content rather than the array's identity.
+ */
+const serverKey = (state: PreviewState, seed: ReadonlyArray<DnsRecord.Model>): string =>
+  [
+    state.providerId,
+    state.oauth ? "oauth" : "token",
+    ...seed.map((record) => `${record._tag} ${record.name} ${DnsRecord.data(record)}`),
+  ].join("|");
 
 function Verification({ domain }: { readonly domain: string }) {
   const controller = Verify.useController({ domain });
@@ -116,12 +123,10 @@ export function Preview({ state }: { readonly state: PreviewState }) {
     return () => window.clearTimeout(timeout);
   }, [event]);
   const seed = seedOf(state);
-  const key = seedKey(seed);
+  const key = serverKey(state, seed);
   const transport = useMemo(
     () => makeTransport({ oauth: state.oauth, providerId: state.providerId, seed }),
-    // `seed` is rebuilt every render, so the provider is keyed on its content instead: editing a
-    // seeded record has to reach the fake provider that already holds it, and nothing else does.
-    [key, state.oauth, state.providerId],
+    [key],
   );
   const notification: ReactNode =
     event === undefined ? null : (
@@ -132,8 +137,11 @@ export function Preview({ state }: { readonly state: PreviewState }) {
       </div>
     );
   return (
+    // A new fake server is a new world: the controllers hold plans, receipts, and readiness the
+    // replacement has never heard of, so the story remounts with it rather than mixing the two.
     <DomainKit.Root
       colorScheme={state.colorScheme}
+      key={key}
       onEvent={setEvent}
       theme={workshopTheme(state.theme, state.colorScheme)}
       transport={transport}
