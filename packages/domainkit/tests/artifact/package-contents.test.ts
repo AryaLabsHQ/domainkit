@@ -38,8 +38,12 @@ describe("packed package contents", () => {
 
     for (const [subpath, target] of Object.entries(packageJson.exports)) {
       if (typeof target === "string") continue;
-      assert.ok(target.import.startsWith("./dist/"), `${subpath} import must target dist`);
       assert.ok(target.types.startsWith("./dist/"), `${subpath} types must target dist`);
+      if ("import" in target) {
+        assert.ok(target.import.startsWith("./dist/"), `${subpath} import must target dist`);
+      } else {
+        assert.strictEqual(subpath, "./dist/types/*", "only the declaration path is types-only");
+      }
     }
   });
 

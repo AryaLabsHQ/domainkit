@@ -38,14 +38,18 @@ describe("public namespaces", () => {
     assert.deepStrictEqual(Object.keys(root).sort(), [...modules, "VERSION"].sort());
   });
 
-  it("publishes the root, client, server, and testing entry points", () => {
+  it("publishes the entry points and a types-only path to every declaration file", () => {
     assert.deepStrictEqual(Object.keys(packageJson.exports), [
       ".",
       "./client",
       "./server",
       "./testing",
+      "./dist/types/*",
       "./package.json",
     ]);
+    // Declaration emit in a consumer names DomainKit types by their declaring file; the wildcard
+    // keeps those references resolvable through the exports map without exposing runtime entries.
+    assert.deepStrictEqual(packageJson.exports["./dist/types/*"], { types: "./dist/types/*.d.ts" });
     assert.strictEqual("./promise" in packageJson.exports, false);
   });
 

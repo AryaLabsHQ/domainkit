@@ -146,7 +146,7 @@ if (JSON.stringify(result) !== JSON.stringify(expected)) {
         join(directory, "types.ts"),
         `
 import { Effect, Layer, Redacted } from "effect";
-import { Custody, DnsRecord, DomainKit, Plan, type Provider, type Storage, type Verify } from "domainkit";
+import { Custody, DnsRecord, DomainKit, Plan, type Provider, Provision, type Storage, Verify } from "domainkit";
 import { Transport } from "domainkit/client";
 import { Server } from "domainkit/server";
 import { Testing } from "domainkit/testing";
@@ -195,6 +195,11 @@ export const first = (items: ReadonlyArray<DnsRecord.Model>) => items[0];
 export const operations = (plan: Plan.Model) => plan.operations;
 export const pair = (plan: Plan.Model, readiness: Verify.Readiness) => ({ plan, readiness });
 export const conformance = Testing.conformance.storage(Testing.storage);
+/** Types the consumer never imported (Principal.Service in R, Principal.Interface) resolve via the exports map. */
+export const planned = Provision.plan({ domain: "app.example.com", requirements });
+export const observed = Verify.observe({ domain: "app.example.com" });
+export const principal = Testing.principal;
+export const byTag = { A: DnsRecord.A, TXT: DnsRecord.TXT } as const;
 `,
       );
       await writeFile(
@@ -221,9 +226,10 @@ export const conformance = Testing.conformance.storage(Testing.storage);
       );
       const emitted = await readFile(join(directory, "types-out", "types.d.ts"), "utf8");
       assert.ok(
-        !emitted.includes("/dist/"),
-        `consumer declarations must not reference dist internals:\n${emitted}`,
+        !emitted.includes("node_modules"),
+        `consumer declarations must reference domainkit through its exports map:\n${emitted}`,
       );
+      assert.include(emitted, 'import("domainkit/dist/types/Principal")');
 
       await run(["node", "consumer.mjs"], directory);
       await run(["bun", "consumer.mjs"], directory);
