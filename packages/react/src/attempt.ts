@@ -81,11 +81,14 @@ export function useAttempt(options: Options): Controller {
   const { emit } = useDomainKit();
   const runner = useRunner();
   const [state, setState] = useState<State>(State.Idle());
-  const held = useRef<{ plan: Plan.Plan | null; approval: Approval.Approval | null }>({
-    approval: null,
-    plan: null,
-  });
-  const lastCommand = useRef<(() => void) | null>(null);
+  // The key travels with what it produced, so a command raised before the reset commits still
+  // refuses to run: a plan built for one domain must never be approved for another.
+  const held = useRef<{
+    key: string;
+    plan: Plan.Plan | null;
+    approval: Approval.Approval | null;
+  }>({ approval: null, key, plan: null });
+  const lastCommand = useRef<{ key: string; run: () => void } | null>(null);
   const build = useRef(options.plan);
   const lastKey = useRef(key);
   useEffect(() => {
@@ -95,7 +98,7 @@ export function useAttempt(options: Options): Controller {
     if (lastKey.current === key) return;
     lastKey.current = key;
     runner.cancel();
-    held.current = { approval: null, plan: null };
+    held.current = { approval: null, key, plan: null };
     lastCommand.current = null;
     setState(State.Idle());
   }, [key, runner]);
@@ -110,7 +113,7 @@ export function useAttempt(options: Options): Controller {
 
   const applyWith = useCallback(
     (plan: Plan.Plan, approval: Approval.Approval) => {
-      if (group === undefined) return;
+      if (group === undefined || held.current.key !== key) return;
       const command = () => {
         setState(State.Applying({ approval, plan }));
         runner.run(group.apply(approval.id), {
@@ -122,10 +125,10 @@ export function useAttempt(options: Options): Controller {
           },
         });
       };
-      lastCommand.current = command;
+      lastCommand.current = { key, run: command };
       command();
     },
-    [done, emit, group, onDone, onFailure, runner],
+    [done, emit, group, key, onDone, onFailure, runner],
   );
 
   const buildPlan = useCallback(() => {
@@ -136,19 +139,19 @@ export function useAttempt(options: Options): Controller {
       runner.run(effect, {
         onFailure,
         onSuccess: (plan) => {
-          held.current = { approval: null, plan };
+          held.current = { approval: null, key, plan };
           setState(State.Planned({ plan }));
         },
       });
     };
-    lastCommand.current = command;
+    lastCommand.current = { key, run: command };
     command();
-  }, [onFailure, runner]);
+  }, [key, onFailure, runner]);
 
   const approve = useCallback(
     (operationIds?: ReadonlyArray<Plan.OperationId>) => {
       const plan = held.current.plan;
-      if (group === undefined || plan === null) return;
+      if (group === undefined || plan === null || held.current.key !== key) return;
       const command = () => {
         setState(State.Approving({ plan }));
         runner.run(
@@ -159,22 +162,22 @@ export function useAttempt(options: Options): Controller {
           {
             onFailure,
             onSuccess: (approval) => {
-              held.current = { approval, plan };
+              held.current = { approval, key, plan };
               applyWith(plan, approval);
             },
           },
         );
       };
-      lastCommand.current = command;
+      lastCommand.current = { key, run: command };
       command();
     },
-    [applyWith, group, onFailure, runner],
+    [applyWith, group, key, onFailure, runner],
   );
 
   const reject = useCallback(
     (reason?: string) => {
       const plan = held.current.plan;
-      if (group === undefined || plan === null) return;
+      if (group === undefined || plan === null || held.current.key !== key) return;
       const command = () => {
         setState(State.Rejecting({ plan }));
         runner.run(group.reject({ planId: plan.id, ...(reason === undefined ? {} : { reason }) }), {
@@ -185,10 +188,10 @@ export function useAttempt(options: Options): Controller {
           },
         });
       };
-      lastCommand.current = command;
+      lastCommand.current = { key, run: command };
       command();
     },
-    [domain, emit, group, onFailure, runner],
+    [domain, emit, group, key, onFailure, runner],
   );
 
   const apply = useCallback(() => {
@@ -199,21 +202,21 @@ export function useAttempt(options: Options): Controller {
 
   const retry = useCallback(() => {
     if (state._tag === "Failure" && needsNewPlan(state.error)) {
-      held.current = { approval: null, plan: null };
+      held.current = { approval: null, key, plan: null };
       buildPlan();
       return;
     }
     const command = lastCommand.current;
-    if (command === null) buildPlan();
-    else command();
-  }, [buildPlan, state]);
+    if (command === null || command.key !== key) buildPlan();
+    else command.run();
+  }, [buildPlan, key, state]);
 
   const reset = useCallback(() => {
     runner.cancel();
-    held.current = { approval: null, plan: null };
+    held.current = { approval: null, key, plan: null };
     lastCommand.current = null;
     setState(State.Idle());
-  }, [runner]);
+  }, [key, runner]);
 
   return { apply, approve, plan: buildPlan, reject, reset, retry, state };
 }

@@ -51,6 +51,26 @@ test("connects, reviews the plan, and approves it", async ({ page }) => {
   await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("applied") });
 });
 
+test("opens the verification popover and reads per-requirement evidence", async ({ page }) => {
+  await open(page, "browser5.example");
+  await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByRole("dialog").getByLabel("Token").fill("tok");
+  await page.getByRole("button", { name: "Token (fake)" }).click();
+  await expect(page.getByText("fake connected")).toBeVisible();
+  await page.getByRole("button", { name: "Review changes" }).click();
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(page.getByText("DNS records added.")).toBeVisible();
+
+  await page.getByRole("button", { name: /Check/ }).click();
+  const evidence = page.locator("[data-domainkit-part='observation-list']");
+  await expect(evidence).toBeVisible();
+  await expect(evidence.getByText("CNAME app.browser5.example")).toBeVisible();
+  await expect(evidence.locator("[data-domainkit-part='record-status']").first()).toBeVisible();
+  await page.locator("[data-domainkit-part='verification-popover']").screenshot({
+    path: shot("verification"),
+  });
+});
+
 test("takes theme tokens and the color scheme from the root", async ({ page }) => {
   await open(page, "browser4.example", "dark");
   const root = page.locator("[data-domainkit-root]").first();

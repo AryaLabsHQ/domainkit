@@ -66,7 +66,8 @@ describe("Domain.Flow", () => {
     await waitFor(() => expect(applied).toHaveLength(1));
     expect(applied[0]?.status).toBe("complete");
 
-    await click(/Check/);
+    // The default verification slot observes on mount; opening its popover is a browser concern
+    // and `tests/browser/flow.spec.ts` covers it there.
     await waitFor(() =>
       expect(transport.calls.some((call) => call.method === "verification.observe")).toBe(true),
     );
