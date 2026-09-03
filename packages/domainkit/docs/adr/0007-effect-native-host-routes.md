@@ -24,9 +24,7 @@ against that origin before persistence. Callback state is consumed exactly once 
 connection is committed.
 
 `Server.toWebHandler` adapts a fully provided Layer to the standard Web `Request` and `Response`
-contract. For non-Effect applications, the named `createDomainKit` export accepts Promise-based
-host capabilities and returns the same Web handler. It adapts those capabilities into the canonical
-Effect program instead of defining a second lifecycle.
+contract.
 
 Async hosts must supply their own durable persistence implementation. DomainKit does not select a
 database, initialize schemas, run migrations, or own the persistence client's disposal.
