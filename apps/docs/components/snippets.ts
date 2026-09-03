@@ -59,11 +59,14 @@ const trimBlankEdges = (lines: ReadonlyArray<string>): ReadonlyArray<string> => 
   return lines.slice(start, end);
 };
 
+const isMarker = (line: string): boolean =>
+  /^\/\/ #(?:region\b|endregion\b)/.test(line.trimStart());
+
 /** A `// #region name` … `// #endregion` slice, or the whole file when no region is named. */
 export const snippet = (file: string, region?: string): string => {
   const lines = read(file).split("\n");
   if (region === undefined) {
-    return trimBlankEdges(lines.filter((line) => !line.trimStart().startsWith("// #"))).join("\n");
+    return trimBlankEdges(lines.filter((line) => !isMarker(line))).join("\n");
   }
   const start = lines.findIndex((line) => line.trim() === `// #region ${region}`);
   if (start < 0) throw new Error(`Snippet ${file} has no region ${region}`);

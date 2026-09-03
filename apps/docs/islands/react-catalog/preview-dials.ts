@@ -78,6 +78,10 @@ const withinZone = (candidate: string | undefined, fallback: string): string => 
   return DomainName.isWithin(name, previewZone) ? name : fallback;
 };
 
+/** Record schemas reject an empty value, so an emptied dial keeps the record it is editing. */
+const text = (candidate: string | undefined, fallback: string): string =>
+  candidate === undefined || candidate.trim() === "" ? fallback : candidate;
+
 export function stateFromDials(initial: PreviewState, values: PreviewDialValues): PreviewState {
   const providerId = values.provider === "vercel" ? "vercel" : "cloudflare";
   const cname = first(initial.requirements);
@@ -97,7 +101,7 @@ export function stateFromDials(initial: PreviewState, values: PreviewDialValues)
       : [
           DnsRecord.txt({
             name: withinZone(values.records?.txt?.name, txt.name),
-            value: values.records?.txt?.value ?? txt.value,
+            value: text(values.records?.txt?.value, txt.value),
             ...(txt.purpose === undefined ? {} : { purpose: txt.purpose }),
           }),
         ]),
