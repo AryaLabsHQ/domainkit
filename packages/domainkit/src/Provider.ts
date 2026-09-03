@@ -21,10 +21,11 @@ export interface ObservedRecord {
 /** What a session can do inside one zone. The only thing planning and applying touch. */
 export interface Dns {
   readonly list: (zone: string) => Fx<ReadonlyArray<ObservedRecord>>;
+  /** Must return the provider's id for the new record; cleanup deletes by that id. */
   readonly create: (
     zone: string,
     record: DnsRecord.DnsRecord,
-  ) => Fx<{ readonly providerRecordId: string | null }>;
+  ) => Fx<{ readonly providerRecordId: string }>;
   readonly get: (zone: string, providerRecordId: string) => Fx<DnsRecord.Observed | null>;
   readonly delete: (zone: string, providerRecordId: string) => Fx<void>;
 }

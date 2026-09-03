@@ -161,6 +161,16 @@ describe("Connect", () => {
         callbackUrl: "https://app.example/cb?state=other&code=fake-code",
       }).pipe(Effect.flip);
       assert.strictEqual(mismatch.reason._tag, "Unauthenticated");
+      const denied = yield* Connect.complete({
+        continuationId: redirect.continuationId,
+        callbackUrl: `https://app.example/cb?state=${redirect.continuationId}&error=access_denied`,
+      }).pipe(Effect.flip);
+      assert.strictEqual(denied.reason._tag, "Unauthenticated");
+      const stillPending = yield* Connect.complete({
+        continuationId: redirect.continuationId,
+        callbackUrl: redirect.authorizationUrl,
+      });
+      assert.strictEqual(stillPending._tag, "Connected");
       const late = yield* Connect.start({
         provider: "fake",
         method: Connect.Method.oauth(),

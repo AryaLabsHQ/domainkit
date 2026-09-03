@@ -83,9 +83,7 @@ const txt = (zone: string, label: string, value: string) =>
   DnsRecord.txt({ name: `${label}.${zone}`, value, ttl: 300 });
 
 const recordIds = (receipt: Receipt.Receipt) =>
-  Receipt.applied(receipt).flatMap(({ providerRecordId }) =>
-    providerRecordId === null ? [] : [providerRecordId],
-  );
+  Receipt.applied(receipt).map(({ providerRecordId }) => providerRecordId);
 
 /**
  * Runs create/readback/cleanup, exact-noop, conflict, stale-plan, and partial-apply against a
@@ -176,7 +174,7 @@ export const provider = (
     return Effect.gen(function* () {
       const requirement = cname(zone, `${prefix}-exact`);
       const { providerRecordId } = yield* dns.create(zone, requirement);
-      created = providerRecordId === null ? [] : [providerRecordId];
+      created = [providerRecordId];
       const plan = yield* Provision.plan({
         domain: attachment.domain,
         requirements: [requirement],
@@ -199,7 +197,7 @@ export const provider = (
         zone,
         txt(zone, `${prefix}-conflict`, "occupied"),
       );
-      created = providerRecordId === null ? [] : [providerRecordId];
+      created = [providerRecordId];
       const plan = yield* Provision.plan({
         domain: attachment.domain,
         requirements: [cname(zone, `${prefix}-conflict`)],
@@ -229,7 +227,7 @@ export const provider = (
       });
       const approval = yield* Provision.approve(plan);
       const { providerRecordId } = yield* dns.create(zone, requirement);
-      created = providerRecordId === null ? [] : [providerRecordId];
+      created = [providerRecordId];
       const stale = yield* Provision.apply(approval).pipe(Effect.result);
       yield* expect(
         name,

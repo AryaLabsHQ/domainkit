@@ -476,8 +476,9 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
 
     const complete: Service["complete"] = (input) =>
       Effect.gen(function* () {
-        const continuation = yield* storage.continuations.consume(input.continuationId);
-        const payload = yield* DomainKitError.decode(Payload, continuation.payload, "continuation");
+        // Validate the callback before spending the continuation, so a malformed or mismatched
+        // callback leaves the pending flow intact. The provider code itself is single-use, so a
+        // failed exchange or persistence after this point needs a fresh start.
         const callback = yield* Effect.try({
           try: () => new URL(input.callbackUrl),
           catch: () =>
@@ -492,13 +493,15 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
         const unauthenticated = (message: string) =>
           DomainKitError.fail(new DomainKitError.Unauthenticated({ message }));
         if (params.error !== undefined) {
-          return yield* unauthenticated(`${continuation.provider} returned ${params.error}`);
+          return yield* unauthenticated(`Provider returned ${params.error}`);
         }
-        if (params.state !== continuation.id) {
+        if (params.state !== input.continuationId) {
           return yield* unauthenticated("Callback state does not match the continuation");
         }
         const code = params.code;
         if (code === undefined) return yield* unauthenticated("Callback has no code");
+        const continuation = yield* storage.continuations.consume(input.continuationId);
+        const payload = yield* DomainKitError.decode(Payload, continuation.payload, "continuation");
         const definition = yield* providers.get(continuation.provider);
         const issued =
           payload.method === "oauth"

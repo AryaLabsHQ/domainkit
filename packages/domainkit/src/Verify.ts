@@ -137,8 +137,8 @@ const quorumStatus = (
   const satisfied = known.filter((status) => status === "satisfied").length;
   const needed =
     quorum === "any" ? 1 : quorum === "all" ? Math.max(1, known.length) : quorum.minimum;
-  if (known.length > 0 && satisfied >= needed) return "satisfied";
   if (known.includes("mismatch")) return "mismatch";
+  if (known.length > 0 && satisfied >= needed) return "satisfied";
   return known.length === 0 ? "unknown" : "missing";
 };
 
@@ -153,10 +153,18 @@ const overallOf = (
     return "failed";
   }
   const ready =
+    requirements.length + host.length > 0 &&
     requirements.every(({ status }) => status === "satisfied") &&
     host.every(({ status }) => status === "ok");
   return ready ? "ready" : "pending";
 };
+
+/** The identity of a requirement set: type, name, and data, independent of labels and order. */
+const requirementKey = (requirements: ReadonlyArray<{ readonly record: DnsRecord.DnsRecord }>) =>
+  requirements
+    .map(({ record }) => `${record._tag} ${record.name} ${DnsRecord.data(record)}`)
+    .sort()
+    .join("\n");
 
 export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Resolver> = Effect.gen(
   function* () {
@@ -213,10 +221,15 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
         const policy = yield* Policy;
         const now = yield* DateTime.now;
         const overall = overallOf(input.requirements, input.host);
+        const sameRequirements =
+          Option.isSome(input.previous) &&
+          requirementKey(input.previous.value.requirements) === requirementKey(input.requirements);
         const pendingSince =
           overall === "ready"
             ? null
-            : Option.isSome(input.previous) && input.previous.value.pendingSince !== null
+            : sameRequirements &&
+                Option.isSome(input.previous) &&
+                input.previous.value.pendingSince !== null
               ? input.previous.value.pendingSince
               : now;
         const nextCheckAt =
@@ -295,6 +308,14 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect | Res
           input.requirements === undefined
             ? yield* defaultRequirements(attachment)
             : input.requirements.map((record) => ({ operationId: null, record }));
+        if (requirements.length === 0) {
+          return yield* DomainKitError.fail(
+            new DomainKitError.InvalidInput({
+              message: "Nothing to observe: pass at least one requirement",
+              field: "requirements",
+            }),
+          );
+        }
         const now = yield* DateTime.now;
         const { session, target } = yield* connect.session(attachment.id);
         const providerRecords = yield* session

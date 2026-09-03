@@ -1,8 +1,16 @@
 import { assert, describe, it } from "@effect/vitest";
-import { DateTime, Effect } from "effect";
+import { DateTime, Effect, Layer } from "effect";
 import { TestClock } from "effect/testing";
 
-import { Connect, DnsRecord, DomainKit, Principal, Provision, Verify } from "../../src/index.ts";
+import {
+  Connect,
+  DnsRecord,
+  DomainKit,
+  Principal,
+  Provision,
+  Resolver,
+  Verify,
+} from "../../src/index.ts";
 import { Testing } from "../../src/entry/testing.ts";
 
 const requirements = [
@@ -151,6 +159,89 @@ describe("Verify", () => {
     }).pipe(
       withPrincipal,
       Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
+    );
+  });
+
+  it.effect("lets a mismatch at one resolver override agreement at another", () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    const conflicting = Testing.resolver([
+      {
+        name: "app.example.com",
+        records: [DnsRecord.cname({ name: "app.example.com", target: "edge.acme.dev" })],
+      },
+    ]);
+    const split: Layer.Layer<Resolver.Resolver> = Layer.succeed(Resolver.Resolver)({
+      resolve: (name, type) =>
+        Effect.map(
+          Effect.provide(
+            Effect.flatMap(Resolver.Resolver, (service) => service.resolve(name, type)),
+            conflicting,
+          ),
+          (outcomes) => [
+            ...outcomes,
+            {
+              _tag: "Answered",
+              answer: {
+                resolver: "stale-cache",
+                records:
+                  type === "CNAME"
+                    ? [DnsRecord.cname({ name: "app.example.com", target: "old.acme.dev" })]
+                    : [],
+                negative: false,
+                ttl: 60,
+              },
+            },
+          ],
+        ),
+    });
+    return Effect.gen(function* () {
+      yield* connectAndApply;
+      const readiness = yield* Verify.observe({
+        domain: "app.example.com",
+        requirements: [DnsRecord.cname({ name: "app.example.com", target: "edge.acme.dev" })],
+      });
+      assert.strictEqual(readiness.overall, "failed");
+      assert.strictEqual(readiness.requirements[0]?.status, "mismatch");
+      const empty = yield* Verify.observe({ domain: "app.example.com", requirements: [] }).pipe(
+        Effect.flip,
+      );
+      assert.strictEqual(empty.reason._tag, "InvalidInput");
+    }).pipe(
+      withPrincipal,
+      Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: split })),
+    );
+  });
+
+  it.effect("restarts the backoff ladder when the requirement set changes", () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    return Effect.gen(function* () {
+      yield* Connect.start({
+        provider: "fake",
+        method: Connect.Method.token("t"),
+        domain: "app.example.com",
+      });
+      yield* Verify.observe({
+        domain: "app.example.com",
+        requirements: [requirements[0] ?? assert.fail("record")],
+      });
+      yield* TestClock.adjust("30 minutes");
+      const same = yield* Verify.observe({
+        domain: "app.example.com",
+        requirements: [requirements[0] ?? assert.fail("record")],
+      });
+      const now = yield* DateTime.now;
+      assert.strictEqual(
+        DateTime.toEpochMillis(same.nextCheckAt ?? now) - DateTime.toEpochMillis(now),
+        5 * 60_000,
+      );
+      const changed = yield* Verify.observe({ domain: "app.example.com", requirements });
+      assert.strictEqual(
+        DateTime.toEpochMillis(changed.nextCheckAt ?? now) - DateTime.toEpochMillis(now),
+        15_000,
+      );
+    }).pipe(
+      withPrincipal,
+      Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver([]) })),
     );
   });
 

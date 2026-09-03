@@ -82,7 +82,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
               const created = source.plan.operations.find(
                 (operation) => operation._tag === "Create" && operation.id === applied.operationId,
               );
-              if (created === undefined || applied.providerRecordId === null) {
+              if (created === undefined) {
                 return yield* DomainKitError.fail(
                   new DomainKitError.InvalidInput({
                     message: `Receipt ${receipt.id} proves no created record for ${applied.operationId}`,

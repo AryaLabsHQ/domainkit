@@ -10,7 +10,7 @@ const session = (): Provider.Session => ({
   resolveTarget: () => Effect.succeed({ _tag: "NotFound" }),
   dns: () => ({
     list: () => Effect.succeed([]),
-    create: () => Effect.succeed({ providerRecordId: null }),
+    create: () => Effect.succeed({ providerRecordId: "pb-1" }),
     get: () => Effect.succeed(null),
     delete: () => Effect.void,
   }),

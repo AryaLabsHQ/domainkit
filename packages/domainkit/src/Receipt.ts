@@ -13,7 +13,8 @@ export type ReceiptId = typeof ReceiptId.Type;
 
 export class Applied extends Schema.TaggedClass<Applied>("@domainkit/Receipt/Applied")("Applied", {
   operationId: Plan.OperationId,
-  providerRecordId: Schema.NullOr(Schema.String),
+  /** The record created (provisioning) or deleted (cleanup). */
+  providerRecordId: Schema.String,
 }) {}
 /**
  * `noop`: the record already existed. `not-approved`: the approval excluded the operation.

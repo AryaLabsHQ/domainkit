@@ -325,7 +325,7 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
     operation: Plan.Create | Plan.Delete,
     dns: Provider.Dns,
     zone: string,
-  ): Effect.Effect<string | null, DomainKitError.DomainKitError> =>
+  ): Effect.Effect<string, DomainKitError.DomainKitError> =>
     operation._tag === "Create"
       ? Effect.gen(function* () {
           const observed = yield* dns.list(zone);
