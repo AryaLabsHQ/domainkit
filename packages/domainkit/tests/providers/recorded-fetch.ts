@@ -49,6 +49,11 @@ export function recordedFetch(responses: ReadonlyArray<Recorded>): {
   };
 }
 
+/** Fail loudly when a fixture lacks an auth method the test needs. */
+export function bail(method: string): never {
+  throw new Error(`Provider fixture does not offer the ${method} method`);
+}
+
 export function json(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
     headers: { "content-type": "application/json" },

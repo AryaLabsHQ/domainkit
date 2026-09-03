@@ -7,6 +7,7 @@ import type { DateTime, Effect, Redacted, Schema } from "effect";
 
 import type * as DnsRecord from "./DnsRecord.ts";
 import * as DomainKitError from "./DomainKitError.ts";
+import * as DomainName from "./DomainName.ts";
 import type { Capability } from "./Storage.ts";
 
 export type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError>;
@@ -146,6 +147,23 @@ export const methods = (definition: Definition): ReadonlyArray<AuthMethod> => {
   if (definition.auth.oauth !== undefined) found.push("oauth");
   if (definition.auth.integration !== undefined) found.push("integration");
   return found;
+};
+
+/**
+ * Pick the most specific zone among `targets` for `domain`: exactly one match resolves, several
+ * matches at the same depth need a selection, none is `NotFound`.
+ */
+export const resolveAmong = (
+  domain: DomainName.DomainName,
+  targets: ReadonlyArray<Target>,
+): Resolution => {
+  for (const candidate of DomainName.candidates(domain)) {
+    const matches = targets.filter((target) => target.zone === candidate);
+    const [only] = matches;
+    if (matches.length === 1 && only !== undefined) return { _tag: "Resolved", target: only };
+    if (matches.length > 1) return { _tag: "SelectionRequired", candidates: matches };
+  }
+  return { _tag: "NotFound" };
 };
 
 /** Decode stored context with the definition's schema; a mismatch is `InvalidInput`. */

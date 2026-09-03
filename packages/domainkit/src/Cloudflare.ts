@@ -74,7 +74,8 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
     Client.listZones(client(token)).pipe(
       Effect.map((zones) => {
         const accounts = new Set(zones.map((zone) => zone.account.id));
-        return accounts.size === 1 ? [...accounts][0]! : null;
+        const [only] = accounts;
+        return accounts.size === 1 && only !== undefined ? only : null;
       }),
     );
 
@@ -106,76 +107,78 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
       })),
     );
 
-  const oauth: Provider.OAuthAuth | undefined =
-    options.oauth === undefined
-      ? undefined
-      : {
-          label: "Sign in with Cloudflare",
-          scopes: options.oauth.scopes ?? defaultScopes,
-          start: (input) =>
-            oauthClient(options.oauth!).pipe(
-              Effect.map(({ clientId }) => ({
-                authorizationUrl: OAuth.authorizationUrl({
-                  server,
-                  clientId,
-                  scopes: options.oauth?.scopes ?? defaultScopes,
-                  state: input.state,
-                  callbackUrl: input.callbackUrl,
-                  codeChallenge: input.codeChallenge,
-                }),
-              })),
-            ),
-          complete: (input) =>
-            oauthClient(options.oauth!).pipe(
-              Effect.flatMap((oauthClientValue) =>
-                OAuth.exchangeCode({
-                  provider: Client.provider,
-                  server,
-                  client: oauthClientValue,
-                  code: input.code,
-                  state: input.params.state ?? "",
-                  callbackUrl: input.callbackUrl,
-                  codeVerifier: input.codeVerifier,
-                  fetch,
-                }),
-              ),
-              Effect.flatMap(issued),
-            ),
-          refresh: (credential) =>
-            Effect.gen(function* () {
-              const { refreshToken } = parseSecret(credential.secret);
-              if (refreshToken === null) {
-                return yield* DomainKitError.fail(
-                  new DomainKitError.Unauthenticated({
-                    message: "Cloudflare credential has no refresh token",
-                  }),
-                );
-              }
-              const tokens = yield* OAuth.refresh({
-                provider: Client.provider,
-                server,
-                client: yield* oauthClient(options.oauth!),
-                refreshToken,
-                fetch,
-              });
-              return {
-                secret: packSecret(tokens),
-                context: credential.context,
-                expiresAt: tokens.expiresAt,
-              };
+  const oauth = options.oauth === undefined ? undefined : oauthAuth(options.oauth);
+
+  function oauthAuth(settings: NonNullable<Options["oauth"]>): Provider.OAuthAuth {
+    const scopes = settings.scopes ?? defaultScopes;
+    return {
+      label: "Sign in with Cloudflare",
+      scopes,
+      start: (input) =>
+        oauthClient(settings).pipe(
+          Effect.map(({ clientId }) => ({
+            authorizationUrl: OAuth.authorizationUrl({
+              server,
+              clientId,
+              scopes,
+              state: input.state,
+              callbackUrl: input.callbackUrl,
+              codeChallenge: input.codeChallenge,
             }),
-          revoke: (credential) =>
-            Effect.gen(function* () {
-              const { accessToken } = parseSecret(credential.secret);
-              yield* OAuth.revoke({
-                provider: Client.provider,
-                server,
-                client: yield* oauthClient(options.oauth!),
-                token: accessToken,
-                fetch,
-              });
+          })),
+        ),
+      complete: (input) =>
+        oauthClient(settings).pipe(
+          Effect.flatMap((oauthClientValue) =>
+            OAuth.exchangeCode({
+              provider: Client.provider,
+              server,
+              client: oauthClientValue,
+              code: input.code,
+              state: input.params.state ?? "",
+              callbackUrl: input.callbackUrl,
+              codeVerifier: input.codeVerifier,
+              fetch,
             }),
-        };
+          ),
+          Effect.flatMap(issued),
+        ),
+      refresh: (credential) =>
+        Effect.gen(function* () {
+          const { refreshToken } = parseSecret(credential.secret);
+          if (refreshToken === null) {
+            return yield* DomainKitError.fail(
+              new DomainKitError.Unauthenticated({
+                message: "Cloudflare credential has no refresh token",
+              }),
+            );
+          }
+          const tokens = yield* OAuth.refresh({
+            provider: Client.provider,
+            server,
+            client: yield* oauthClient(settings),
+            refreshToken,
+            fetch,
+          });
+          return {
+            secret: packSecret(tokens),
+            context: credential.context,
+            expiresAt: tokens.expiresAt,
+          };
+        }),
+      revoke: (credential) =>
+        Effect.gen(function* () {
+          const { accessToken } = parseSecret(credential.secret);
+          yield* OAuth.revoke({
+            provider: Client.provider,
+            server,
+            client: yield* oauthClient(settings),
+            token: accessToken,
+            fetch,
+          });
+        }),
+    };
+  }
 
   return Provider.make<AccountContext>({
     id: "cloudflare",
@@ -198,12 +201,12 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
     },
     session: (credential) => {
       const { accessToken } = parseSecret(credential.secret);
-      const options = client(accessToken);
+      const clientOptions = client(accessToken);
       const context = Schema.decodeUnknownOption(AccountContext)(credential.context);
       const accountId =
         context._tag === "Some" ? (context.value.accountId ?? undefined) : undefined;
       const listTargets = () =>
-        Client.listZones(options, accountId).pipe(Effect.map((zones) => zones.map(targetOf)));
+        Client.listZones(clientOptions, accountId).pipe(Effect.map((zones) => zones.map(targetOf)));
       return {
         capabilities: () => Effect.succeed(capabilities),
         listTargets,
@@ -211,13 +214,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
           Effect.gen(function* () {
             const name = yield* DomainName.decode(domain);
             const targets = yield* listTargets();
-            for (const candidate of DomainName.candidates(name)) {
-              const matches = targets.filter((target) => target.zone === candidate);
-              if (matches.length === 1) return { _tag: "Resolved", target: matches[0]! } as const;
-              if (matches.length > 1)
-                return { _tag: "SelectionRequired", candidates: matches } as const;
-            }
-            return { _tag: "NotFound" } as const;
+            return Provider.resolveAmong(name, targets);
           }),
         dns: (target) => {
           const zone = Schema.decodeUnknownOption(AccountContext)(target.context);
@@ -236,7 +233,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
               delete: () => failure,
             };
           }
-          return Client.dns(options, zoneId);
+          return Client.dns(clientOptions, zoneId);
         },
       };
     },

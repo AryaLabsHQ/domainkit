@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Redacted, Schema } from "effect";
 
 import { DomainKitError, Provider, Providers } from "../../src/index.ts";
+import { bail } from "./recorded-fetch.ts";
 
 const session = (): Provider.Session => ({
   capabilities: () => Effect.succeed(["dns:read"]),
@@ -61,7 +62,9 @@ describe("Provider.make and Providers", () => {
       assert.deepStrictEqual(context, { apiKey: "k" });
       const invalid = yield* Provider.decodeContext(tokenOnly, {}).pipe(Effect.flip);
       assert.strictEqual(invalid.reason._tag, "InvalidInput");
-      const issued = yield* tokenOnly.auth.token!.authenticate(Redacted.make("t"));
+      const issued = yield* (tokenOnly.auth.token ?? bail("token")).authenticate(
+        Redacted.make("t"),
+      );
       assert.strictEqual(Redacted.value(issued.secret), "t");
     }).pipe(Effect.provide(Providers.layer([tokenOnly]))),
   );

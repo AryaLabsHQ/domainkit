@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Redacted } from "effect";
 
 import { Cloudflare, DnsRecord, Provider } from "../../../src/index.ts";
-import { recordedFetch } from "../recorded-fetch.ts";
+import { bail, recordedFetch } from "../recorded-fetch.ts";
 import { activeToken, failure, page, single, zone } from "./fixtures.ts";
 
 const token = Redacted.make("cf-token");
@@ -36,7 +36,7 @@ describe("Cloudflare.provider", () => {
     ]);
     const definition = Cloudflare.provider({ fetch: recording.fetch });
     return Effect.gen(function* () {
-      const issued = yield* definition.auth.token!.authenticate(token);
+      const issued = yield* (definition.auth.token ?? bail("token")).authenticate(token);
       assert.deepStrictEqual(issued.context, { accountId: "account-1" });
       assert.strictEqual(Redacted.value(issued.secret), "cf-token");
       assert.ok(issued.expiresAt !== null);
@@ -57,9 +57,8 @@ describe("Cloudflare.provider", () => {
       },
     ]);
     return Effect.gen(function* () {
-      const issued = yield* Cloudflare.provider({
-        fetch: recording.fetch,
-      }).auth.token!.authenticate(token);
+      const definition = Cloudflare.provider({ fetch: recording.fetch });
+      const issued = yield* (definition.auth.token ?? bail("token")).authenticate(token);
       assert.strictEqual(issued.expiresAt, null);
       assert.deepStrictEqual(issued.context, { accountId: "account-1" });
     });
@@ -70,8 +69,9 @@ describe("Cloudflare.provider", () => {
       { body: failure(9109, "Unauthorized"), init: { status: 401 } },
     ]);
     return Effect.gen(function* () {
-      const error = yield* Cloudflare.provider({ fetch: recording.fetch })
-        .auth.token!.authenticate(token)
+      const definition = Cloudflare.provider({ fetch: recording.fetch });
+      const error = yield* (definition.auth.token ?? bail("token"))
+        .authenticate(token)
         .pipe(Effect.flip);
       assert.strictEqual(error.reason._tag, "Unauthenticated");
     });
@@ -269,7 +269,7 @@ describe("Cloudflare.provider", () => {
       oauth: { clientId: "client-1", clientSecret: Redacted.make("secret"), scopes: ["zone:read"] },
     });
     return Effect.gen(function* () {
-      const oauth = definition.auth.oauth!;
+      const oauth = definition.auth.oauth ?? bail("oauth");
       const started = yield* oauth.start({
         state: "state-1",
         callbackUrl: "https://app.example/cb",
@@ -310,10 +310,11 @@ describe("Cloudflare.provider", () => {
       { body: { access_token: "access-3", refresh_token: "refresh-2", token_type: "bearer" } },
       { body: { error: "invalid_grant", error_description: "revoked" }, init: { status: 400 } },
     ]);
-    const oauth = Cloudflare.provider({
-      fetch: recording.fetch,
-      oauth: { clientId: "client-1", clientSecret: Redacted.make("secret") },
-    }).auth.oauth!;
+    const oauth =
+      Cloudflare.provider({
+        fetch: recording.fetch,
+        oauth: { clientId: "client-1", clientSecret: Redacted.make("secret") },
+      }).auth.oauth ?? bail("oauth");
     const stored: Provider.Credential = {
       secret: Redacted.make(JSON.stringify({ accessToken: "access-1", refreshToken: "refresh-1" })),
       context: { accountId: "account-1" },

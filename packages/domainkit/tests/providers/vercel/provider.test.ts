@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Redacted } from "effect";
 
 import { DnsRecord, Provider, Vercel } from "../../../src/index.ts";
-import { recordedFetch } from "../recorded-fetch.ts";
+import { bail, recordedFetch } from "../recorded-fetch.ts";
 import {
   domain,
   domainPage,
@@ -44,10 +44,12 @@ describe("Vercel.provider", () => {
     ]);
     const definition = Vercel.provider({ fetch: recording.fetch });
     return Effect.gen(function* () {
-      const issued = yield* definition.auth.token!.authenticate(token);
+      const issued = yield* (definition.auth.token ?? bail("token")).authenticate(token);
       assert.deepStrictEqual(issued.context, { teamId: null });
       assert.strictEqual(issued.expiresAt, null);
-      const denied = yield* definition.auth.token!.authenticate(token).pipe(Effect.flip);
+      const denied = yield* (definition.auth.token ?? bail("token"))
+        .authenticate(token)
+        .pipe(Effect.flip);
       assert.strictEqual(denied.reason._tag, "ProviderRejected");
     });
   });
@@ -109,14 +111,15 @@ describe("Vercel.provider", () => {
       },
       { body: { access_token: "access-2", team_id: "team-2", user_id: "user-1" } },
     ]);
-    const integration = Vercel.provider({
-      fetch: recording.fetch,
-      integration: {
-        clientId: "client-1",
-        clientSecret: Redacted.make("secret"),
-        slug: "domainkit",
-      },
-    }).auth.integration!;
+    const integration =
+      Vercel.provider({
+        fetch: recording.fetch,
+        integration: {
+          clientId: "client-1",
+          clientSecret: Redacted.make("secret"),
+          slug: "domainkit",
+        },
+      }).auth.integration ?? bail("integration");
     return Effect.gen(function* () {
       const started = yield* integration.start({
         state: "state-1",

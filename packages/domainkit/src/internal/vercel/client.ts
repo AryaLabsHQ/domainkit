@@ -67,7 +67,7 @@ const call = <R extends S.ConstraintDecoder<unknown>>(
 
 export const user = (options: Options) =>
   call(options, url(options, "/v2/user", null), Protocol.UserEnvelope).pipe(
-    Effect.map(({ user }) => user),
+    Effect.map((envelope) => envelope.user),
   );
 
 export const teams = (options: Options): Fx<ReadonlyArray<typeof Protocol.Team.Type>> =>
