@@ -17,6 +17,7 @@ export const VERSION = packageJson.version;
 
 export * as Approval from "./Approval.ts";
 export * as Cloudflare from "./Cloudflare.ts";
+export * as Custody from "./Custody.ts";
 export * as DnsRecord from "./DnsRecord.ts";
 export * as DomainKitError from "./DomainKitError.ts";
 export * as DomainName from "./DomainName.ts";
