@@ -321,6 +321,9 @@ export const transport = (options: TransportOptions = {}): RecordingTransport =>
   return { ...recorded, calls };
 };
 
+export type { Case as ProviderCase } from "./internal/conformance/provider.ts";
+export type { Case as StorageCase } from "./internal/conformance/storage.ts";
+
 export const conformance = {
   /** Runs every Storage invariant (tenant isolation, leases, exactly-once continuations, revocation recovery). */
   storage: storageCases,

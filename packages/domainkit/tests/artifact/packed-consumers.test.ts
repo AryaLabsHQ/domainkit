@@ -146,7 +146,7 @@ if (JSON.stringify(result) !== JSON.stringify(expected)) {
         join(directory, "types.ts"),
         `
 import { Effect, Layer, Redacted } from "effect";
-import { Custody, DomainKit, type Provider, type Storage } from "domainkit";
+import { Custody, DnsRecord, DomainKit, Plan, type Provider, type Storage, type Verify } from "domainkit";
 import { Transport } from "domainkit/client";
 import { Server } from "domainkit/server";
 import { Testing } from "domainkit/testing";
@@ -181,6 +181,13 @@ export const connectionOnly: Transport.Interface = {
 };
 export const groups = Transport.capabilities(connectionOnly);
 export const noRuntimeExit: Effect.Effect<void, unknown> = Effect.void;
+/** Inferred types below must be nameable through exported entries (TS2883 otherwise). */
+export const requirement = DnsRecord.txt({ name: "_verify.app.example.com", value: "domainkit" });
+export const requirements = [requirement, DnsRecord.cname({ name: "www.example.com", target: "example.com" })];
+export const first = (items: ReadonlyArray<DnsRecord.Model>) => items[0];
+export const operations = (plan: Plan.Model) => plan.operations;
+export const pair = (plan: Plan.Model, readiness: Verify.Readiness) => ({ plan, readiness });
+export const conformance = Testing.conformance.storage(Testing.storage);
 `,
       );
       await writeFile(
@@ -190,7 +197,9 @@ export const noRuntimeExit: Effect.Effect<void, unknown> = Effect.void;
             exactOptionalPropertyTypes: true,
             module: "Preserve",
             moduleResolution: "Bundler",
-            noEmit: true,
+            declaration: true,
+            emitDeclarationOnly: true,
+            outDir: "types-out",
             skipLibCheck: true,
             strict: true,
             target: "ES2024",
@@ -202,6 +211,11 @@ export const noRuntimeExit: Effect.Effect<void, unknown> = Effect.void;
       await run(
         [join(process.cwd(), "node_modules", ".bin", "tsc"), "--project", "tsconfig.json"],
         directory,
+      );
+      const emitted = await readFile(join(directory, "types-out", "types.d.ts"), "utf8");
+      assert.ok(
+        !emitted.includes("/dist/"),
+        `consumer declarations must not reference dist internals:\n${emitted}`,
       );
 
       await run(["node", "consumer.mjs"], directory);

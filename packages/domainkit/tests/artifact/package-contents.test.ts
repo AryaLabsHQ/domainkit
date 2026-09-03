@@ -14,18 +14,18 @@ const PackResult = Schema.Array(
 const requiredFiles = new Set([
   "LICENSE",
   "README.md",
-  "dist/client.d.mts",
   "dist/client.mjs",
-  "dist/index.d.mts",
   "dist/index.mjs",
-  "dist/server.d.mts",
   "dist/server.mjs",
-  "dist/testing.d.mts",
   "dist/testing.mjs",
+  "dist/types/entry/client.d.ts",
+  "dist/types/entry/server.d.ts",
+  "dist/types/entry/testing.d.ts",
+  "dist/types/index.d.ts",
   "package.json",
 ]);
 
-const generatedSuffixes = [".d.mts", ".d.mts.map", ".mjs", ".mjs.map"];
+const generatedSuffixes = [".d.ts", ".mjs", ".mjs.map"];
 
 describe("packed package contents", () => {
   it("keeps runtime and peer metadata portable", () => {
