@@ -35,7 +35,7 @@ jobs:
 
   docs:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -65,6 +65,14 @@ jobs:
 
       - name: Build the docs site
         run: bun run --filter @domainkit/docs build
+
+      - name: Validate the registry manifest
+        run: bun run --filter @domainkit/docs registry:validate
+
+      # Installs every item into a scratch shadcn project and compiles it, so a broken item cannot
+      # reach the published registry.
+      - name: Check the registry consumers
+        run: bun run --filter @domainkit/docs registry:check
 
       - name: Validate links
         run: ./node_modules/.bin/blume validate --strict

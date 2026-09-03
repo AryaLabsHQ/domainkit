@@ -43,6 +43,36 @@ Add the persistence package when the host runs Effect on PostgreSQL:
 `domainkit/client` runs in the browser and holds no credential. `domainkit/server` and
 `@domainkit/capsuledb` run on the server and never reach browser code.
 
+## One subpath per namespace
+
+The root re-exports every namespace, and each one is also its own subpath:
+
+```ts
+import { Plan, Principal } from "domainkit";
+// or
+import * as Plan from "domainkit/Plan";
+import * as Principal from "domainkit/Principal";
+```
+
+The root import is the documented default and what every example on this site uses. Reach for a
+subpath in two cases:
+
+- **Your package emits declarations.** A `.d.ts` that mentions `Principal.Service` or `Plan.Model`
+  needs a module path TypeScript can name. `import("domainkit/Principal").Service` resolves to one
+  module, so the declaration your build emits is portable.
+- **You want a narrow import.** One namespace, without pulling the root's names into scope.
+
+Runtime and types resolve to the same module either way, so the two spellings never disagree.
+
+| Subpath                                                                                     |
+| ------------------------------------------------------------------------------------------- |
+| `domainkit/Approval`, `/Cleanup`, `/Cloudflare`, `/Connect`, `/Custody`, `/DnsRecord`       |
+| `domainkit/DomainKit`, `/DomainName`, `/Plan`, `/Principal`, `/Provider`, `/Providers`      |
+| `domainkit/Provision`, `/Reason`, `/Receipt`, `/Resolver`, `/Storage`, `/Vercel`, `/Verify` |
+
+Nothing else is importable. There is no pattern export, and no path under `internal` or `entry` is
+part of the contract.
+
 ## Where each one runs
 
 ```text
