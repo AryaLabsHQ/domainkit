@@ -29,6 +29,19 @@ declare const sessions: {
 // Read the credential from a cookie, not an `Authorization` header: `/callback/:provider` is a
 // top-level navigation the provider sends the browser on, so only what the browser attaches by
 // itself arrives with it. A header-only scheme fails every interactive connection at completion.
+// Writes need an administrator; every other route is open to any member of the tenant.
+const writeRoutes = new Set<Server.EndpointName>([
+  "start",
+  "attach",
+  "detach",
+  "disconnect",
+  "createPlan",
+  "approve",
+  "reject",
+  "apply",
+  "cleanupPlan",
+]);
+
 const IdentityLive = Layer.succeed(Server.Identity)({
   principal: (request) =>
     Effect.gen(function* () {
@@ -42,6 +55,15 @@ const IdentityLive = Layer.succeed(Server.Identity)({
           )
         : session;
     }),
+  // Optional. Without it every authenticated principal reaches every route.
+  authorize: (principal, endpoint) =>
+    principal.actorId.startsWith("admin_") || !writeRoutes.has(endpoint)
+      ? Effect.void
+      : Effect.fail(
+          new DomainKit.Error({
+            reason: new Reason.Forbidden({ message: `${endpoint} needs an administrator` }),
+          }),
+        ),
 });
 
 // Mount the group in your API. Every route, typed, with OpenAPI for free.
