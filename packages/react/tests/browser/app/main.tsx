@@ -5,10 +5,10 @@
 import { DnsRecord, Plan, Verify } from "domainkit";
 import type { Transport } from "domainkit/client";
 import * as DateTime from "effect/DateTime";
-import { StrictMode } from "react";
+import { StrictMode, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { Domain, DomainKit, Testing, Verify as VerifyUi } from "../../../src/index.ts";
+import { Connect, Domain, DomainKit, Testing, Verify as VerifyUi } from "../../../src/index.ts";
 // oxlint-disable-next-line import/no-unassigned-import -- a stylesheet has nothing to bind
 import "../../../src/styles.css";
 
@@ -18,6 +18,34 @@ const domain = `app.${zone}`;
 const colorScheme = parameters.get("scheme") === "dark" ? "dark" : "light";
 
 const transport = Testing.transport({ provider: { oauth: true, zones: [zone] } });
+
+/**
+ * The interactive method's `returnTo` rides on the request, not on the authorization URL, so the
+ * fixture reports the request rather than following the redirect.
+ */
+function ReturnToProbe() {
+  const [started, setStarted] = useState<string>("");
+  const recording = useMemo(() => {
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fixture transport has no connection group");
+    return {
+      ...transport,
+      connection: {
+        ...connection,
+        start: (input: Parameters<typeof connection.start>[0]) => {
+          setStarted(JSON.stringify(input.method));
+          return connection.start(input);
+        },
+      },
+    };
+  }, []);
+  return (
+    <DomainKit.Root navigate={() => {}} transport={recording}>
+      <Connect.Flow domain={domain} />
+      <pre data-testid="started">{started}</pre>
+    </DomainKit.Root>
+  );
+}
 
 const requirements = [
   DnsRecord.cname({ name: domain, purpose: "Serve your site", target: "edge.example.com" }),
@@ -79,14 +107,41 @@ const mismatched: Transport.Readiness = {
 const container = document.querySelector("#root");
 if (container === null) throw new Error("The fixture has no #root");
 
+const view = parameters.get("view");
+
+/**
+ * The flag flips in place rather than on reload: the fake transport keeps its state in memory, so
+ * a reload would forget the connection this view is meant to show.
+ */
+function FlowWithReadOnlyToggle() {
+  const [readOnly, setReadOnly] = useState(false);
+  return (
+    <>
+      <button data-testid="toggle-readonly" onClick={() => setReadOnly(!readOnly)} type="button">
+        Toggle read-only
+      </button>
+      <Domain.Flow
+        className="host-flow"
+        domain={domain}
+        readOnly={readOnly}
+        requirements={requirements}
+      />
+    </>
+  );
+}
+
 createRoot(container).render(
   <StrictMode>
-    <DomainKit.Root colorScheme={colorScheme} theme={{ accent: "#4f46e5" }} transport={transport}>
-      {parameters.get("view") === "evidence" ? (
-        <VerifyUi.Evidence readiness={mismatched} />
-      ) : (
-        <Domain.Flow domain={domain} requirements={requirements} />
-      )}
-    </DomainKit.Root>
+    {view === "returnto" ? (
+      <ReturnToProbe />
+    ) : (
+      <DomainKit.Root colorScheme={colorScheme} theme={{ accent: "#4f46e5" }} transport={transport}>
+        {view === "evidence" ? (
+          <VerifyUi.Evidence readiness={mismatched} />
+        ) : (
+          <FlowWithReadOnlyToggle />
+        )}
+      </DomainKit.Root>
+    )}
   </StrictMode>,
 );

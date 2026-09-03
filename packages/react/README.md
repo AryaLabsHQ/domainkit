@@ -48,6 +48,9 @@ JSX is fine: `DomainKit.Root` keeps the transport's identity for the whole mount
 do not restart on every render. Pass `revision` to re-inspect every mounted domain after a change
 the UI did not make.
 
+An interactive provider returns the customer to the page they started from. Pass `returnTo` to name
+a different destination, or `null` to leave the server's `defaultReturnTo` in charge.
+
 ## Own one piece, keep the rest
 
 Every part of the flow is a slot with a default.
@@ -73,6 +76,32 @@ Every part of the flow is a slot with a default.
 `Domain.Flow` adds no layout container around a slot: its output is a direct child of the flow root,
 so your own grid can place it without `display: contents`.
 
+## The member view
+
+A customer who may read a domain but not change it gets `readOnly`. Status renders; every control
+that would start a write does not.
+
+```tsx
+<DomainKit.Root transport={transport} readOnly>
+  <Domain.Flow domain="app.example.com" requirements={requirements} />
+</DomainKit.Root>
+```
+
+`Domain.Flow` takes the same flag when only one domain on the page is read-only, and `useReadOnly()`
+tells a part of your own which mode it is in. Capability gating is the other half: a group the
+transport does not declare never renders, so a transport built with
+`Transport.fromFetch(url, { capabilities: ["connection", "verification"] })` already hides
+provisioning and cleanup. `readOnly` covers the authorization a transport cannot express, such as a
+member of an organisation who reaches the same routes.
+
+Verification does not wait for a connection: the flow observes the requirements it was given, so a
+domain with no provider attached still reports which records are in place.
+
+Observation stays available in read-only, because checking DNS reads the world rather than changing
+the domain. Retrying is not: a flow that becomes read-only after a write failed keeps the failure on
+screen and drops the retry.
+If your `Identity.authorize` denies `observe` to members, pass `slots={{ verification: () => null }}`.
+
 ## Controllers
 
 Compose the flow yourself from the same hooks. Each takes one options object and returns a named
@@ -96,6 +125,14 @@ so branding stays in your app. `Messages.Catalog` holds every user-visible strin
 sentence per `DomainKit.Error` reason; nothing renders a tag. Provider artwork comes from `marks`,
 with the provider's initial as the fallback and no request at render time. The stylesheet is
 opt-in and every color is a `--domainkit-*` custom property.
+
+Every rule ships inside `@layer domainkit`, so your own stylesheet wins without out-specifying a
+part selector and a Tailwind utility class lands where you put it. To let the package win instead,
+order a layer of your own below it:
+
+```css
+@layer domainkit, app;
+```
 
 Every dialog and popover takes a `render` prop that replaces the surface with your own.
 

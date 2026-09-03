@@ -5,7 +5,7 @@ import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import * as Cleanup from "./cleanup.tsx";
 import * as Connect from "./connect.tsx";
-import { useDomainKit } from "./domain-kit.tsx";
+import { ReadOnly, useDomainKit, useReadOnly } from "./domain-kit.tsx";
 import { useIcons } from "./icons.tsx";
 import * as Provision from "./provision.tsx";
 import * as Records from "./records.tsx";
@@ -61,6 +61,13 @@ export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children">
   readonly slots?: Slots;
   readonly onApplied?: (receipt: Receipt.Model) => void;
   readonly onCleaned?: (receipt: Receipt.Model) => void;
+  /**
+   * Where an interactive provider flow returns the customer. Defaults to the page they started
+   * from; pass `null` to let the server's `defaultReturnTo` decide.
+   */
+  readonly returnTo?: string | null;
+  /** Render this domain's state without the controls that change it. Defaults to the root's. */
+  readonly readOnly?: boolean;
 }
 
 function DefaultConnection({ controller }: ConnectionSlotProps): ReactElement {
@@ -75,10 +82,17 @@ function DefaultConnection({ controller }: ConnectionSlotProps): ReactElement {
   );
 }
 
-function DefaultActions({ cleanup, connection, provisioning }: ActionsSlotProps): ReactElement {
+function DefaultActions({
+  cleanup,
+  connection,
+  provisioning,
+}: ActionsSlotProps): ReactElement | null {
   const { capabilities, messages } = useDomainKit();
+  const readOnly = useReadOnly();
   const icons = useIcons();
   const connected = connection.state._tag === "Connected";
+  // Every control here starts a write; the state a read-only customer may see is rendered above.
+  if (readOnly) return null;
   const hasReceipt = connection.snapshot?.lastReceiptId != null;
   return (
     <>
@@ -128,12 +142,18 @@ export function Flow({
   domain,
   onApplied,
   onCleaned,
+  readOnly,
   requirements,
+  returnTo,
   slots = {},
   ...props
 }: FlowProps): ReactElement {
   const { capabilities } = useDomainKit();
-  const connection = Connect.useController({ domain });
+  const inherited = useReadOnly();
+  const connection = Connect.useController({
+    domain,
+    ...(returnTo === undefined ? {} : { returnTo }),
+  });
   const refresh = connection.refresh;
   const provisioning = Provision.useController({
     domain,
@@ -159,7 +179,8 @@ export function Flow({
       ? {}
       : { receiptId: Receipt.ReceiptId.make(connection.snapshot.lastReceiptId) }),
   });
-  const verification = Verify.useController({ domain });
+  // The flow knows what it asked for, so a domain with no attachment can still be verified.
+  const verification = Verify.useController({ domain, requirements });
   const readiness = verification.readiness;
   return usePart(
     "div",
@@ -167,7 +188,7 @@ export function Flow({
     { connection: connection.state._tag, provisioning: provisioning.state._tag },
     {
       children: (
-        <>
+        <ReadOnly value={readOnly ?? inherited}>
           {!capabilities.includes("connection") ? null : slots.connection === undefined ? (
             <DefaultConnection controller={connection} domain={domain} />
           ) : (
@@ -193,7 +214,7 @@ export function Flow({
           ) : (
             slots.actions({ cleanup, connection, domain, provisioning })
           )}
-        </>
+        </ReadOnly>
       ),
       "data-domainkit-part": "domain-flow",
       "data-domain": domain,

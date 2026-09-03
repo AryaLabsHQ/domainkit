@@ -37,6 +37,12 @@ export interface RootProps extends Omit<PartProps<"div", RootState>, "children">
   readonly navigate?: (url: string) => void;
   readonly onEvent?: Listener;
   readonly portalContainer?: HTMLElement | null;
+  /**
+   * Render the state without the controls that change it, for a customer who may read the domain
+   * but not write to it. Capability gating already hides a group the transport does not declare;
+   * this covers authorization the transport cannot express, such as a member of an organisation.
+   */
+  readonly readOnly?: boolean;
   /** Bump to re-inspect every mounted domain after a change the UI did not make. */
   readonly revision?: number;
   readonly theme?: Theme;
@@ -52,6 +58,7 @@ interface ContextValue {
   readonly messages: Catalog;
   readonly navigate: (url: string) => void;
   readonly portalContainer: RefObject<HTMLElement | null>;
+  readonly readOnly: boolean;
   readonly revision: number;
   readonly themeStyle: ReturnType<typeof toStyle>;
   readonly transport: Transport.Interface;
@@ -150,6 +157,7 @@ export function Root({
   navigate = navigateInBrowser,
   onEvent,
   portalContainer = null,
+  readOnly = false,
   revision = 0,
   theme,
   transport,
@@ -181,6 +189,7 @@ export function Root({
     messages: mergeMessages(messages),
     navigate,
     portalContainer: portalContainerRef,
+    readOnly,
     revision,
     themeStyle,
     transport: stable,
@@ -214,6 +223,26 @@ export function useDomainKit(): ContextValue {
 /** The transport `DomainKit.Root` holds, with the identity it keeps for the whole mount. */
 export function useTransport(): Transport.Interface {
   return useDomainKit().transport;
+}
+
+const ReadOnlyContext = createContext<boolean | null>(null);
+
+/** Narrow one subtree to read-only without touching the rest of the page. */
+export function ReadOnly({
+  children,
+  value,
+}: {
+  readonly children: ReactNode;
+  readonly value: boolean;
+}) {
+  return <ReadOnlyContext.Provider value={value}>{children}</ReadOnlyContext.Provider>;
+}
+
+/** Whether this part may offer controls that change the domain. */
+export function useReadOnly(): boolean {
+  const scoped = useContext(ReadOnlyContext);
+  const root = useDomainKit().readOnly;
+  return scoped ?? root;
 }
 
 /** Which capability groups the host's transport declares, for gating a custom part. */

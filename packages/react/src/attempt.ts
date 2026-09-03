@@ -9,7 +9,7 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useDomainKit } from "./domain-kit.tsx";
+import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
 import { useRunner } from "./task.ts";
 
@@ -79,6 +79,7 @@ const needsNewPlan = (error: DomainKit.Error): boolean =>
 export function useAttempt(options: Options): Controller {
   const { domain, done, group, key, onDone } = options;
   const { emit } = useDomainKit();
+  const readOnly = useReadOnly();
   const runner = useRunner();
   const [state, setState] = useState<State>(State.Idle());
   // The key travels with what it produced, so a command raised before the reset commits still
@@ -205,6 +206,8 @@ export function useAttempt(options: Options): Controller {
   }, [applyWith]);
 
   const retry = useCallback(() => {
+    // Every step of an attempt is a write, so read-only has nothing to retry.
+    if (readOnly) return;
     if (state._tag === "Failure" && needsNewPlan(state.error)) {
       held.current = { approval: null, key, plan: null };
       buildPlan();
@@ -213,7 +216,7 @@ export function useAttempt(options: Options): Controller {
     const command = lastCommand.current;
     if (command === null || command.key !== key) buildPlan();
     else command.run();
-  }, [buildPlan, key, state]);
+  }, [buildPlan, key, readOnly, state]);
 
   const reset = useCallback(() => {
     runner.cancel();

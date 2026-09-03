@@ -19,9 +19,12 @@ export interface Options {
 }
 
 /** Plan, approve, apply. `approve` authorizes the digest and applies it in the same action. */
-/** Requirements identify themselves by content, so an inline array does not abandon the attempt. */
+/**
+ * Requirements identify themselves by content, so an inline array does not abandon the attempt.
+ * Every field counts: a plan turns on `policy`, and `ttl` and `purpose` ride the wire with it.
+ */
 const keyOf = (domain: string, requirements: ReadonlyArray<DnsRecord.Model>): string =>
-  [domain, ...requirements.map((record) => Records.identity(record))].join("|");
+  [domain, Records.requirementsKey(requirements)].join("|");
 
 export function useController({ domain, onApplied, requirements }: Options): Controller {
   const { transport } = useDomainKit();

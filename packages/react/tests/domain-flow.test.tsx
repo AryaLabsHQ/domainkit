@@ -1,6 +1,8 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DnsRecord, type Receipt } from "domainkit";
+
+import { useEffect, useState } from "react";
 
 import { Connect, Domain, DomainKit, Records, Testing } from "../src/index.ts";
 
@@ -206,5 +208,196 @@ describe("Domain.Flow", () => {
     );
     await screen.findByTestId("host-panel");
     expect(screen.getByLabelText(/Token/)).toBeDefined();
+  });
+});
+
+describe("Domain.Flow read-only", () => {
+  const connected = async () => {
+    const scenarioed = scenario();
+    await (async () => {
+      const view = render(
+        <DomainKit.Root transport={scenarioed.transport}>
+          <Domain.Flow domain={scenarioed.domain} requirements={scenarioed.requirements} />
+        </DomainKit.Root>,
+      );
+      await connect();
+      view.unmount();
+    })();
+    return scenarioed;
+  };
+
+  it("keeps the state and drops every control that would change it", async () => {
+    const { domain, requirements, transport } = await connected();
+    render(
+      <DomainKit.Root readOnly transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    // The state a member may see.
+    await screen.findByText("fake connected");
+    expect(screen.getByRole("columnheader", { name: "Type" })).toBeDefined();
+    expect(screen.getByRole("cell", { name: "CNAME" })).toBeDefined();
+    // The writes they may not start.
+    for (const name of [
+      "Connect",
+      "Detach domain",
+      "Disconnect",
+      "Review changes",
+      "Approve",
+      "Decline",
+      "Remove records",
+    ]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+  });
+
+  it("says a domain has no provider rather than offering to connect one", async () => {
+    const { domain, requirements, transport } = scenario();
+    render(
+      <DomainKit.Root readOnly transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await screen.findByText("No DNS provider is connected.");
+    expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
+  });
+
+  it("scopes the flag to one flow when the root is writable", async () => {
+    const { domain, requirements, transport } = await connected();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} readOnly requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await screen.findByText("fake connected");
+    expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Detach domain" })).toBeNull();
+  });
+
+  it("still offers the writes when the flag is off", async () => {
+    const { domain, requirements, transport } = await connected();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    expect(await screen.findByRole("button", { name: "Review changes" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Detach domain" })).toBeDefined();
+  });
+});
+
+describe("Domain.Flow verification requirements", () => {
+  const observeCalls = (transport: {
+    readonly calls: ReadonlyArray<{ method: string; input: unknown }>;
+  }) => transport.calls.filter((call) => call.method === "verification.observe");
+
+  it("verifies a domain with no attachment by naming what it asked for", async () => {
+    const { domain, requirements, transport } = scenario();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await waitFor(() => expect(observeCalls(transport).length).toBeGreaterThan(0));
+    // Two arguments, so the fake records the list: the domain, then what to look for.
+    expect(observeCalls(transport)[0]?.input).toEqual([domain, { requirements }]);
+    // Nothing is attached, so the receipt path would have failed the call outright.
+    await waitFor(() => expect(screen.getByRole("button", { name: /Check/ })).toBeDefined());
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("observes again when a requirement changes in a way only the wire sees", async () => {
+    const { domain, requirements, transport } = scenario();
+    const first = requirements[0];
+    if (first === undefined) throw new Error("the scenario has no requirements");
+    // Same type, name, and data; a different policy, which is what readiness turns on.
+    const restated = [
+      DnsRecord.cname({ name: first.name, purpose: "Serve your site", target: "edge.example.com" }),
+      DnsRecord.txt({
+        name: `_acme.${domain}`,
+        policy: "exclusive",
+        purpose: "Prove ownership",
+        value: "acme-verify=7f3a",
+      }),
+    ];
+    function Harness({ set }: { readonly set: ReadonlyArray<DnsRecord.Model> }) {
+      return (
+        <DomainKit.Root transport={transport}>
+          <Domain.Flow domain={domain} requirements={set} />
+        </DomainKit.Root>
+      );
+    }
+    const view = render(<Harness set={requirements} />);
+    await waitFor(() => expect(observeCalls(transport)).toHaveLength(1));
+    view.rerender(<Harness set={restated} />);
+    await waitFor(() => expect(observeCalls(transport)).toHaveLength(2));
+    expect(observeCalls(transport)[1]?.input).toEqual([domain, { requirements: restated }]);
+  });
+
+  it("does not re-observe when the host writes the requirements inline", async () => {
+    const { domain, requirements, transport } = scenario();
+    function Harness() {
+      const [, setTick] = useState(0);
+      useEffect(() => {
+        setTick(1);
+        setTick(2);
+      }, []);
+      return (
+        <DomainKit.Root transport={transport}>
+          <Domain.Flow domain={domain} requirements={[...requirements]} />
+        </DomainKit.Root>
+      );
+    }
+    render(<Harness />);
+    await waitFor(() => expect(observeCalls(transport).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Check/ })).toBeDefined());
+    expect(observeCalls(transport)).toHaveLength(1);
+  });
+});
+
+describe("read-only and a failed write", () => {
+  it("offers no retry for a write that failed before the flow became read-only", async () => {
+    const { domain, requirements, transport } = scenario();
+    let controller: Connect.Controller | null = null;
+    function Probe({ readOnly }: { readonly readOnly: boolean }) {
+      controller = Connect.useController({ domain });
+      return (
+        <>
+          <Connect.Outcome controller={controller} />
+          <Domain.Flow domain={domain} readOnly={readOnly} requirements={requirements} />
+        </>
+      );
+    }
+    function Harness({ readOnly }: { readonly readOnly: boolean }) {
+      return (
+        <DomainKit.Root readOnly={readOnly} transport={transport}>
+          <Probe readOnly={readOnly} />
+        </DomainKit.Root>
+      );
+    }
+    const view = render(<Harness readOnly={false} />);
+    await waitFor(() => expect(controller).not.toBeNull());
+    // A write that fails while the flow is still writable.
+    act(() => {
+      controller?.connect({ method: "token", provider: "absent", values: { token: "x" } });
+    });
+    await screen.findByRole("button", { name: "Try again" });
+
+    view.rerender(<Harness readOnly />);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    // The failure itself still reads.
+    expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
+
+    // And the verb refuses too, so a host calling it directly cannot resend the write.
+    const before = transport.calls.filter((call) => call.method === "connection.start").length;
+    act(() => controller?.retry());
+    await waitFor(() =>
+      expect(
+        transport.calls.filter((call) => call.method === "connection.inspect").length,
+      ).toBeGreaterThan(0),
+    );
+    expect(transport.calls.filter((call) => call.method === "connection.start")).toHaveLength(
+      before,
+    );
   });
 });

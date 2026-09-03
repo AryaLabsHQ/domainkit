@@ -16,6 +16,18 @@ tenancy, or product verification policy.
   the declared capability groups is the only thing that rebuilds it.
 - Parts render only what `Transport.capabilities()` declares. `Domain.Flow` adds no layout
   container around a slot, so slot output stays a direct child of the flow root.
+- `readOnly` on `DomainKit.Root` or `Domain.Flow` renders the state without the controls that
+  change it, for authorization a transport cannot express. Parts read it through `useReadOnly()`.
+  Observation stays available: checking DNS reads the world rather than changing the domain. A
+  retry is a write too, so read-only hides every retry control and `retry` re-inspects instead of
+  resending the last command.
+- `Verify.useController` and `Domain.Flow` pass the flow's requirements to `observe`, so a domain
+  with no attachment verifies against what the host asked for rather than a receipt it has not
+  earned yet. The requirement set is keyed by content, never array identity.
+- An interactive connect returns the customer to the page they started from. `returnTo` on the
+  connect controller and both flows names another destination; `null` defers to the server.
+- `src/styles.css` ships wholly inside `@layer domainkit`, so a host's own rules win by default. An
+  artifact test asserts the built stylesheet carries nothing outside that layer.
 - Every user-visible string comes from `Messages.Catalog`, including one sentence per
   `DomainKit.Error` reason. No tag, status literal, or reason name reaches a customer.
 - Icons come from the one context on `DomainKit.Root`; no part takes an icon prop. Provider artwork

@@ -10,7 +10,7 @@ import { useState, type ReactElement, type ReactNode } from "react";
 import type { Controller } from "./attempt.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
-import { useDomainKit } from "./domain-kit.tsx";
+import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
 import { failure as describeFailure } from "./messages.ts";
 import * as Operations from "./operations.tsx";
 
@@ -77,6 +77,7 @@ export interface OutcomeProps extends PartProps<"p", ReviewState>, KindProps {}
 /** The failure sentence from the error's reason, with the retry the flow allows. */
 export function Outcome({ controller, kind, ...props }: OutcomeProps): ReactElement | null {
   const { messages } = useDomainKit();
+  const readOnly = useReadOnly();
   const state = controller.state;
   const partial = state._tag === "Applied" && state.receipt.status === "partial";
   const element = usePart(
@@ -87,14 +88,21 @@ export function Outcome({ controller, kind, ...props }: OutcomeProps): ReactElem
       children:
         state._tag === "Failure" ? (
           <>
-            {describeFailure(state.error, messages)}{" "}
-            <button
-              data-domainkit-part={kind === "provisioning" ? "provisioning-retry" : "cleanup-retry"}
-              onClick={controller.retry}
-              type="button"
-            >
-              {messages.retry}
-            </button>
+            {describeFailure(state.error, messages)}
+            {readOnly ? null : (
+              <>
+                {" "}
+                <button
+                  data-domainkit-part={
+                    kind === "provisioning" ? "provisioning-retry" : "cleanup-retry"
+                  }
+                  onClick={controller.retry}
+                  type="button"
+                >
+                  {messages.retry}
+                </button>
+              </>
+            )}
           </>
         ) : partial ? (
           kind === "provisioning" ? (
@@ -119,6 +127,7 @@ export interface ActionsProps extends PartProps<"div", ReviewState>, KindProps {
  */
 export function Actions({ controller, kind, ...props }: ActionsProps): ReactElement | null {
   const { messages } = useDomainKit();
+  const readOnly = useReadOnly();
   const state = controller.state;
   const plan = state._tag === "Planned" ? state.plan : null;
   const running = busy(state._tag);
@@ -150,6 +159,7 @@ export function Actions({ controller, kind, ...props }: ActionsProps): ReactElem
       "data-domainkit-part": "review-actions",
     },
   );
+  if (readOnly) return null;
   return plan === null && !running ? null : element;
 }
 
@@ -207,6 +217,7 @@ export function Dialog({
   trigger,
 }: DialogProps): ReactElement {
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
+  const readOnly = useReadOnly();
   const [uncontrolled, setUncontrolled] = useState(false);
   const isOpen = open ?? uncontrolled;
   const setOpen = (next: boolean) => {
@@ -217,6 +228,8 @@ export function Dialog({
   const body = children ?? <Body controller={controller} kind={kind} />;
   const title = kind === "provisioning" ? messages.planTitle : messages.cleanupTitle;
   const label = trigger ?? (kind === "provisioning" ? messages.reviewChanges : messages.cleanUp);
+  // Reviewing exists to authorize a write, so the whole surface goes rather than a dead trigger.
+  if (readOnly) return <></>;
   if (render !== undefined) {
     return (
       <>

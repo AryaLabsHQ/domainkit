@@ -88,6 +88,72 @@ test("names the expected value and what each observer read for a failing require
   await evidence.screenshot({ path: shot("evidence") });
 });
 
+test("lets a host's own rule beat a part, because the package ships in a cascade layer", async ({
+  page,
+}) => {
+  await open(page, "browser7.example");
+  const flow = page.locator("[data-domainkit-part='domain-flow']");
+  // The package sets `gap: 0.75rem` on this part; the host's unlayered `.host-flow` wins.
+  await expect(flow).toHaveClass(/host-flow/);
+  await expect(flow).toHaveCSS("gap", "48px");
+  await flow.screenshot({ path: shot("host-override") });
+});
+
+test("sends the page the customer started from as the interactive return destination", async ({
+  page,
+}) => {
+  await page.goto("/?zone=browser8.example&view=returnto");
+  await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByRole("button", { name: "Sign in (fake)" }).click();
+  const started = page.getByTestId("started");
+  await expect(started).not.toBeEmpty();
+  const method = JSON.parse((await started.textContent()) ?? "{}") as {
+    readonly _tag: string;
+    readonly returnTo?: string;
+  };
+  expect(method._tag).toBe("OAuth");
+  expect(method.returnTo).toBe(page.url());
+});
+
+test("renders a read-only domain as state with no controls", async ({ page }) => {
+  // Connect while writable, then flip the flag: the state stays, the controls go.
+  await open(page, "browser9.example");
+  await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByRole("dialog").getByLabel("Token").fill("tok");
+  await page.getByRole("button", { name: "Token (fake)" }).click();
+  await expect(page.getByText("fake connected")).toBeVisible();
+
+  await page.getByTestId("toggle-readonly").click();
+  await expect(page.getByText("fake connected")).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Type" })).toBeVisible();
+  await Promise.all(
+    ["Connect", "Detach domain", "Disconnect", "Review changes"].map((name) =>
+      expect(page.getByRole("button", { name })).toHaveCount(0),
+    ),
+  );
+  await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("read-only") });
+});
+
+test("verifies a domain with no attachment from the requirements the flow was given", async ({
+  page,
+}) => {
+  await open(page, "browser10.example");
+  // Nothing is connected, so the receipt path has nothing to look for; the flow names its own.
+  await expect(page.getByRole("button", { name: "Connect" })).toBeVisible();
+  // A status column only appears once an observation came back.
+  await expect(page.getByRole("columnheader", { name: "Status" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Missing" })).toHaveCount(2);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Check/ }).click();
+  const evidence = page.locator("[data-domainkit-part='observation-list']");
+  await expect(evidence).toBeVisible();
+  await expect(evidence.locator("[data-domainkit-part='observation-group']")).toHaveCount(2);
+  await page
+    .locator("[data-domainkit-part='verification-popover']")
+    .screenshot({ path: shot("unattached-verify") });
+});
+
 test("takes theme tokens and the color scheme from the root", async ({ page }) => {
   await open(page, "browser4.example", "dark");
   const root = page.locator("[data-domainkit-root]").first();

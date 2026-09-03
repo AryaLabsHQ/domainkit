@@ -295,6 +295,15 @@ export function Root({ count = 0, ...props }: RootProps) {
 export const identity = (record: DnsRecord.Model): string =>
   [rrType(record), record.name, DnsRecord.data(record)].join(":");
 
+/**
+ * A requirement set keyed by everything it carries, for memos that decide whether to re-send it.
+ * `identity` is deliberately narrower: it answers "is this the same record" for a React key, while
+ * a plan and an observation are built from `ttl`, `policy`, and `purpose` as well. `policy` in
+ * particular decides whether a name may hold anything else, so readiness turns on it.
+ */
+export const requirementsKey = (records: ReadonlyArray<DnsRecord.Model>): string =>
+  JSON.stringify(records);
+
 export interface CardProps extends PartProps<"section", { readonly record: string }> {
   readonly readiness?: Readiness | null;
   readonly record: DnsRecord.Model;

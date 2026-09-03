@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState, type ReactElement, type React
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
-import { useDomainKit } from "./domain-kit.tsx";
+import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
 import { useIcons } from "./icons.tsx";
 import { failure as describeFailure } from "./messages.ts";
@@ -71,7 +71,16 @@ export interface Controller {
 
 export interface Options {
   readonly domain: string;
+  /**
+   * Where an interactive method returns the customer. Defaults to the page they started from;
+   * pass `null` to send none and let the server's `defaultReturnTo` decide.
+   */
+  readonly returnTo?: string | null;
 }
+
+/** Read at connect time, not at render, so it is the page the customer is actually on. */
+const currentUrl = (): string | null =>
+  typeof window === "undefined" ? null : window.location.href;
 
 const snapshotOf = (state: State): Snapshot | null => {
   switch (state._tag) {
@@ -105,8 +114,9 @@ const settled = (snapshot: Snapshot, discovery: Discovery | null): State => {
  * transport declares it and the domain has no connection yet; a discovery failure is not the
  * customer's problem, so the provider list still renders.
  */
-export function useController({ domain }: Options): Controller {
+export function useController({ domain, returnTo }: Options): Controller {
   const { emit, navigate, revision, transport } = useDomainKit();
+  const readOnly = useReadOnly();
   const connection = transport.connection;
   const runner = useRunner();
   const [state, setState] = useState<State>(State.Loading({ snapshot: null }));
@@ -219,16 +229,17 @@ export function useController({ domain }: Options): Controller {
   const connect = useCallback(
     (input: ConnectInput) => {
       if (connection === undefined) return;
-      const returnTo = input.returnTo;
+      const destination = input.returnTo ?? (returnTo === undefined ? currentUrl() : returnTo);
+      const interactive = destination === null ? {} : { returnTo: destination };
       const method =
         input.method === "token"
           ? Transport.Method.token(input.values ?? {})
           : input.method === "oauth"
-            ? Transport.Method.oauth(returnTo === undefined ? {} : { returnTo })
-            : Transport.Method.integration(returnTo === undefined ? {} : { returnTo });
+            ? Transport.Method.oauth(interactive)
+            : Transport.Method.integration(interactive);
       submit(connection.start({ domain, method, provider: input.provider }));
     },
-    [connection, domain, submit],
+    [connection, domain, returnTo, submit],
   );
 
   const reuse = useCallback(
@@ -286,9 +297,10 @@ export function useController({ domain }: Options): Controller {
 
   const retry = useCallback(() => {
     const command = lastCommand.current;
-    if (command === null || command.domain !== domain) load();
+    // Re-inspecting is a read, so it stays; rerunning the last write does not.
+    if (readOnly || command === null || command.domain !== domain) load();
     else command.run();
-  }, [domain, load]);
+  }, [domain, load, readOnly]);
 
   return {
     connect,
@@ -333,6 +345,7 @@ export interface OutcomeProps extends PartProps<"p", RootState> {
 /** The failure sentence, chosen by the error's reason, plus the retry that reason allows. */
 export function Outcome({ controller, ...props }: OutcomeProps): ReactElement | null {
   const { messages } = useDomainKit();
+  const readOnly = useReadOnly();
   const state = controller.state;
   const element = usePart(
     "p",
@@ -342,10 +355,19 @@ export function Outcome({ controller, ...props }: OutcomeProps): ReactElement | 
       children:
         state._tag === "Failure" ? (
           <>
-            {describeFailure(state.error, messages)}{" "}
-            <button data-domainkit-part="connection-retry" onClick={controller.retry} type="button">
-              {messages.retry}
-            </button>
+            {describeFailure(state.error, messages)}
+            {readOnly ? null : (
+              <>
+                {" "}
+                <button
+                  data-domainkit-part="connection-retry"
+                  onClick={controller.retry}
+                  type="button"
+                >
+                  {messages.retry}
+                </button>
+              </>
+            )}
           </>
         ) : null,
       "data-domainkit-part": "flow-outcome",
@@ -379,6 +401,7 @@ export function Status({ controller, ...props }: StatusProps): ReactElement {
       case "SelectionRequired":
         return messages.chooseZone;
       case "Disconnected":
+        return messages.notConnected;
       case "Failure":
         return "";
     }
@@ -608,6 +631,7 @@ export function Dialog({
   trigger,
 }: DialogProps): ReactElement {
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
+  const readOnly = useReadOnly();
   const [open, setOpen] = useState(false);
   const busy = controller.state._tag === "Submitting";
   const snapshot = controller.snapshot;
@@ -618,6 +642,8 @@ export function Dialog({
       ? messages.connectAnyTitle
       : messages.connectTitle(provider));
   const body = children ?? <Form controller={controller} />;
+  // Connecting is a write, so the whole surface goes rather than a disabled trigger.
+  if (readOnly) return <></>;
   if (render !== undefined) {
     return (
       <>
@@ -697,6 +723,7 @@ export interface CardProps extends PartProps<"div", RootState> {
 /** A connected domain: which provider holds it, and how to let it go. */
 export function Card({ controller, ...props }: CardProps): ReactElement {
   const { messages } = useDomainKit();
+  const readOnly = useReadOnly();
   const state = controller.state;
   const snapshot = controller.snapshot;
   const provider = controller.providers.find((entry) => entry.id === snapshot?.provider);
@@ -711,24 +738,26 @@ export function Card({ controller, ...props }: CardProps): ReactElement {
             {provider === undefined ? null : <Provider.Mark provider={provider} />}
             <Status controller={controller} />
           </div>
-          <div data-domainkit-part="connected-actions">
-            <button
-              data-domainkit-part="disconnect-trigger"
-              disabled={state._tag === "Submitting"}
-              onClick={controller.detach}
-              type="button"
-            >
-              {messages.detach}
-            </button>
-            <button
-              data-domainkit-part="disconnect-action"
-              disabled={state._tag === "Submitting"}
-              onClick={controller.disconnect}
-              type="button"
-            >
-              {messages.disconnect}
-            </button>
-          </div>
+          {readOnly ? null : (
+            <div data-domainkit-part="connected-actions">
+              <button
+                data-domainkit-part="disconnect-trigger"
+                disabled={state._tag === "Submitting"}
+                onClick={controller.detach}
+                type="button"
+              >
+                {messages.detach}
+              </button>
+              <button
+                data-domainkit-part="disconnect-action"
+                disabled={state._tag === "Submitting"}
+                onClick={controller.disconnect}
+                type="button"
+              >
+                {messages.disconnect}
+              </button>
+            </div>
+          )}
           <Outcome controller={controller} />
         </>
       ),
@@ -739,11 +768,12 @@ export function Card({ controller, ...props }: CardProps): ReactElement {
 
 export interface FlowProps extends Omit<RootProps, "controller"> {
   readonly domain: string;
+  readonly returnTo?: string | null;
 }
 
 /** Connection on its own: the card once connected, the dialog until then. */
-export function Flow({ domain, ...props }: FlowProps): ReactElement {
-  const controller = useController({ domain });
+export function Flow({ domain, returnTo, ...props }: FlowProps): ReactElement {
+  const controller = useController({ domain, ...(returnTo === undefined ? {} : { returnTo }) });
   const state = controller.state;
   return (
     <Root controller={controller} {...props}>
