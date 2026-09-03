@@ -147,6 +147,44 @@ describe("Connect", () => {
     },
   );
 
+  it.effect(
+    "re-validates that the attached zone is still reachable before handing out a session",
+    () => {
+      const fake = Testing.provider({ zones: ["example.com"] });
+      let zones: ReadonlyArray<string> | null = null;
+      const shrinking: Testing.FakeProvider = {
+        ...fake,
+        session: (credential) => {
+          const session = fake.session(credential);
+          return {
+            ...session,
+            listTargets: () =>
+              zones === null
+                ? session.listTargets()
+                : Effect.map(session.listTargets(), (targets) =>
+                    targets.filter((target) => zones?.includes(target.zone) === true),
+                  ),
+          };
+        },
+      };
+      return Effect.gen(function* () {
+        const started = yield* Connect.start({
+          provider: "fake",
+          method: Connect.Method.token("t"),
+          domain: "app.example.com",
+        });
+        if (started._tag !== "Connected" || started.attachment === null)
+          return assert.fail("expected an attachment");
+        const live = yield* Connect.session(started.attachment.id);
+        assert.strictEqual(live.target.zone, "example.com");
+        zones = [];
+        const gone = yield* Connect.session(started.attachment.id).pipe(Effect.flip);
+        assert.strictEqual(gone.reason._tag, "NotFound");
+        if (gone.reason._tag === "NotFound") assert.strictEqual(gone.reason.entity, "zone");
+      }).pipe(withPrincipal, Effect.provide(layerFor(shrinking)));
+    },
+  );
+
   it.effect("rejects mismatched or expired callbacks", () => {
     const fake = Testing.provider({ zones: ["example.com"], oauth: true });
     return Effect.gen(function* () {

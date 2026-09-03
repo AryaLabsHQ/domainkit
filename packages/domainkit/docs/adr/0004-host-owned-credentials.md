@@ -20,7 +20,9 @@ the core ships AES-256-GCM over Web Crypto from one configured key, and a host w
 its own implementation.
 
 `Storage` never sees plaintext: `Connect` seals a credential through `Custody` before writing it
-and opens it after reading it. `Connect` also owns the connection lifecycle: token and interactive
+and opens it after reading it. Every session handed to `Provision`, `Cleanup`, or `Verify` is re-checked against the provider:
+the attached zone must still be among the targets the credential can reach, else `NotFound`.
+`Connect` also owns the connection lifecycle: token and interactive
 (OAuth, integration) methods, continuations stored in `Storage` and spent only after the connection
 is persisted, refresh before expiry single-flighted through `Storage.withLock`, and two-phase
 revocation on disconnect that leaves a pending row for recovery when the provider call fails.

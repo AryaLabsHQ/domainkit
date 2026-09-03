@@ -599,7 +599,16 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
         const attachment = yield* storage.attachments.get(attachmentId);
         const connection = yield* storage.connections.get(attachment.connectionId);
         const target = yield* DomainKitError.decode(Target, attachment.target, "target");
-        return { session: yield* sessionFor(connection), target };
+        const built = yield* sessionFor(connection);
+        // The zone must still be reachable by this credential: it may have moved account, been
+        // deleted, or become a kind the provider cannot host records in.
+        const reachable = yield* built.listTargets();
+        if (!reachable.some((candidate) => candidate.zone === target.zone)) {
+          return yield* DomainKitError.fail(
+            new DomainKitError.NotFound({ entity: "zone", id: target.zone }),
+          );
+        }
+        return { session: built, target };
       });
 
     return {
