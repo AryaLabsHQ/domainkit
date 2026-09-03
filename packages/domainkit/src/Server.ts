@@ -187,6 +187,12 @@ export const PlanPayload = Schema.Struct({
 });
 export type PlanPayload = typeof PlanPayload.Type;
 
+export const ObservePayload = Schema.Struct({
+  /** Records to observe instead of the attachment's receipt; required for an unattached domain. */
+  requirements: Schema.optionalKey(Schema.Array(DnsRecord.Model)),
+});
+export type ObservePayload = typeof ObservePayload.Type;
+
 export const ApprovePayload = Schema.Struct({
   /** A subset of the plan's writes; omit to approve every write. */
   operationIds: Schema.optionalKey(Schema.Array(Plan.OperationId)),
@@ -351,6 +357,7 @@ export const group = HttpApiGroup.make("domainkit")
   .add(
     HttpApiEndpoint.post("observe", "/domains/:domain/observations", {
       params: { domain: Schema.String },
+      payload: ObservePayload,
       success: Readiness,
       error: errors,
     }),
@@ -783,8 +790,15 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
             ),
           ),
         )
-        .handle("observe", ({ params, request }) =>
-          as("observe", request, verify.observe({ domain: params.domain })),
+        .handle("observe", ({ params, payload, request }) =>
+          as(
+            "observe",
+            request,
+            verify.observe({
+              domain: params.domain,
+              ...(payload.requirements === undefined ? {} : { requirements: payload.requirements }),
+            }),
+          ),
         )
         .handle("cleanupPlan", ({ params, request }) =>
           as("cleanupPlan", request, cleanup.plan({ receiptId: params.receiptId })),

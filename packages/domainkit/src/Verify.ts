@@ -81,10 +81,12 @@ type Fx<A> = Effect.Effect<A, Errors.DomainKitError, Principal.Service>;
 
 export interface Interface {
   /**
-   * Requirements default to the latest provisioning receipt for the attachment (records it
-   * applied or found in place); pass `requirements` to observe an arbitrary set, including for a
-   * domain with no attachment. Provider evidence is added when the attachment's session can be
-   * built; public DNS is always observed.
+   * What to observe, in order of precedence: `requirements` when supplied (an attached domain
+   * without a provisioning receipt, or a domain with no attachment whose records the customer
+   * applies by hand), else the latest provisioning receipt of the domain's attachment (records it
+   * applied or found in place). Neither is `InvalidInput`. Provider evidence is added when the
+   * attachment's session can be built; public DNS is always observed, and readiness is stored
+   * per domain either way.
    */
   readonly observe: (input: {
     readonly domain: string;

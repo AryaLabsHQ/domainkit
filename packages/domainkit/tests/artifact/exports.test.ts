@@ -99,6 +99,7 @@ describe("public namespaces", () => {
       "Method",
       "MethodDescriptor",
       "OAuth",
+      "ObservePayload",
       "PlanPayload",
       "Readiness",
       "Redirect",

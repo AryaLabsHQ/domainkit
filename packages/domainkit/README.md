@@ -104,7 +104,8 @@ The host provides two services beneath the layer and one per request:
 `Connect.start` connects a provider (a token in one call, OAuth or a marketplace integration via a
 redirect and `Connect.complete`), attaches domains, refreshes credentials before they expire, and
 revokes them on disconnect. `Verify.observe` reads the provider and public DNS, stores readiness
-per requirement, and tells you when to look again.
+per requirement, and tells you when to look again; pass `requirements` to observe records a
+customer applies by hand on a domain with no attachment.
 
 ## Mount the routes
 
