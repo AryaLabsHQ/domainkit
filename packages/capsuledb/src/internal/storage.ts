@@ -281,15 +281,6 @@ const readinessOf = (row: ReadinessRow) =>
     nextCheckAt: isoOrNull(row.next_check_at),
   });
 
-/**
- * The rejection an encoded attempt carries.
- *
- * Read structurally so the column and the core field can land in either order; the row is written
- * from whatever the schema encodes.
- */
-const rejectionOf = (encoded: object): unknown =>
-  (encoded as { readonly rejection?: unknown }).rejection ?? null;
-
 const stale = (attempt: Storage.Attempt) =>
   fail(new DomainKitError.Stale({ planId: attempt.id, digest: attempt.plan.digest }));
 
@@ -701,6 +692,22 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
               `;
             }),
           ).pipe(guard("continuations.put")),
+        get: (id) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+            Effect.gen(function* () {
+              // A read, not a claim: the row survives so `consume` can still spend it.
+              const rows = yield* sql<ContinuationRow>`
+                SELECT * FROM ${continuations} WHERE id = ${id} AND owner_id = ${ownerId}
+              `;
+              if (rows[0] === undefined) return yield* notFound("continuation", id);
+              const continuation = yield* continuationOf(rows[0]);
+              const instant = yield* DateTime.now;
+              return DateTime.toEpochMillis(continuation.expiresAt) <=
+                DateTime.toEpochMillis(instant)
+                ? yield* fail(new DomainKitError.Expired({ entity: "continuation", id }))
+                : continuation;
+            }),
+          ).pipe(guard("continuations.get")),
         consume: (id) =>
           Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.gen(function* () {
@@ -736,7 +743,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
                   ${encoded.id}, ${encoded.ownerId}, ${encoded.attachmentId}, ${encoded.kind},
                   ${encoded.status}, ${toJson(encoded.plan)}, ${toJsonOrNull(encoded.approval)},
                   ${attempt.approval?.id ?? null}, ${toJsonOrNull(encoded.receipt)},
-                  ${attempt.receipt?.id ?? null}, ${toJsonOrNull(rejectionOf(encoded))},
+                  ${attempt.receipt?.id ?? null}, ${toJsonOrNull(encoded.rejection)},
                   ${encoded.sourceReceiptId},
                   ${atOrNull(encoded.leaseExpiresAt)}, ${encoded.failure},
                   ${at(encoded.plan.createdAt)}, ${at(encoded.updatedAt)}
@@ -818,6 +825,39 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
               }),
             ),
           ).pipe(guard("attempts.approve")),
+        reject: (id, input) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const current = yield* lockedAttempt(ownerId, id);
+                // Terminal: a second rejection is the same outcome, so it returns the first one.
+                if (current.status === "rejected") return current;
+                if (current.status === "expired") {
+                  return yield* fail(new DomainKitError.Expired({ entity: "plan", id }));
+                }
+                // A digest mismatch means the reviewer declined a plan that is no longer current.
+                if (current.status !== "planned" || current.plan.digest !== input.digest) {
+                  return yield* stale(current);
+                }
+                const instant = yield* DateTime.now;
+                const next = new Storage.Attempt({
+                  ...current,
+                  status: "rejected",
+                  rejection: { actorId: input.actorId, reason: input.reason, at: instant },
+                  updatedAt: instant,
+                });
+                const encoded = yield* attemptCodec.write(next);
+                yield* sql`
+                  UPDATE ${attempts} SET
+                    status = ${encoded.status},
+                    rejection = ${toJsonOrNull(encoded.rejection)},
+                    updated_at = ${at(encoded.updatedAt)}
+                  WHERE id = ${id} AND owner_id = ${ownerId}
+                `;
+                return next;
+              }),
+            ),
+          ).pipe(guard("attempts.reject")),
         claim: (id, lease) =>
           Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql.withTransaction(
