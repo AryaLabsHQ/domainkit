@@ -4,6 +4,7 @@ import * as Approval from "../Approval.ts";
 import { Connect } from "../Connect.ts";
 import * as DnsRecord from "../DnsRecord.ts";
 import * as DomainKitError from "../DomainKitError.ts";
+import * as DomainName from "../DomainName.ts";
 import * as Plan from "../Plan.ts";
 import { Principal } from "../Principal.ts";
 import type * as Provider from "../Provider.ts";
@@ -32,6 +33,22 @@ const expired = (entity: "plan" | "approval", id: string) =>
 
 const past = (at: DateTime.Utc, now: DateTime.Utc) =>
   DateTime.toEpochMillis(at) <= DateTime.toEpochMillis(now);
+
+/** Every requirement must sit at or below the attached domain; other tenants share the zone. */
+export const assertWithin = (
+  attachment: Storage.Attachment,
+  records: ReadonlyArray<DnsRecord.DnsRecord>,
+): Effect.Effect<void, DomainKitError.DomainKitError> => {
+  const outside = records.filter((record) => !DomainName.isWithin(record.name, attachment.domain));
+  return outside.length === 0
+    ? Effect.void
+    : DomainKitError.fail(
+        new DomainKitError.InvalidInput({
+          message: `${outside.map(({ name }) => name).join(", ")} is outside the attached domain ${attachment.domain}`,
+          field: "requirements",
+        }),
+      );
+};
 
 /** Shared plan -> approve -> apply machinery for provisioning and cleanup attempts. */
 export const make = (storage: Storage.Service, connect: Connect["Service"], kind: Plan.Kind) => {
