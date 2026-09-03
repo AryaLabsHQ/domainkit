@@ -13,17 +13,19 @@ look again.
 
 <Snippet file="examples/core/verification.ts" region="observe" title="One observation" />
 
-Requirements default to the latest provisioning receipt, meaning the records the apply wrote or
-found already in place.
-
 <Snippet
   file="examples/core/verification.ts"
   region="requirements"
   title="Watching a specific set"
 />
 
-A domain with no attachment is observed too. Public DNS stands alone, no provider evidence is
-recorded, and the readiness row is the same shape.
+Supplied `requirements` win. Without them, `observe` uses the attachment's latest provisioning
+receipt, meaning the records the apply wrote or found already in place. A domain with neither fails
+`InvalidInput`. The route and the browser transport carry the same optional field, so a UI can ask
+about a set the server has no receipt for.
+
+A domain with no attachment is observed too, as long as it names its requirements. Public DNS stands
+alone, no provider evidence is recorded, and the readiness row is the same shape.
 
 ## Three kinds of evidence
 

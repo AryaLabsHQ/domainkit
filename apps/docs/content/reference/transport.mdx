@@ -31,6 +31,10 @@ a transport that typechecks and a UI that renders only what the server can serve
 | `verification` | `observe`                                                        |
 | `cleanup`      | `plan`, `approve`, `reject`, `apply`                             |
 
+`verification.observe(domain, options?)` takes an optional `requirements` array. Supplied
+requirements win; without them the server uses the attachment's latest provisioning receipt, and a
+domain with neither answers `InvalidInput`.
+
 <Snippet file="examples/client/transport.ts" region="capabilities" title="Declaring capabilities" />
 
 ## Building one
@@ -47,6 +51,8 @@ your app refreshes is read at call time.
 Every method returns `Effect<A, DomainKit.Error>` with no requirements.
 
 <Snippet file="examples/client/transport.ts" region="call" title="From Effect" />
+
+<Snippet file="examples/client/transport.ts" region="observe" title="Observing a requirement set" />
 
 <Snippet file="examples/client/transport.ts" region="promises" title="From Promises" />
 

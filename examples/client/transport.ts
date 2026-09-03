@@ -38,6 +38,20 @@ export const plan = Effect.gen(function* () {
 });
 // #endregion call
 
+// #region observe
+/**
+ * Verification takes the requirements to look for. Without them the server uses the domain's
+ * latest provisioning receipt, and a domain with neither answers `InvalidInput`.
+ */
+export const readiness = Effect.gen(function* () {
+  const verification = transport.verification;
+  if (verification === undefined) return null;
+  return yield* verification.observe("app.example.com", {
+    requirements: [DnsRecord.cname({ name: "app.example.com", target: "edge.acme.dev" })],
+  });
+});
+// #endregion observe
+
 // #region promises
 /** The same transport in Promises, for a component tree that does not run Effect. */
 export const api = Transport.toAsync(transport);
