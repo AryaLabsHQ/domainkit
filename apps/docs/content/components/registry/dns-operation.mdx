@@ -1,10 +1,10 @@
 ---
 title: DNS operation
-description: Show one planned DNS operation with its action, record, value, priority, and reason before your app applies the plan.
+description: Show one planned DNS operation with its kind, record, value, purpose, and conflict reason before your app applies the plan.
 ---
 
-`dns-operation` is a display row for a DNS operation. It can show `create`, `noop`, or `conflict`
-from a plan, but it does not create a plan or approve a write.
+`dns-operation` is a display card for one operation out of a plan. It shows what would happen; it
+does not build a plan, approve one, or write anything.
 
 <Component path="registry/dns-operation" />
 
@@ -16,34 +16,43 @@ npx shadcn@latest add https://domain-kit.dev/r/dns-operation.json
 
 ## Usage
 
-Pass the action as text, a badge, or an icon. Keep the action and any conflict reason clear without
-relying on color.
+`operation` is one of the four kinds a plan carries, and it picks the label.
 
 ```tsx
 <DnsOperation
-  action="Create"
-  name="mail.example.com"
-  priority={10}
-  type="MX"
-  value="feedback-smtp.example.net"
+  name="app.example.com"
+  operation="create"
+  purpose="Serve your site"
+  type="CNAME"
+  value="edge.acme.dev"
+/>
+<DnsOperation
+  name="app.example.com"
+  operation="conflict"
+  reason="A CNAME cannot share a name with the existing A record."
+  type="CNAME"
+  value="edge.acme.dev"
 />
 ```
 
 ## API
 
-| Prop       | Type        | Required | Description                                    |
-| ---------- | ----------- | -------- | ---------------------------------------------- |
-| `action`   | `ReactNode` | yes      | Visible operation label or custom content.     |
-| `name`     | `string`    | yes      | DNS record name.                               |
-| `priority` | `number`    | no       | Optional numeric priority.                     |
-| `reason`   | `ReactNode` | no       | Optional explanation, commonly for a conflict. |
-| `type`     | `string`    | yes      | DNS record type.                               |
-| `value`    | `string`    | yes      | DNS record value.                              |
+| Prop        | Type                                           | Required | Description                                    |
+| ----------- | ---------------------------------------------- | -------- | ---------------------------------------------- |
+| `operation` | `"conflict" \| "create" \| "delete" \| "noop"` | yes      | Which of the four plan operations this is.     |
+| `name`      | `string`                                       | yes      | DNS record name.                               |
+| `type`      | `string`                                       | yes      | DNS record type.                               |
+| `value`     | `string`                                       | yes      | DNS record value.                              |
+| `priority`  | `number`                                       | no       | Optional numeric priority.                     |
+| `purpose`   | `ReactNode`                                    | no       | What the record is for, shown to the customer. |
+| `reason`    | `ReactNode`                                    | no       | Why an operation conflicts.                    |
 
-`DnsOperation` also accepts the native props and `className` supported by the shadcn `Card` root.
+`dnsOperationLabels` is exported, so the copied file is where you change the wording of a kind.
+
+`DnsOperation` also accepts the native props and `className` the shadcn `Card` root supports.
 
 ## Boundary
 
-DomainKit plans remain immutable and tied to a digest: `dns-operation` only renders the operation
-your host has already selected. Use [Plans, authorization, and receipts](/docs/core/plans) for the
-review and apply steps.
+A plan and its digest are immutable: this card renders an operation your app already holds. The
+review and apply steps are [plans, approval, and receipts](/docs/core/plans), and the packaged
+[provisioning](/components/provisioning) flow runs them.

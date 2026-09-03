@@ -7,32 +7,52 @@
       "name": "dns-table",
       "type": "registry:ui",
       "title": "DNS Table",
-      "description": "A DNS record table with optional priority and status content.",
+      "description": "A DNS record table with optional purpose and readiness columns.",
       "registryDependencies": ["table"],
-      "files": [{ "path": "registry/ui/dns-table.tsx", "type": "registry:ui" }]
+      "files": [
+        {
+          "path": "registry/ui/dns-table.tsx",
+          "type": "registry:ui"
+        }
+      ]
     },
     {
       "name": "dns-operation",
       "type": "registry:ui",
       "title": "DNS Operation",
-      "description": "A card for one planned DNS operation.",
+      "description": "A card for one planned create, no-op, conflict, or delete.",
       "registryDependencies": ["badge", "card"],
-      "files": [{ "path": "registry/ui/dns-operation.tsx", "type": "registry:ui" }]
+      "files": [
+        {
+          "path": "registry/ui/dns-operation.tsx",
+          "type": "registry:ui"
+        }
+      ]
     },
     {
       "name": "dns-status",
       "type": "registry:ui",
       "title": "DNS Status",
-      "description": "A compact status badge for DNS states.",
+      "description": "A readiness badge for one DNS requirement.",
       "registryDependencies": ["badge"],
-      "files": [{ "path": "registry/ui/dns-status.tsx", "type": "registry:ui" }]
+      "files": [
+        {
+          "path": "registry/ui/dns-status.tsx",
+          "type": "registry:ui"
+        }
+      ]
     },
     {
       "name": "provider-mark",
       "type": "registry:ui",
       "title": "Provider Mark",
       "description": "An accessible wrapper for a DNS provider logo.",
-      "files": [{ "path": "registry/ui/provider-mark.tsx", "type": "registry:ui" }]
+      "files": [
+        {
+          "path": "registry/ui/provider-mark.tsx",
+          "type": "registry:ui"
+        }
+      ]
     },
     {
       "name": "copy-value",
@@ -41,7 +61,12 @@
       "description": "A compact DNS value with a copy action.",
       "dependencies": ["lucide-react"],
       "registryDependencies": ["button"],
-      "files": [{ "path": "registry/ui/copy-value.tsx", "type": "registry:ui" }]
+      "files": [
+        {
+          "path": "registry/ui/copy-value.tsx",
+          "type": "registry:ui"
+        }
+      ]
     },
     {
       "name": "async-state",
@@ -50,7 +75,12 @@
       "description": "Loading, empty, and error states for DNS interfaces.",
       "dependencies": ["lucide-react"],
       "registryDependencies": ["empty", "spinner"],
-      "files": [{ "path": "registry/ui/async-state.tsx", "type": "registry:ui" }]
+      "files": [
+        {
+          "path": "registry/ui/async-state.tsx",
+          "type": "registry:ui"
+        }
+      ]
     }
   ]
 }

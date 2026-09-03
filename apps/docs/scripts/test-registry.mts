@@ -130,7 +130,7 @@ import { DnsStatus } from "@/components/ui/dns-status";
 import { DnsTable } from "@/components/ui/dns-table";
 import { ProviderMark } from "@/components/ui/provider-mark";
 
-const record = { id: "mx", name: "mail.example.com", type: "MX", value: "mx.example.net" };
+const record = { id: "cname", name: "app.example.com", type: "CNAME", value: "edge.acme.dev" };
 createRoot(document.getElementById("root")!).render(
   <main>
     <ProviderMark label="Cloudflare">
@@ -139,8 +139,8 @@ createRoot(document.getElementById("root")!).render(
     <ProviderMark label="Vercel">
       <img alt="" height={32} src="https://integrations.sh/logo/vercel.com?sz=64" width={32} />
     </ProviderMark>
-    <DnsTable records={[{ ...record, status: <DnsStatus tone="success">Found</DnsStatus> }]} />
-    <DnsOperation action="Create" {...record} />
+    <DnsTable records={[{ ...record, purpose: "Serve your site", status: <DnsStatus status="satisfied" /> }]} />
+    <DnsOperation operation="create" {...record} />
     <CopyValue value={record.value} />
     <ErrorState>Provider unavailable</ErrorState>
   </main>,

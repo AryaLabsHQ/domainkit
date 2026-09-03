@@ -1,6 +1,6 @@
 ---
 title: DNS table
-description: Show plain DNS records in a responsive table with optional priority and status cells for setup screens and review steps.
+description: Show plain DNS records in a responsive table with optional priority, purpose, and readiness cells for setup screens and review steps.
 ---
 
 `dns-table` is a table for record data your app already has. It renders values; it does not fetch
@@ -23,12 +23,12 @@ Pass records with stable `id` values. Status content is rendered as provided, so
 <DnsTable
   records={[
     {
-      id: "mx",
-      name: "mail.example.com",
-      priority: 10,
-      status: <DnsStatus tone="success">Found</DnsStatus>,
-      type: "MX",
-      value: "feedback-smtp.example.net",
+      id: "cname",
+      name: "app.example.com",
+      purpose: "Serve your site",
+      status: <DnsStatus status="satisfied" />,
+      type: "CNAME",
+      value: "edge.acme.dev",
     },
   ]}
 />
@@ -46,14 +46,15 @@ Pass records with stable `id` values. Status content is rendered as provided, so
 
 ### `DnsTableRecord`
 
-| Field      | Type        | Required | Description                                |
-| ---------- | ----------- | -------- | ------------------------------------------ |
-| `id`       | `string`    | yes      | Stable React key for the row.              |
-| `name`     | `string`    | yes      | DNS record name.                           |
-| `priority` | `number`    | no       | Optional numeric priority, such as MX 10.  |
-| `status`   | `ReactNode` | no       | Optional content for the status column.    |
-| `type`     | `string`    | yes      | DNS record type, such as `TXT` or `CNAME`. |
-| `value`    | `string`    | yes      | DNS record value.                          |
+| Field      | Type        | Required | Description                                   |
+| ---------- | ----------- | -------- | --------------------------------------------- |
+| `id`       | `string`    | yes      | Stable React key for the row.                 |
+| `name`     | `string`    | yes      | DNS record name.                              |
+| `priority` | `number`    | no       | Optional numeric priority, such as MX 10.     |
+| `purpose`  | `ReactNode` | no       | What the record is for, shown under its name. |
+| `status`   | `ReactNode` | no       | Readiness for this record, once observed.     |
+| `type`     | `string`    | yes      | DNS record type, such as `TXT` or `CNAME`.    |
+| `value`    | `string`    | yes      | DNS record value.                             |
 
 ### `DnsTableRow`
 
