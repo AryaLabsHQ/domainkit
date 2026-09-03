@@ -1,4 +1,4 @@
-import { Receipt } from "domainkit";
+import { DnsRecord, Receipt } from "domainkit";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Cleanup,
@@ -16,26 +16,35 @@ import {
 import { defaultRequirements, previewZone, type PreviewState } from "./preview-state.ts";
 import { workshopTheme } from "./themes.ts";
 
+interface ProviderSettings {
+  readonly oauth: boolean;
+  readonly providerId: string;
+  /** The records the zone already holds, so a seeded plan shows one Create and one Noop. */
+  readonly seed: ReadonlyArray<DnsRecord.Model>;
+}
+
 /**
  * Every preview runs the real lifecycle. `Testing.transport` mounts `domainkit/server` over memory
  * storage and a fake provider in this tab, so connecting, planning, approving, applying, observing,
  * and cleaning up all behave the way they do against a host.
  */
-const makeTransport = (state: PreviewState) =>
+const makeTransport = (settings: ProviderSettings) =>
   Testing.transport({
     provider: {
-      id: state.providerId,
-      oauth: state.oauth,
+      id: settings.providerId,
+      oauth: settings.oauth,
       zones: [previewZone],
-      ...(state.seeded
-        ? {
-            records: state.requirements
-              .filter((record) => record._tag === "TXT")
-              .map((record) => ({ record, zone: previewZone })),
-          }
-        : {}),
+      records: settings.seed.map((record) => ({ record, zone: previewZone })),
     },
   });
+
+/** What the zone holds before the customer starts: the TXT requirements, when seeding is on. */
+const seedOf = (state: PreviewState): ReadonlyArray<DnsRecord.Model> =>
+  state.seeded ? state.requirements.filter((record) => record._tag === "TXT") : [];
+
+/** The seed's content, so editing a seeded record rebuilds the provider that already holds it. */
+const seedKey = (seed: ReadonlyArray<DnsRecord.Model>): string =>
+  seed.map((record) => `${record._tag} ${record.name} ${DnsRecord.data(record)}`).join("\n");
 
 function Verification({ domain }: { readonly domain: string }) {
   const controller = Verify.useController({ domain });
@@ -106,9 +115,13 @@ export function Preview({ state }: { readonly state: PreviewState }) {
     const timeout = window.setTimeout(() => setEvent(undefined), 4_000);
     return () => window.clearTimeout(timeout);
   }, [event]);
+  const seed = seedOf(state);
+  const key = seedKey(seed);
   const transport = useMemo(
-    () => makeTransport(state),
-    [state.oauth, state.providerId, state.seeded, state.story],
+    () => makeTransport({ oauth: state.oauth, providerId: state.providerId, seed }),
+    // `seed` is rebuilt every render, so the provider is keyed on its content instead: editing a
+    // seeded record has to reach the fake provider that already holds it, and nothing else does.
+    [key, state.oauth, state.providerId],
   );
   const notification: ReactNode =
     event === undefined ? null : (
