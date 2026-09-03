@@ -1,3 +1,25 @@
+## @domainkit/react@0.9.0
+
+### Domain.Flow with slots over a transport value
+
+`DomainKit.Root` takes a `Transport.Interface` by value and keeps its identity stable; pass
+`revision` to re-inspect. Every controller takes one options object and returns a named
+`Controller` whose `State` is a tagged union carrying `Plan.Model`, `Approval.Model`,
+`Receipt.Model`, and `DomainKit.Error`. `Domain.Flow` composes connection, records, verification,
+provisioning, and cleanup from four slots with defaults: `connection` renders token fields from
+the provider's declared descriptors, `records` and `verification` accept host replacements, and
+`actions` renders Approve and Decline. Parts render only the capabilities the transport declares.
+A failing DNS check shows the value it expected, what each observer found, and the observer's
+detail line; an observer that never answered reports no values. A flow can run read-only, hiding every write
+surface for a customer who may not change the domain, passes `returnTo` so an interactive connect
+returns to the page it started from, and observes the requirements it was given. Failures render
+through `Messages.Catalog`, one sentence per `Reason` tag; icons come from one
+context; provider marks use host marks first with a local fallback and no runtime fetch.
+
+Breaking: the stylesheet ships inside `@layer domainkit`, so host utilities win unless the host
+orders its layers; `ManagedFlow`, per-component icon props, the layer-identity remount, and the
+`scheduler`, `motion`, `react-grab`, and hugeicons dependencies are gone.
+
 ## @domainkit/react@0.8.0
 
 ### Standardize callable constructors

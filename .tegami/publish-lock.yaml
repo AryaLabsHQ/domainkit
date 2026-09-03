@@ -1,25 +1,36 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Standardize callable constructors\n\nStandardize trusted tagged-value construction on callable case constructors across the core and\nReact transport APIs. Aggregate schemas remain available for decoding serialized values.\n"
-    filename: domainkit-callable-constructor-consistency.md
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n### One Effect-native lifecycle: Connect, Provision, Cleanup, Verify\n\nThe root exports nineteen modules. Lifecycle services are `Connect`, `Provision`, `Cleanup`, and\n`Verify`; host seams are `Storage`, `Custody`, and `Principal`; providers are declared with\n`Provider.make` and registered through `DomainKit.layer({ providers })`. Every service module\nexports `Service` and `Interface`, every schema-backed value exports `Model`, and every operation\nfails with `DomainKit.Error` carrying one of sixteen `Reason` classes.\n\nPlans are additive and digest-bound: `Provision.plan` reads provider state, `approve` records\nconsent, `reject` records refusal, and `apply` creates records under a durable attempt with a lease,\npartial success in the success channel, and replay idempotency. `Cleanup` removes only what a receipt\nproves DomainKit created. `Verify.observe` persists readiness per domain with a backoff ladder,\npublic DNS evidence that carries the observed values, and host evidence such as SES status; it\naccepts the requirements to observe, so a domain with no attachment verifies too.\n`Connect` owns token, OAuth, and integration connections with stored continuations, library-owned\nrefresh single-flighted through `Storage.withLock`, two-phase revocation, schema-declared token\nfields, and `Connect.discover` for nameserver-based connection discovery.\n\n`domainkit/server` mounts the whole lifecycle as one HttpApi group with fifteen routes, a host\n`Identity` service with an optional per-route `authorize` hook, callbacks that follow the mount, and\n`Server.toWebHandler` for hosts outside HttpApi. `domainkit/client` ships `Transport.fromFetch` with\ncapability groups. `domainkit/testing` ships fakes and the Storage and provider conformance suites.\n\nEach root namespace is also a subpath export (`domainkit/Principal`, `domainkit/DnsRecord`, and the\nrest) whose runtime and types resolve to the same unbundled module, so a host that emits\ndeclarations names DomainKit types portably. Declarations ship one file per module.\n\nBreaking: the Promise root, the sixteen error classes, `ManagedDnsConnections`, the Digest module,\nand the two-route server are gone; hosts provide `Storage` and `Custody` beneath `DomainKit.layer`.\n"
+    filename: domainkit-0-9-effect-lifecycle.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@domainkit/capsuledb\":\n    type: minor\n---\n\n### DomainKit Storage on PostgreSQL as one declarative capsule\n\n`PgStorage.layer()` provides `Storage.Service` over the host's `SqlClient` from one CapsuleDB\ncapsule with six tables, no host foreign keys, readiness keyed by domain, advisory-lock\n`withLock`, `FOR UPDATE` attempt transitions including reject, and two-phase revocation guarded by\ncredential ciphertext. `mode: \"prepare\"` migrates at boot; `mode: \"assert\"` expects the SQL that\n`capsuledb emit` writes. Depends on the published `capsuledb` 0.2 and stores rows in the core\nschema's encoded form, so the row layout follows `Storage.ts`.\n\nBreaking: `persistence.ts`, host bindings, and package-level custody are gone; credentials arrive\nsealed by the core `Custody` service.\n"
+    filename: capsuledb-0-9-postgres-storage.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n### Domain.Flow with slots over a transport value\n\n`DomainKit.Root` takes a `Transport.Interface` by value and keeps its identity stable; pass\n`revision` to re-inspect. Every controller takes one options object and returns a named\n`Controller` whose `State` is a tagged union carrying `Plan.Model`, `Approval.Model`,\n`Receipt.Model`, and `DomainKit.Error`. `Domain.Flow` composes connection, records, verification,\nprovisioning, and cleanup from four slots with defaults: `connection` renders token fields from\nthe provider's declared descriptors, `records` and `verification` accept host replacements, and\n`actions` renders Approve and Decline. Parts render only the capabilities the transport declares.\nA failing DNS check shows the value it expected, what each observer found, and the observer's\ndetail line; an observer that never answered reports no values. A flow can run read-only, hiding every write\nsurface for a customer who may not change the domain, passes `returnTo` so an interactive connect\nreturns to the page it started from, and observes the requirements it was given. Failures render\nthrough `Messages.Catalog`, one sentence per `Reason` tag; icons come from one\ncontext; provider marks use host marks first with a local fallback and no runtime fetch.\n\nBreaking: the stylesheet ships inside `@layer domainkit`, so host utilities win unless the host\norders its layers; `ManagedFlow`, per-component icon props, the layer-identity remount, and the\n`scheduler`, `motion`, `react-grab`, and hugeicons dependencies are gone.\n"
+    filename: react-0-9-domain-flow.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
+  - changelogIds:
+      - domainkit-0-9-effect-lifecycle.md
+    id: npm:domainkit
+    updated: true
+  - id: npm:@domainkit/examples
+    updated: false
+  - changelogIds:
+      - capsuledb-0-9-postgres-storage.md
+    id: npm:@domainkit/capsuledb
+    updated: true
   - id: npm:@domainkit/docs
     updated: false
   - changelogIds:
-      - domainkit-callable-constructor-consistency.md
-    id: npm:domainkit
-    updated: true
-  - id: npm:@domainkit/capsuledb
-    updated: true
-  - changelogIds:
-      - domainkit-callable-constructor-consistency.md
+      - react-0-9-domain-flow.md
     id: npm:@domainkit/react
     updated: true
 npm:packages:
   - id: npm:domainkit-workspace
-  - id: npm:@domainkit/docs
   - id: npm:domainkit
+  - id: npm:@domainkit/examples
   - id: npm:@domainkit/capsuledb
+  - id: npm:@domainkit/docs
   - id: npm:@domainkit/react

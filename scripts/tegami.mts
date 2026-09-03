@@ -57,7 +57,7 @@ const paper = tegami({
     },
   },
   packages: {
-    "@domainkit/capsuledb": {},
+    "@domainkit/capsuledb": { group: "public" },
     "@domainkit/react": { group: "public" },
     domainkit: { group: "public" },
   },
