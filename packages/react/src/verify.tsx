@@ -20,11 +20,12 @@ export type Requirement = Readiness["requirements"][number];
 export type Evidence = Requirement["evidence"][number];
 
 /**
- * What the observer read back for the requirement's name. Host evidence reports a status the host
- * reached rather than values read off a name, so it has none.
+ * What the observer read back for the requirement's name, or `null` when it read nothing back at
+ * all. Host evidence reports a status the host reached rather than values read off a name, and an
+ * `unknown` observation is a lookup that never answered, which is not the same as finding nothing.
  */
 const valuesOf = (evidence: Evidence): ReadonlyArray<string> | null =>
-  evidence._tag === "Host" ? null : evidence.values;
+  evidence._tag === "Host" || evidence.status === "unknown" ? null : evidence.values;
 
 /**
  * Readiness rides on the state rather than a ref, so it can never outlive the render that

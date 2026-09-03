@@ -82,6 +82,9 @@ test("names the expected value and what each observer read for a failing require
   await expect(evidence.getByText("Found old.example.com, older.example.com")).toBeVisible();
   await expect(evidence.getByText("Found nothing")).toBeVisible();
   await expect(evidence.getByText("The name resolves somewhere else.")).toBeVisible();
+  // The observer that never answered says so, rather than claiming the name is empty.
+  await expect(evidence.getByText("The resolver did not answer.")).toBeVisible();
+  await expect(evidence.getByText("Found nothing")).toHaveCount(1);
   await evidence.screenshot({ path: shot("evidence") });
 });
 

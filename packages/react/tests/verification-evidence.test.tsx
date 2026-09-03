@@ -54,6 +54,13 @@ const readiness: Transport.Readiness = {
           status: "missing",
           values: [],
         }),
+        new Verify.PublicDnsEvidence({
+          detail: "The resolver did not answer.",
+          observedAt,
+          resolver: "quad9",
+          status: "unknown",
+          values: [],
+        }),
       ],
       operationId: Plan.OperationId.make("op-1"),
       record: required,
@@ -100,7 +107,17 @@ describe("Verify.Evidence", () => {
     panel();
     expect(screen.getByText("The name resolves somewhere else.")).toBeDefined();
     expect(screen.getByText("The identity is still pending at the provider.")).toBeDefined();
-    expect(document.querySelectorAll("[data-domainkit-part='observation-note']")).toHaveLength(2);
+    expect(document.querySelectorAll("[data-domainkit-part='observation-note']")).toHaveLength(3);
+  });
+
+  it("says nothing about values when an observer never answered", () => {
+    panel();
+    // `missing` is the one observer that confirmed absence; `unknown` only failed to look.
+    expect(screen.getAllByText("Found nothing")).toHaveLength(1);
+    expect(document.querySelectorAll("[data-domainkit-part='observation-observed']")).toHaveLength(
+      3,
+    );
+    expect(screen.getByText("The resolver did not answer.")).toBeDefined();
   });
 
   it("leaves a satisfied requirement free of expected and observed lines", () => {

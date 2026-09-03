@@ -61,6 +61,13 @@ const mismatched: Transport.Readiness = {
           status: "missing",
           values: [],
         }),
+        new Verify.PublicDnsEvidence({
+          detail: "The resolver did not answer.",
+          observedAt,
+          resolver: "quad9",
+          status: "unknown",
+          values: [],
+        }),
       ],
       operationId: Plan.OperationId.make("op-1"),
       record: requirements[0] as DnsRecord.Model,
