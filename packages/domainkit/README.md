@@ -109,16 +109,20 @@ per requirement, and tells you when to look again.
 ## Mount the routes
 
 ```ts
-import { Layer } from "effect";
+import { Effect, Layer } from "effect";
 import { HttpApi, HttpApiBuilder } from "effect/unstable/httpapi";
+import { DomainKitError } from "domainkit";
 import { Server } from "domainkit/server";
 
+// Verify a credential you issued and look the tenant up yourself. A request never names its own
+// `ownerId`, and one you cannot attribute fails closed.
 const IdentityLive = Layer.succeed(Server.Identity)({
   principal: (request) =>
-    Effect.succeed({
-      ownerId: request.headers["x-org-id"]!,
-      actorId: request.headers["x-user-id"]!,
-    }),
+    Effect.flatMap(yourSessions.verify(request.headers.authorization), (session) =>
+      session === null
+        ? DomainKitError.fail(new DomainKitError.Unauthenticated({ message: "No session" }))
+        : Effect.succeed({ ownerId: session.orgId, actorId: session.userId }),
+    ),
 });
 
 export const Api = HttpApi.make("app").add(Server.group);
@@ -129,20 +133,17 @@ export const ApiLive = HttpApiBuilder.layer(Api).pipe(
 );
 ```
 
-`Identity` verifies a credential you issued and looks the tenant up yourself; a request never names
-its own `ownerId`, and one you cannot attribute fails `Unauthenticated` rather than running under
-another tenant's principal.
-
 `Server.group` is one `HttpApiGroup` with fifteen typed endpoints covering the whole lifecycle:
 inspect, discover, connect, callback, attach, detach, disconnect, plan, approve, reject, apply, read
-a plan or a receipt, observe, and build a cleanup plan. `Identity` is the only service you write; every handler
-derives the `Principal` for the request it is serving. `Server.group.prefix("/internal/dns")` moves
+a plan or a receipt, observe, and build a cleanup plan. `Identity` is the only service you write, and
+every handler derives the `Principal` for the request it is serving. `Server.group.prefix("/internal/dns")` moves
 every route, and the OAuth callback URL follows the mount. `OpenApi.fromApi(Server.api)` documents
 the group.
 
 After an interactive connection completes, the callback redirects to the `returnTo` the flow was
-started with, or to `defaultReturnTo`. Either way the destination must be a path on this server or a
-URL on the callback's own origin, so a provider cannot steer the customer off the application.
+started with, or to `defaultReturnTo`. The destination is resolved against the callback URL and must
+land on its origin, so neither the provider nor a crafted `returnTo` can steer the customer off the
+application.
 
 Failures cross the wire as the `DomainKitError` value with the status its `reason` derives, so a
 `Conflict` is a 409 carrying the conflicting operations and a `Reconnect` is a 403 naming the
