@@ -109,9 +109,3 @@ change it after. `registryPrefix` does the same for CapsuleDB's own ledger table
 
 The package passes `Testing.conformance.storage` from `domainkit/testing`, the same suite the
 in-memory implementation passes.
-
-## Development pin
-
-Until `capsuledb@0.2` is published, the `capsuledb` dependency is pinned to a reviewed Git revision
-as a devDependency. That pin never enters the packed runtime dependency graph; a packed-manifest
-test enforces it.

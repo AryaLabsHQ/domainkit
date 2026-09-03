@@ -46,7 +46,7 @@
         "@effect/vitest": "4.0.0-rc.112",
         "@testcontainers/postgresql": "12.1.0",
         "@types/bun": "1.4.0",
-        "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#94777cfdcf5cca5dce1a4abe5db9665e0630a00f",
+        "capsuledb": "0.2.0",
         "drizzle-orm": "1.0.0-rc.5-ab785fc",
         "effect": "4.0.0-rc.112",
         "tsdown": "0.22.14",
@@ -54,7 +54,7 @@
         "vitest": "4.1.11",
       },
       "peerDependencies": {
-        "capsuledb": ">=0.1.0 <0.2.0",
+        "capsuledb": ">=0.2.0 <0.3.0",
         "effect": ">=4.0.0-rc.112 <5.0.0",
       },
     },
@@ -120,7 +120,7 @@
     "blume@1.5.3": "patches/blume@1.5.3.patch",
   },
   "overrides": {
-    "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#94777cfdcf5cca5dce1a4abe5db9665e0630a00f",
+    "capsuledb": "0.2.0",
   },
   "packages": {
     "@ai-sdk/gateway": ["@ai-sdk/gateway@4.0.69", "", { "dependencies": { "@ai-sdk/provider": "4.0.9", "@ai-sdk/provider-utils": "5.0.34", "@vercel/oidc": "3.2.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-W5MMdyqsaziQy/A4kxlK74iEQ+NuO6OaszH32cEQpUgBW0o15S2fAdP0aYSH2/5lrVZSMXLQLCzuMkRGHBua3A=="],
@@ -1337,7 +1337,7 @@
 
     "caniuse-lite": ["caniuse-lite@1.0.30001810", "", {}, "sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg=="],
 
-    "capsuledb": ["capsuledb@github:aryasaatvik/CapsuleDB#94777cf", { "peerDependencies": { "@effect/sql-libsql": ">=4.0.0-rc.111 <5", "@effect/sql-sqlite-bun": ">=4.0.0-rc.111 <5", "effect": ">=4.0.0-rc.111 <5" }, "optionalPeers": ["@effect/sql-libsql", "@effect/sql-sqlite-bun"], "bin": { "capsuledb": "./dist/cli.mjs" } }, "aryasaatvik-CapsuleDB-94777cf", "sha512-MG0zYFu7u+Hnrm/E88CLywBwhD03Ma8i/3Q3SDRR6Jh2szCzdoANJV5F5q3dfoxUyM49rP6ULlPXi3FjjeZl+w=="],
+    "capsuledb": ["capsuledb@0.2.0", "", { "peerDependencies": { "@effect/sql-libsql": ">=4.0.0-rc.111 <5", "@effect/sql-sqlite-bun": ">=4.0.0-rc.111 <5", "effect": ">=4.0.0-rc.111 <5" }, "optionalPeers": ["@effect/sql-libsql", "@effect/sql-sqlite-bun"], "bin": { "capsuledb": "dist/cli.mjs" } }, "sha512-SyezLz+TE/1M2qx+RPdhnfatYuvORWAqNB74xapQ9wgPqHWsq5VrOD7TkjU5m6PlTU70xjJM69Kws1Zke7JJLg=="],
 
     "ccount": ["ccount@2.0.1", "", {}, "sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg=="],
 

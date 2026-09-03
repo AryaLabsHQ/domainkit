@@ -37,19 +37,25 @@ const pack = async (directory: string) => {
 };
 
 describe("packed manifest", () => {
-  it("keeps the development pin out of the runtime dependency graph", async () => {
+  it("resolves capsuledb through the peer range, not a workspace path", async () => {
     const directory = await mkdtemp(join(tmpdir(), "domainkit-capsuledb-pack-"));
     try {
       const { packed } = await pack(directory);
-      // The pin stays a devDependency until capsuledb@0.2 is published; a consumer resolves
-      // `capsuledb` through the peer range, never through a Git URL.
-      assert.strictEqual(
-        packed.devDependencies?.capsuledb,
-        "git+https://github.com/aryasaatvik/CapsuleDB.git#94777cfdcf5cca5dce1a4abe5db9665e0630a00f",
-      );
+      // The host installs one capsuledb and this package binds to it, so a consumer can never end
+      // up with two copies of the registry.
+      assert.strictEqual(packed.peerDependencies?.capsuledb, ">=0.2.0 <0.3.0");
       assert.strictEqual(packed.dependencies?.capsuledb, undefined);
-      assert.ok(packed.peerDependencies?.capsuledb !== undefined, "capsuledb stays a peer");
-      assert.strictEqual(JSON.stringify(packed).includes("capsuledb-worktrees"), false);
+      // Nothing a consumer installs may come from a Git URL or a local checkout.
+      const ranges = Object.values({
+        ...packed.dependencies,
+        ...packed.devDependencies,
+        ...packed.peerDependencies,
+      });
+      for (const range of ranges) {
+        assert.strictEqual(range.startsWith("git+"), false, `${range} is a Git dependency`);
+        assert.strictEqual(range.includes("worktrees"), false, `${range} is a local checkout`);
+        assert.strictEqual(range.startsWith("file:"), false, `${range} is a local checkout`);
+      }
     } finally {
       await rm(directory, { force: true, recursive: true });
     }

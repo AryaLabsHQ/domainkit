@@ -52,7 +52,7 @@
     "@effect/vitest": "4.0.0-rc.112",
     "@testcontainers/postgresql": "12.1.0",
     "@types/bun": "1.4.0",
-    "capsuledb": "git+https://github.com/aryasaatvik/CapsuleDB.git#94777cfdcf5cca5dce1a4abe5db9665e0630a00f",
+    "capsuledb": "0.2.0",
     "drizzle-orm": "1.0.0-rc.5-ab785fc",
     "effect": "4.0.0-rc.112",
     "tsdown": "0.22.14",
@@ -60,7 +60,7 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "capsuledb": ">=0.1.0 <0.2.0",
+    "capsuledb": ">=0.2.0 <0.3.0",
     "effect": ">=4.0.0-rc.112 <5.0.0"
   },
   "engines": {
