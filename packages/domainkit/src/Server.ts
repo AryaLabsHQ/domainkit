@@ -137,11 +137,19 @@ export const ApprovePayload = Schema.Struct({
 });
 export type ApprovePayload = typeof ApprovePayload.Type;
 
+export const RejectPayload = Schema.Struct({
+  /** Why the customer declined, for the audit trail. */
+  reason: Schema.optionalKey(Schema.String),
+});
+export type RejectPayload = typeof RejectPayload.Type;
+
 /** One durable plan -> approval -> receipt lifecycle, as `GET /plans/:planId` returns it. */
 export const Attempt = Schema.Struct({
   plan: Plan.Plan,
+  status: Storage.AttemptStatus,
   approval: Schema.NullOr(Approval.Approval),
   receipt: Schema.NullOr(Receipt.Receipt),
+  rejection: Schema.NullOr(Storage.Rejection),
 });
 export type Attempt = typeof Attempt.Type;
 
@@ -248,6 +256,14 @@ export const group = HttpApiGroup.make("domainkit")
     }),
   )
   .add(
+    HttpApiEndpoint.post("reject", "/plans/:planId/rejections", {
+      params: { planId: Plan.PlanId },
+      payload: RejectPayload,
+      success: Attempt,
+      error: errors,
+    }),
+  )
+  .add(
     HttpApiEndpoint.post("apply", "/approvals/:approvalId/apply", {
       params: { approvalId: Approval.ApprovalId },
       success: Receipt.Receipt,
@@ -282,7 +298,7 @@ export const group = HttpApiGroup.make("domainkit")
       error: errors,
     }),
   );
-// Cleanup approve and apply reuse `approve` and `apply`: the attempt knows its kind.
+// Cleanup approve, reject, and apply reuse those routes: the attempt knows its kind.
 
 export type Group = typeof group;
 
@@ -587,6 +603,17 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
             }),
           ),
         )
+        .handle("reject", ({ params, payload, request }) =>
+          as(
+            request,
+            Effect.gen(function* () {
+              const attempt = yield* storage.attempts.get(params.planId);
+              return yield* kindOf(attempt).reject(params.planId, {
+                ...(payload.reason === undefined ? {} : { reason: payload.reason }),
+              });
+            }),
+          ),
+        )
         .handle("apply", ({ params, request }) =>
           as(
             request,
@@ -601,8 +628,10 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
             request,
             Effect.map(storage.attempts.get(params.planId), (attempt) => ({
               plan: attempt.plan,
+              status: attempt.status,
               approval: attempt.approval,
               receipt: attempt.receipt,
+              rejection: attempt.rejection,
             })),
           ),
         )

@@ -16,7 +16,7 @@ application that owns them.
 ## Decision
 
 `domainkit/server` publishes `Server.group`, one `HttpApiGroup` covering the whole lifecycle in
-thirteen endpoints. A host adds it to its own `HttpApi` and provides `Server.layer(api)` for the
+fourteen endpoints. A host adds it to its own `HttpApi` and provides `Server.layer(api)` for the
 handlers. The group declares no prefix, so `Server.group.prefix("/internal/dns")` or a router mount
 moves every route at once and the OAuth callback URL follows the mount. `Server.api` is the same
 group as a standalone API, and `OpenApi.fromApi` documents it without extra work.

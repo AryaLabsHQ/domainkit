@@ -60,8 +60,13 @@ export interface ProvisioningGroup {
     readonly planId: Plan.PlanId;
     readonly operationIds?: ReadonlyArray<Plan.OperationId>;
   }) => Fx<Approval.Approval>;
+  /** Decline the plan; terminal, and approving it afterwards fails `Stale`. */
+  readonly reject: (input: {
+    readonly planId: Plan.PlanId;
+    readonly reason?: string;
+  }) => Fx<Attempt>;
   readonly apply: (approvalId: Approval.ApprovalId) => Fx<Receipt.Receipt>;
-  /** The stored plan, its approval, and its receipt, for rendering a flow the customer left. */
+  /** The stored plan with its status, approval, receipt, and rejection. */
   readonly attempt: (planId: Plan.PlanId) => Fx<Attempt>;
 }
 
@@ -75,6 +80,10 @@ export interface CleanupGroup {
     readonly planId: Plan.PlanId;
     readonly operationIds?: ReadonlyArray<Plan.OperationId>;
   }) => Fx<Approval.Approval>;
+  readonly reject: (input: {
+    readonly planId: Plan.PlanId;
+    readonly reason?: string;
+  }) => Fx<Attempt>;
   readonly apply: (approvalId: Approval.ApprovalId) => Fx<Receipt.Receipt>;
 }
 
@@ -158,7 +167,7 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
       return yield* DomainKitError.decode(input.success, reply.body, "response");
     });
 
-  /** Provisioning and cleanup approve and apply through the same routes; the attempt knows its kind. */
+  /** Provisioning and cleanup share these routes; the attempt knows its kind. */
   const approve = (input: {
     readonly planId: Plan.PlanId;
     readonly operationIds?: ReadonlyArray<Plan.OperationId>;
@@ -170,6 +179,16 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
         input.operationIds === undefined ? {} : { operationIds: input.operationIds },
       ),
       success: Approval.Approval,
+    });
+
+  const reject = (input: { readonly planId: Plan.PlanId; readonly reason?: string }) =>
+    request({
+      method: "POST",
+      path: `/plans/${encodeURIComponent(input.planId)}/rejections`,
+      body: Schema.encodeSync(Server.RejectPayload)(
+        input.reason === undefined ? {} : { reason: input.reason },
+      ),
+      success: Server.Attempt,
     });
 
   const apply = (approvalId: Approval.ApprovalId) =>
@@ -227,6 +246,7 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
         success: Plan.Plan,
       }),
     approve,
+    reject,
     apply,
     attempt: (planId) =>
       request({
@@ -253,6 +273,7 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
         success: Plan.Plan,
       }),
     approve,
+    reject,
     apply,
   };
 

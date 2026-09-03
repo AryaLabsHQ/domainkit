@@ -140,6 +140,41 @@ describe("Server.group over the lifecycle", () => {
     }
   });
 
+  it("records a rejection as a terminal attempt state", async () => {
+    const { fake, call, dispose } = server();
+    try {
+      await connected(call, fake.id);
+      const planned = await call("POST", "/domains/app.example.com/plans", {
+        requirements: requirements.map((record) => JSON.parse(JSON.stringify(record))),
+      });
+      const plan = planned.body as { readonly id: string };
+
+      const rejected = await call("POST", `/plans/${plan.id}/rejections`, {
+        reason: "wrong subdomain",
+      });
+      assert.strictEqual(rejected.status, 200);
+      const attempt = rejected.body as {
+        readonly status: string;
+        readonly rejection: { readonly actorId: string; readonly reason: string | null } | null;
+      };
+      assert.strictEqual(attempt.status, "rejected");
+      assert.strictEqual(attempt.rejection?.actorId, "user_test");
+      assert.strictEqual(attempt.rejection?.reason, "wrong subdomain");
+
+      const read = await call("GET", `/plans/${plan.id}`);
+      assert.deepStrictEqual(read.body, rejected.body);
+
+      const late = await call("POST", `/plans/${plan.id}/approvals`, {});
+      assert.strictEqual(late.status, 409);
+      assert.strictEqual(
+        (late.body as { readonly reason: { readonly _tag: string } }).reason._tag,
+        "Stale",
+      );
+    } finally {
+      await dispose();
+    }
+  });
+
   it("answers with the DomainKitError wire body and its httpStatus", async () => {
     const { call, dispose } = server();
     try {
@@ -352,7 +387,7 @@ describe("Server.api", () => {
   it("generates an OpenAPI document covering every route", () => {
     const spec = OpenApi.fromApi(Server.api);
     const operations = Object.values(spec.paths).flatMap((item) => Object.values(item));
-    assert.strictEqual(operations.length, 13);
+    assert.strictEqual(operations.length, 14);
     assert.deepStrictEqual(
       operations
         .map((operation) => (operation as { readonly operationId: string }).operationId)
@@ -370,6 +405,7 @@ describe("Server.api", () => {
         "domainkit.observe",
         "domainkit.plan",
         "domainkit.receipt",
+        "domainkit.reject",
         "domainkit.start",
       ],
     );

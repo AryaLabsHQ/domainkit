@@ -93,8 +93,10 @@ describe("Transport.fromFetch", () => {
       assert.strictEqual(receipt.status, "complete");
 
       const attempt = yield* provisioning.attempt(plan.id);
+      assert.strictEqual(attempt.status, "complete");
       assert.strictEqual(attempt.receipt?.id, receipt.id);
       assert.strictEqual(attempt.approval?.id, approval.id);
+      assert.strictEqual(attempt.rejection, null);
 
       const readiness = yield* verification.observe("app.example.com");
       assert.strictEqual(readiness.overall, "ready");
@@ -156,6 +158,29 @@ describe("Transport.fromFetch", () => {
       assert.strictEqual(missing.httpStatus, 404);
       if (missing.reason._tag !== "NotFound") return;
       assert.strictEqual(missing.reason.entity, "plan");
+    }).pipe(Effect.ensuring(Effect.promise(dispose)));
+  });
+
+  it.effect("rejects a plan and refuses to approve it afterwards", () => {
+    const { fake, transport, dispose } = inProcess();
+    const { connection, provisioning } = groups(transport);
+    return Effect.gen(function* () {
+      yield* connection.start({
+        domain: "app.example.com",
+        provider: fake.id,
+        method: Transport.Method.token("token"),
+      });
+      const plan = yield* provisioning.plan({ domain: "app.example.com", requirements });
+
+      const rejected = yield* provisioning.reject({ planId: plan.id, reason: "wrong subdomain" });
+      assert.strictEqual(rejected.status, "rejected");
+      assert.strictEqual(rejected.rejection?.reason, "wrong subdomain");
+
+      const stale = yield* Effect.flip(provisioning.approve({ planId: plan.id }));
+      assert.strictEqual(stale.reason._tag, "Stale");
+      assert.strictEqual(stale.httpStatus, 409);
+      if (stale.reason._tag !== "Stale") return;
+      assert.strictEqual(stale.reason.planId, plan.id);
     }).pipe(Effect.ensuring(Effect.promise(dispose)));
   });
 
@@ -252,6 +277,8 @@ describe("Testing.transport", () => {
       });
       const plan = yield* provisioning.plan({ domain: "app.example.com", requirements });
       yield* provisioning.apply((yield* provisioning.approve({ planId: plan.id })).id);
+      const second = yield* provisioning.plan({ domain: "app.example.com", requirements });
+      yield* provisioning.reject({ planId: second.id });
 
       assert.deepStrictEqual(
         transport.calls.map(({ method }) => method),
@@ -261,10 +288,13 @@ describe("Testing.transport", () => {
           "provisioning.plan",
           "provisioning.approve",
           "provisioning.apply",
+          "provisioning.plan",
+          "provisioning.reject",
         ],
       );
       assert.deepStrictEqual(transport.calls[0]?.input, "app.example.com");
       assert.deepStrictEqual(transport.calls[3]?.input, { planId: plan.id });
+      assert.deepStrictEqual(transport.calls[6]?.input, { planId: second.id });
     });
   });
 

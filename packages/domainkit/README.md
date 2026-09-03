@@ -132,9 +132,9 @@ export const ApiLive = HttpApiBuilder.layer(Api).pipe(
 `Identity` fails closed: a request DomainKit cannot attribute never runs under another tenant's
 principal.
 
-`Server.group` is one `HttpApiGroup` with thirteen typed endpoints covering the whole lifecycle:
-inspect, connect, callback, attach, detach, disconnect, plan, approve, apply, read a plan or a
-receipt, observe, and build a cleanup plan. `Identity` is the only service you write; every handler
+`Server.group` is one `HttpApiGroup` with fourteen typed endpoints covering the whole lifecycle:
+inspect, connect, callback, attach, detach, disconnect, plan, approve, reject, apply, read a plan or
+a receipt, observe, and build a cleanup plan. `Identity` is the only service you write; every handler
 derives the `Principal` for the request it is serving. `Server.group.prefix("/internal/dns")` moves
 every route, and the OAuth callback URL follows the mount. `OpenApi.fromApi(Server.api)` documents
 the group.
