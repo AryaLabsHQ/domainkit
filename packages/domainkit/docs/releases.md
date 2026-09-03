@@ -20,6 +20,7 @@ Useful local checks:
 
 ```bash
 bun run release:check
+bun run typecheck:examples
 bun run tegami pr preview
 ```
 

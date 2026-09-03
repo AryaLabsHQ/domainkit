@@ -1,266 +1,106 @@
 ---
-title: Integrate a host application
-description: Put users, credentials, storage, server routes, and React transport around DomainKit so the host app stays in control.
+title: Mount DomainKit in your app
+description: Compose the lifecycle layer, write the Identity service, mount the route group in your API, and handle the provider callback the browser is sent to.
+sidebar:
+  label: Host integration
 seo:
-  title: Integrate DomainKit into a SaaS application
+  title: Integrate DomainKit into a host application
 ---
 
-This guide shows what belongs in your app and what DomainKit handles. Your app owns security,
-storage, and product rules. DomainKit handles connecting a provider, planning DNS changes, applying
-them, checking the result, and cleaning up.
+A host writes one service and mounts one route group. Everything else, including provider callbacks
+and the error-to-status table, comes with them.
 
-## Architecture
+## Prerequisites
 
-```text
-browser or product client
-  -> authenticated host endpoints
-  -> host identity, tenant policy, and consent checks
-  -> durable connection + plan-attempt + receipt storage
-  -> domainkit
-  -> Cloudflare, Vercel, or another DnsProvider
-```
+- `domainkit` and `effect` installed, Node.js 24.10 or newer.
+- A `Storage` implementation. [Persistence and custody](/docs/guides/storage) covers the options.
+- A 32-byte custody key in `DOMAINKIT_CUSTODY_KEY`, or a KMS.
+- A session credential your app already issues, readable from a cookie.
 
-`@domainkit/react` uses the same boundary through `Transport.Service`:
+## Compose the layer
 
-```text
-@domainkit/react
-  -> Transport.Service
-  -> authenticated host client
-  -> the server lifecycle above
-```
+`DomainKit.layer({ providers })` provides every lifecycle service and requires `Storage` and
+`Custody` beneath it.
 
-Provider credentials never cross into the browser transport.
+<Snippet file="examples/storage/postgres.ts" region="wire" title="The lifecycle layer" />
 
-## Decide what is durable
+Compose `Storage` with `provideMerge`, not `provide`: the route handlers read attempts and receipts
+straight from it.
 
-| State                                         | Lifetime                 | Host responsibility                                                               |
-| --------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| OAuth or integration continuation             | Short-lived and one-time | Store until callback consumption; loss may require restarting consent             |
-| Provider authorization                        | Durable                  | Persist account context, capabilities, credential reference, and revocation state |
-| Encrypted credential                          | Durable and secret       | Encrypt tokens and access-token expiry, restrict access, rotate, and audit use    |
-| Organization connection and domain attachment | Durable                  | Bind provider authority to your tenant and an exact discovered provider target    |
-| Plan attempt and authorization                | Durable through apply    | Correlate a server-owned plan with the digest the user reviewed                   |
-| Apply receipt                                 | Durable                  | Preserve confirmed writes and partial outcomes for later cleanup                  |
-| Public-DNS observation                        | Evidence, not authority  | Persist only if your product needs history, polling, or readiness state           |
+## Write Identity
 
-Do not use a browser store or short-lived cache as the source of truth for provider authorizations,
-plans, or receipts.
+`Server.Identity` maps a request to a `Principal`. It is the only service you implement.
 
-## 1. Define product requirements on the server
+<Snippet file="examples/server/mount.ts" region="identity" title="Identity" />
 
-Your product decides which DNS records it needs and why. Check those requirements on the server:
+Two rules make this safe:
 
-```ts
-import { DnsRecord, DomainName } from "domainkit";
+- **Verify a credential you issued, then look the tenant up yourself.** A request never names its
+  own `ownerId`. Every stored row is scoped by whatever this returns, so a request you cannot
+  attribute must fail closed.
+- **Read it from a cookie.** `/callback/:provider` is a top-level navigation the provider sends the
+  browser on, so only what the browser attaches by itself arrives with it. A header-only scheme
+  works until the first interactive connection and then fails at the last step.
 
-const requirement = DnsRecord.Txt({
-  metadata: {
-    ownership: "product",
-    provenance: "domain-onboarding",
-    purpose: "domain-verification",
-  },
-  name: DomainName.parse("_verify.example.com"),
-  policy: "append",
-  ttl: 300,
-  value: "verification-value",
-});
-```
+`Identity` takes an optional `authorize`, which runs after `principal` with the name of the route
+being served. Use it when reads and writes belong to different roles.
 
-The browser may display these records, but it must not choose ownership, conflict policy, or provider
-authority.
+<Snippet file="examples/server/mount.ts" region="authorize" title="Splitting reads from writes" />
 
-## 2. Implement authorization storage
+Leave it out when your own middleware already gates the mount: without it every authenticated
+principal reaches every route.
 
-For an Effect host, provide one `ManagedDnsConnections.Service` for the provider authorization,
-encrypted credential reference, organization connections, and domain attachments. An async host implements
-`ManagedDnsConnections.AsyncInterface` from the Promise entry point and passes it to
-`createDomainKit`:
+## Mount the group
 
-```ts
-import { type ManagedDnsConnections } from "domainkit/promise";
-```
+<Snippet file="examples/server/mount.ts" region="mount" title="Adding the group to your API" />
 
-A SQL host can save these records in one transaction. If database and vault storage are split, make
-the save recoverable behind the same interface.
+`Server.group` covers the whole lifecycle in fifteen endpoints. It declares no path of its own, so
+one prefix moves every route and the callback URL follows it.
 
-Use `domainkit/testing`'s in-memory repository in tests only. It does not encrypt credentials or
-provide production durability.
+<Snippet file="examples/server/mount.ts" region="prefix" title="Mounting elsewhere" />
 
-PostgreSQL Effect hosts may instead use [`@domainkit/capsuledb`](/docs/reference/capsuledb). The
-optional package owns the lifecycle schema and `ManagedDnsConnections.Service`; your application
-supplies its existing `PgClient`, calls `Registry.prepare` once at startup, and provides encrypted
-credential custody plus tenant/domain bindings. It is intentionally Effect-native: `createDomainKit`
-does not initialize CapsuleDB or provide async persistence. An async host must implement
-`ManagedDnsConnections.AsyncInterface` (or adapt an Effect service with
-`ManagedDnsConnections.toAsync`) and own database startup and disposal.
+Hosts that are not on Effect's HTTP stack take the same group as one `fetch` handler.
 
-## 3. Mount provider connection routes
+<Snippet file="examples/server/mount.ts" region="web-handler" title="The Web handler" />
 
-`domainkit/server` supplies one catch-all route program for the shared connection mechanics. In an
-async host, pass Promise capabilities to `createDomainKit`:
+Mount `handler` on a catch-all route under the prefix, and call `dispose` when the process shuts
+down. Hono, Next.js App Router, and TanStack Start all take a Web handler directly.
 
-```ts
-import { createDomainKit } from "domainkit/server";
+## Handle the callback
 
-export const domainKit = await createDomainKit({
-  baseURL: "https://app.example.com",
-  identity: HostIdentity,
-  connectionPolicy: HostConnectionPolicy,
-  // Each entry implements AsyncInteractiveProvider for one provider/method pair.
-  providers: [cloudflareProvider],
-  pendingAuthorizations: RedisPendingAuthorizations,
-  persistence: ManagedDnsConnections,
-});
-```
+An interactive connection ends at `/callback/:provider`. DomainKit spends the continuation, stores
+the connection, and redirects the customer.
 
-The host owns the persistence implementation, database setup, migrations, and database lifecycle.
-DomainKit intentionally does not supply async CapsuleDB persistence.
+The destination is the `returnTo` the flow was started with, or `defaultReturnTo`. It is resolved
+against the callback URL and must land on its origin, so neither the provider nor a crafted
+`returnTo` can steer the customer off your application. `returnTo` is not a declared callback query
+parameter, so the provider cannot set it at all.
 
-In an Effect-native host, compose the same capabilities as sibling Layers:
+By default the callback URL is the request's own origin plus the prefix the group is mounted at. An
+edge that rewrites `Host` leaves that pointing somewhere the browser never reaches, so name the
+public base once and it wins everywhere:
 
-```ts
-import { Server } from "domainkit/server";
-import { Layer } from "effect";
+<Snippet file="examples/server/mount.ts" region="callback-base-url" title="Behind an edge" />
 
-const DomainKitDependencies = Layer.mergeAll(
-  HostIdentityLive,
-  HostConnectionPolicyLive,
-  ProviderRegistryLive,
-  RedisPendingAuthorizationsLive,
-  ManagedDnsConnectionsLive,
-  CryptoLive,
-);
+Register that same callback URL with the provider's OAuth client or integration.
 
-const DomainKitServerLive = Server.layer({
-  baseURL: "https://app.example.com",
-}).pipe(Layer.provide(DomainKitDependencies));
-```
+## Document it
 
-Mount `Server.toWebHandler(DomainKitServerLive).fetch` at `/api/domainkit/*`, or run
-`Server.Handler` directly inside an Effect HTTP host. Async frameworks mount `domainKit.fetch` at
-the same catch-all route. This handler currently serves only the connection start and callback
-routes below; expose provisioning, verification, and cleanup endpoints separately in your app. An
-interactive provider connection has two server routes:
+<Snippet file="examples/server/mount.ts" region="openapi" title="OpenAPI" />
 
-1. The start route checks the current user and tenant, asks the host policy to authorize any
-   requested existing authorization aggregate, creates a short-lived continuation, and returns a
-   provider authorization URL.
-2. The callback route trusts the initiating principal stored in the server-side continuation,
-   consumes it exactly once, exchanges the provider code, and commits the durable authorization
-   aggregate.
+## Next
 
-A token route validates the submitted credential on the server and commits the same durable
-authorization and organization connection without a redirect. Connection start/complete does not
-create a domain attachment.
-
-The callback redirects to a previously validated same-origin path. After connection, reconstruct
-the provider client from the stored credential and non-secret provider context. Do not ask the
-browser to retain the provider token or account client.
-
-Before each OAuth-backed provider operation, load the credential and refresh within a short expiry
-skew. Serialize refresh per authorization, reload after acquiring the lock, then persist the entire
-rotated credential before restoring the provider session. Terminal OAuth grant failures should
-return a reconnect-required product state; transient provider failures should remain retryable.
-DomainKit's provider helper performs the exchange, but the host owns this lock-and-persist call
-stack.
-
-## Attach an exact provider target
-
-After a connection is returned, load its private aggregate, restore the credential-scoped provider
-session, and resolve the requested domain. Persist the selected target with `Connection.attach`:
-
-```ts
-import { Connection, DomainName } from "domainkit/promise";
-
-const aggregate = await repository.getByConnectionId(connection.id);
-if (aggregate === null) throw new Error("Connection was not persisted");
-
-// Adapt the provider-specific restore helper to your host's ProviderSession.AsyncInterface.
-const domainName = DomainName.parse("example.com");
-const resolution = await providerSession.resolveTarget(domainName);
-if (resolution._tag !== "Resolved") {
-  throw new Error("The domain needs an explicit provider-target selection");
-}
-
-const attached = await Connection.attach({
-  attachment: {
-    connectionId: connection.id,
-    createdAt: new Date(),
-    domain: domainName,
-    id: crypto.randomUUID(),
-    target: resolution.target,
-  },
-  connectionId: connection.id,
-  ownerId,
-  repository,
-});
-```
-
-The target must come from provider-backed discovery, not browser input. If the result is
-`SelectionRequired`, return candidates to the product UI and validate the selected candidate on the
-server. Use the focused provider for planning, apply, observation, and receipt-bound cleanup.
-
-## 4. Persist plan attempts before approval
-
-When the user asks to review DNS changes:
-
-1. Load the authorized connection and assert its owner and domain attachment.
-2. Reconstruct the provider.
-3. Create the plan against an exact zone or a discovered zone.
-4. Persist the complete encoded plan, digest, connection, tenant, domain, and expiry as one attempt.
-5. Return a browser-safe projection for review.
-
-When the user approves, match the submitted digest to that server-owned attempt before calling
-`Provisioning.authorize`. Do not rebuild a plan from browser input and treat it as the reviewed plan.
-
-## 5. Apply once and persist the receipt
-
-Before apply, claim or otherwise lock the plan attempt according to your host's request model. Pass
-the saved plan and authorization to `Provisioning.apply`. Store complete and partial receipts before
-reporting the outcome.
-
-An apply receipt is more than UI progress. It proves which writes can be considered for a later
-cleanup plan.
-
-## 6. Map authenticated endpoints into React
-
-Expose only app-facing operations to the browser, then adapt the client once:
-
-```ts
-import { Transport } from "domainkit";
-
-export const transport = Transport.layerFromAsync({
-  connection: api.connections,
-  provisioning: api.provisioning,
-  verification: api.verification,
-  cleanup: api.cleanup,
-});
-```
-
-The React transport carries a `planDigest`; your server can also match an opaque attempt ID in its
-session, database, or API route. The transport is an app contract for the browser, not a provider API.
-
-## 7. Keep product readiness separate
-
-`Verification.observe` reports provider and public-DNS evidence for DNS requirements. Your product
-may also need service readiness, certificate status, email checks, polling, or a saved onboarding
-phase. Keep that product state in the host instead of folding it into DomainKit's observation result.
-
-## Security checklist
-
-- Provider credentials are accepted and used only on trusted server boundaries.
-- Every connection, reuse, plan, apply, cleanup, and disconnect route rechecks tenant authority.
-- Domain attachments are checked in addition to provider scopes.
-- Interactive continuations are single-use and bound to the initiating flow.
-- OAuth refresh is serialized, persisted before use, and falls back to reconnect only for terminal grants.
-- Plans and cleanup plans are authorized by exact digest.
-- Partial receipts are stored before a retry or remediation path begins.
-- Detaching one domain does not imply deleting DNS records.
-- Final-binding revocation remains retryable until the provider confirms it.
-
-## Next steps
-
-- [Provision and clean up records](/docs/guides/provision-and-clean-up)
-- [Choose a React integration level](/docs/react/integration-levels)
-- [Understand provider authorization and domain attachments](/docs/core/connections)
-- [Review the transport reference](/docs/reference/transport)
+<CardGroup cols={2}>
+  <Card title="Persistence and custody" href="/docs/guides/storage" icon="database">
+    Where the rows live and how credentials are sealed.
+  </Card>
+  <Card title="Browser transport" href="/docs/react/transport" icon="link">
+    Call the routes you just mounted.
+  </Card>
+  <Card title="domainkit/server" href="/docs/reference/server" icon="book">
+    Every endpoint, option, and wire schema.
+  </Card>
+  <Card title="Troubleshooting" href="/docs/guides/troubleshooting" icon="alert">
+    When an interactive connection never completes.
+  </Card>
+</CardGroup>

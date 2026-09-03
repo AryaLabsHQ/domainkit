@@ -1,8 +1,8 @@
 # Contributing
 
-DomainKit defines a small, auditable public contract for DNS provisioning. Changes should keep
-provider APIs, host storage, and product UI outside the core protocol unless an accepted architecture
-decision says otherwise.
+DomainKit defines a small, auditable public contract for DNS provisioning. Provider APIs, host
+storage, and product UI stay outside the core protocol unless an accepted architecture decision says
+otherwise.
 
 ## Development
 
@@ -13,37 +13,44 @@ bun install --frozen-lockfile
 bun run release:check
 ```
 
-Add focused tests for observable behavior and document exported APIs. Pull requests should contain
-one coherent change and explain any public contract change.
+`release:check` runs lint, the lint-rule tests, the format check, and each package's own typecheck,
+tests, build, and packed-consumer suite.
+
+Two more gates cover the documentation:
+
+```sh
+bun run typecheck:examples
+cd apps/docs && bun run reference:check && bunx blume validate --strict && bun run audit --strict && bun run build
+```
+
+Add focused tests for observable behaviour, document exported APIs, and keep a pull request to one
+coherent change. A change to the public contract says so in its description.
+
+Every code sample on the documentation site is a slice of a file in `examples/` or
+`packages/domainkit/examples/`, so a snippet that drifts from the API fails CI rather than the
+reader.
 
 ## Live provider conformance
 
-The live harness is opt-in and never runs in CI. It validates a credential, builds a DNS plan, and
-prints the plan without mutating provider state:
+The live harness is opt-in and never runs in CI. It runs the provider conformance suite against a
+real account: create and read back, exact no-op, conflict, stale plan, and partial apply. Every
+record it writes carries the conformance prefix and is removed again.
 
 ```sh
-bun run test:live:cloudflare preview
-bun run test:live:vercel preview
+bun run test:live:cloudflare
+bun run test:live:vercel
 ```
 
-Both providers require these environment variables:
+Both providers need the zone named twice, once as the target and once as the explicit permission:
 
 - `DOMAINKIT_LIVE_ZONE`
-- `DOMAINKIT_LIVE_RECORD_NAME`
-- `DOMAINKIT_LIVE_RECORD_VALUE`
-- `DOMAINKIT_LIVE_ALLOW_ZONE`, exactly matching the zone
-- `DOMAINKIT_LIVE_ALLOW_RECORD_NAME`, exactly matching the record name
+- `DOMAINKIT_LIVE_ALLOW_ZONE`, matching it exactly
 
-Cloudflare additionally requires `DOMAINKIT_LIVE_CLOUDFLARE_ACCOUNT_ID` and
-`DOMAINKIT_LIVE_CLOUDFLARE_TOKEN`. Vercel requires `DOMAINKIT_LIVE_VERCEL_TEAM_ID` and
-`DOMAINKIT_LIVE_VERCEL_TOKEN`. Keep credentials in a local secret manager or scoped process
+Cloudflare also needs `DOMAINKIT_LIVE_CLOUDFLARE_TOKEN`. Vercel needs `DOMAINKIT_LIVE_VERCEL_TOKEN`
+and `DOMAINKIT_LIVE_VERCEL_TEAM_ID`. Keep credentials in a local secret manager or a scoped process
 environment; never commit them.
 
-To apply a reviewed plan, set `DOMAINKIT_LIVE_APPROVED_DIGEST` to the approval digest printed by
-`preview` and replace `preview` with `apply`. The harness recomputes the approval and refuses to apply
-if the DNS plan, Cloudflare account or Vercel team, zone allowlist, or record-name allowlist differs.
-Apply creates DNS state and does not delete it, so use an explicitly disposable record and clean it
-up through the provider when testing ends.
+Point the harness at a zone you own and can inspect. It writes real DNS records.
 
 ## Compatibility
 

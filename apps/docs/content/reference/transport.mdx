@@ -1,108 +1,68 @@
 ---
-title: Transport API
-description: Reference the app transport used by DomainKit React and implemented by your server for authenticated domain setup requests.
+title: domainkit/client
+description: The browser transport over the routes you mounted, its optional capability groups, the connect methods it sends, and the Promise adapters.
 sidebar:
-  label: Transport API
+  label: domainkit/client
 seo:
-  title: DomainKit application transport API reference
+  title: DomainKit client transport reference
 ---
 
-`Transport` is an app contract, not a provider client. Implement it on the server, authorize each
-method as a product operation, and give `DomainKit.Root` a layer that calls your authenticated
-endpoints.
-
-## Constructing responses
-
-Use the callable transport constructors when your host creates a response. Their `Schema` members
-and the aggregate `ConnectionSnapshot`/`ConnectionResult` schemas are for validating serialized
-wire data.
-
 ```ts
-import { Transport } from "domainkit";
-
-const plan = Transport.ProvisioningPlan({
-  digest: "plan-digest",
-  expiresAt: "2026-09-01T00:15:00.000Z",
-  operations: [
-    Transport.PlanOperation.Create({
-      id: "record-1",
-      record: { id: "record-1", name: "mail.example.com", type: "TXT", value: "verified" },
-    }),
-  ],
-});
-
-const result = Transport.ApplyResult.Applied({
-  operationId: "apply-1",
-  receiptId: "receipt-1",
-  results: [],
-});
+import { Transport } from "domainkit/client";
 ```
 
-This keeps `_tag` available for narrowing while avoiding handwritten tags in host implementations.
+{/* reference-inventory:start */}
 
-## Service methods
+| Namespace   | Carries                                                                                       |
+| ----------- | --------------------------------------------------------------------------------------------- |
+| `Transport` | `Interface`, `fromFetch`, `fromAsync`, `toAsync`, `capabilities`, `allCapabilities`, `Method` |
 
-| Method                 | Input                    | Result               |
-| ---------------------- | ------------------------ | -------------------- |
-| `connection.inspect`   | `InspectInput`           | `ConnectionSnapshot` |
-| `connection.connect`   | `ConnectInput`           | `ConnectionResult`   |
-| `connection.attach`    | `AttachInput`            | `Connected`          |
-| `connection.detach`    | `DetachInput`            | `DetachResult`       |
-| `provisioning.plan`    | `ProvisioningPlanInput`  | `ProvisioningPlan`   |
-| `provisioning.apply`   | `ProvisioningApplyInput` | `ApplyResult`        |
-| `verification.observe` | `ObserveInput`           | `Observation`        |
-| `cleanup.plan`         | `CleanupPlanInput`       | `CleanupPlan`        |
-| `cleanup.apply`        | `CleanupApplyInput`      | `CleanupResult`      |
+{/* reference-inventory:end */}
 
-The `Interface` returns Effect values with `Failure` in the error channel. `Service` is the Effect
-service accepted by the React root.
+## Capability groups
 
-## Connection wire models
+Every group on `Transport.Interface` is optional, so a host that mounts part of the route group gets
+a transport that typechecks and a UI that renders only what the server can serve.
 
-- `Provider` describes display-safe provider identity and authentication methods.
-- `ProviderConnection` describes a connection tied to a credential; `ProviderTarget` describes an
-  exact provider account and zone; `DomainAttachment` binds the two to one domain.
-- `Connected`, `Disconnected`, and `Unsupported` form `ConnectionSnapshot`.
-- `ConnectionResult` is either `Connected` or `Redirect`.
-- `Disconnected.reusableConnections` lists existing provider connections and their discovered
-  targets. `AttachInput` requires an explicit target and attaches without reconnecting.
-- `DetachInput` identifies a `DomainAttachment` and requires `preserveDns: true`; DNS deletion is
-  the independent cleanup flow. `DetachResult` retains the connection and reports the remaining
-  attachment count, including zero for a final attachment.
+| Group          | Methods                                                          |
+| -------------- | ---------------------------------------------------------------- |
+| `connection`   | `inspect`, `discover`, `start`, `attach`, `detach`, `disconnect` |
+| `provisioning` | `plan`, `approve`, `reject`, `apply`, `attempt`                  |
+| `verification` | `observe`                                                        |
+| `cleanup`      | `plan`, `approve`, `reject`, `apply`                             |
 
-## Plan and result wire models
+<Snippet file="examples/client/transport.ts" region="capabilities" title="Declaring capabilities" />
 
-- `ProvisioningPlan` contains `digest`, `expiresAt`, and `PlanOperation` values.
-- `PlanOperation` is `Create`, `Noop`, or `Conflict`.
-- `ApplyResult` is `Applied`, `Partial`, or `Stale` and contains per-operation results when present.
-- `CleanupPlan` contains receipt-bound `Delete`, `AlreadyAbsent`, or `Blocked` operations.
-- `CleanupResult` is `Cleaned`, `Partial`, or `Stale`.
+## Building one
 
-The browser submits only the saved digest when applying a plan. The server loads the plan, checks the
-authenticated actor, approves the requested operation, and stores the result.
+<Snippet file="examples/client/transport.ts" region="create" title="Over the mounted routes" />
 
-## Observation wire models
+<Snippet file="examples/client/transport.ts" region="headers" title="With host headers" />
 
-`ObserveInput.sources` turns provider and public-DNS checks on or off. `Observation` returns each
-source separately as `Found`, `Mismatch`, `Missing`, or `Unavailable`. The host maps that evidence
-into product status and retry rules.
+`headers` is either a `HeadersInit` or a function returning one, awaited per request, so a token
+your app refreshes is read at call time.
 
-## Promise adapter
+## Calling it
 
-`AsyncInterface` mirrors all service methods with Promises. Use `fromAsync` to produce an Effect
-`Interface`, or `layerFromAsync` to produce a `Layer<Transport.Service>`. `toAsync` adapts an Effect
-implementation to Promises. `AsyncOptions.onError` can map other failures to `Transport.Failure`.
+Every method returns `Effect<A, DomainKit.Error>` with no requirements.
 
-```ts
-import { Transport } from "domainkit";
+<Snippet file="examples/client/transport.ts" region="call" title="From Effect" />
 
-export const layer = Transport.layerFromAsync({
-  connection: api.connections,
-  provisioning: api.provisioning,
-  verification: api.verification,
-  cleanup: api.cleanup,
-});
-```
+<Snippet file="examples/client/transport.ts" region="promises" title="From Promises" />
 
-See [React transport integration](/docs/react/transport) for a host architecture and security
-checklist.
+## Connect methods
+
+`Transport.Method` mirrors `Connect.Method` over the wire, so a client never writes a tag literal.
+
+| Constructor                        | Sends                                                    |
+| ---------------------------------- | -------------------------------------------------------- |
+| `Method.token(values)`             | A lone string, or the values the method descriptor names |
+| `Method.oauth({ returnTo })`       | An OAuth start that answers with a redirect              |
+| `Method.integration({ returnTo })` | A marketplace install that answers with a redirect       |
+
+## Failures
+
+A failure arrives as the same `DomainKit.Error` the lifecycle raised, reason intact. A reply the
+transport cannot read as one is classified from its status: 401 becomes `Unauthenticated`, 429 and
+5xx become a retryable `ProviderUnavailable` carrying `retry-after`, anything else
+`ProviderRejected`. All three name the transport's base URL as the origin.

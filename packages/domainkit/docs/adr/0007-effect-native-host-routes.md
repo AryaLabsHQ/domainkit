@@ -21,7 +21,7 @@ handlers. The group declares no prefix, so `Server.group.prefix("/internal/dns")
 moves every route at once and the OAuth callback URL follows the mount. `Server.api` is the same
 group as a standalone API, and `OpenApi.fromApi` documents it without extra work.
 
-`Server.Identity` is the only service a host must implement: a request maps to `Principal.Shape` by
+`Server.Identity` is the only service a host must implement: a request maps to `Principal.Interface` by
 verifying a credential the host issued, never by reading a tenant id off the request. Each handler derives the principal for the request it is serving and provides it
 to `Connect`, `Provision`, `Cleanup`, and `Verify`, so no route can read across owners. Everything
 else comes from `DomainKit.layer` plus `Storage`.

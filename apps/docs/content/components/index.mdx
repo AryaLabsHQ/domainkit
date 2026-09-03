@@ -1,30 +1,34 @@
 ---
 title: Components
-description: Add custom-domain flows or build your own DNS screen while your app keeps control of transport, credentials, and product policy.
+description: Complete custom-domain flows, the parts they are built from, and copy-in display components with no runtime, each with a preview that runs for real.
 sidebar:
   label: Overview
 seo:
   title: DomainKit React components
 ---
 
-Add custom-domain setup with complete flows or smaller parts from `@domainkit/react`. Every
-interactive component uses a transport supplied by your app. Your app keeps the credentials, routes,
-storage, users, tenants, consent, and audit policy.
+Every interactive component here runs over a transport your app supplies, so credentials, routes,
+storage, tenants, consent, and audit policy stay in your app. The previews on these pages run the
+real lifecycle against an in-memory server, so clicking through them behaves the way a real
+integration does.
 
 ## Flows
 
 <CardGroup cols={2}>
-  <Card title="Connection" href="/components/connection">
-    Connect a DNS provider with a ready-made flow.
-  </Card>
-  <Card title="Host connection" href="/components/host-connection">
-    Put the connection controls in your own screen.
-  </Card>
-  <Card title="Host lifecycle" href="/components/host-lifecycle">
-    Combine connection, review, apply, cleanup, and disconnect actions.
-  </Card>
   <Card title="Domain flow" href="/components/domain">
-    Mount the full setup flow for one customer domain.
+    The whole lifecycle for one customer domain.
+  </Card>
+  <Card title="Composed flow" href="/components/composition">
+    Replace one slot and keep the rest.
+  </Card>
+  <Card title="Connection" href="/components/connection">
+    Connect a provider, reuse one, or pick a zone.
+  </Card>
+  <Card title="Provisioning" href="/components/provisioning">
+    Review the exact changes and approve them.
+  </Card>
+  <Card title="Cleanup" href="/components/cleanup">
+    Remove what an apply receipt proves was created.
   </Card>
 </CardGroup>
 
@@ -32,48 +36,47 @@ storage, users, tenants, consent, and audit policy.
 
 <CardGroup cols={2}>
   <Card title="Records" href="/components/records">
-    Show DNS records in a table or zone file.
+    The requirements as a table or a zone file.
   </Card>
-  <Card title="Record Card" href="/components/record-card">
-    Show one DNS record with copy controls and evidence.
-  </Card>
-  <Card title="Provider Mark" href="/components/provider-mark">
-    Show provider identity with your own artwork or a fallback.
+  <Card title="Record card" href="/components/record-card">
+    One requirement, for narrow layouts.
   </Card>
   <Card title="Verification" href="/components/verification">
-    Show provider checks and public DNS separately.
+    Provider evidence and public DNS, kept apart.
+  </Card>
+  <Card title="Provider mark" href="/components/provider-mark">
+    Provider identity with your artwork or a fallback.
   </Card>
 </CardGroup>
 
 ## Registry
 
-Copy standalone display components into your application through the DomainKit Shadcn registry. Each
-item has its own live preview, source view, install command, usage example, and API
-reference.
+The registry ships plain React display components you copy into your project with the shadcn CLI.
+They import no DomainKit runtime and render only the props you pass them.
 
 <CardGroup cols={2}>
   <Card title="Registry overview" href="/components/registry">
-    Compare every copied component and understand the registry boundary.
+    What the copied components are, and where the boundary sits.
   </Card>
   <Card title="DNS table" href="/components/registry/dns-table">
-    Render DNS records with plain data and optional status values.
+    DNS records in a compact table.
   </Card>
-  <Card title="DNS Operation" href="/components/registry/dns-operation">
-    Present a planned DNS create, no-op, or conflict.
+  <Card title="DNS operation" href="/components/registry/dns-operation">
+    One planned create, no-op, conflict, or delete.
   </Card>
   <Card title="DNS status" href="/components/registry/dns-status">
-    Show a compact status label for a DNS result.
+    A compact status label.
   </Card>
   <Card title="Provider mark" href="/components/registry/provider-mark">
-    Wrap provider artwork with an accessible label.
+    An accessible wrapper for provider artwork.
   </Card>
   <Card title="Copy value" href="/components/registry/copy-value">
-    Add a small copy action to a DNS value or identifier.
+    A DNS value with a copy action.
   </Card>
-  <Card title="Async State" href="/components/registry/async-state">
-    Show loading, empty, and error states without a DomainKit runtime.
+  <Card title="Async state" href="/components/registry/async-state">
+    Loading, empty, and error states.
   </Card>
 </CardGroup>
 
-Start with the [React overview](/docs/react) to choose an integration level. Use the
-[Registry overview](/components/registry) when you only need copied display parts.
+Start with the [React overview](/docs/react) to choose between the flow, the slots, and the
+controllers.

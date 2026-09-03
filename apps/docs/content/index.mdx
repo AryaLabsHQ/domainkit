@@ -1,75 +1,83 @@
 ---
 title: Add custom domains to your app
-description: Connect a DNS provider, apply the records your product needs, and keep control in your app from the first request to cleanup.
+description: Connect a DNS provider, review the exact records your product needs, apply only what the customer approved, and keep credentials and policy in your app.
 sidebar:
   label: Overview
-  order: 1
 seo:
   title: Add custom domains to your app
 ---
 
-DomainKit helps you add custom domains to a SaaS product. Your app says which DNS records it needs.
-DomainKit connects a supported provider, builds a plan you can review, applies the approved changes,
-checks DNS, and records what happened.
+DomainKit turns your product's DNS requirements into a plan a customer can review, applies only the
+plan digest they approved, keeps a receipt of every write, and plans cleanup from that receipt.
+Cloudflare and Vercel are built in, and a provider is one declarative value.
 
-Your app keeps control of users, credentials, storage, routes, and product rules. Use the Effect API
-at the core, the Promise API when your app uses async/await, and `@domainkit/react` for browser-safe
-flows over your server.
+Your app keeps identity, tenancy, credentials, storage, routes, consent, and audit. DomainKit
+supplies the lifecycle, not a hosted control plane.
 
 ```package-install
-domainkit
+domainkit effect@rc
 ```
+
+<Snippet file="examples/core/plans.ts" region="apply" title="Plan, approve, apply" />
 
 <CardGroup cols={2}>
   <Card title="Quickstart" href="/docs/quickstart" icon="rocket">
-    Build and inspect your first DNS plan without credentials.
+    Build, approve, and apply a plan in memory, without credentials.
   </Card>
   <Card title="Plans" href="/docs/core/plans" icon="file">
-    See how review, apply, receipts, and cleanup work.
+    How review, approval, apply, and receipts fit together.
   </Card>
-  <Card title="Connect providers" href="/docs/core/connections" icon="link">
+  <Card title="Connections" href="/docs/core/connections" icon="link">
     Connect a provider without putting credentials in the browser.
   </Card>
-  <Card title="DomainKit and Domain Connect" href="/docs/core/domain-connect" icon="link">
-    Compare a provider template with a full app-owned setup.
+  <Card title="Host integration" href="/docs/guides/host-integration" icon="server">
+    Mount the routes, write `Identity`, install storage.
   </Card>
-  <Card title="React UI" href="/docs/react" icon="component">
-    Use ready-made flows or build your own screen from parts.
+  <Card title="React" href="/docs/react" icon="component">
+    A complete flow, or the controllers behind it.
+  </Card>
+  <Card title="Glossary" href="/docs/glossary" icon="book">
+    The eight words the whole lifecycle is built from.
   </Card>
   <ProviderCard title="Cloudflare" href="/docs/providers/cloudflare" provider="cloudflare">
-    Connect Cloudflare with OAuth or a scoped API token.
+    API tokens, or OAuth with refresh and revoke.
   </ProviderCard>
   <ProviderCard title="Vercel" href="/docs/providers/vercel" provider="vercel">
-    Connect Vercel with an Integration or personal access token.
+    Personal and team tokens, or a marketplace integration.
   </ProviderCard>
 </CardGroup>
 
-## Product boundary
+## The safety model
 
-| DomainKit owns                       | Your application owns                      |
-| ------------------------------------ | ------------------------------------------ |
-| Plan construction and apply checks   | Your product's DNS requirements            |
-| Digest validation before apply       | Users, tenants, consent, and audit policy  |
-| Cloudflare and Vercel integrations   | Credential encryption and storage          |
-| Provider and public DNS checks       | Authenticated routes and product readiness |
-| Cleanup plans tied to apply receipts | When and how users may remove records      |
-| React lifecycle contracts            | Branding, layout, messages, and telemetry  |
+- **Nothing is written before it is shown.** A plan lists the creates, the exact matches, and the
+  conflicts, with a digest over all of them.
+- **Apply accepts one approval.** The approval names the digest and the exact operations; apply
+  re-plans first and fails `Stale` if the zone moved.
+- **Additive, fail closed.** Missing records are created, exact records are no-ops, and
+  incompatible state is a conflict. DomainKit never updates or deletes a record it did not create.
+- **Partial application is data.** A failure after a confirmed write produces a receipt with
+  `status: "partial"` listing every operation, not an exception.
+- **Cleanup is its own plan.** It is built from an apply receipt, and a record that no longer
+  matches is left alone.
 
-## Safety model
+## Who owns what
 
-- **Review before a write.** A plan lists creates, exact no-ops, and conflicts before anything changes.
-- **Approve the exact plan.** Apply accepts the reviewed plan and approval for its digest.
-- **Stop on conflicts.** DomainKit never silently overwrites incompatible DNS state.
-- **Keep control in your app.** Your application owns credentials, consent, routes, storage, and audit history.
-- **One implementation.** The Effect API is canonical; the Promise API uses it.
+| DomainKit                                      | Your application                             |
+| ---------------------------------------------- | -------------------------------------------- |
+| Building the plan and its digest               | Which DNS records the product needs          |
+| Refusing an apply the customer did not approve | Identity, tenancy, consent, and audit policy |
+| Cloudflare and Vercel integrations             | The database and the encryption key          |
+| Provider readback and public DNS observation   | Authenticated routes and product readiness   |
+| Cleanup bound to an apply receipt              | When a customer may remove records           |
+| React flows and their contracts                | Branding, layout, wording, and telemetry     |
 
 ## Entry points
 
-| Package                | Use it for                                                     |
-| ---------------------- | -------------------------------------------------------------- |
-| `domainkit`            | Effect services, schemas, plans, providers, and typed failures |
-| `domainkit/promise`    | Promise API for apps that use async/await                      |
-| `domainkit/server`     | Provider connection routes and an async Web handler            |
-| `domainkit/testing`    | In-memory services and provider tests                          |
-| `@domainkit/react`     | React flows and DNS record UI over your server                 |
-| `@domainkit/capsuledb` | Optional PostgreSQL persistence for Effect hosts               |
+| Package                | Use it for                                                  |
+| ---------------------- | ----------------------------------------------------------- |
+| `domainkit`            | Lifecycle services, host seams, providers, values, failures |
+| `domainkit/server`     | The mountable route group and its Web handler               |
+| `domainkit/client`     | The browser transport over those routes                     |
+| `domainkit/testing`    | Fakes, a recording transport, and conformance runners       |
+| `@domainkit/react`     | React flows and DNS record parts over your transport        |
+| `@domainkit/capsuledb` | Optional PostgreSQL persistence for Effect hosts            |

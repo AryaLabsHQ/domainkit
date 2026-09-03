@@ -1,73 +1,80 @@
 ---
-title: Provider APIs
-description: Reference the provider contract, Cloudflare and Vercel adapters, opaque records, and provider tests for new integrations.
+title: Provider contract
+description: What a provider definition must implement, which record types travel portably, and how provider failures are classified.
 sidebar:
-  label: Provider APIs
+  label: Provider contract
 seo:
-  title: DomainKit provider API reference
+  title: DomainKit provider contract reference
 ---
 
-## Provider contract
+A provider is one `Provider.Definition` value. Auth methods are optional cases, so a provider that
+only issues personal tokens declares `token` and nothing else. The definition drives the connection
+routes, refresh, the UI method catalog, and rebuilding a session from stored context.
 
-`DnsProvider.Interface` is the provider capability used for planning, apply, delete, and provider
-checks.
+## The definition
 
-| Member         | Purpose                                                               |
-| -------------- | --------------------------------------------------------------------- |
-| `id`           | Stable provider identity embedded in plans and checked before apply.  |
-| `listRecords`  | Read all records in an authoritative zone, including opaque records.  |
-| `getRecord`    | Read one record by provider record ID.                                |
-| `createRecord` | Create a normalized DomainKit record and return a stable provider ID. |
-| `deleteRecord` | Delete a record by the ID captured in an application receipt.         |
+| Field            | Purpose                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `id`             | Lowercase kebab-case, stable, stored on every row                                    |
+| `name`           | The display name a UI shows                                                          |
+| `auth`           | Any of `token`, `oauth`, `integration`; at least one                                 |
+| `context`        | The schema for the account and zone context stored on authorizations and attachments |
+| `contextVersion` | The tag written into every stored context envelope, bumped with the schema           |
+| `migrateContext` | Upgrades an envelope written under an older version; absent means `Unsupported`      |
+| `session`        | A credential to a `Session`                                                          |
 
-Provider failures use `DnsProvider.Error` with the operation, provider ID, optional status/code,
-reason, and optional retry delay. Keep the original cause for diagnostics, but do not send secrets or
-raw provider responses to the browser.
+## The session
 
-`CreateResult.providerRecordId` may be `null` when a provider cannot return a record identifier.
-Receipt-bound deletion requires a stable, non-null ID, so the conformance cases that read back and
-clean up created records require adapters to return one for those writes.
+| Operation               | Contract                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `capabilities()`        | What the credential actually holds; promoted onto the authorization           |
+| `listTargets()`         | Every zone the credential reaches, with the identity needed to address it     |
+| `resolveTarget(domain)` | `Resolved`, `SelectionRequired`, or `NotFound`; never chooses across accounts |
+| `dns(target)`           | `list`, `create`, `get`, `delete` inside one zone                             |
 
-Promise-first adapters can implement `DnsProvider.AsyncInterface` and use `fromAsync` or
-`layerFromAsync`. `toAsync` adapts an environment-free Effect provider in the opposite direction.
+`create` must return the provider's id for the new record. Cleanup deletes by that id, so a
+provider that cannot return one cannot be cleaned up by receipt.
 
-## Bundled providers
+`Provider.resolveAmong(domain, targets)` implements the standard rule: the most specific zone wins,
+several matches at the same depth need a selection, none is `NotFound`.
 
-`Cloudflare` and `Vercel` each group:
+## Token methods
 
-- OAuth or Integration authorization helpers;
-- token-based constructors;
-- account or team discovery;
-- zone discovery; and
-- a `DnsProvider` implementation.
+`Provider.tokenAuth` declares the values a method needs once, as a `fields` schema. Secrets are
+`Schema.RedactedFromValue(Schema.String)` and optional values use `Schema.optionalKey`, so the
+connect form renders from the definition and `Connect.start` decodes the values before the provider
+sees them.
 
-The provider namespaces do not store OAuth state, credentials, connections, plans, or receipts. Your
-host owns those stores and builds a provider service for each approved operation.
+<Snippet file="packages/domainkit/examples/effect/provider.ts" title="A token-only provider" />
 
-### Cloudflare
+## Portable record types
 
-`Cloudflare` supports OAuth and API-token authentication, account discovery from an authorized
-zone, zone discovery, and provider reconstruction from a stored non-secret account context plus a
-host-held credential. `Cloudflare.Auth.refreshCredential` exchanges a host-held refresh token,
-preserves or adopts refresh-token rotation, and returns the complete credential the host must
-persist. The host owns refresh serialization and reconnect policy.
+Both first-party adapters support `A`, `AAAA`, `CAA`, `CNAME`, `MX`, `NS`, `SRV`, and `TXT`. A
+provider record DomainKit cannot model is kept as `DnsRecord.Opaque` during reads, so planning sees
+it, refuses to overwrite it, and reports a conflict instead.
 
-### Vercel
+## Classifying a failure
 
-`Vercel` supports Integration authorization and token authentication, personal or team context,
-zone discovery, and provider reconstruction from the stored context plus a host-held credential.
+Decode the provider's response at the HTTP boundary and fail with the reason that tells a host what
+to do next. Never let a raw response body or a credential reach a `DomainKit.Error`.
 
-## Opaque records
+| Provider condition                   | Reason                |
+| ------------------------------------ | --------------------- |
+| Credential rejected                  | `Unauthenticated`     |
+| Credential lacks the permission      | `Forbidden`           |
+| Zone or record absent                | `NotFound`            |
+| A conflicting record already exists  | `ProviderConflict`    |
+| The operation is not supported there | `Unsupported`         |
+| Rate limited or unavailable          | `ProviderUnavailable` |
+| Anything else the provider refused   | `ProviderRejected`    |
 
-An adapter must return unsupported provider records as `DnsRecord.Opaque({...})` values instead of
-dropping them. Planning keeps opaque records and avoids assumptions about data it cannot model.
-Deletion targets only provider record IDs captured by a DomainKit receipt. The `DnsRecord.Observed`
-schema is the decoding boundary for provider responses.
+## Conformance
 
-## Acceptance
+<Snippet
+  file="examples/testing/conformance.ts"
+  region="provider"
+  title="Before shipping an adapter"
+/>
 
-Run the public `ProviderConformance` suite against a fresh isolated instance, then add adapter tests
-for authentication, discovery, pagination, provider errors, rate limits, and live API behavior.
-
-Continue with [Implement a DNS provider](/docs/guides/implement-provider),
-[Cloudflare](/docs/providers/cloudflare), or [Vercel](/docs/providers/vercel).
+The runner exercises create and read back, exact no-op, conflict, stale plan, and partial apply
+through the same `Provision` and `Cleanup` services hosts use, then removes every record it wrote.

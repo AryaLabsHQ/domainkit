@@ -8,6 +8,7 @@ import { Server } from "domainkit/server";
 declare const DomainKitLive: Layer.Layer<DomainKit.Services | Storage.Service>;
 declare const sessions: {
   readonly verify: (token: string) => Effect.Effect<Principal.Interface | null>;
+  readonly principal: (token: string) => Effect.Effect<Principal.Interface, Error>;
 };
 
 // #region identity
@@ -34,6 +35,35 @@ export const IdentityLive = Layer.succeed(Server.Identity)({
     }),
 });
 // #endregion identity
+
+// #region authorize
+/**
+ * `authorize` runs after `principal` on every request and decides which routes that principal may
+ * reach. Without it every authenticated principal reaches every route, which is right for a host
+ * whose own middleware already gates the mount. Fail with `Forbidden` for the 403 a UI expects.
+ */
+const writeRoutes = new Set<Server.EndpointName>([
+  "start",
+  "attach",
+  "detach",
+  "disconnect",
+  "approve",
+  "reject",
+  "apply",
+]);
+
+export const AdminWritesIdentity = Layer.succeed(Server.Identity)({
+  principal: (request) => Effect.orDie(sessions.principal(request.cookies.session ?? "")),
+  authorize: (principal, endpoint) =>
+    !writeRoutes.has(endpoint) || principal.actorId.startsWith("admin_")
+      ? Effect.void
+      : Effect.fail(
+          new DomainKit.Error({
+            reason: new Reason.Forbidden({ message: `${endpoint} needs an administrator` }),
+          }),
+        ),
+});
+// #endregion authorize
 
 // #region mount
 export const Api = HttpApi.make("app").add(Server.group);
@@ -67,8 +97,9 @@ export const { handler, dispose } = Server.toWebHandler(
 
 // #region callback-base-url
 /**
- * The callback URL follows the mount and the incoming request's origin. A deployment behind a
- * proxy that hides its public origin names it once.
+ * The callback URL follows the mount and the incoming request's origin. An edge that rewrites
+ * `Host` leaves the request pointing at an origin the browser never sees, so name the public one
+ * once and it wins everywhere.
  */
 export const behindProxy = Server.toWebHandler(Layer.mergeAll(DomainKitLive, IdentityLive), {
   prefix: "/api/domainkit",

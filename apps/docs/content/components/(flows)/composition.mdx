@@ -1,0 +1,36 @@
+---
+title: Composed flow
+description: Replace one slot of the domain flow with your own component, place the slots in your own layout, and keep every other part of the lifecycle intact.
+---
+
+Every part of `Domain.Flow` is a slot with a default. Replacing one changes that part and nothing
+else, and the flow adds no layout container around a slot's output.
+
+<ReactExample story="slots" />
+
+## Usage
+
+<Snippet file="examples/react/slots.tsx" region="one-slot" title="Your own records table" />
+
+## Slots
+
+| Slot           | Receives                                        | Default                                                    |
+| -------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| `connection`   | `{ controller, domain }`                        | `Connect.Card` once connected, `Connect.Dialog` until then |
+| `records`      | `{ records, readiness, controller, domain }`    | `Records.Table`                                            |
+| `verification` | `{ controller, domain }`                        | `Verify.Status`                                            |
+| `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline, Remove records           |
+
+## Your own layout
+
+<Snippet file="examples/react/slots.tsx" region="layout" title="Placing the slots" />
+
+## Your own actions
+
+<Snippet
+  file="examples/react/slots.tsx"
+  region="actions"
+  title="Driving the flow from your buttons"
+/>
+
+Read [composition](/docs/react/composition) for parts, `render`, and state-aware `className`.

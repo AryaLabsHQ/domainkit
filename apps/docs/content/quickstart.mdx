@@ -1,143 +1,79 @@
 ---
-title: Your first safe DNS plan
-description: Build, review, approve, and apply your first DNS plan in memory, then see the next plan become a no-op without provider credentials.
+title: Your first plan, approval, and receipt
+description: Run the whole lifecycle against an in-memory provider, then read the plan, the receipt, and the readiness it produced.
 sidebar:
   label: Quickstart
-  order: 2
 seo:
-  title: Create your first safe DNS plan with DomainKit
+  title: Build and apply your first DNS plan
 ---
 
-In this tutorial, you will define one DNS requirement, review the plan, approve its exact digest,
-apply it to an in-memory provider, and plan the same requirement again. The second plan becomes a
-no-op because the record already exists.
-
-The exercise does not need a provider account, network request, database, or browser.
+You will connect a fake provider, build a plan for two DNS requirements, approve its digest, apply
+it, and observe the result. No provider account, network request, database, or browser is involved.
 
 ## Prerequisites
 
 - Node.js 24.10 or newer, or Bun 1.4 or newer.
-- A TypeScript project that uses ESM.
+- A TypeScript project using ESM.
 
-## Install DomainKit
+## Install
 
 ```package-install
 domainkit effect@rc
 ```
 
-`effect` is a peer dependency. The package root uses Effect, and this tutorial uses it for every
+`effect` is a peer dependency. The package root is Effect-native and this tutorial uses it at every
 step.
 
-## Create the exercise
+## Write the program
 
 Create `quickstart.ts`:
 
-```ts
-import { Effect, Layer } from "effect";
-import { Digest, DnsRecord, DomainName, Provisioning } from "domainkit";
-import { InMemoryDnsProvider } from "domainkit/testing";
-
-const requirement = DnsRecord.Cname({
-  metadata: {
-    ownership: "customer",
-    provenance: "product-onboarding",
-    purpose: "tracking",
-  },
-  name: DomainName.parse("track.example.com"),
-  policy: "exclusive",
-  target: DomainName.parse("tracking.example.net"),
-  ttl: 300,
-});
-
-const runtimeLayer = Layer.merge(InMemoryDnsProvider.layer(), Digest.webCryptoLayer);
-
-const program = Effect.gen(function* () {
-  const { plan } = yield* Provisioning.create({
-    requirements: [requirement],
-    target: Provisioning.Target.ExactZone({
-      zone: DomainName.parse("example.com"),
-    }),
-  });
-
-  console.log(
-    "First plan:",
-    plan.operations.map(({ _tag }) => _tag),
-  );
-
-  const authorization = yield* Provisioning.authorize(plan);
-  const receipt = yield* Provisioning.apply({ authorization, plan });
-
-  console.log("Receipt:", receipt.status);
-
-  const { plan: nextPlan } = yield* Provisioning.create({
-    requirements: [requirement],
-    target: Provisioning.Target.ExactZone({
-      zone: DomainName.parse("example.com"),
-    }),
-  });
-
-  console.log(
-    "Second plan:",
-    nextPlan.operations.map(({ _tag }) => _tag),
-  );
-}).pipe(Effect.provide(runtimeLayer));
-
-await Effect.runPromise(program);
-```
-
-The provider and Web Crypto layers are set up once and shared by the program. The plan, approval,
-and apply calls all use the same in-memory provider.
+<Snippet file="packages/domainkit/examples/effect/quickstart.ts" title="quickstart.ts" />
 
 ## Run it
 
 ```sh
-bun run quickstart.ts
+bun quickstart.ts
 ```
 
-The output should have this shape:
+## What you just read
 
-```text
-First plan: [ 'create' ]
-Receipt: complete
-Second plan: [ 'noop' ]
-```
+`Provision.plan` listed the zone and reconciled it against the two requirements. The fake provider
+already holds the TXT record, so the plan carries one `Create` for the CNAME and one `Noop` for the
+TXT, plus a digest over both.
 
-The digest and operation IDs are left out of the output. The important part is the change from a
-missing record to an exact match:
+`Provision.approve` recorded consent for that digest. `Provision.apply` re-planned the zone, saw the
+digest had not moved, wrote the CNAME, and returned a receipt whose `outcomes` name one `Applied`
+and one `Skipped` with reason `noop`.
 
-```text
-missing record
-  -> create plan
-  -> approval for the exact plan
-  -> apply receipt
-  -> exact record
-  -> noop plan
-```
+`Verify.observe` read the provider through the connection and public DNS through the resolver, and
+stored per-requirement readiness with a `nextCheckAt` for the next look.
 
-## What happened
+## The moving parts
 
-- `DnsRecord.Cname` constructs the trusted requirement, including ownership, purpose, conflict policy, and TTL.
-- `Provisioning.create` read the provider and made a plan with one `create` operation.
-- `Provisioning.authorize` approved that exact plan.
-- `Provisioning.apply` checked provider state again, created the record, and returned a receipt.
-- The second `Provisioning.create` found the same record and returned `noop` instead of writing again.
+| Piece                   | What it is here                                                       |
+| ----------------------- | --------------------------------------------------------------------- |
+| `Testing.provider`      | A provider definition over in-memory zones, with a token method       |
+| `DomainKit.layerMemory` | Every lifecycle service, memory storage, and a throwaway custody key  |
+| `Principal.Service`     | Who is acting. Every stored row is scoped by it; there is no default  |
+| `Connect.start`         | Connects the provider and attaches the domain in one call for a token |
 
-The in-memory provider follows the same contract as a live provider. You can learn the DomainKit
-lifecycle without adding credentials, callback routes, storage, or provider account selection.
+## Run it again
 
-## Next steps
+Run the program a second time. The plan now carries two `Noop` operations, `Plan.isApplicable` is
+`false`, and there is nothing to write. Planning is a read, so it is safe to run whenever a screen
+needs to show what would change.
+
+## Next
 
 <CardGroup cols={2}>
-  <Card title="Understand plans and receipts" href="/docs/core/plans" icon="file">
-    Learn why users approve an exact plan and cleanup is separate.
+  <Card title="Plans" href="/docs/core/plans" icon="file">
+    Conflicts, partial approval, partial receipts, and stale plans.
   </Card>
-  <Card title="Integrate your application" href="/docs/guides/host-integration" icon="server">
-    Put users, storage, endpoints, and credentials around the core lifecycle.
-  </Card>
-  <ProviderCard title="Connect Cloudflare" href="/docs/providers/cloudflare" provider="cloudflare">
-    Replace the in-memory provider with server-side OAuth or a scoped API token.
-  </ProviderCard>
-  <Card title="Choose a React integration" href="/docs/react/integration-levels" icon="component">
-    Choose record UI, complete flows, or smaller parts for your own screen.
+  <Card title="Host integration" href="/docs/guides/host-integration" icon="server">
+    Mount the routes and swap the fakes for a real provider and database.
   </Card>
 </CardGroup>
+
+The [entry points](/docs/reference/entry-points) reference lists what each import carries, and
+[testing](/docs/guides/testing) covers the fakes this tutorial used.

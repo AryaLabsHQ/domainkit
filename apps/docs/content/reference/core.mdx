@@ -1,125 +1,89 @@
 ---
-title: Core API
-description: Reference the namespaces exported by the `domainkit` package, including schemas, plans, providers, services, and typed failures.
+title: domainkit
+description: Every namespace the package root exports, what each one owns, how the composed layer is built, and the failure shape every operation raises.
 sidebar:
-  label: Core API
+  label: domainkit
 seo:
   title: DomainKit core API reference
 ---
 
-Import the core API from `domainkit`:
+The package root is one module per concept. A service module exposes `Service` (the tag) and
+`Interface` (its shape); a value module exposes `Model` (the schema).
 
 ```ts
-import { DnsRecord, Provisioning, Verification } from "domainkit";
+import { DnsRecord, DomainKit, Provision, Verify } from "domainkit";
 ```
-
-`VERSION` is the version from the installed package manifest.
 
 {/* reference-inventory:start */}
 
-## Domain values and validation
+## Lifecycle services
 
-| Namespace      | Purpose                                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------- |
-| `VERSION`      | Installed DomainKit package version from the package manifest.                                    |
-| `DomainName`   | Decode, normalize, and brand DNS names at an untrusted boundary.                                  |
-| `DnsRecord`    | Schemas and constructors for A, AAAA, CAA, CNAME, MX, NS, SRV, TXT, observed, and opaque records. |
-| `InvalidInput` | Schema-backed invalid-input failure used by decoding and validation APIs.                         |
-| `Digest`       | Canonical JSON encoding and SHA-256 helpers used for digest-bound plans.                          |
-| `DnsData`      | Normalize DNS answer data before comparing public resolver evidence.                              |
+Each one is a `Service` tag, an `Interface`, a `layer`, and free accessors that read the service
+from context (`Provision.plan(...)`). `Policy` values are `Context.Reference`s with defaults.
 
-## Authorization and connections
+| Namespace   | Owns                                                                                               |
+| ----------- | -------------------------------------------------------------------------------------------------- |
+| `Connect`   | `inspect`, `discover`, `start`, `complete`, `attach`, `detach`, `disconnect`, `refresh`, `session` |
+| `Provision` | `plan`, `approve`, `reject`, `apply`, `get`, `latest` over durable attempts                        |
+| `Cleanup`   | The same verbs over a plan built from an apply receipt                                             |
+| `Verify`    | `observe`, `attachEvidence`, `latest`, and the evidence classes they produce                       |
 
-| Namespace                 | Purpose                                                                                |
-| ------------------------- | -------------------------------------------------------------------------------------- |
-| `Connection`              | Inspect, start, complete, attach, detach, disconnect, and validate connections.        |
-| `ManagedDnsConnections`   | Durable repository contract for provider authorizations, connections, and attachments. |
-| `ConnectionAuthorization` | Authorize connection actions against provider and domain-attachment context.           |
-| `ProviderAuth`            | Provider authentication manifests and supported authentication methods.                |
-| `ProviderSession`         | Provider account session context and target-resolution values.                         |
-| `ProviderContext`         | Provider, account, and connection context carried through authorization.               |
-| `ProviderDiscovery`       | Select a provider candidate for a domain.                                              |
-| `ZoneDiscovery`           | Discover an authoritative zone and provider from a domain.                             |
-| `Zones`                   | Zone lookup and candidate value types.                                                 |
-| `Secret`                  | Redacted secret value used to keep credentials out of logs and diagnostics.            |
-| `Diagnostic`              | Structured, safe-to-present diagnostic information for authorization failures.         |
+## Host seams
 
-## Planning and cleanup
+| Namespace   | Owns                                                                             |
+| ----------- | -------------------------------------------------------------------------------- |
+| `Principal` | `{ ownerId, actorId }` per request; every Storage query is scoped by it          |
+| `Storage`   | Every durable row, the row schemas, `layerMemory`, and `layerFromAsync`          |
+| `Custody`   | Sealing credentials: `layer`, `layerConfig`, `layerFromAsync`, and `generateKey` |
 
-| Namespace      | Purpose                                                      |
-| -------------- | ------------------------------------------------------------ |
-| `Provisioning` | Create, authorize, validate, and apply additive DNS plans.   |
-| `DnsPlan`      | Plan, authorization, operation, result, and receipt schemas. |
-| `Deletion`     | Create, authorize, and apply receipt-bound cleanup plans.    |
+## Providers
 
-## Verification
+| Namespace    | Owns                                                                                     |
+| ------------ | ---------------------------------------------------------------------------------------- |
+| `Provider`   | `Definition`, `make`, `tokenAuth`, `Session`, `Dns`, `Target`, `Resolution`, `fromAsync` |
+| `Providers`  | The registry of enabled definitions, built by `DomainKit.layer`                          |
+| `Cloudflare` | `provider`, `AccountContext`, `TokenFields`, and the OAuth server metadata               |
+| `Vercel`     | `provider`, `TeamContext`, and `TokenFields`                                             |
 
-| Namespace                | Purpose                                                                     |
-| ------------------------ | --------------------------------------------------------------------------- |
-| `Verification`           | Observe provider and public DNS evidence under an explicit resolver policy. |
-| `DnsResolver`            | Resolver service contract and structured observation outcomes.              |
-| `DnsResolverPool`        | Combine resolver evidence with any-match, all-match, or quorum policy.      |
-| `DnsOverHttps`           | Generic DNS-over-HTTPS resolver implementation.                             |
-| `CloudflareDnsOverHttps` | Cloudflare public resolver implementation and layer.                        |
-| `GoogleDnsOverHttps`     | Google public resolver implementation and layer.                            |
+## Values
 
-## Providers and host transport
+| Namespace    | Owns                                                                                      |
+| ------------ | ----------------------------------------------------------------------------------------- |
+| `DomainName` | A normalized, IDN-aware hostname, its zone `candidates`, and `isWithin`                   |
+| `DnsRecord`  | Record constructors, `Model`, `Observed`, `Opaque`, `data`, `equals`, `sameSet`           |
+| `Plan`       | `Model`, the four operations, `writes`, `conflicts`, `isApplicable`, `renderInstructions` |
+| `Approval`   | Consent bound to one plan digest and an explicit operation set                            |
+| `Receipt`    | What an apply actually wrote: `Applied`, `Skipped`, `Failed`, `applied`, `isComplete`     |
 
-| Namespace     | Purpose                                                                    |
-| ------------- | -------------------------------------------------------------------------- |
-| `DnsProvider` | Provider-independent DNS record capability and adapters.                   |
-| `Cloudflare`  | Cloudflare OAuth, token, account discovery, and DNS provider constructors. |
-| `Vercel`      | Vercel Integration, token, team discovery, and DNS provider constructors.  |
-| `Transport`   | Browser-safe application contract used by `@domainkit/react`.              |
+## Everything else
+
+| Namespace   | Owns                                                                             |
+| ----------- | -------------------------------------------------------------------------------- |
+| `DomainKit` | `layer`, `layerMemory`, `Error`, `ErrorCategory`, and `isError`                  |
+| `Reason`    | The sixteen failure reasons and their union, `Reason.Model`                      |
+| `Resolver`  | The public DNS pool: `layer` (Cloudflare and Google DoH), `layerWith`, `Outcome` |
+| `VERSION`   | The installed package version, read from the package manifest                    |
 
 {/* reference-inventory:end */}
 
-Each namespace groups its schemas, constructors, services, layers, and failure types. Import from the
-namespace instead of an internal module path so the public package boundary stays clear.
+## Composing the layer
 
-## Constructor and schema convention
+`DomainKit.layer({ providers, resolver? })` provides every lifecycle service and requires `Storage`
+and `Custody` beneath it. `DomainKit.layerMemory` adds the in-memory pair and a throwaway custody
+key for tests and playgrounds.
 
-Use a callable case constructor when your application or adapter is creating a trusted DomainKit
-value. The aggregate `Schema` export, or a constructor's `.Schema` member, remains the decoding
-boundary for persisted or provider data.
+<Snippet file="examples/storage/postgres.ts" region="wire" title="Composing the layer" />
 
-```ts
-import { DnsPlan, DnsRecord, DomainName } from "domainkit";
+## Failures
 
-const requirement = DnsRecord.Txt({
-  metadata: { ownership: "customer", provenance: "app", purpose: "verification" },
-  name: DomainName.parse("_verify.example.com"),
-  policy: "append",
-  ttl: 300,
-  value: "verification-value",
-});
+Every operation fails with `DomainKit.Error`. It carries one `Reason`, and `category`,
+`isRetryable`, and `httpStatus` derive from it.
 
-const operation = DnsPlan.Operation.create({
-  id: "operation-1",
-  requirement,
-});
-```
+| Property      | Values                                                        |
+| ------------- | ------------------------------------------------------------- |
+| `reason`      | One member of `Reason.Model`                                  |
+| `category`    | `request`, `auth`, `plan`, `provider`, `storage`, `internal`  |
+| `isRetryable` | `true` for `Busy`, `ProviderUnavailable`, and `StorageFailed` |
+| `httpStatus`  | The status `domainkit/server` answers with                    |
 
-Case constructors are available on `DnsRecord`, `DnsPlan.Operation`, `DnsResolver.Resolution`,
-`DnsResolver.AsyncResolution`, `ProviderAuth.Method`, and `ProviderDiscovery.Selection`. Provider
-adapters also expose constructors for provider-specific context values such as
-`Vercel.AccountContext`. Use `_tag` only to narrow or inspect an existing value; do not hand-write
-it when constructing one.
-
-## Lifecycle map
-
-| Job                | Start with                          | Persist before continuing                        |
-| ------------------ | ----------------------------------- | ------------------------------------------------ |
-| Connect a provider | `Connection.start`                  | authorization attempt and provider context       |
-| Complete OAuth     | `Connection.complete`               | resulting organization connection                |
-| Refresh Cloudflare | `Cloudflare.Auth.refreshCredential` | complete rotated credential before provider use  |
-| Plan records       | `Provisioning.create`               | plan, digest, and attempt identity               |
-| Approve changes    | `Provisioning.authorize`            | digest-bound authorization                       |
-| Apply records      | `Provisioning.apply`                | receipt, including partial results               |
-| Observe records    | `Verification.observe`              | evidence useful to your product state            |
-| Plan cleanup       | `Deletion.create`                   | receipt-bound deletion plan                      |
-| Apply cleanup      | `Deletion.apply`                    | cleanup result before detaching or disconnecting |
-
-See [Plans and receipts](/docs/core/plans) and
-[Provision and clean up DNS](/docs/guides/provision-and-clean-up) for the lifecycle rules. See
-[Entry points](/docs/reference/entry-points) when choosing an import.
+[Failure reasons](/docs/core/errors) lists every reason with its status and the next step.

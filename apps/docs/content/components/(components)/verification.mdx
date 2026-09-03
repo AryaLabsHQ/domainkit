@@ -1,104 +1,36 @@
 ---
 title: Verification
-description: Show provider checks and public DNS for each record without hiding propagation or product readiness from the person setting it up.
+description: Show what the provider reports and what public DNS reports as separate evidence, with the values behind each status and when the next check is due.
 ---
 
-`Verification.Status` requests fresh checks through the host transport and shows provider readback
-separately from public DNS.
+`Verify.Status` renders the readiness a `Verify` controller observed: the overall state, the
+per-requirement evidence, and the next check.
 
 <ReactExample story="verification" />
 
-## Installation
-
-```package-install
-@domainkit/react domainkit effect @effect/atom-react react react-dom
-```
-
-For standalone status and async-state primitives, use the registry:
-
-```package-install
-npx shadcn@latest add https://domain-kit.dev/r/dns-status.json https://domain-kit.dev/r/async-state.json
-```
-
-Those copied components only render what you pass to them. They do not call the DomainKit transport
-or interpret observation evidence.
-
-## Observation states
-
-| State         | Meaning                                                 |
-| ------------- | ------------------------------------------------------- |
-| `Idle`        | No check has been requested in this controller.         |
-| `Observing`   | The host is reading provider and public-DNS evidence.   |
-| `Observation` | Evidence is available for the requested records.        |
-| `Failed`      | The check failed; previous evidence may still be shown. |
-
-`Found`, `Missing`, `Mismatch`, and provider failures describe individual records. Your app decides
-whether that evidence makes the product feature ready.
-
 ## Usage
 
-Include the connected provider context when available. Without it, the host can still perform public
-DNS observation according to its transport implementation.
+<Snippet file="examples/react/catalog.tsx" region="verification" title="Observing a domain" />
 
-```tsx
-<Verification.Status config={{ connection, domain, records }} />
-```
+## What it separates
 
-## Accessibility
+Provider evidence and public DNS evidence stay apart, because a record can exist at the provider and
+still be missing from a resolver. Each entry names its source, carries the values that source
+returned, and, when the requirement is not satisfied, a detail explaining why.
 
-The observe action exposes its busy state and prevents duplicate requests. Keep evidence notes and
-failure messages visible; color alone cannot distinguish missing, mismatched, or unavailable DNS.
+`Verify.Evidence` renders that breakdown on its own, inside a popover by default.
 
-## API reference
+## Parts
 
-### `Verification.Status`
+| Part                   | Renders                                               |
+| ---------------------- | ----------------------------------------------------- |
+| `Verify.Status`        | The overall state, with the evidence behind a popover |
+| `Verify.Evidence`      | The per-requirement evidence table                    |
+| `Verify.ObserveAction` | A button that observes again now                      |
+| `Verify.Outcome`       | The last failure, as a sentence from the catalog      |
 
-<TypeTable
-  type={{
-    config: {
-      type: "Verification.ObserveConfig",
-      required: true,
-      description: "Inputs used by the status controller.",
-    },
-  }}
-/>
+## Polling
 
-### `Verification.ObserveConfig`
-
-<TypeTable
-  type={{
-    connection: {
-      type: "Transport.Connected",
-      description: "Optional connected attachment used for provider checks.",
-    },
-    domain: {
-      type: "string",
-      required: true,
-      description: "Customer domain whose records are checked.",
-    },
-    records: {
-      type: "ReadonlyArray<Transport.DnsRecord>",
-      required: true,
-      description: "DNS records to compare with provider and public-DNS evidence.",
-    },
-    sources: {
-      type: "{ provider?: boolean; publicDns?: boolean }",
-      description:
-        "Select the checks to run; provider follows connection presence and public DNS is on by default.",
-    },
-  }}
-/>
-
-### `Verification.ObserveAction`
-
-<TypeTable
-  type={{
-    controller: {
-      type: "Verification.Controller",
-      required: true,
-      description: "Controller whose observe command the action runs.",
-    },
-  }}
-/>
-
-Read [Provider evidence and public DNS](/docs/core/verification) for the observation model.
+The controller observes on mount and then follows the readiness row's own `nextCheckAt` while it is
+mounted, so a pending domain backs off on its own schedule. Pass `polling: false` to observe only
+when the customer asks.

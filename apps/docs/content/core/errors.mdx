@@ -1,0 +1,68 @@
+---
+title: Failure reasons
+description: The one error type DomainKit raises, the sixteen reasons it carries, the HTTP status each answers with, and what a host should do about each of them.
+sidebar:
+  label: Failures
+seo:
+  title: DomainKit failure reasons
+---
+
+Every DomainKit operation fails with one `DomainKit.Error`. It carries exactly one `Reason`, and
+`category`, `isRetryable`, and `httpStatus` all derive from that reason. Hosts match on the reason;
+nothing parses a message.
+
+```ts
+import { DomainKit, Reason } from "domainkit";
+```
+
+## The reasons
+
+| Reason                | Status | Retryable | Carries                            | Next step                                                  |
+| --------------------- | ------ | --------- | ---------------------------------- | ---------------------------------------------------------- |
+| `InvalidInput`        | 400    | no        | `message`, `field`                 | Fix the request                                            |
+| `Unauthenticated`     | 401    | no        | `message`                          | Sign in, or supply a working credential                    |
+| `Forbidden`           | 403    | no        | `message`                          | The credential lacks the permission                        |
+| `Reconnect`           | 403    | no        | `provider`, `connectionId`         | Ask the customer to connect the provider again             |
+| `NotFound`            | 404    | no        | `entity`, `id`                     | The row or provider object does not exist for this owner   |
+| `Conflict`            | 409    | no        | `planId`, `operations`             | Show the conflicting records; approve partially or fix DNS |
+| `Stale`               | 409    | no        | `planId`, `digest`                 | The zone moved under the plan; build a new one             |
+| `Expired`             | 409    | no        | `entity`, `id`                     | The plan, approval, continuation, or credential aged out   |
+| `Busy`                | 409    | yes       | `key`                              | Another apply or refresh holds the lock; retry             |
+| `ProviderConflict`    | 409    | no        | `provider`, `code`, `message`      | The provider refused because a conflicting record exists   |
+| `Unsupported`         | 501    | no        | `provider`, `operation`, `message` | The provider or that target cannot do it                   |
+| `ProviderRejected`    | 502    | no        | `provider`, `code`, `message`      | The provider refused; the message says why                 |
+| `ProviderUnavailable` | 503    | yes       | `provider`, `retryAfterMs`         | Rate limited or down; retry after the delay                |
+| `StorageFailed`       | 500    | yes       | `operation`, `message`             | The database call failed; retry                            |
+| `CryptoFailed`        | 500    | no        | `operation`                        | Sealing or opening failed; check the custody key           |
+| `ResolverFailed`      | 500    | no        | `resolver`, `message`              | The DNS pool could not be reached                          |
+
+## Categories
+
+`category` groups the reasons for logging and metrics: `request`, `auth`, `plan`, `provider`,
+`storage`, `internal`.
+
+## Matching
+
+<Snippet file="examples/core/plans.ts" region="failures" title="Deciding what to do next" />
+
+`DomainKit.isError(value)` narrows an unknown to the error, for a `catch` at a foreign boundary.
+
+## Over the wire
+
+`domainkit/server` answers with the error value itself at the status its reason derives, so a
+`Conflict` is a 409 whose body still carries the conflicting operations and a `Reconnect` is a 403
+naming the connection. `domainkit/client` decodes that body back into the same
+`DomainKit.Error`, reason intact.
+
+A reply the client cannot read as one came from in front of the server: a proxy, a login page, a
+maintenance window. Those are classified from the status instead, and always name the transport's
+base URL as the origin.
+
+## In the UI
+
+`@domainkit/react` renders a sentence per reason from `Messages.Catalog`, so nothing shows a tag.
+Override one key to change one sentence.
+
+<Snippet file="examples/react/controllers.tsx" region="failure" title="Rendering a failure" />
+
+[Troubleshooting](/docs/guides/troubleshooting) covers what to do when one of these keeps happening.

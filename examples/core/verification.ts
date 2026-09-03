@@ -18,7 +18,11 @@ export const check = Effect.map(Verify.observe({ domain }), (readiness) => ({
 // #endregion observe
 
 // #region evidence
-/** Every requirement keeps the evidence behind its status, one entry per source that answered. */
+/**
+ * Every requirement keeps the evidence behind its status, one entry per source that answered.
+ * `values` is what that source returned for the record's name and type, empty when it returned
+ * nothing; `detail` is null when satisfied and otherwise says what went wrong.
+ */
 export const sources = Effect.map(Verify.observe({ domain }), (readiness) =>
   readiness.requirements.flatMap((requirement) =>
     requirement.evidence.map((evidence) => ({
@@ -30,6 +34,8 @@ export const sources = Effect.map(Verify.observe({ domain }), (readiness) =>
           : evidence._tag === "PublicDns"
             ? evidence.resolver
             : evidence.source,
+      found: evidence._tag === "Host" ? [] : evidence.values,
+      detail: evidence.detail,
     })),
   ),
 );

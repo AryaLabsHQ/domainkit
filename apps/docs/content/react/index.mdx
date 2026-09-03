@@ -1,79 +1,96 @@
 ---
 title: React
-description: Add React flows for connection, DNS setup, verification, and cleanup while the browser talks to your server, never the provider.
+description: A complete custom-domain flow over a transport your server owns, the slots that replace one part of it, and the controllers that sit behind both.
 sidebar:
   label: Overview
 seo:
-  title: React DNS flows for your app
+  title: DomainKit React flows
 ---
 
-DomainKit React turns the core lifecycle into ready-made flows and smaller parts. Start with the
-complete `Domain.Flow`, use one focused flow, or build your own screen from models and parts. The
-[integration levels guide](/docs/react/integration-levels) compares these choices and the work your
-app still owns.
-
-Install the React package with its peer dependencies and opt in to the default stylesheet:
+`@domainkit/react` renders the whole custom-domain lifecycle over a transport your server owns.
+Provider credentials never reach the browser: the transport calls the routes you mounted from
+`domainkit/server`.
 
 ```package-install
-@domainkit/react domainkit effect@rc @effect/atom-react@rc react react-dom
+@domainkit/react domainkit effect@rc react react-dom
 ```
 
-```tsx
-import { Domain, DomainKit } from "@domainkit/react";
+React 19 is required. Install `domainkit` and `@domainkit/react` at the same release version.
+
+## Two components
+
+<Snippet
+  file="examples/react/domain-settings.tsx"
+  region="setup"
+  title="The transport and the requirements"
+/>
+
+<Snippet file="examples/react/domain-settings.tsx" region="flow" title="The whole flow" />
+
+<ReactExample story="domain-flow" />
+
+`Domain.Flow` connects a provider, plans the DNS changes, takes the customer's approval or refusal,
+applies the plan, observes the records, and cleans them up against the apply receipt. It renders
+only the capability groups the transport declares.
+
+Writing `Transport.fromFetch("/api/domainkit")` inline in JSX is fine: `DomainKit.Root` keeps the
+transport's identity for the whole mount, so the controllers do not restart on every render.
+
+## Three ways in
+
+| Level       | You write                             | Reach for it when                                      |
+| ----------- | ------------------------------------- | ------------------------------------------------------ |
+| The flow    | `<Domain.Flow domain requirements />` | The product needs a working screen today               |
+| Slots       | One or more slot render functions     | Most of the flow fits and one part is yours            |
+| Controllers | `useController` and your own markup   | The lifecycle belongs inside a screen you already have |
+
+[Composition](/docs/react/composition) covers slots, [controllers](/docs/react/controllers) the
+hooks, and [presentation](/docs/react/presentation) the theme, messages, marks, and icons.
+
+## Events
+
+<Snippet
+  file="examples/react/domain-settings.tsx"
+  region="events"
+  title="Observing finished steps"
+/>
+
+`onEvent` fires when a customer finishes something: `Connected`, `Applied`, `Cleaned`, `Declined`,
+`Detached`, `Disconnected`, and `Failed`. A listener that throws cannot change the outcome of an
+operation that already completed.
+
+## Keeping the UI honest
+
+Pass `revision` and bump it after a change the UI did not make, such as a webhook that disconnected
+a provider. Every mounted domain re-inspects.
+
+## Next.js
+
+The package entry carries `"use client"`. A transport is an object of functions, so build it inside
+a client module rather than passing one down from a server component.
+
+## Styles
+
+```ts
 import "@domainkit/react/styles.css";
-
-export function DomainSetup() {
-  return (
-    <DomainKit.Root transport={transport}>
-      <Domain.Flow domain="example.com" records={records} />
-    </DomainKit.Root>
-  );
-}
 ```
 
-`Domain.Flow` handles connection, plan review, apply, verification, cleanup, and removal of the
-current domain attachment. `DomainKit.Root` runs the host transport through Effect Atom. The package never
-receives provider credentials in the browser; every operation goes through your authenticated
-transport.
+The stylesheet is opt-in and every colour in it is a `--domainkit-*` custom property, so a host that
+imports it can still restyle everything through `theme`.
 
-React 19 is required.
-
-## Choose a flow or part
-
-| Surface                          | Use it when                                              |
-| -------------------------------- | -------------------------------------------------------- |
-| `Domain.Flow`                    | You want the complete lifecycle in one component         |
-| `Connection.Flow`                | You only need provider connection and reuse              |
-| `Provisioning.Flow`              | Your product already owns the surrounding domain screen  |
-| `Records.Table` / `Records.Card` | You want presentational DNS records without a transport  |
-| Hooks and parts                  | Your design system owns structure and interaction chrome |
-
-Server rendering is supported. Clipboard access, downloads, and navigation occur only from browser interactions.
-
-The [component catalog](/components) has installation, examples, states, accessibility, and API
-details for each component. These pages explain package-wide choices and the host transport.
+## Next
 
 <CardGroup cols={2}>
-  <Card title="Integration levels" href="/docs/react/integration-levels" icon="layers">
-    Compare complete screens, focused flows, model hooks, and low-level parts.
+  <Card title="Component catalog" href="/components" icon="component">
+    Every flow and part, with a preview that runs the real lifecycle.
   </Card>
-  <Card title="Components" href="/components" icon="component">
-    Explore every shipped React flow, presentation component, theme, and provider state.
-  </Card>
-  <Card title="Transport" href="/docs/react/transport" icon="arrow-right-left">
-    Map authenticated endpoints into the browser-safe app transport.
-  </Card>
-  <Card title="Composition" href="/docs/react/composition" icon="palette">
-    Bring your own components, icons, messages, provider marks, and design tokens.
+  <Card title="@domainkit/react reference" href="/docs/reference/react" icon="book">
+    Namespaces, controller states, slots, and props.
   </Card>
   <Card title="Shadcn registry" href="/docs/react/registry" icon="copy">
-    Copy standalone DNS display components directly into your application.
+    Copy-in display components with no DomainKit runtime.
+  </Card>
+  <Card title="The transport" href="/docs/react/transport" icon="link">
+    What the browser calls, and what it never holds.
   </Card>
 </CardGroup>
-
-## Keep the host boundary explicit
-
-The React package owns the UI flows and client-side state. Your app still owns authentication,
-authorization, saved attempts, secrets, provider credentials, and the server-side `Transport`
-implementation. See
-[Integrate with your host application](/docs/guides/host-integration) for the end-to-end boundary.

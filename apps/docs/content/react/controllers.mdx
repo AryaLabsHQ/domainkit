@@ -1,0 +1,100 @@
+---
+title: Controllers
+description: The four hooks behind the flow, the tagged states they expose, the commands they take, and how an attempt is abandoned when its inputs change.
+sidebar:
+  label: Controllers
+seo:
+  title: DomainKit React controllers
+---
+
+Every part of the flow is a hook. Each takes one options object and returns a controller whose
+`state` is a tagged union, so a screen renders from `state._tag` and never from a boolean pair.
+
+<Snippet file="examples/react/controllers.tsx" region="hooks" title="The four controllers" />
+
+## Connection
+
+`Connect.useController({ domain })`
+
+| State               | Means                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| `Loading`           | Inspecting the domain                                                                     |
+| `Disconnected`      | No connection. Carries `discovery` when one of the owner's connections reaches the domain |
+| `Connected`         | Attached and usable                                                                       |
+| `Reconnect`         | The credential can no longer be refreshed                                                 |
+| `Submitting`        | A connect, attach, detach, or disconnect is in flight                                     |
+| `Redirecting`       | Sending the customer to the provider                                                      |
+| `SelectionRequired` | The credential reaches several matching zones                                             |
+| `Failure`           | Carries the `DomainKit.Error`                                                             |
+
+| Command                                             | Does                                                      |
+| --------------------------------------------------- | --------------------------------------------------------- |
+| `connect({ provider, method, values?, returnTo? })` | Starts a connection                                       |
+| `reuse({ connectionId, zone? })`                    | Attaches the domain to a connection the owner already has |
+| `select(zone)`                                      | Answers `SelectionRequired`                               |
+| `detach()` / `disconnect()`                         | Releases the domain, or the whole connection              |
+| `refresh()` / `retry()`                             | Re-inspects, or re-runs the step that failed              |
+
+Discovery runs on mount whenever the transport declares it and the domain has no connection yet. A
+discovery failure leaves `discovery` null and the provider list still renders: discovery is an
+optimisation, not a step the customer asked for.
+
+## Provisioning and cleanup
+
+`Provision.useController({ domain, requirements, onApplied? })` and
+`Cleanup.useController({ domain, receiptId?, onCleaned? })` run the same machine.
+
+| State       | Means                                      |
+| ----------- | ------------------------------------------ |
+| `Idle`      | Nothing planned yet                        |
+| `Planning`  | Building the plan                          |
+| `Planned`   | Carries the plan, waiting for the customer |
+| `Approving` | Recording consent                          |
+| `Applying`  | Writing                                    |
+| `Applied`   | Carries the receipt, complete or partial   |
+| `Rejecting` | Recording a refusal                        |
+| `Rejected`  | Carries the closed attempt                 |
+| `Failure`   | Carries the `DomainKit.Error`              |
+
+<Snippet file="examples/react/controllers.tsx" region="commands" title="Approve or decline" />
+
+`approve(operationIds?)` authorizes the digest and applies it in one customer action, because the
+review screen offers Approve and Decline rather than Approve and then Apply. `apply()` stays
+available for a host that approves out of band. `reject(reason?)` is terminal: approving that plan
+afterwards fails `Stale`.
+
+`retry()` builds a new plan when the reason says the old one is gone (`Stale`, `Expired`,
+`Conflict`) and re-runs the failed step otherwise.
+
+## Verification
+
+`Verify.useController({ domain, polling? })` observes on mount, then re-observes at the readiness
+row's own `nextCheckAt` while it stays mounted. `readiness` holds the latest observation even while
+a new one runs, so the table does not blink.
+
+<ReactExample story="verification" />
+
+## Abandoning an attempt
+
+A controller's plan, approval, and receipt only mean something for the inputs that produced them, so
+changing `domain` or `requirements` drops them. The identity is the content of the requirement
+records, not array identity, so writing `requirements={[...]}` inline does not lose a plan the
+customer is reading.
+
+Every command carries the key it was raised for and refuses once that key has moved, so a command
+raised from a layout effect in the same commit cannot act on the previous domain.
+
+## Failures
+
+<Snippet file="examples/react/controllers.tsx" region="failure" title="Rendering a failure" />
+
+The failed state carries the `DomainKit.Error` itself, so a host reads `reason`, `category`, and
+`isRetryable` instead of parsing text. `Messages.failure(error, catalog)` picks the sentence.
+
+## Capabilities
+
+<Snippet
+  file="examples/react/controllers.tsx"
+  region="capabilities"
+  title="Rendering only what the server serves"
+/>

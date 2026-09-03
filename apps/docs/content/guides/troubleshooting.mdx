@@ -1,138 +1,104 @@
 ---
 title: Troubleshooting
-description: Find and fix installation, connection, plan, cleanup, DNS, and React transport problems by checking one boundary at a time.
+description: What each failure means in practice, why an interactive connection stalls, why DNS never becomes ready, and the checks that usually explain both.
+sidebar:
+  label: Troubleshooting
 seo:
-  title: Troubleshoot DomainKit integrations
+  title: Troubleshoot a DomainKit integration
 ---
 
-Start with the tagged failure or outcome. Do not turn different authorization, provider, stale,
-conflict, propagation, and transport failures into one generic retry state.
+Every failure is a `DomainKit.Error` carrying one reason.
+[Failure reasons](/docs/core/errors) is the full table; this page is what to do when
+one of them keeps happening.
 
-## Installation and exports
+## The plan will not apply
 
-### A module subpath cannot be resolved
+**`Conflict`.** The zone already holds something incompatible. The reason carries the conflicting
+operations, each with the requirement and what was found there. Show them: `exclusive-name` and
+`cname-collision` mean a record has to move before the plan can run, `value-mismatch` means the
+same name and type holds a different value, and `opaque` means the provider reports something
+DomainKit will not touch.
 
-Only `domainkit`, `domainkit/promise`, `domainkit/server`, `domainkit/testing`, and package metadata are exported. Replace
-historical `domainkit/effect`, provider, adapter, or compatibility subpaths with namespaces from the
-canonical roots.
+Approve the rest with `allowPartial` and a conflict-free selection when the customer wants to make
+progress before resolving the rest.
 
-### Core and React declarations disagree
+**`Stale`.** Provider state moved between planning and applying. Build a new plan and show it again;
+the customer's consent was for a digest that no longer describes the zone.
 
-Install matching `domainkit` and `@domainkit/react` versions. Remove lockfile overrides or packed
-artifacts that resolve the packages to different transport types, then rebuild after a clean install.
+**`Expired`.** The plan or approval aged out. Plans live one hour by default; `Provision.Policy`
+changes that.
 
-### React or Effect peer errors appear
+**`Busy`.** Another apply holds the attempt lease, or another request holds the refresh lock. It is
+retryable and usually resolves within the lease, two minutes by default.
 
-Check the current package manifests. DomainKit 0.8.0 expects Effect 4 RC; `@domainkit/react` expects
-React and ReactDOM 19 plus `@effect/atom-react` 4 RC.
+## The connection stops working
 
-## Connections
+**`Reconnect`.** The provider will no longer refresh the credential. Nothing you can retry: the
+customer connects the provider again. `Connect.inspect` reports the same thing as
+`status: "reconnect"` so a settings screen can show it before an action fails.
 
-### The provider redirects but callback completion fails
+**`Unauthenticated` from a provider.** The token was revoked or rotated at the provider, or the
+customer pasted the wrong value.
 
-- Confirm the callback uses the same provider flow configuration and redirect URI as the start
-  route.
-- Confirm the continuation exists, has not expired, and has not already been consumed.
-- Check state/PKCE validation before retrying the exchange.
-- Restart consent instead of reconstructing missing continuation state.
+**`Forbidden`.** The credential is valid and lacks the permission. Cloudflare tokens need
+`zone:read` and `dns_records:edit`; check the token's scopes and, for an account-owned token, that
+the account id matches.
 
-### A credential is valid but no account or zone is found
+## The interactive connection never completes
 
-- Verify the known domain and its parent zone are visible to the credential.
-- Check the required DNS read capability and the provider-specific account/team context.
-- Treat multiple candidates as a selection problem; do not choose an account ID arbitrarily.
+Check three things in order:
 
-### Reuse is rejected
+1. **The callback URL the provider redirects to matches the one registered.** It is the mount path
+   plus `/callback/:provider`. Behind an edge that rewrites `Host`, set `callbackBaseUrl` and use
+   that same value at the provider.
+2. **`Identity` reads a cookie.** The callback is a top-level browser navigation, so an
+   `Authorization` header scheme yields no principal there and the flow fails at the last step.
+3. **The continuation is still alive.** They live fifteen minutes by default, and they are spent
+   exactly once, so a replayed callback fails `NotFound`.
 
-The existing authorization must belong to the same host owner, remain active, cover the requested
-provider capability, and prove authority for the new domain. Authorizations from another owner,
-expired authorizations, and authorizations being revoked stop without a write.
+A callback that lands somewhere unexpected is `defaultReturnTo`: a `returnTo` that does not resolve
+to the callback's own origin is refused rather than followed.
 
-## Plans and apply
+## DNS never becomes ready
 
-### The plan contains a conflict
+Read the evidence rather than the overall status. Each requirement carries one entry per source,
+with the values that source returned and a `detail` explaining a status that is not `satisfied`.
 
-Read the conflicting existing records. DomainKit will not overwrite them. Ask the user to resolve
-the incompatible state, change the product requirement, or continue through a manual path.
+- **Provider satisfied, public DNS missing.** Propagation, or a resolver caching the negative
+  answer. `nextCheckAt` already schedules the next look; the ladder is 15 seconds, 1 minute, 5
+  minutes, 30 minutes.
+- **One resolver satisfied, another missing.** The default quorum is `any`, so this is still
+  satisfied. Set `Verify.Policy.quorum` to `all` when your product needs agreement.
+- **`mismatch`.** An exclusive requirement met a conflicting record at the same name and type. That
+  outranks agreement anywhere else, and it needs a DNS change, not another check.
+- **Everything `unknown`.** No source answered. Check `ResolverFailed` in your logs and whether the
+  runtime can reach `cloudflare-dns.com` and `dns.google`.
 
-### Apply reports a stale plan
+Nameserver delegation is the usual root cause: a domain whose nameservers do not point at the
+connected zone will read correctly at the provider and never appear in public DNS.
 
-Provider state changed after review. Discard the attempt, create a fresh plan, show the new
-operations, and ask for approval again.
+## Storage and keys
 
-### Apply completed partially
+**`StorageFailed`.** The database call failed. It is retryable, and the message names the operation.
 
-Save the receipt carried by `PartialApplyError` before doing anything else. Report the writes that
-finished separately from the failed operation. Do not describe the provider sequence as rolled back
-or atomic.
+**`CryptoFailed`.** Sealing or opening a credential failed. On `open`, the usual cause is a custody
+key that changed: stored ciphertext is bound to the key that sealed it, so rotating the key means
+re-sealing.
 
-## Cleanup
+**A row that should exist reads as `NotFound`.** Every query is scoped by the request's `Principal`.
+A row belonging to another tenant is absent, not forbidden, so check the `ownerId` your `Identity`
+returned before looking at the database.
 
-### Cleanup cannot be planned
+## The UI renders less than you expect
 
-Confirm that the source plan and receipt belong to the same provider and zone and that every created
-record has a provider record ID. A missing or drifted record intentionally blocks automatic cleanup.
+`@domainkit/react` renders only the capability groups the transport declares. If the review actions
+or the cleanup button are missing, the transport was built with fewer capabilities than the server
+mounts, or those routes are not mounted at all. `Transport.capabilities(transport)` reports what it
+has, and `DomainKit.useCapabilities()` reports the same inside the tree.
 
-### Cleanup completed partially
+## Something answered that DomainKit did not send
 
-Persist the partial deletion receipt. Recreate or reload the same cleanup plan as appropriate for
-your expiry model, authorize the remaining operations, and pass the prior receipt when resuming.
-
-## Observation
-
-### Provider state matches but public DNS is pending
-
-The provider write exists, but public resolvers have not seen it. Keep the two results separate and
-continue your host's propagation policy.
-
-### Observation is unavailable
-
-Inspect resolver evidence for timeouts and failures. `Unavailable` does not prove that the record is
-missing and should not be shown as propagation delay.
-
-### Observation is a mismatch
-
-Compare normalized values, record type, name, priority, and provider/public evidence. A mismatch means
-DNS returned different data; waiting alone may not fix it.
-
-## Providers
-
-### Planning misses records returned by the provider UI
-
-Check pagination and normalization in the adapter. Preserve provider-only record types as opaque
-observations so they can still participate in name conflicts.
-
-### Conformance fails after a successful create
-
-Verify that `createRecord` returns a stable record ID and that a fresh `listRecords` and `getRecord`
-can read the exact normalized record. The conformance tests expect complete readback, not a local
-write-through cache.
-
-## React transport
-
-### The UI stays in a loading or submitting state
-
-Confirm every `Transport.Service` operation resolves or fails through the Effect channel. Do not
-leave an HTTP client Promise pending after navigation or component disposal.
-
-### A stale request replaces newer state
-
-Use the packaged models and one stable `DomainKit.Root` transport Layer for the mounted flow.
-Avoid recreating transport identity during an active session.
-
-### OAuth navigation does not match the host router
-
-Pass a `navigate` function to `DomainKit.Root`. The default browser behavior assigns the returned
-authorization URL directly.
-
-## Collect useful evidence
-
-When reporting a problem, include:
-
-- installed core, React, Effect, and React versions;
-- runtime and bundler;
-- provider and connection method without credentials;
-- operation and tagged failure/outcome;
-- plan/provider/zone identifiers with secrets removed;
-- whether the failure occurred in provider readback, public DNS, host transport, or product state;
-- a minimal reproduction using `domainkit/testing` when possible.
+A reply the transport cannot read as a `DomainKit.Error` becomes a `ProviderUnavailable` or
+`ProviderRejected` naming the transport's base URL. That means something in front of the server
+answered: a proxy, a login page, a maintenance window. Check the raw response before looking at
+DomainKit.

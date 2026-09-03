@@ -1,169 +1,63 @@
 ---
-title: Connect Vercel
-description: Connect Vercel with an Integration or personal access token and keep the personal or team context for later DNS requests and cleanup.
+title: Vercel
+description: Connect Vercel with a personal or team access token or a marketplace integration, what each method stores, and which domains become DNS targets.
+sidebar:
+  label: Vercel
 seo:
-  title: Connect Vercel DNS
+  title: Connect Vercel DNS with DomainKit
 ---
 
 <ProviderLogo provider="vercel" size={48} />
 
-Vercel's interactive method is an Integration installation-code flow. DomainKit keeps it as an
-Integration instead of treating every redirect as generic OAuth. A successful connection records
-the personal or team context; attaching a domain to an exact Vercel zone is a separate step.
+Vercel offers access tokens and, when you publish one, a marketplace integration. Both end at the
+same connection.
 
-Run provider exchanges and token checks on a trusted server. The browser receives only your app's
-connection outcome.
+## Register the provider
 
-## Prerequisites
+<Snippet file="examples/providers/vercel.ts" region="token-only" title="Tokens only" />
 
-- A Vercel Integration with a slug, client ID, client secret, and registered redirect URI.
-- A durable `ManagedDnsConnections.AsyncInterface`.
-- A short-lived, one-time continuation store.
-- Authenticated start and callback routes tied to the current host owner.
+<Snippet file="examples/providers/vercel.ts" region="integration" title="With an integration" />
 
-Import the async repository type from the Promise entry point:
+`slug` is your integration's slug; the flow starts at
+`vercel.com/integrations/<slug>/new` and exchanges the one-time callback code at Vercel's token
+endpoint. It redirects like OAuth, and it is not OAuth, so DomainKit models it as its own method
+rather than pretending the two are the same.
 
-```ts
-import { type ManagedDnsConnections } from "domainkit/promise";
-```
+## Connecting with a token
 
-## Start an Integration installation
+<Snippet file="examples/providers/vercel.ts" region="connect-token" title="An access token" />
 
-```ts
-import { Connection, DomainName, Secret, Vercel } from "domainkit/promise";
+| Field    | Required | Secret | Means                                                         |
+| -------- | -------- | ------ | ------------------------------------------------------------- |
+| `token`  | yes      | yes    | The access token                                              |
+| `teamId` | no       | no     | Scope the connection to one team; omit for a personal account |
 
-const capabilities = ["dns:read", "dns:write"] as const;
+The stored context is just `{ teamId }`, `null` for a personal account. Team requests carry
+`teamId`; personal ones do not.
 
-const flow = Vercel.Auth.integrationFlow({
-  capabilities,
-  clientId,
-  clientSecret: Secret.make(clientSecret),
-  redirectUri,
-  slug: "your-integration-slug",
-});
+## Connecting with the integration
 
-const result = await Connection.start({
-  authorizedById,
-  method: Connection.Method.Interactive({ continuations, flow }),
-  ownerId,
-  repository,
-});
-```
+<Snippet
+  file="examples/providers/vercel.ts"
+  region="connect-integration"
+  title="A marketplace install"
+/>
 
-Send the returned `Redirect.authorizationUrl` to the browser. Vercel lets the user choose a personal
-or team installation during this flow.
+`Connect.start` answers a `Redirect` to the install URL. When the customer finishes, Vercel drives
+the browser back to `/callback/vercel` with the installation's team, which DomainKit checks against
+the token it exchanges: an install that reports a different team than the token belongs to fails
+`Unauthenticated` rather than connecting to the wrong account.
 
-## Complete the callback
+## Zones and targets
 
-Use the same flow configuration on the callback route:
+A Vercel domain is a target when Vercel hosts its DNS. Each target carries the team that owns it and
+the nameservers Vercel reports, current or intended. Those nameservers are provider evidence, and
+they never stand in for an independent public DNS observation: a domain whose delegation has not
+moved yet reads correctly here and is still missing everywhere else.
 
-```ts
-const connected = await Connection.complete({
-  callbackUrl: new URL(request.url),
-  continuationId,
-  continuations,
-  flow,
-  repository,
-});
-```
+## Records
 
-The code exchange returns the personal account or team context and installation identity. DomainKit
-saves that non-secret provider context with the authorization so later requests build the correct
-Vercel client without asking the customer to type a team ID.
+`A`, `AAAA`, `CAA`, `CNAME`, `MX`, `NS`, `SRV`, and `TXT`, through Vercel's domain records API. A
+record type DomainKit does not model is kept as an opaque observation and never overwritten.
 
-## Connect a personal access token
-
-For a personal account:
-
-```ts
-const method = Vercel.Auth.tokenConnectionMethod({
-  capabilities,
-  context: Vercel.AccountContext.personal(),
-  token: Secret.make(personalAccessToken),
-});
-```
-
-For a team, provide the team context selected by the host:
-
-```ts
-const method = Vercel.Auth.tokenConnectionMethod({
-  capabilities,
-  context: Vercel.AccountContext.team({ teamId }),
-  token: Secret.make(personalAccessToken),
-});
-```
-
-Then pass the method to `Connection.start` with the owner identity and durable repository. Keep the
-token behind the host's secret-storage boundary. `Connection.start` returns a public
-`ProviderConnection`; it does not attach a domain.
-
-## Reconstruct the provider
-
-Load the private aggregate from the host repository and restore the credential-scoped client:
-
-```ts
-const aggregate = await repository.getByConnectionId(connection.id);
-if (aggregate === null) throw new Error("Connection was not persisted");
-
-const session = await Vercel.Auth.restore({
-  authorization: aggregate.authorization,
-  credential: aggregate.credential,
-});
-```
-
-The restore helper decodes the saved context and uses `Vercel.AccountContext.personal()` or
-`Vercel.AccountContext.team({ teamId })` internally. Personal clients omit team context; team clients
-include `teamId` in Vercel resource requests. The returned client is Effect-native; adapt it once with
-`ProviderSession.fromEffect` before passing a focused provider to Promise `Provisioning` or
-`Verification`.
-
-## Attach the discovered provider target
-
-Resolve the domain against the restored session, then persist the exact target as a host-owned domain
-attachment. `Vercel.Auth.restore` returns the Effect-native client; adapt it once with
-`ProviderSession.fromEffect` before using the Promise-shaped session methods:
-
-```ts
-import { Connection, DomainName, ProviderSession } from "domainkit/promise";
-
-const domain = DomainName.parse("example.com");
-const asyncSession = ProviderSession.fromEffect(session);
-const resolution = await asyncSession.resolveTarget(domain);
-if (resolution._tag !== "Resolved") {
-  throw new Error("Vercel returned no unique authoritative target");
-}
-
-const attached = await Connection.attach({
-  attachment: {
-    connectionId: connection.id,
-    createdAt: new Date(),
-    domain,
-    id: crypto.randomUUID(), // a host-owned durable attachment id
-    target: resolution.target,
-  },
-  connectionId: connection.id,
-  ownerId,
-  repository,
-});
-```
-
-If the session returns `SelectionRequired`, show the candidates and validate the selected target on
-the server. Do not accept an account or team ID from browser input without provider-backed proof.
-
-## Zone discovery
-
-DomainKit treats a Vercel domain as DNS storage when Vercel reports its DNS service type, zone flag,
-or intended nameservers. Current or intended Vercel nameservers are provider evidence; they do not
-replace an independent public-DNS check. Use the focused provider from
-`asyncSession.forTarget(attachment.target)` for planning and apply so DNS requests stay bound to the
-selected zone. Pass the resulting Promise provider to the Promise APIs.
-
-When more than one authorized context can serve a domain, show a recognizable personal/team choice
-instead of silently selecting a team ID.
-
-## Next steps
-
-- [Integrate the host lifecycle](/docs/guides/host-integration)
-- [Provision and clean up records](/docs/guides/provision-and-clean-up)
-- [Vercel capability reference](/docs/reference/providers#vercel)
-- [Troubleshoot provider connections](/docs/guides/troubleshooting#connections)
+Adding a provider of your own is the [write a provider](/docs/guides/implement-provider) guide.

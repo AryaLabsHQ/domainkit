@@ -1,120 +1,42 @@
 ---
 title: Domain flow
-description: Mount the full connection, DNS setup, verification, cleanup, and disconnect flow for one customer domain in a single screen.
+description: The whole custom-domain lifecycle for one domain, from connecting a provider through reviewing the plan, applying it, observing DNS, and cleaning up.
 ---
 
-`Domain.Flow` is the highest-level React integration. It combines the controllers and parts exposed
-by the focused namespaces.
+`Domain.Flow` is the complete flow. It composes the four controllers, renders four slots with
+defaults, and shows only the capability groups the transport declares.
 
-<ReactExample story="domain" />
+<ReactExample story="domain-flow" />
 
-## Installation
+## Install
 
 ```package-install
-@domainkit/react domainkit effect @effect/atom-react react react-dom
+@domainkit/react domainkit effect@rc react react-dom
 ```
 
 ## Usage
 
-Place the flow inside `DomainKit.Root` and pass the DNS requirements from your product. The optional
-`receiptId` restores cleanup after the host reloads saved state.
+<Snippet file="examples/react/domain-settings.tsx" region="flow" title="The whole flow" />
 
-```tsx
-<DomainKit.Root transport={transportLayer}>
-  <Domain.Flow domain={domain} records={records} receiptId={receiptId} />
-</DomainKit.Root>
-```
+## Props
 
-The flow does not decide identity, tenancy, consent, audit policy, or product readiness. It renders
-the state returned by the host transport and emits events after user-triggered changes finish.
+| Prop           | Type                               | Required | Means                                       |
+| -------------- | ---------------------------------- | -------- | ------------------------------------------- |
+| `domain`       | `string`                           | yes      | The customer domain this flow is for        |
+| `requirements` | `ReadonlyArray<DnsRecord.Model>`   | yes      | The records your product needs              |
+| `slots`        | `Domain.Slots`                     | no       | Replace one part of the flow, keep the rest |
+| `onApplied`    | `(receipt: Receipt.Model) => void` | no       | Fires once an apply produced a receipt      |
+| `onCleaned`    | `(receipt: Receipt.Model) => void` | no       | Fires once a cleanup produced a receipt     |
 
-## When to use it
+It also takes the composition props every part takes: `className`, `style`, and `render`.
 
-Use `Domain.Flow` when the packaged card and action order fit your product. Choose
-[Host lifecycle](/components/host-lifecycle) when your application must control surrounding layout,
-action placement, or readiness rules.
+## What it decides, and what it does not
 
-## Accessibility
+The flow decides the order of the steps and the default presentation. It does not decide identity,
+tenancy, consent, audit policy, or product readiness: it renders what the transport answers and
+reports finished steps through `onEvent` on `DomainKit.Root`.
 
-The complete flow includes tables, dialogs, status text, and action labels. Keep the default
-semantics when styling parts, and keep host-provided messages specific about the provider, record
-action, and failure.
+## Next
 
-## API reference
-
-### `Domain.Flow`
-
-<TypeTable
-  type={{
-    domain: {
-      type: "string",
-      required: true,
-      description: "Customer domain whose full setup flow is shown.",
-    },
-    receiptId: {
-      type: "string",
-      description: "Saved apply receipt that enables cleanup for its records.",
-    },
-    records: {
-      type: "ReadonlyArray<Transport.DnsRecord>",
-      required: true,
-      description: "DNS requirements to plan, display, check, and clean up.",
-    },
-  }}
-/>
-
-### `DomainKit.Root`
-
-<TypeTable
-  type={{
-    children: {
-      type: "ReactNode",
-      required: true,
-      description: "DomainKit components rendered inside the configured runtime.",
-    },
-    colorScheme: {
-      type: '"dark" | "inherit" | "light"',
-      default: '"inherit"',
-      description: "Color scheme used by DomainKit components.",
-    },
-    icons: {
-      type: "Partial<Icons>",
-      description: "Optional replacements for the default action icons.",
-    },
-    marks: {
-      type: "Provider.Marks",
-      default: "{}",
-      description: "Provider artwork overrides keyed by provider ID.",
-    },
-    messages: {
-      type: "Partial<Catalog>",
-      description: "Optional replacements for labels, status text, and dialogs.",
-    },
-    navigate: {
-      type: "(url: string) => void",
-      default: "browser navigation",
-      description: "Navigation function used after an OAuth URL is returned.",
-    },
-    onEvent: {
-      type: "Lifecycle.Listener",
-      description: "Optional listener for lifecycle events after user actions finish.",
-    },
-    portalContainer: {
-      type: "HTMLElement | null",
-      default: "null",
-      description: "DOM container used for dialogs and popovers.",
-    },
-    theme: {
-      type: "Theme",
-      description: "Optional token theme used by DomainKit components.",
-    },
-    transport: {
-      type: "Layer.Layer<Transport.Service>",
-      required: true,
-      description: "Transport from your app for connection and DNS calls.",
-    },
-  }}
-/>
-
-See [Choose an integration level](/docs/react/integration-levels) before replacing complete flows
-with lower-level parts.
+Use [composition](/docs/react/composition) to replace one slot, and
+[controllers](/docs/react/controllers) when the lifecycle belongs inside a screen you already have.

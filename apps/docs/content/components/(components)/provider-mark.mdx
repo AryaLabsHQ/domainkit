@@ -1,77 +1,31 @@
 ---
-title: Provider Mark
-description: Show a DNS provider logo from integrations.sh, your own artwork, or a text fallback in a connection card or provider picker.
-sidebar:
-  label: Provider Mark
+title: Provider mark
+description: Show a DNS provider's identity with artwork your app supplies, falling back to the provider's own initial, with nothing fetched at render time.
 ---
 
-`Provider.Mark` renders the provider identity returned by the host transport. Known providers use
-the `integrations.sh` logo endpoint. Unknown or failed images fall back to the provider's initial.
+`Provider.Mark` renders the artwork for one provider. Nothing is fetched at render time.
 
-<ReactExample story="provider" />
+<ReactExample story="provider-mark" />
 
-## Installation
+## Usage
 
-Install the package component:
+<Snippet file="examples/react/catalog.tsx" region="provider-mark" title="A provider mark" />
 
-```package-install
-@domainkit/react domainkit effect @effect/atom-react react react-dom
-```
+Supply the artwork once on `DomainKit.Root`:
 
-Or copy the standalone wrapper through the DomainKit registry:
+<Snippet file="examples/react/presentation.tsx" region="marks" title="Host-supplied artwork" />
 
-```package-install
-npx shadcn@latest add https://domain-kit.dev/r/provider-mark.json
-```
+## Props
 
-The copied `ProviderMark` supplies only the accessible wrapper. Pass your own image, such as
-`https://integrations.sh/logo/cloudflare.com?sz=64`, as its child.
+| Prop       | Type                  | Required | Means                                     |
+| ---------- | --------------------- | -------- | ----------------------------------------- |
+| `provider` | `Provider.Descriptor` | yes      | The provider as the snapshot describes it |
 
-## Host overrides
-
-Provide `marks` to `DomainKit.Root` when your application already owns provider artwork:
-
-```tsx
-<DomainKit.Root
-  marks={{
-    cloudflare: <img alt="" src="/brands/cloudflare.svg" />,
-  }}
-  transport={transportLayer}
->
-  {children}
-</DomainKit.Root>
-```
-
-Marks use provider IDs and may be a React node or a function of the provider descriptor. Your app
-still controls branding, asset policy, and self-hosted images.
+`marks` is keyed by provider id and takes a node or a function of the descriptor. Without an entry,
+the mark is the provider's own initial drawn with the theme's tokens, so a provider list renders
+before any artwork exists.
 
 ## Accessibility
 
-The wrapper has `role="img"` and uses the provider name as its accessible label. Decorative images
-inside it should use an empty `alt` so the provider is announced once.
-
-## API reference
-
-### `Provider.Mark`
-
-<TypeTable
-  type={{
-    provider: {
-      type: "Provider.Provider",
-      required: true,
-      description: "Provider whose identity and artwork are shown.",
-    },
-  }}
-/>
-
-### `DomainKit.Root` mark configuration
-
-<TypeTable
-  type={{
-    marks: {
-      type: "Provider.Marks",
-      default: "{}",
-      description: "Provider artwork overrides keyed by provider ID.",
-    },
-  }}
-/>
+The mark carries `role="img"` and the provider's name as its label, so replacing the artwork does
+not remove the name from the accessibility tree.

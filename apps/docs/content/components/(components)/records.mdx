@@ -1,153 +1,46 @@
 ---
 title: Records
-description: Show your DNS records in a table, or let users copy and download a zone file for setup screens, support, or export.
+description: Render the DNS requirements your product supplies as a table or a zone file, with copy actions and a status column once readiness has been observed.
 ---
 
-The records namespace shows the DNS requirements from your app and any evidence you pass to it. It
-does not read DNS or decide whether the product is ready.
+The records namespace renders the requirements your product supplies, plus the readiness a
+`Verify` controller observed. It reads no DNS of its own.
 
 <ReactExample story="records" />
 
-## Installation
+## Usage
 
-Install the packaged React components:
-
-```package-install
-@domainkit/react domainkit effect @effect/atom-react react react-dom
-```
-
-For standalone, copied display components, install the matching registry items:
-
-```package-install
-npx shadcn@latest add https://domain-kit.dev/r/dns-table.json https://domain-kit.dev/r/copy-value.json https://domain-kit.dev/r/dns-status.json
-```
-
-The registry components accept plain props and do not include DomainKit transport, planning, or
-observation models.
+<Snippet file="examples/react/catalog.tsx" region="records" title="Table and zone file" />
 
 ## Table
 
-`Records.Table` renders type, name, value, priority, and any evidence you pass in. Evidence is
-grouped by `recordId`, so provider and public-DNS results can stay separate.
+`Records.Table` renders one row per requirement: type, name, value, purpose, and a status column
+when `readiness` is present. Values carry a copy action.
 
-```tsx
-<Records.Table records={records} evidence={observation.publicDns} />
-```
+| Prop        | Type                             | Required | Means                     |
+| ----------- | -------------------------------- | -------- | ------------------------- |
+| `records`   | `ReadonlyArray<DnsRecord.Model>` | yes      | The requirements to show  |
+| `readiness` | `Verify.Readiness \| null`       | no       | Adds the status column    |
+| `caption`   | `string`                         | no       | A caption above the table |
+
+The table's leaf parts (`Header`, `Body`, `Row`, `Head`, `Cell`, `Caption`, `Value`, `Purpose`) are
+exported, so a host can assemble its own table from the same parts and keep the styling hooks.
 
 ## Zone file
 
-`Records.ZoneFile` turns the same records into a zone file for copy and download actions. Clipboard
-and download behavior starts only after a user action, so the component can render on the server.
+`Records.ZoneFile` renders the same records as zone-file lines with copy and download actions.
+`Records.toZoneFile(records)` returns the text on its own, and `Records.downloadZoneFile` triggers
+the download; both run only from a user action, so the component renders on the server.
 
-```tsx
-<Records.ZoneFile domain={domain} records={records} />
-```
+## Helpers
+
+| Helper                     | Returns                                                   |
+| -------------------------- | --------------------------------------------------------- |
+| `Records.identity(record)` | A stable key for a requirement: type, name, and data      |
+| `Records.statusOf`         | One requirement's status out of a readiness row           |
+| `Records.useCopy(value)`   | A copy controller with a `copied` flag that resets itself |
 
 ## Accessibility
 
-Copy and download controls have action-specific accessible labels. Preserve those labels when
-supplying custom icons. Keep the table header cells and visible status text when composing lower
-level record parts.
-
-## API reference
-
-### `Records.Table`
-
-<TypeTable
-  type={{
-    copiedIcon: {
-      type: "ReactNode",
-      description: "Optional icon shown after a value has been copied.",
-    },
-    copyIcon: {
-      type: "ReactNode",
-      description: "Optional icon shown for a copy action.",
-    },
-    evidence: {
-      type: "ReadonlyArray<Transport.ObservationEvidence>",
-      description: "Optional provider or public-DNS evidence grouped by record ID.",
-    },
-    records: {
-      type: "ReadonlyArray<Transport.DnsRecord>",
-      required: true,
-      description: "DNS records to render as table rows.",
-    },
-  }}
-/>
-
-### `Records.ZoneFile`
-
-<TypeTable
-  type={{
-    copiedIcon: {
-      type: "ReactNode",
-      description: "Optional icon shown after the zone file has been copied.",
-    },
-    copiedLabel: {
-      type: "string",
-      default: '"Copied"',
-      description: "Label shown after copying the zone file.",
-    },
-    copyIcon: {
-      type: "ReactNode",
-      description: "Optional icon shown for the copy action.",
-    },
-    copyLabel: {
-      type: "string",
-      default: '"Copy zone"',
-      description: "Label for the copy action.",
-    },
-    domain: {
-      type: "string",
-      required: true,
-      description: "Domain used in the downloaded zone file name.",
-    },
-    downloadIcon: {
-      type: "ReactNode",
-      description: "Optional icon shown for the download action.",
-    },
-    downloadLabel: {
-      type: "string",
-      default: '"Download"',
-      description: "Label for the download action.",
-    },
-    records: {
-      type: "ReadonlyArray<Transport.DnsRecord>",
-      required: true,
-      description: "DNS records written to the zone file.",
-    },
-  }}
-/>
-
-### `Records.CopyValue`
-
-<TypeTable
-  type={{
-    copiedIcon: {
-      type: "ReactNode",
-      description: "Optional icon shown after the value has been copied.",
-    },
-    copiedLabel: {
-      type: "string",
-      default: '"Copied"',
-      description: "Action label shown after copying.",
-    },
-    copyIcon: {
-      type: "ReactNode",
-      description: "Optional icon shown for the copy action.",
-    },
-    copyLabel: {
-      type: "string",
-      default: '"Copy"',
-      description: "Action label shown before copying.",
-    },
-    value: {
-      type: "string",
-      required: true,
-      description: "Text shown and copied after the user activates the action.",
-    },
-  }}
-/>
-
-Read [Observe DNS](/docs/guides/observe-dns) for the difference between provider readback and public
-DNS propagation.
+Copy and download controls carry action-specific labels. Keep them when supplying your own icons,
+and keep the header cells when assembling a table from the leaf parts.

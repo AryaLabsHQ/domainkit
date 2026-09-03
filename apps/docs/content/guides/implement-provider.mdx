@@ -1,83 +1,101 @@
 ---
-title: Implement a DNS provider
-description: Build a DNS provider adapter and check it against DomainKit's planning, apply, and cleanup rules before you ship it.
+title: Write a provider
+description: Turn a DNS provider's HTTP API into one declarative definition, declare its auth methods, and prove it with the conformance runner.
+sidebar:
+  label: Write a provider
 seo:
-  title: Implement a DomainKit DNS provider adapter
+  title: Write a DomainKit provider adapter
 ---
 
-Implement a provider when DomainKit does not include the DNS API your application uses. The adapter
-handles provider HTTP calls; DomainKit handles planning, authorization, receipts, verification, and
-cleanup.
+A provider is one value. Auth methods are optional cases, so a provider that only issues personal
+tokens declares `token` and nothing else. Adding OAuth is one more case on the same definition.
 
-## Implement the contract
+## The whole thing
+
+<Snippet file="packages/domainkit/examples/effect/provider.ts" title="A token-only provider" />
+
+## Declare the token fields once
+
+`Provider.tokenAuth` takes the values the method needs as a `fields` schema. Secrets are
+`Schema.RedactedFromValue(Schema.String)` and optional values use `Schema.optionalKey`.
+
+That one declaration does three jobs: the connect form renders from it without knowing the
+provider, `Connect.start` decodes the submitted values before `authenticate` runs, and
+`Snapshot.providers[].methods[]` carries the field list to the browser.
+
+`authenticate` receives the decoded record and returns the credential: the opaque `secret`, the
+account `context` your `context` schema describes, and `expiresAt` (`null` when it does not expire).
+
+## The session
+
+`session(credential)` returns four operations bound to that credential.
+
+| Operation               | Contract                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `capabilities()`        | What the credential actually holds; DomainKit records it on the authorization |
+| `listTargets()`         | Every zone the credential reaches, with the context that addresses it         |
+| `resolveTarget(domain)` | `Resolved`, `SelectionRequired`, or `NotFound`                                |
+| `dns(target)`           | `list`, `create`, `get`, `delete` inside one zone                             |
+
+`Provider.resolveAmong(domain, targets)` implements the standard rule so an adapter usually does not
+write it: the most specific zone wins, several matches at the same depth need a selection, none is
+`NotFound`.
+
+Report the zone's nameservers on a `Target` when the provider exposes them. `Connect.discover` uses
+them to break a tie between two connections that both hold the zone.
+
+`create` must return the provider's id for the new record. Cleanup deletes by that id, so an adapter
+that cannot return one produces receipts nothing can clean up.
+
+## Keep opaque records opaque
+
+A record type DomainKit does not model becomes `DnsRecord.Opaque` with the provider's own payload.
+Planning still sees it, refuses to overwrite it, and reports a conflict, so an adapter never has to
+guess at a shape it cannot represent.
+
+## Classify failures
+
+Decode the response at the HTTP boundary and fail with the reason that tells a host what to do next.
+Never let a raw response body or a credential reach a `DomainKit.Error`; a provider status or error
+code belongs in `code`.
+
+| Provider condition                   | Reason                |
+| ------------------------------------ | --------------------- |
+| Credential rejected                  | `Unauthenticated`     |
+| Credential lacks the permission      | `Forbidden`           |
+| Zone or record absent                | `NotFound`            |
+| A conflicting record already exists  | `ProviderConflict`    |
+| The operation is not supported there | `Unsupported`         |
+| Rate limited or unavailable          | `ProviderUnavailable` |
+| Anything else the provider refused   | `ProviderRejected`    |
+
+## Version the stored context
+
+`context` is persisted as an envelope tagged with `contextVersion`. Bump the version whenever the
+schema changes, and add `migrateContext` to upgrade an older envelope. Without one, an older
+envelope fails `Unsupported` instead of decoding into the wrong shape.
+
+## Register it
 
 ```ts
-import { DnsProvider } from "domainkit";
-
-export const provider: DnsProvider.Interface = {
-  id: "example-provider",
-  listRecords: (zone) => listAllPortableRecords(zone),
-  getRecord: (zone, providerRecordId) => getPortableRecord(zone, providerRecordId),
-  createRecord: (zone, record) => createPortableRecord(zone, record),
-  deleteRecord: (zone, providerRecordId) => deletePortableRecord(zone, providerRecordId),
-};
+DomainKit.layer({ providers: [porkbun] });
 ```
 
-The adapter must:
+`Providers` rejects two definitions with the same id, and `Provider.make` rejects an id that is not
+lowercase kebab-case, a definition with no auth method, and an empty `contextVersion`.
 
-- return complete paginated readback for the zone;
-- preserve stable provider record IDs so receipts can support cleanup;
-- decode provider responses before they enter domain logic;
-- normalize record values without erasing provider-only records;
-- classify provider failures as `DnsProvider.Error` without including credentials or raw response
-  bodies;
-- honor interruption and avoid hidden retry loops that outlive the caller.
+## Prove it
 
-Represent a provider record DomainKit cannot plan as `DnsRecord.Opaque({...})`. Ignoring it
-completely can hide CNAME or name-set conflicts. Use `DnsRecord.Observed` when validating an
-untrusted provider response.
+<Snippet file="examples/testing/conformance.ts" region="provider" title="Against a real account" />
 
-The provider interface allows `providerRecordId: null` when an API cannot expose an identifier. A
-conformance-compatible adapter must return a stable, non-null ID for every record it creates so
-receipt-bound cleanup can find and remove that record.
+The runner exercises create and read back, exact no-op, conflict, stale plan, and partial apply
+through the same `Provision` and `Cleanup` services a host uses. It writes to a real zone, so point
+it at one you own; every record it creates carries the prefix and is removed again.
 
-## Keep credentials outside the interface
+## Adapting a Promise client
 
-Build the provider from a secret and non-secret context supplied by the host. The resulting
-`DnsProvider.Interface` exposes DNS capabilities, not credential storage or tenant identity.
+`Provider.fromAsync` wraps a Promise-shaped definition, for an adapter built on an existing SDK or
+client. The lifecycle sees the same `Provider.Definition` either way.
 
-## Run the conformance tests
-
-```ts
-import { Effect } from "effect";
-import { DomainName } from "domainkit";
-import { ProviderConformance } from "domainkit/testing";
-
-const report = await Effect.runPromise(
-  ProviderConformance.run({
-    makeProvider: ProviderConformance.fromAsync(() => makeFreshPromiseProvider()),
-    zone: DomainName.parse("example.com"),
-  }),
-);
-```
-
-Each `makeProvider` call must return a fresh fixture. The tests cover:
-
-- complete create/readback/cleanup;
-- exact no-op;
-- conflict without mutation;
-- stale-plan rejection;
-- partial apply with a resumable receipt;
-- receipt-bound deletion, including partial receipts.
-
-## Add live-provider coverage
-
-The conformance runner checks DomainKit behavior against your adapter. Add a credential-gated live
-profile for provider-specific pagination, authentication, error decoding, record normalization, and
-delete/readback behavior. Use disposable records in a dedicated test zone.
-
-## Related documentation
-
-- [Provider capability reference](/docs/reference/providers)
-- [Plans, authorization, and receipts](/docs/core/plans)
-- [Troubleshooting provider adapters](/docs/guides/troubleshooting#providers)
+The [provider contract](/docs/reference/providers) reference states the same rules without the
+walkthrough.

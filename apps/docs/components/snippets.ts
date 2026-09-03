@@ -1,15 +1,30 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 /**
  * Every code sample on the site is a slice of a file that typechecks in CI: the gallery under
  * `examples/` (root `typecheck:examples`) and the core package's own executable examples
  * (`domainkit release:check`). Nothing here is hand-written prose pretending to be code.
  */
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-
 const allowedRoots = ["examples/", "packages/domainkit/examples/"];
+
+/**
+ * Walk up from the working directory to the workspace root. `import.meta.url` points into the
+ * bundle during a production build, so it cannot locate the source trees.
+ */
+const findRepositoryRoot = (): string => {
+  let directory = resolve(process.cwd());
+  for (;;) {
+    if (allowedRoots.every((root) => existsSync(join(directory, root)))) return directory;
+    const parent = dirname(directory);
+    if (parent === directory) {
+      throw new Error(`No workspace root above ${process.cwd()} holds the example trees`);
+    }
+    directory = parent;
+  }
+};
+
+const repositoryRoot = findRepositoryRoot();
 
 const languages: Readonly<Record<string, string>> = {
   ".css": "css",

@@ -1,235 +1,83 @@
 ---
-title: Connect Cloudflare
-description: Connect Cloudflare with OAuth or a scoped API token, find the right account, and save the authorization on your server for later requests.
+title: Cloudflare
+description: Connect Cloudflare with an API token or OAuth, what each method stores, and which capabilities DomainKit needs.
+sidebar:
+  label: Cloudflare
 seo:
-  title: Connect Cloudflare DNS with OAuth or API tokens
+  title: Connect Cloudflare DNS with DomainKit
 ---
 
 <ProviderLogo provider="cloudflare" size={48} />
 
-Cloudflare supports OAuth and API-token connections. Both produce the same saved provider
-authorization and organization connection; attaching a domain to the exact provider zone is a
-separate step.
+Cloudflare offers two connect methods on one definition: API tokens, and OAuth when your app has a
+registered client. Both end at the same connection, and both keep the credential on your server.
 
-Run every step in this guide on a trusted server. Do not build a Cloudflare client or keep the token
-in browser code.
+## Register the provider
 
-## Prerequisites
+<Snippet file="examples/providers/cloudflare.ts" region="token-only" title="Tokens only" />
 
-- A durable `ManagedDnsConnections.AsyncInterface` for authorizations and credentials.
-- A short-lived, one-time continuation store for OAuth.
-- Authenticated start and callback routes bound to your host user and tenant.
-- A known customer domain whose authoritative zone the credential must be able to read.
-- For OAuth, a registered Cloudflare client, redirect URI, client secret, and the scope IDs assigned
-  to that client.
+<Snippet file="examples/providers/cloudflare.ts" region="oauth" title="Tokens and OAuth" />
 
-Import the async repository type from the Promise entry point:
+`clientId` and `clientSecret` take a value or a `Config`, so the secret can stay in the config
+provider your app already uses. `scopes` defaults to `zone:read`, `dns_records:edit`, and
+`offline_access`; they are the scope ids assigned to your OAuth client, not something DomainKit
+invents. `clientAuth` defaults to `client_secret_basic`.
 
-```ts
-import { type ManagedDnsConnections } from "domainkit/promise";
-```
+The OAuth endpoints DomainKit uses are `dash.cloudflare.com/oauth2/auth`, `/token`, and `/revoke`.
+Register the callback URL your routes are mounted at, ending in `/callback/cloudflare`.
 
-## Start OAuth
+## Connecting with a token
 
-```ts
-import { Cloudflare, Connection, DnsRecord, DomainName, Secret } from "domainkit/promise";
+<Snippet file="examples/providers/cloudflare.ts" region="connect-token" title="An API token" />
 
-const capabilities = ["dns:read", "dns:write"] as const;
+The connect form renders from the method descriptor, which carries two fields:
 
-const flow = Cloudflare.Auth.oauthFlow({
-  capabilities,
-  client: {
-    clientId,
-    clientSecret: Secret.make(clientSecret),
-  },
-  clientAuth: "client_secret_basic",
-  domain: DomainName.parse("example.com"),
-  redirectUri,
-  scopes: scopeIds,
-});
+| Field       | Required | Secret | Means                                         |
+| ----------- | -------- | ------ | --------------------------------------------- |
+| `token`     | yes      | yes    | The API token                                 |
+| `accountId` | no       | no     | The account an account-owned token belongs to |
 
-const result = await Connection.start({
-  authorizedById,
-  method: Connection.Method.Interactive({ continuations, flow }),
-  ownerId,
-  repository,
-});
-```
+A **user token** spans every account it can reach. DomainKit verifies it, discovers the account from
+the zones it can see, and records `tokenKind: "user"`, so the same connection can serve domains in
+more than one account.
 
-An interactive start returns `Redirect`. Send its `authorizationUrl` to the browser only after the
-host checks the current session and tenant authority.
+An **account-owned token** is pinned to one account and cannot be verified without naming it. Supply
+`accountId` and DomainKit verifies against that account and records `tokenKind: "account"`.
 
-The flow uses the known domain to find the Cloudflare account after authorization. The customer does
-not need to find or type an account ID.
+Point the customer at Cloudflare's token page; the descriptor carries the URL, so a connect form
+links it without hard-coding anything.
 
-## Complete the callback
+## Connecting with OAuth
 
-Use the same flow configuration on the authenticated callback route:
+<Snippet file="examples/providers/cloudflare.ts" region="connect-oauth" title="OAuth" />
 
-```ts
-const connected = await Connection.complete({
-  callbackUrl: new URL(request.url),
-  continuationId,
-  continuations,
-  flow,
-  repository,
-});
-```
+`Connect.start` answers a `Redirect`. Send the customer there; Cloudflare drives the browser back to
+`/callback/cloudflare`, where DomainKit exchanges the code, stores the sealed credential, and
+redirects to the `returnTo` the flow began with.
 
-`Connection.complete` consumes the continuation once, validates the OAuth response, finds the account
-from the known zone, and saves the provider authorization and organization connection. It returns a
-public `ProviderConnection`; it does not attach a domain. Store only non-secret provider context in
-ordinary records; keep the credential behind the repository's secret-storage boundary.
+The credential packs the access and refresh tokens together, so a refresh is invisible to the host.
+DomainKit refreshes ten minutes before expiry, single-flighted, and revokes at Cloudflare when the
+customer disconnects.
 
-## Refresh an OAuth credential
+## Capabilities
 
-OAuth access-token expiry belongs to the stored credential, not the durable provider authorization.
-Before reconstructing a Cloudflare session, compare `credential.expiresAt` with a short host-defined
-skew and refresh when needed:
+DomainKit needs `dns:read` and `dns:write`. Cloudflare's token verification does not enumerate DNS
+permissions, so a token missing `dns_records:edit` verifies here and fails at the first write with
+`Forbidden`.
 
-```ts
-const freshCredential = await Cloudflare.Auth.refreshCredential({
-  client: {
-    clientId,
-    clientSecret: Secret.make(clientSecret),
-  },
-  clientAuth: "client_secret_basic",
-  credential,
-});
+## Zones and targets
 
-await repository.rotate(authorization.id, freshCredential);
-```
+`listTargets` lists the zones the credential reaches, each with its Cloudflare zone id and the
+nameservers Cloudflare reports. Those nameservers are what `Connect.discover` matches against a
+domain's authoritative delegation.
 
-`refreshCredential` preserves the existing refresh token when Cloudflare omits one and adopts a
-rotated token when Cloudflare returns one. Persist the complete returned credential before using it.
-An `invalid_grant` or `invalid_client` response is a terminal `Connection.Error` with
-`retry: "after-user-action"`; send the customer through connection again. Transport and other
-provider failures remain `DnsProvider.Error` values so the host can retry without pretending that
-consent was revoked.
+A target without a zone id cannot hold records, and DomainKit fails `Unsupported` rather than
+guessing.
 
-Serialize concurrent refresh attempts in the host. DomainKit performs the provider exchange, while
-your application owns the lock, encrypted write, retry policy, and reconnect UX.
+## Records
 
-## Connect an API token
+Cloudflare's DNS API is the record surface: `A`, `AAAA`, `CAA`, `CNAME`, `MX`, `NS`, `SRV`, and
+`TXT`. A record type DomainKit does not model is kept as an opaque observation, so planning sees it,
+refuses to overwrite it, and reports a conflict.
 
-Use a token route when the customer supplies a scoped Cloudflare API token:
-
-```ts
-const domain = DomainName.parse("example.com");
-const method = Cloudflare.Auth.tokenConnectionMethod({
-  capabilities,
-  domain,
-  token: Secret.make(apiToken),
-});
-
-const connected = await Connection.start({
-  authorizedById,
-  method,
-  ownerId,
-  repository,
-});
-```
-
-Ask for the narrowest token that covers the intended zones and DNS permissions. Domain-targeted
-validation supports user-owned and account-owned API tokens and finds the account from the visible
-zone.
-
-## Attach the discovered provider target
-
-After either OAuth completion or token connection, restore the credential-scoped session, resolve the
-customer domain, and attach the exact target returned by the provider. `Cloudflare.Auth.restore`
-returns the Effect-native client; adapt it once with `ProviderSession.fromEffect` before using the
-Promise-shaped session methods:
-
-```ts
-import { Cloudflare, Connection, DomainName, ProviderSession } from "domainkit/promise";
-
-const aggregate = await repository.getByConnectionId(connection.id);
-if (aggregate === null) throw new Error("Connection was not persisted");
-
-const session = await Cloudflare.Auth.restore({
-  authorization: aggregate.authorization,
-  credential: aggregate.credential,
-});
-const domain = DomainName.parse("example.com");
-const asyncSession = ProviderSession.fromEffect(session);
-const resolution = await asyncSession.resolveTarget(domain);
-if (resolution._tag !== "Resolved") {
-  throw new Error("Cloudflare returned no unique authoritative target");
-}
-
-const attached = await Connection.attach({
-  attachment: {
-    connectionId: connection.id,
-    createdAt: new Date(),
-    domain,
-    id: crypto.randomUUID(), // a host-owned durable attachment id
-    target: resolution.target,
-  },
-  connectionId: connection.id,
-  ownerId,
-  repository,
-});
-```
-
-`Connection.attach` checks the owner and connection in the repository and records the exact account,
-zone, and discovery evidence. Do not accept a target chosen by the browser. If the session returns
-`SelectionRequired`, ask the user to choose among the candidates and validate that choice on the
-server before attaching it.
-
-## Reconstruct the provider
-
-After loading and, when necessary, refreshing the stored credential, restore the credential-scoped
-session on the server. Load the private aggregate through the host repository; the public connection
-projection does not contain the authorization or credential:
-
-```ts
-const session = await Cloudflare.Auth.restore({
-  authorization,
-  credential,
-});
-```
-
-Resolve an exact provider target through the session, call `Connection.attach`, and bind DNS operations
-to the focused provider returned by `asyncSession.forTarget(attachment.target)`. The adapter keeps the
-Promise boundary explicit before passing the provider to Promise APIs:
-
-```ts
-import { Verification } from "domainkit/promise";
-
-const zone = DomainName.parse("example.com");
-const record = DnsRecord.Txt({
-  metadata: {
-    ownership: "customer",
-    provenance: "example",
-    purpose: "domain verification",
-  },
-  name: DomainName.parse("_verify.example.com"),
-  policy: "append",
-  ttl: 300,
-  value: "verification-value",
-});
-
-const provider = await asyncSession.forTarget(attachment.target);
-await Verification.observe({
-  provider: Verification.Provider.Enabled({ provider, zone }),
-  record,
-});
-```
-
-## Account discovery outcomes
-
-- One matching visible zone identifies the Cloudflare account and can continue.
-- No matching zone is an actionable authorization or zone-ownership failure.
-- Ambiguous provider accounts require host/user selection; never choose an opaque account ID
-  silently.
-
-Cloudflare's read-only token check does not always list DNS permissions. DomainKit records declared,
-introspected, and exercised capability evidence instead of treating scope strings as complete proof.
-
-## Next steps
-
-- [Integrate the host lifecycle](/docs/guides/host-integration)
-- [Provision and clean up records](/docs/guides/provision-and-clean-up)
-- [Cloudflare capability reference](/docs/reference/providers#cloudflare)
-- [Troubleshoot provider connections](/docs/guides/troubleshooting#connections)
+Adding a provider of your own is the [write a provider](/docs/guides/implement-provider) guide.

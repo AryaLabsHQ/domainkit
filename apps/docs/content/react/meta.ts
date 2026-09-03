@@ -1,7 +1,6 @@
 import { defineMeta } from "blume";
 
 export default defineMeta({
-  order: 6,
-  pages: ["index", "integration-levels", "transport", "composition", "registry"],
+  pages: ["index", "controllers", "composition", "presentation", "transport", "registry"],
   title: "React",
 });

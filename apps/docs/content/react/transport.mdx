@@ -1,114 +1,76 @@
 ---
-title: Transport
-description: Connect React to your authenticated app endpoints while provider credentials and API clients stay on the server where they belong.
+title: The transport
+description: Build the browser-side view of your routes, declare which capability groups exist, and adapt a Promise client.
+sidebar:
+  label: Transport
 seo:
-  title: Keep provider credentials off the React client
+  title: The DomainKit browser transport
 ---
 
-`DomainKit.Root` receives a `Layer<Transport.Service>`. Its controllers use Effect Atom to stop old
-requests, ignore stale results, and clean up when the React subtree closes. The service is for your
-app; it is not a browser wrapper around provider APIs.
-
-The [host integration guide](/docs/guides/host-integration) shows where the transport belongs in a
-complete browser, application server, and provider architecture.
-
-```ts
-import { Transport } from "domainkit";
-import * as Layer from "effect/Layer";
-
-const service = Transport.Service.of({
-  connection: {
-    inspect: (input) => api.connections.inspect(input),
-    connect: (input) => api.connections.connect(input),
-    attach: (input) => api.connections.attach(input),
-    detach: (input) => api.connections.detach(input),
-  },
-  provisioning: {
-    plan: (input) => api.provisioning.plan(input),
-    apply: (input) => api.provisioning.apply(input),
-  },
-  verification: {
-    observe: (input) => api.verification.observe(input),
-  },
-  cleanup: {
-    plan: (input) => api.cleanup.plan(input),
-    apply: (input) => api.cleanup.apply(input),
-  },
-});
-
-export const transport = Layer.succeed(Transport.Service, service);
-```
-
-When an authenticated client already returns Promises, adapt it at that boundary instead of creating
-a second React transport contract:
-
-```ts
-import { Transport } from "domainkit";
-
-export const transport = Transport.layerFromAsync({
-  connection: api.connections,
-  provisioning: api.provisioning,
-  verification: api.verification,
-  cleanup: api.cleanup,
-});
-```
+`domainkit/client` is the browser's view of the routes you mounted. It holds no credential and knows
+no provider: it calls your server, and your server calls the provider.
 
 ```text
-@domainkit/react
-  -> authenticated host endpoint
-  -> durable connection + receipt state
-  -> domainkit
-  -> Cloudflare / Vercel
+@domainkit/react -> Transport.fromFetch -> your routes -> domainkit/server -> provider
 ```
 
-Successful outcomes use tagged models. Failures use `Transport.Failure` in the Effect error channel.
-Check untrusted request, database, and provider data at your server boundary before mapping it into
-these browser-safe types.
+## Build one
 
-When a host handler creates a response, use the callable constructors (`Transport.Connected(...)`,
-`Transport.ProvisioningPlan(...)`, `Transport.ApplyResult.Applied(...)`, and the other case
-constructors) instead of writing `_tag` fields by hand. Use the corresponding `Schema` members or
-aggregate schemas only when decoding serialized data.
+<Snippet file="examples/client/transport.ts" region="create" title="Over the mounted routes" />
 
-Custom UI can consume `Connection.useModel(domain)` with `useAtomValue(model.state)` and
-`useAtomSet(model.command)`. Dispatch `Connection.Command.Connect`, `Attach`, `Detach`, and `Retry`;
-the packaged controller and flow use the same atoms. A reusable connection contains its
-credential-scoped provider connection and the discovered targets it can attach. Selecting a target
-attaches that existing connection to the domain without reconnecting.
+The base URL is the prefix the route group is mounted at. A relative path is fine when the app and
+the API share an origin.
 
-`ProviderTarget` is an exact account-and-zone choice. Keep discovery and selection on the server, and
-return an unavailable or ambiguous target when the credential cannot produce one safe choice.
-Integration authentication is separate from OAuth and should use
-`AuthenticationMethod.Integration` when the provider supports it.
+<Snippet file="examples/client/transport.ts" region="headers" title="With host headers" />
 
-## Correlate browser operations with durable attempts
+`headers` is a `HeadersInit` or a function returning one, awaited per request, so a token your app
+refreshes is read at call time rather than captured once.
 
-Treat every plan application as a server-side attempt. Save the plan and its digest before
-returning it to the browser, then require the browser to submit that digest when it asks the server
-to apply the plan.
+Cookies are the usual answer instead. The provider callback is a top-level navigation, so a host
+whose `Identity` reads a cookie needs no headers here at all.
 
-```text
-browser requests plan
-  -> server plans and persists { attemptId, planDigest, plan }
-  -> browser reviews plan
-  -> browser submits { attemptId, planDigest }
-  -> server authorizes and applies the persisted plan
-  -> server stores the receipt
-```
+## Capability groups
 
-This keeps retries, approval decisions, and support investigations attached to one saved record
-instead of trusting a plan that the browser can change.
+<Snippet file="examples/client/transport.ts" region="capabilities" title="Declaring what exists" />
 
-## Use product-owned verification when needed
+| Group          | Methods                                                          |
+| -------------- | ---------------------------------------------------------------- |
+| `connection`   | `inspect`, `discover`, `start`, `attach`, `detach`, `disconnect` |
+| `provisioning` | `plan`, `approve`, `reject`, `apply`, `attempt`                  |
+| `verification` | `observe`                                                        |
+| `cleanup`      | `plan`, `approve`, `reject`, `apply`                             |
 
-`Transport` exposes provider-backed operations. Public DNS verification is a separate product choice:
-your server can use `Verification.observe` with public resolvers, expose an endpoint, and map its
-result into product state without giving the browser resolver or provider credentials.
+Every group is optional. A host that mounts only the connection routes gets a transport that
+typechecks and a UI that renders only the connection step, because `@domainkit/react` reads
+`Transport.capabilities(transport)` and skips the rest.
 
-<Callout type="warning" title="No browser credentials">
-  A token input may collect a credential, but submit it directly to your authenticated server
-  endpoint. Never construct a Cloudflare or Vercel provider client in browser code.
-</Callout>
+## Calling it
 
-See the [Transport reference](/docs/reference/transport) for every service method and
-[Observe DNS](/docs/guides/observe-dns) for verification policy choices.
+<Snippet file="examples/client/transport.ts" region="call" title="From Effect" />
+
+<Snippet file="examples/client/transport.ts" region="promises" title="From Promises" />
+
+Every method returns `Effect<A, DomainKit.Error>` with no requirements, so `@domainkit/react` runs
+them without an Effect runtime in the tree. `Transport.toAsync` gives the same methods as Promises
+that reject with the same error.
+
+`Transport.fromAsync` goes the other way, for a host whose client is already Promise-shaped.
+
+## Failures
+
+A failure arrives as the `DomainKit.Error` the lifecycle raised, reason intact, so a `Conflict`
+still carries its conflicting operations and the UI can list them.
+
+A reply the transport cannot read as one came from in front of your server. It is classified from
+the status instead: 401 becomes `Unauthenticated`, 429 and 5xx become a retryable
+`ProviderUnavailable` carrying `retry-after`, anything else `ProviderRejected`. All of them name the
+transport's base URL, so a proxy answering HTML is obvious in the message.
+
+## In tests
+
+<Snippet file="examples/testing/fakes.ts" region="transport" title="A transport for UI tests" />
+
+`Testing.transport` runs `domainkit/server` over memory storage and a fake provider in the same
+process, so a component test drives the real lifecycle instead of a stub.
+
+The [`domainkit/client` reference](/docs/reference/transport) lists every method on every group.

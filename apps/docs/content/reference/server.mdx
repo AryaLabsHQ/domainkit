@@ -1,159 +1,104 @@
 ---
-title: Server API
-description: Mount provider connection routes in Effect-native or async hosts while retaining application ownership of identity, persistence, and policy.
+title: domainkit/server
+description: The mountable route group and its fifteen endpoints, the Identity service a host implements, the wire schemas, the options, and the Web handler.
 sidebar:
-  label: Server
+  label: domainkit/server
+seo:
+  title: DomainKit server reference
 ---
-
-`domainkit/server` supplies one provider-connection HTTP seam for Effect-native and async hosts.
-Identity, tenancy, credentials, short-lived continuations, durable authorization storage, and audit
-policy remain host-owned.
-
-## Async hosts
-
-Use `createDomainKit` in a conventional async application. It accepts Promise-based host
-capabilities and returns a standard Web handler:
-
-```ts
-import { createDomainKit } from "domainkit/server";
-
-export const domainKit = await createDomainKit({
-  baseURL: "https://app.example.com",
-  basePath: "/api/domainkit",
-  defaultReturnTo: "/domains",
-  identity: hostIdentity,
-  connectionPolicy: hostConnectionPolicy,
-  providers: [cloudflare],
-  pendingAuthorizations: redisPendingAuthorizations,
-  persistence: managedDnsConnections,
-});
-```
-
-The host supplies `persistence`; DomainKit does not choose a database, run migrations, or dispose
-the host's database client. The optional `@domainkit/capsuledb` package remains an Effect-native
-implementation rather than an implicit dependency of this factory.
-
-## Effect-native hosts
-
-Use `Server.make` in an existing Effect program or provide it as a Layer with `Server.layer`:
 
 ```ts
 import { Server } from "domainkit/server";
-import { Layer } from "effect";
-
-const dependencies = Layer.mergeAll(
-  IdentityLive,
-  ConnectionPolicyLive,
-  ProvidersLive,
-  PendingAuthorizationsLive,
-  ManagedDnsConnectionsLive,
-  CryptoLive,
-);
-
-const DomainKitServerLive = Server.layer({
-  baseURL: "https://app.example.com",
-  basePath: "/api/domainkit",
-  defaultReturnTo: "/domains",
-}).pipe(Layer.provide(dependencies));
-
-export const domainKit = Server.toWebHandler(DomainKitServerLive);
 ```
-
-Both paths use the same route program. `Server.make` leaves Effect requirements visible;
-`createDomainKit` adapts Promise capabilities at the foreign-runtime boundary.
-
-## Mount the handler
-
-The returned `WebHandler` exposes `fetch(Request)` and `dispose()`. Create one handler during host
-startup and pass each framework's standard `Request` through unchanged; do not construct a handler
-for every request. The examples below assume the initialized `domainKit` is exported by the host
-composition module.
-
-```ts title="Hono"
-import { Hono } from "hono";
-import { domainKit } from "./domainkit";
-
-const app = new Hono();
-app.all("/api/domainkit/*", (context) => domainKit.fetch(context.req.raw));
-
-export default app;
-```
-
-```ts title="Next.js App Router"
-// app/api/domainkit/[...path]/route.ts
-import { domainKit } from "@/server/domainkit";
-
-export const GET = (request: Request) => domainKit.fetch(request);
-export const POST = (request: Request) => domainKit.fetch(request);
-```
-
-```ts title="TanStack Start"
-// routes/api/domainkit/$.ts
-import { createFileRoute } from "@tanstack/react-router";
-import { domainKit } from "~/server/domainkit";
-
-export const Route = createFileRoute("/api/domainkit/$")({
-  server: {
-    handlers: {
-      GET: ({ request }) => domainKit.fetch(request),
-      POST: ({ request }) => domainKit.fetch(request),
-    },
-  },
-});
-```
-
-Use your host's module path in the imports above. Dispose the handler once during a long-lived
-host's shutdown: this closes the ManagedRuntime created by `toWebHandler` or `createDomainKit`.
-`createDomainKit` does not initialize or dispose the host-provided `persistence`; keep shared host
-resources available until the handler is disposed, then complete the host's own shutdown sequence.
-The default base path is `/api/domainkit`. When `baseURL` is omitted, the start request's origin
-constructs the callback URL; configure it explicitly behind a reverse proxy or custom domain.
-
-## Routes
-
-With the default `basePath`, the handler serves these routes:
-
-| Method | Path                                  | Behavior                                                          |
-| ------ | ------------------------------------- | ----------------------------------------------------------------- |
-| `POST` | `/api/domainkit/connection/start`     | Authenticates the host principal and returns an authorization URL |
-| `GET`  | `/api/domainkit/callback/:providerId` | Consumes state once, commits the connection, and redirects        |
-
-The start body accepts `providerId`, `method`, an optional provider-selection `domain`, an optional
-existing `authorizationId`, and a same-origin `returnTo`. When `authorizationId` is present,
-`Server.ConnectionPolicy` must authorize that exact aggregate for the authenticated principal
-before DomainKit can reuse it. Callback redirects append
-`domainkit=connected` and the public `connectionId` so the host UI can continue its setup flow.
-
-## Host services
 
 {/* reference-inventory:start */}
 
-| Export            | Purpose                                                                       |
-| ----------------- | ----------------------------------------------------------------------------- |
-| `Server`          | Routes, configuration, host service tags, errors, and the Web handler adapter |
-| `createDomainKit` | Promise-based factory that returns the same Web handler for async hosts       |
+| Namespace | Carries                                                                                       |
+| --------- | --------------------------------------------------------------------------------------------- |
+| `Server`  | `group`, `api`, `layer`, `toWebHandler`, `Identity`, and every wire schema the client decodes |
 
 {/* reference-inventory:end */}
 
-| Service                         | Host responsibility                                                                 |
-| ------------------------------- | ----------------------------------------------------------------------------------- |
-| `Server.Identity`               | Authenticate a start request and return tenant-owned principal identifiers          |
-| `Server.ConnectionPolicy`       | Authorize an exact existing aggregate before connection reuse                       |
-| `Server.Providers`              | Build a configured interactive provider flow for the selected domain and callback   |
-| `Server.PendingAuthorizations`  | Persist the opaque continuation and safe callback context until one-time consume    |
-| `ManagedDnsConnections.Service` | Persist the durable authorization, credential, connection, and attachment aggregate |
-| `Crypto.Crypto`                 | Generate continuation, authorization, and connection identifiers                    |
+## Endpoints
 
-`createDomainKit` is also a named export for Promise hosts. Its `identity`, `connectionPolicy`,
-`providers`, `pendingAuthorizations`, and `persistence` options correspond to these Effect
-services. Build Effect sibling implementations with `Layer.mergeAll`, then provide the completed
-dependency graph to `Server.layer` once.
+`Server.group` is one `HttpApiGroup` with fifteen endpoints. It declares no prefix of its own, so
+`Server.group.prefix("/internal/dns")` or a router mount moves every route at once and the OAuth
+callback URL follows the mount.
 
-## Failure behavior
+| Method   | Path                                     | Endpoint      | Answers                  |
+| -------- | ---------------------------------------- | ------------- | ------------------------ |
+| `GET`    | `/domains/:domain`                       | `inspect`     | `Snapshot`               |
+| `GET`    | `/domains/:domain/discovery`             | `discover`    | `Discovery`              |
+| `POST`   | `/connections`                           | `start`       | `Started`                |
+| `GET`    | `/callback/:provider`                    | `callback`    | `302` to the return path |
+| `POST`   | `/connections/:connectionId/attachments` | `attach`      | `Started`                |
+| `DELETE` | `/attachments/:attachmentId`             | `detach`      | Empty                    |
+| `DELETE` | `/connections/:connectionId`             | `disconnect`  | Empty                    |
+| `POST`   | `/domains/:domain/plans`                 | `createPlan`  | `Plan.Model`             |
+| `POST`   | `/plans/:planId/approvals`               | `approve`     | `Approval.Model`         |
+| `POST`   | `/plans/:planId/rejections`              | `reject`      | `Attempt`                |
+| `POST`   | `/approvals/:approvalId/apply`           | `apply`       | `Receipt.Model`          |
+| `GET`    | `/plans/:planId`                         | `plan`        | `Attempt`                |
+| `GET`    | `/receipts/:receiptId`                   | `receipt`     | `Receipt.Model`          |
+| `POST`   | `/domains/:domain/observations`          | `observe`     | `Readiness`              |
+| `POST`   | `/receipts/:receiptId/cleanup-plans`     | `cleanupPlan` | `Plan.Model`             |
 
-Failures are returned as JSON with `category`, `message`, `operation`, and `retry`. Start requests
-without a host identity return `401`, and denied aggregate reuse returns `403`. Invalid provider
-input, unsafe return URLs, mismatched callbacks, expired state, and replayed state return `400`.
-Configuration failures return `500`, provider infrastructure failures return `502`, and storage
-failures return `503`. Provider tokens and opaque continuation payloads are never serialized to the
-browser response.
+Approve, reject, and apply serve both provisioning and cleanup: the stored attempt knows its kind.
+
+## Identity
+
+`Server.Identity` is the only service a host implements. Everything else comes from
+`DomainKit.layer` plus `Storage`.
+
+| Member      | Required | Runs                                                                   |
+| ----------- | -------- | ---------------------------------------------------------------------- |
+| `principal` | yes      | On every request, before the handler, to derive `{ ownerId, actorId }` |
+| `authorize` | no       | After `principal`, with the `EndpointName` of the route being served   |
+
+<Snippet file="examples/server/mount.ts" region="identity" title="The Identity layer" />
+
+Without `authorize`, every authenticated principal reaches every route, which is right for a host
+whose own middleware already gates the mount. Implement it to split reads from writes, and fail
+with the `Forbidden` reason for the 403 a UI expects.
+
+<Snippet file="examples/server/mount.ts" region="authorize" title="Per-route authorization" />
+
+`Server.EndpointName` is derived from the group, so it is exactly the endpoint identifiers in the
+table above and a new route is a type error in an exhaustive host check rather than a silent gap.
+
+## Mounting
+
+<Snippet file="examples/server/mount.ts" region="mount" title="Mounting the group" />
+
+`Server.layer(api, options)` builds the handlers. `Server.api` is the same group as a standalone
+`HttpApi`, so `OpenApi.fromApi(Server.api)` documents it.
+
+| Option            | Effect                                                                                                                                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `callbackBaseUrl` | The origin and mount path the provider redirects back to. Set it behind an edge that rewrites `Host`; otherwise the callback follows the request's own origin and the prefix the group is mounted at |
+| `defaultReturnTo` | Where an interactive flow lands when the continuation carries no `returnTo`                                                                                                                          |
+| `prefix`          | `toWebHandler` only: mount every route under this path                                                                                                                                               |
+
+## Web handler
+
+<Snippet file="examples/server/mount.ts" region="web-handler" title="The Promise edge" />
+
+## Wire schemas
+
+The client and `@domainkit/react` decode these, so the three cannot drift.
+
+| Schema             | Shape                                                                                    |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `Snapshot`         | Domain, attachment, connection, provider, status, reusable connections, provider catalog |
+| `Started`          | `Connected`, `Redirect`, or `SelectionRequired`                                          |
+| `Discovery`        | `DiscoveryResolved`, `DiscoverySelectionRequired`, or `DiscoveryNotFound`                |
+| `Method`           | `Token`, `OAuth`, or `Integration`                                                       |
+| `MethodDescriptor` | A method's `kind`, `label`, `docsUrl`, and token `Field` list                            |
+| `Attempt`          | `plan`, `status`, `approval`, `receipt`, `rejection`                                     |
+| `Readiness`        | `Verify.Readiness` with timestamps as ISO strings                                        |
+
+## Failures
+
+A failure crosses the wire as the `DomainKit.Error` value with the status its reason derives, so a
+`Conflict` is a 409 carrying the conflicting operations. See
+[failure reasons](/docs/core/errors) for the whole table.
