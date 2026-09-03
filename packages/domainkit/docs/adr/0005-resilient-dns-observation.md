@@ -16,7 +16,9 @@ make one resolver an accidental availability dependency.
 `Verify.observe` is the only public observation operation. It reads the provider through the
 attachment's session and the public pool through `Resolver`, whose default layer fans out to
 Cloudflare and Google RFC wire-format DNS-over-HTTPS. `Resolver.resolve` never fails: every
-answer, negative answer, failure, and timeout is a per-resolver outcome.
+answer, negative answer, failure, and timeout is a per-resolver outcome. A wire response counts
+only when its message id is zero, its single question matches the query in name, class, and type,
+it is not truncated, and every answer carries a TTL; a host may pass its own `AbortSignal`.
 
 Readiness is recorded per requirement with its evidence (`ProviderEvidence`, one
 `PublicDnsEvidence` per resolver, and `HostEvidence` the host attaches). A requirement is

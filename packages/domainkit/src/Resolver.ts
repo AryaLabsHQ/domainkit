@@ -26,7 +26,11 @@ export const Outcome = Data.taggedEnum<Outcome>();
 
 export interface Service {
   /** Never fails: each resolver's outcome is preserved. */
-  readonly resolve: (name: string, type: DnsRecord.Type) => Effect.Effect<ReadonlyArray<Outcome>>;
+  readonly resolve: (
+    name: string,
+    type: DnsRecord.Type,
+    options?: { readonly signal?: AbortSignal | undefined },
+  ) => Effect.Effect<ReadonlyArray<Outcome>>;
 }
 
 export class Resolver extends Context.Service<Resolver, Service>()("@domainkit/Resolver") {}
@@ -67,8 +71,13 @@ export const make = (
         );
       }
     }
-    const one = (endpoint: Endpoint, name: DomainName.DomainName, type: DnsRecord.Type) =>
-      Doh.query({ resolver: endpoint.name, url: endpoint.url, fetch, name, type }).pipe(
+    const one = (
+      endpoint: Endpoint,
+      name: DomainName.DomainName,
+      type: DnsRecord.Type,
+      signal: AbortSignal | undefined,
+    ) =>
+      Doh.query({ resolver: endpoint.name, url: endpoint.url, fetch, name, type, signal }).pipe(
         Effect.timeout(timeoutMs),
         Effect.match({
           onSuccess: (answer): Outcome =>
@@ -80,7 +89,7 @@ export const make = (
         }),
       );
     return {
-      resolve: (input, type) =>
+      resolve: (input, type, query) =>
         DomainName.decode(input).pipe(
           Effect.match({
             onFailure: (failure): ReadonlyArray<Outcome> =>
@@ -91,7 +100,7 @@ export const make = (
           }),
           Effect.flatMap((name) =>
             typeof name === "string"
-              ? Effect.forEach(endpoints, (endpoint) => one(endpoint, name, type), {
+              ? Effect.forEach(endpoints, (endpoint) => one(endpoint, name, type, query?.signal), {
                   concurrency: "unbounded",
                 })
               : Effect.succeed(name),

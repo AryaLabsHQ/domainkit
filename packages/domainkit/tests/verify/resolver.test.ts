@@ -5,9 +5,20 @@ import { Effect } from "effect";
 import { DnsRecord, Resolver } from "../../src/index.ts";
 
 const wire = (packet: Omit<DnsPacket.Packet, "type" | "id">): Response =>
-  new Response(Uint8Array.from(DnsPacket.encode({ ...packet, id: 0, type: "response" })), {
-    headers: { "content-type": "application/dns-message" },
-  });
+  new Response(
+    Uint8Array.from(
+      DnsPacket.encode({
+        ...packet,
+        flags: (packet.flags ?? 0) | (packet.rcode === undefined ? 0 : rcodeFlag(packet.rcode)),
+        id: 0,
+        type: "response",
+      }),
+    ),
+    { headers: { "content-type": "application/dns-message" } },
+  );
+
+const rcodeFlag = (rcode: string): number =>
+  rcode === "SERVFAIL" ? 2 : rcode === "NXDOMAIN" ? 3 : 0;
 
 const question = { class: "IN", name: "example.com", type: "MX" } as const;
 
@@ -99,6 +110,141 @@ describe("Resolver", () => {
       );
       const invalid = yield* service.resolve("not a host", "A");
       assert.ok(invalid.every((outcome) => outcome._tag === "Failed"));
+    }),
+  );
+
+  it.effect("rejects responses that do not match the query at the wire boundary", () =>
+    Effect.gen(function* () {
+      const cases: ReadonlyArray<[string, () => Response, RegExp]> = [
+        [
+          "message id",
+          () =>
+            new Response(
+              Uint8Array.from(
+                DnsPacket.encode({ questions: [question], answers: [], id: 7, type: "response" }),
+              ),
+              { headers: { "content-type": "application/dns-message" } },
+            ),
+          /message ID/,
+        ],
+        [
+          "question class",
+          () => wire({ questions: [{ ...question, class: "CH" }], answers: [] }),
+          /did not match/,
+        ],
+        [
+          "question type",
+          () => wire({ questions: [{ ...question, type: "TXT" }], answers: [] }),
+          /did not match/,
+        ],
+        [
+          "truncation",
+          () => wire({ questions: [question], answers: [], flags: DnsPacket.TRUNCATED_RESPONSE }),
+          /truncated/,
+        ],
+        [
+          "servfail",
+          () => wire({ questions: [question], answers: [], rcode: "SERVFAIL" }),
+          /SERVFAIL/,
+        ],
+        [
+          "malformed",
+          () =>
+            new Response(Uint8Array.from([0, 1, 2]), {
+              headers: { "content-type": "application/dns-message" },
+            }),
+          /invalid DNS message/,
+        ],
+        [
+          "content type",
+          () => new Response("{}", { headers: { "content-type": "application/json" } }),
+          /content type/,
+        ],
+      ];
+      for (const [label, respond, pattern] of cases) {
+        const service = yield* Resolver.make({
+          endpoints: [{ name: label, url: "https://one.example/dns-query" }],
+          fetch: async () => respond(),
+        });
+        const [outcome] = yield* service.resolve("example.com", "MX");
+        assert.strictEqual(outcome?._tag, "Failed", label);
+        if (outcome?._tag === "Failed") assert.match(outcome.message, pattern, label);
+      }
+    }),
+  );
+
+  it.effect("joins TXT character strings and decodes CAA and SRV data", () =>
+    Effect.gen(function* () {
+      const service = yield* Resolver.make({
+        endpoints: [{ name: "one", url: "https://one.example/dns-query" }],
+        fetch: async (_input, init) => {
+          const query = DnsPacket.decode(init?.body as Uint8Array);
+          const type = query.questions?.[0]?.type;
+          return wire({
+            questions: query.questions ?? [],
+            answers:
+              type === "TXT"
+                ? [
+                    {
+                      class: "IN",
+                      data: [new TextEncoder().encode("hello "), new TextEncoder().encode("world")],
+                      name: "example.com",
+                      ttl: 60,
+                      type: "TXT",
+                    },
+                  ]
+                : type === "CAA"
+                  ? [
+                      {
+                        class: "IN",
+                        data: { flags: 128, tag: "issue", value: "letsencrypt.org" },
+                        name: "example.com",
+                        ttl: 60,
+                        type: "CAA",
+                      },
+                    ]
+                  : [
+                      {
+                        class: "IN",
+                        data: { port: 5060, priority: 10, target: "sip.example.com", weight: 5 },
+                        name: "_sip._tcp.example.com",
+                        ttl: 60,
+                        type: "SRV",
+                      },
+                    ],
+          });
+        },
+      });
+      const data = (outcomes: ReadonlyArray<Resolver.Outcome>) =>
+        outcomes[0]?._tag === "Answered"
+          ? outcomes[0].answer.records.map((record) =>
+              record._tag === "Opaque" ? record.type : DnsRecord.data(record),
+            )
+          : [];
+      assert.deepStrictEqual(data(yield* service.resolve("example.com", "TXT")), ["hello world"]);
+      assert.deepStrictEqual(data(yield* service.resolve("example.com", "CAA")), [
+        "128 issue letsencrypt.org",
+      ]);
+      assert.deepStrictEqual(data(yield* service.resolve("_sip._tcp.example.com", "SRV")), [
+        "10 5 5060 sip.example.com",
+      ]);
+    }),
+  );
+
+  it.effect("honours a host-supplied abort signal", () =>
+    Effect.gen(function* () {
+      const controller = new AbortController();
+      controller.abort(new Error("host cancelled"));
+      const service = yield* Resolver.make({
+        endpoints: [{ name: "one", url: "https://one.example/dns-query" }],
+        fetch: async (_input, init) => {
+          if (init?.signal?.aborted === true) throw init.signal.reason;
+          return wire({ questions: [question], answers: [] });
+        },
+      });
+      const [outcome] = yield* service.resolve("example.com", "MX", { signal: controller.signal });
+      assert.strictEqual(outcome?._tag, "Failed");
+      if (outcome?._tag === "Failed") assert.match(outcome.message, /host cancelled/);
     }),
   );
 

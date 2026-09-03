@@ -23,9 +23,17 @@ export const query = (input: {
   readonly fetch: Fetch;
   readonly name: string;
   readonly type: DnsRecord.Type;
+  /** Host-supplied abort, combined with the fiber's own interruption signal. */
+  readonly signal?: AbortSignal | undefined;
 }): Effect.Effect<Answer, DomainKitError.DomainKitError> =>
   Effect.tryPromise({
-    try: async (signal) => {
+    try: async (fiberSignal) => {
+      const controller = new AbortController();
+      const abort = (reason: unknown) => controller.abort(reason);
+      fiberSignal.addEventListener("abort", () => abort(fiberSignal.reason), { once: true });
+      input.signal?.addEventListener("abort", () => abort(input.signal?.reason), { once: true });
+      if (input.signal?.aborted === true) abort(input.signal.reason);
+      const signal = controller.signal;
       const body = Uint8Array.from(
         DnsPacket.encode({
           flags: DnsPacket.RECURSION_DESIRED,
@@ -73,11 +81,13 @@ function decode(resolver: string, name: string, type: DnsRecord.Type, message: U
     throw failed(resolver, "DoH returned an invalid DNS message");
   }
   if (packet.type !== "response") throw failed(resolver, "DoH returned a DNS query");
+  if (packet.id !== 0) throw failed(resolver, "DoH response used an unexpected message ID");
   if (packet.flag_tc) throw failed(resolver, "DoH returned a truncated DNS response");
   const question = packet.questions?.[0];
   if (
     packet.questions?.length !== 1 ||
     question === undefined ||
+    question.class !== "IN" ||
     question.type !== type ||
     question.name.toLowerCase().replace(/\.$/, "") !== name
   ) {
@@ -88,6 +98,9 @@ function decode(resolver: string, name: string, type: DnsRecord.Type, message: U
     throw failed(resolver, `DNS resolver returned ${packet.rcode ?? "an unknown response code"}`);
   }
   const answers = (packet.answers ?? []).filter((answer) => answer.class === "IN");
+  if (answers.some((answer) => answer.ttl === undefined)) {
+    throw failed(resolver, "DoH response omitted the DNS record TTL");
+  }
   const records = answers.map(toRecord);
   const ttls = answers.flatMap((answer) => (answer.ttl === undefined ? [] : [answer.ttl]));
   return {
