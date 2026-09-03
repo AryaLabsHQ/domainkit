@@ -244,7 +244,7 @@ export const english: Catalog = {
       case "Delete":
         return "Remove";
       case "Conflict":
-        return "Conflict";
+        return "Blocked";
     }
   },
   conflictReason: (reason) => {

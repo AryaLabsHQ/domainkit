@@ -11,7 +11,7 @@ import { useDomainKit } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
 import { useIcons } from "./icons.tsx";
 import { failure as describeFailure } from "./messages.ts";
-import { Status as RecordStatus } from "./records.tsx";
+import { identity, Status as RecordStatus } from "./records.tsx";
 import { useRunner } from "./task.ts";
 
 export type Readiness = Transport.Readiness;
@@ -141,6 +141,10 @@ export function ObserveAction({ controller, ...props }: ObserveActionProps): Rea
   );
 }
 
+/** Evidence carries no id; its source and position identify it within one requirement. */
+const evidenceKey = (evidence: { readonly _tag: string }, index: number): string =>
+  [evidence._tag, index].join("-");
+
 export interface EvidenceProps {
   readonly readiness: Readiness;
 }
@@ -155,10 +159,7 @@ export function Evidence({ readiness }: EvidenceProps): ReactElement {
   return (
     <div data-domainkit-part="observation-list">
       {readiness.requirements.map((requirement) => (
-        <section
-          data-domainkit-part="observation-group"
-          key={`${requirement.record._tag}:${requirement.record.name}`}
-        >
+        <section data-domainkit-part="observation-group" key={identity(requirement.record)}>
           <div data-domainkit-part="observation-row">
             <span data-domainkit-part="observation-record">
               {messages.recordType(requirement.record)} {requirement.record.name}
@@ -167,7 +168,7 @@ export function Evidence({ readiness }: EvidenceProps): ReactElement {
           </div>
           <ul>
             {requirement.evidence.map((evidence, index) => (
-              <li data-domainkit-part="observation-source" key={`${evidence._tag}-${index}`}>
+              <li data-domainkit-part="observation-source" key={evidenceKey(evidence, index)}>
                 {messages.evidenceSource(evidence)}
               </li>
             ))}

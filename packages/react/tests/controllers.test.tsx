@@ -89,7 +89,7 @@ describe("DomainKit.Root", () => {
 
 describe("Connect.useController", () => {
   it("renders the token fields the provider declares and connects with their values", async () => {
-    const { domain, requirements, transport } = scenario();
+    const { domain, transport } = scenario();
     render(
       <DomainKit.Root transport={transport}>
         <Connect.Flow domain={domain} />
@@ -111,7 +111,7 @@ describe("Connect.useController", () => {
   });
 
   it("renders a failure from the error's reason, never from its tag", async () => {
-    const { domain, requirements, transport } = scenario();
+    const { domain, transport } = scenario();
     function Panel() {
       const controller = Connect.useController({ domain });
       return (

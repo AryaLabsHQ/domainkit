@@ -46,6 +46,9 @@ const txtValue = (value: string): string => {
   return chunks.map((part) => `"${part}"`).join(" ");
 };
 
+/** The RR type as a zone file spells it. The tag and the type name are the same string. */
+const rrType = (record: DnsRecord.DnsRecord): string => record._tag;
+
 const zoneData = (record: DnsRecord.DnsRecord): string => {
   switch (record._tag) {
     case "A":
@@ -70,7 +73,7 @@ export const toZoneFile = (records: ReadonlyArray<DnsRecord.DnsRecord>): string 
   `${records
     .map(
       (record) =>
-        `${absolute(record.name)}${record.ttl === null ? "" : ` ${record.ttl}`} IN ${record._tag} ${zoneData(record)}`,
+        `${absolute(record.name)}${record.ttl === null ? "" : ` ${record.ttl}`} IN ${rrType(record)} ${zoneData(record)}`,
     )
     .join("\n")}\n`;
 
@@ -290,8 +293,9 @@ export function Root({ count = 0, ...props }: RootProps) {
   );
 }
 
-const identity = (record: DnsRecord.DnsRecord): string =>
-  `${record._tag}:${record.name}:${DnsRecord.data(record)}`;
+/** A stable React key for a requirement: type, name, and data identify a record. */
+export const identity = (record: DnsRecord.DnsRecord): string =>
+  [rrType(record), record.name, DnsRecord.data(record)].join(":");
 
 export interface CardProps extends PartProps<"section", { readonly record: string }> {
   readonly readiness?: Readiness | null;

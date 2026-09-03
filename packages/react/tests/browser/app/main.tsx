@@ -7,6 +7,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { Domain, DomainKit, Testing } from "../../../src/index.ts";
+// oxlint-disable-next-line import/no-unassigned-import -- a stylesheet has nothing to bind
 import "../../../src/styles.css";
 
 const parameters = new URLSearchParams(window.location.search);
