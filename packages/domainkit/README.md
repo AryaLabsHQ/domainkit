@@ -126,6 +126,15 @@ const IdentityLive = Layer.succeed(Server.Identity)({
           )
         : Effect.succeed({ ownerId: session.orgId, actorId: session.userId }),
     ),
+  // Optional: which routes this principal may reach. Members read, administrators write.
+  authorize: (principal, endpoint) =>
+    principal.actorId === "admin" || !writeRoutes.has(endpoint)
+      ? Effect.void
+      : Effect.fail(
+          new DomainKit.Error({
+            reason: new Reason.Forbidden({ message: `${endpoint} needs an administrator` }),
+          }),
+        ),
 });
 
 export const Api = HttpApi.make("app").add(Server.group);
@@ -146,10 +155,17 @@ the group.
 `/callback/:provider` is the one route the provider drives the browser to, so `Identity` has to
 recognise a credential the browser sends on a top-level navigation.
 
+`authorize` is optional and runs after `principal` on every request with the route's name, one of
+`Server.EndpointName`. Fail it with reason `Forbidden` for the 403 a UI expects. Omit it and every
+authenticated principal reaches every route, which is right when your own middleware already gates
+the mount.
+
 After an interactive connection completes, the callback redirects to the `returnTo` the flow was
-started with, or to `defaultReturnTo`. The destination is resolved against the callback URL and must
-land on its origin, so neither the provider nor a crafted `returnTo` can steer the customer off the
-application.
+started with, or to `defaultReturnTo`. The destination is resolved against the callback's own base
+and must land on its origin, so neither the provider nor a crafted `returnTo` can steer the customer
+off the application. Behind a proxy that rewrites `Host`, set `callbackBaseUrl` to the public base:
+the request origin is one the browser never sees, and both the provider's callback URL and the
+redirect follow the configured one.
 
 Failures cross the wire as the `DomainKit.Error` value with the status its `reason` derives, so a
 `Conflict` is a 409 carrying the conflicting operations and a `Reconnect` is a 403 naming the

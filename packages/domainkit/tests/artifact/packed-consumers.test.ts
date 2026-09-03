@@ -163,6 +163,13 @@ export const live: Layer.Layer<DomainKit.Services, DomainKit.Error, Storage.Serv
   );
 export const cases = Testing.conformance.storage(Testing.storage).map((item) => item.name);
 export type PublicIdentity = Server.IdentityService;
+export type PublicEndpoint = Server.EndpointName;
+/** Both halves of the Identity seam compile against the packed types. */
+export const identity: Server.IdentityService = {
+  principal: () => Effect.succeed({ ownerId: "org", actorId: "user" }),
+  authorize: (_principal, endpoint: Server.EndpointName) =>
+    endpoint === "approve" ? Effect.die("unused") : Effect.void,
+};
 export type PublicSnapshot = Server.Snapshot;
 export type PublicStarted = Server.Started;
 export type PublicReadiness = Server.Readiness;
