@@ -333,16 +333,21 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
         ),
       latest: (attachmentId, kind) =>
         read((principal) =>
-          Effect.sync(() => {
-            const rows = ownedRows(state.attempts, principal)
-              .filter((row) => row.attachmentId === attachmentId && row.kind === kind)
-              .sort(
-                (left, right) =>
-                  DateTime.toEpochMillis(right.plan.createdAt) -
-                  DateTime.toEpochMillis(left.plan.createdAt),
-              );
-            return Option.fromNullishOr(rows[0]);
-          }),
+          Effect.sync(() =>
+            Option.fromNullishOr(
+              ownedRows(state.attempts, principal)
+                .filter((row) => row.attachmentId === attachmentId && row.kind === kind)
+                .reduce<Storage.Attempt | undefined>(
+                  (best, row) =>
+                    best === undefined ||
+                    DateTime.toEpochMillis(row.plan.createdAt) >=
+                      DateTime.toEpochMillis(best.plan.createdAt)
+                      ? row
+                      : best,
+                  undefined,
+                ),
+            ),
+          ),
         ),
       approve: (id, approval: Approval.Approval) =>
         write((principal) =>
