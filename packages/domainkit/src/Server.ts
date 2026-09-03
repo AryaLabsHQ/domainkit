@@ -40,6 +40,16 @@ export interface IdentityService {
   readonly principal: (
     request: HttpServerRequest.HttpServerRequest,
   ) => Effect.Effect<Principal.Interface, Errors.DomainKitError>;
+  /**
+   * Which routes this principal may reach, checked after `principal` on every request. Fail with
+   * reason `Forbidden` for the 403 a UI expects. Without it every authenticated principal reaches
+   * every route, which is the right default for a host whose own middleware already gates the
+   * mount.
+   */
+  readonly authorize?: (
+    principal: Principal.Interface,
+    endpoint: EndpointName,
+  ) => Effect.Effect<void, Errors.DomainKitError>;
 }
 
 export class Identity extends Context.Service<Identity, IdentityService>()(
@@ -356,6 +366,9 @@ export const group = HttpApiGroup.make("domainkit")
 
 export type Group = typeof group;
 
+/** Every route in the group, by name; what `Identity.authorize` is asked about. */
+export type EndpointName = HttpApiGroup.Endpoints<Group>["identifier"];
+
 export interface Options {
   /**
    * Where the callback route is reachable from the provider, without the `/callback/:provider`
@@ -380,7 +393,8 @@ export type Services =
 // Handlers
 // ---------------------------------------------------------------------------------------------
 
-const START_PATH = "/connections";
+const START_ROUTE = "/connections";
+const callbackRoute = (provider: string) => `/callback/${encodeURIComponent(provider)}`;
 
 const invalid = (message: string, field?: string) =>
   Errors.fail(new Reason.InvalidInput({ message, ...(field === undefined ? {} : { field }) }));
@@ -400,32 +414,50 @@ const absoluteUrl = (
     }
   });
 
-/** The absolute URL the provider redirects back to, following whatever prefix the group is mounted at. */
+/**
+ * The absolute URL the provider redirects back to. `callbackBaseUrl` wins when the host set it,
+ * because a proxy that rewrites `Host` leaves the request pointing at an origin the browser never
+ * sees; otherwise it follows the prefix the group is mounted at, derived by stripping the handling
+ * route's own path off the request.
+ */
 const callbackUrlFor = (input: {
   readonly request: HttpServerRequest.HttpServerRequest;
   readonly provider: string;
   readonly options: Options;
-}): Effect.Effect<string, Errors.DomainKitError> =>
+  /** The path of the route serving this request, stripped to find the mount. */
+  readonly route: string;
+}): Effect.Effect<URL, Errors.DomainKitError> =>
   Effect.suspend(() => {
     const suffix = `/callback/${encodeURIComponent(input.provider)}`;
     const configured = input.options.callbackBaseUrl;
     if (configured !== undefined) {
-      return Effect.succeed(`${configured.replace(/\/+$/, "")}${suffix}`);
+      return Effect.try({
+        try: () => new URL(`${configured.replace(/\/+$/, "")}${suffix}`),
+        catch: () => callbackConfigurationError(`${configured} is not a URL`),
+      });
     }
     return Effect.flatMap(absoluteUrl(input.request), (url) => {
       const path = url.pathname;
-      if (!path.endsWith(START_PATH)) {
-        return invalid("The start route is not mounted at /connections", "callbackBaseUrl");
+      if (!path.endsWith(input.route)) {
+        return invalid(
+          `The ${input.route} route is not mounted where it says; set callbackBaseUrl`,
+          "callbackBaseUrl",
+        );
       }
       return Effect.succeed(
-        `${url.origin}${path.slice(0, path.length - START_PATH.length)}${suffix}`,
+        new URL(`${url.origin}${path.slice(0, path.length - input.route.length)}${suffix}`),
       );
     });
   });
 
+const callbackConfigurationError = (message: string) =>
+  new Errors.DomainKitError({
+    reason: new Reason.InvalidInput({ message, field: "callbackBaseUrl" }),
+  });
+
 /**
- * Where the callback may send the customer. Only a path on this server or an absolute URL on the
- * callback's own origin: a destination that leaves the application is an open redirect, whoever
+ * Where the callback may send the customer: a path under the callback's own base, or an absolute
+ * URL on its origin. A destination that leaves the application is an open redirect, whoever
  * supplied it.
  */
 const sameOrigin = (destination: string, callback: URL): string | null => {
@@ -500,13 +532,19 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
       const verify = yield* Verify.Service;
       const storage = yield* Storage.Service;
 
-      /** Run a lifecycle effect as the principal the host derives from this request. */
+      /**
+       * Run a lifecycle effect as the principal the host derives from this request, once the host
+       * has allowed that principal onto this route.
+       */
       const as = <A>(
+        endpoint: EndpointName,
         request: HttpServerRequest.HttpServerRequest,
         effect: Effect.Effect<A, Errors.DomainKitError, Principal.Service>,
       ): Effect.Effect<A, Errors.DomainKitError> =>
         Effect.flatMap(identity.principal(request), (principal) =>
-          Effect.provideService(effect, Principal.Service, principal),
+          Effect.flatMap(identity.authorize?.(principal, endpoint) ?? Effect.void, () =>
+            Effect.provideService(effect, Principal.Service, principal),
+          ),
         );
 
       const snapshot = (domain: string) => Effect.map(connect.inspect(domain), snapshotOf);
@@ -592,19 +630,25 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         attempt.kind === "cleanup" ? cleanup : provision;
 
       return handlers
-        .handle("inspect", ({ params, request }) => as(request, snapshot(params.domain)))
+        .handle("inspect", ({ params, request }) => as("inspect", request, snapshot(params.domain)))
         .handle("discover", ({ params, request }) =>
-          as(request, Effect.map(connect.discover(params.domain), discovered)),
+          as("discover", request, Effect.map(connect.discover(params.domain), discovered)),
         )
         .handle("start", ({ payload, request }) =>
           as(
+            "start",
             request,
             Effect.gen(function* () {
               // Token methods connect in one call; the interactive ones need somewhere to land.
               const callbackUrl =
                 payload.method._tag === "Token"
                   ? undefined
-                  : yield* callbackUrlFor({ request, provider: payload.provider, options });
+                  : (yield* callbackUrlFor({
+                      request,
+                      provider: payload.provider,
+                      options,
+                      route: START_ROUTE,
+                    })).toString();
               const started = yield* connect.start({
                 provider: payload.provider,
                 domain: payload.domain,
@@ -615,11 +659,20 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
             }),
           ),
         )
-        .handle("callback", ({ query, request }) =>
+        .handle("callback", ({ params, query, request }) =>
           as(
+            "callback",
             request,
             Effect.gen(function* () {
               const url = yield* absoluteUrl(request);
+              // Resolve the destination against the callback's public base, not the request: a
+              // proxy that rewrites `Host` leaves the request on an origin the browser never sees.
+              const base = yield* callbackUrlFor({
+                request,
+                provider: params.provider,
+                options,
+                route: callbackRoute(params.provider),
+              });
               // Where the customer lands comes from the continuation this owner started, never
               // from the provider's query string, and it is resolved before the callback is spent:
               // a server with nowhere to send them must not connect the provider and then fail.
@@ -631,7 +684,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                   "returnTo",
                 );
               }
-              const destination = sameOrigin(requested, url);
+              const destination = sameOrigin(requested, base);
               if (destination === null) {
                 return yield* invalid(`${requested} leaves this application`, "returnTo");
               }
@@ -648,6 +701,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         )
         .handle("attach", ({ params, payload, request }) =>
           as(
+            "attach",
             request,
             attachAt({
               connectionId: params.connectionId,
@@ -656,18 +710,22 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
             }),
           ),
         )
-        .handle("detach", ({ params, request }) => as(request, connect.detach(params.attachmentId)))
+        .handle("detach", ({ params, request }) =>
+          as("detach", request, connect.detach(params.attachmentId)),
+        )
         .handle("disconnect", ({ params, request }) =>
-          as(request, connect.disconnect(params.connectionId)),
+          as("disconnect", request, connect.disconnect(params.connectionId)),
         )
         .handle("createPlan", ({ params, payload, request }) =>
           as(
+            "createPlan",
             request,
             provision.plan({ domain: params.domain, requirements: payload.requirements }),
           ),
         )
         .handle("approve", ({ params, payload, request }) =>
           as(
+            "approve",
             request,
             Effect.gen(function* () {
               const attempt = yield* storage.attempts.get(params.planId);
@@ -681,6 +739,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         )
         .handle("reject", ({ params, payload, request }) =>
           as(
+            "reject",
             request,
             Effect.gen(function* () {
               const attempt = yield* storage.attempts.get(params.planId);
@@ -692,6 +751,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         )
         .handle("apply", ({ params, request }) =>
           as(
+            "apply",
             request,
             Effect.gen(function* () {
               const attempt = yield* storage.attempts.byApproval(params.approvalId);
@@ -701,6 +761,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         )
         .handle("plan", ({ params, request }) =>
           as(
+            "plan",
             request,
             Effect.map(storage.attempts.get(params.planId), (attempt) => ({
               plan: attempt.plan,
@@ -713,6 +774,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         )
         .handle("receipt", ({ params, request }) =>
           as(
+            "receipt",
             request,
             Effect.flatMap(storage.attempts.byReceipt(params.receiptId), (attempt) =>
               attempt.receipt === null
@@ -722,10 +784,10 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
           ),
         )
         .handle("observe", ({ params, request }) =>
-          as(request, verify.observe({ domain: params.domain })),
+          as("observe", request, verify.observe({ domain: params.domain })),
         )
         .handle("cleanupPlan", ({ params, request }) =>
-          as(request, cleanup.plan({ receiptId: params.receiptId })),
+          as("cleanupPlan", request, cleanup.plan({ receiptId: params.receiptId })),
         );
     }),
   ) as Layer.Layer<HttpApiGroup.Service<ApiId, "domainkit">, never, Services>;

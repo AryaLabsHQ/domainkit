@@ -30,9 +30,17 @@ else comes from `DomainKit.layer` plus `Storage`.
 `Identity` must recognise a credential the browser attaches by itself; a header-only scheme fails
 every interactive connection at completion.
 
+`Identity.authorize` is optional and answers a second question per request: may this principal reach
+this route? It receives the principal and the route's name from `Server.EndpointName`, and a
+`Forbidden` reason becomes the 403. One principal per request is not enough for a host that opens
+reads to members and restricts writes to administrators, and pushing that into `principal` would
+make the tenant depend on which route is being served.
+
 The OAuth callback redirects to the destination stored on the continuation the customer's own
-request created, or to `defaultReturnTo`, and only after checking it is a path on this server or a
-URL on the callback's origin. The provider's query string never chooses where the customer lands.
+request created, or to `defaultReturnTo`, and only after checking it resolves onto the callback's
+own origin. The provider's query string never chooses where the customer lands. `callbackBaseUrl`
+names that origin for a deployment whose edge rewrites `Host`, because the request then carries an
+origin the browser never sees; without it the base follows the mount the request arrived on.
 
 Failures cross the wire as the `DomainKit.Error` value itself, with the status `DomainKit.Error`
 already derives from its reason: 400 `InvalidInput`, 401 `Unauthenticated`, 403 `Forbidden` and
@@ -59,7 +67,9 @@ that renders only what the server can serve.
   cannot drift.
 - Mounting under a different base path is a prefix, never request re-hosting.
 - A provider cannot turn the callback into an open redirect.
-- Reverse-proxy deployments that cannot see their public origin set `callbackBaseUrl`.
+- Reverse-proxy deployments that cannot see their public origin set `callbackBaseUrl`, and both the
+  provider callback and the post-connect redirect follow it.
+- A host that needs per-route permissions adds `authorize` instead of a second identity service.
 - Hono, Next.js App Router, and TanStack Start mount the same Web handler.
 
 ## Alternatives considered

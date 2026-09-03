@@ -378,6 +378,121 @@ describe("Server.group over the lifecycle", () => {
     }
   });
 
+  it("resolves the callback against callbackBaseUrl behind a Host-rewriting proxy", async () => {
+    // The browser reaches samva.dev; the edge forwards to api.samva.dev with a rewritten Host, so
+    // the request origin is one the customer never sees. `callbackBaseUrl` names the public one.
+    const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+    const { handler, dispose } = Server.toWebHandler(
+      DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() }).pipe(
+        Layer.merge(identity),
+      ),
+      { callbackBaseUrl: "https://public.test/api/domainkit", defaultReturnTo: "/dashboard" },
+    );
+    try {
+      const started = await handler(
+        new Request("https://internal.test/connections", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            domain: "app.example.com",
+            provider: fake.id,
+            method: { _tag: "OAuth", returnTo: "/settings/domains" },
+          }),
+        }),
+      );
+      assert.strictEqual(started.status, 200);
+      const { authorizationUrl } = (await started.json()) as { readonly authorizationUrl: string };
+      assert.strictEqual(
+        new URL(authorizationUrl).origin + new URL(authorizationUrl).pathname,
+        `https://public.test/api/domainkit/callback/${fake.id}`,
+      );
+
+      // The provider redirects to the public URL; the edge forwards it to the internal origin.
+      const forwarded = new URL(authorizationUrl);
+      const internal = new URL(`https://internal.test/callback/${fake.id}${forwarded.search}`);
+      const callback = await handler(new Request(internal, { redirect: "manual" }));
+      assert.strictEqual(callback.status, 302);
+      assert.strictEqual(callback.headers.get("location"), "https://public.test/settings/domains");
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("authorizes every route by name, so reads and writes can differ", async () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    const writes = new Set<Server.EndpointName>(["approve", "apply"]);
+    const memberIdentity = Layer.succeed(Server.Identity)({
+      principal: (request) =>
+        Effect.succeed({
+          ...Testing.principal,
+          actorId: request.headers["x-role"] === "admin" ? "admin" : "member",
+        }),
+      authorize: (principal, endpoint) =>
+        principal.actorId === "admin" || !writes.has(endpoint)
+          ? Effect.void
+          : Effect.fail(
+              new DomainKit.Error({
+                reason: new Reason.Forbidden({ message: `${endpoint} needs an administrator` }),
+              }),
+            ),
+    });
+    const { handler, dispose } = Server.toWebHandler(
+      DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() }).pipe(
+        Layer.merge(memberIdentity),
+      ),
+    );
+    const call = async (method: string, path: string, role?: string, body?: unknown) => {
+      const response = await handler(
+        new Request(`${host}${path}`, {
+          method,
+          headers: {
+            ...(role === undefined ? {} : { "x-role": role }),
+            ...(body === undefined ? {} : { "content-type": "application/json" }),
+          },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        }),
+      );
+      const text = await response.text();
+      return { status: response.status, body: text === "" ? undefined : JSON.parse(text) };
+    };
+    try {
+      await call("POST", "/connections", "admin", {
+        domain: "app.example.com",
+        provider: fake.id,
+        method: { _tag: "Token", values: { token: "token" } },
+      });
+      const planned = await call("POST", "/domains/app.example.com/plans", "admin", {
+        requirements: requirements.map((record) => JSON.parse(JSON.stringify(record))),
+      });
+      const plan = planned.body as { readonly id: string };
+
+      // A member cannot approve.
+      const refused = await call("POST", `/plans/${plan.id}/approvals`, undefined, {});
+      assert.strictEqual(refused.status, 403);
+      const reason = (
+        refused.body as { readonly reason: { readonly _tag: string; readonly message: string } }
+      ).reason;
+      assert.strictEqual(reason._tag, "Forbidden");
+      assert.strictEqual(reason.message, "approve needs an administrator");
+
+      // An administrator can, and apply is gated the same way.
+      const approved = await call("POST", `/plans/${plan.id}/approvals`, "admin", {});
+      assert.strictEqual(approved.status, 200);
+      const approval = approved.body as { readonly id: string };
+      assert.strictEqual((await call("POST", `/approvals/${approval.id}/apply`)).status, 403);
+      assert.strictEqual(
+        (await call("POST", `/approvals/${approval.id}/apply`, "admin")).status,
+        200,
+      );
+
+      // A member still reads the result.
+      assert.strictEqual((await call("GET", "/domains/app.example.com")).status, 200);
+      assert.strictEqual((await call("POST", "/domains/app.example.com/observations")).status, 200);
+    } finally {
+      await dispose();
+    }
+  });
+
   it("refuses a callback whose flow points off this origin", async () => {
     const { fake, call, handler, dispose } = server({ defaultReturnTo: "/dashboard" });
     try {
