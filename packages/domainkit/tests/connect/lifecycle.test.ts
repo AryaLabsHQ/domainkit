@@ -362,6 +362,44 @@ describe("Connect", () => {
     }).pipe(withPrincipal, Effect.provide(layerFor(slow)));
   });
 
+  it.effect("returns the persisted connection when spending the continuation fails", () => {
+    const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+    const storage = Storage.layerMemoryWith({
+      beforeCommit: (operation) =>
+        operation === "continuations.consume"
+          ? DomainKitError.fail(
+              new DomainKitError.StorageFailed({ operation, message: "storage outage" }),
+            )
+          : Effect.void,
+    });
+    const layer = Connect.layer.pipe(
+      Layer.provideMerge(
+        Layer.mergeAll(
+          storage,
+          Custody.layer({ key: Redacted.make(Custody.generateKey()) }),
+          Providers.layer([fake]),
+          Testing.resolver(),
+        ),
+      ),
+    );
+    return Effect.gen(function* () {
+      const redirect = yield* Connect.start({
+        provider: "fake",
+        method: Connect.Method.oauth(),
+        domain: "app.example.com",
+        callbackUrl: "https://app.example/cb",
+      });
+      if (redirect._tag !== "Redirect") return assert.fail("expected a redirect");
+      const connected = yield* Connect.complete({
+        continuationId: redirect.continuationId,
+        callbackUrl: redirect.authorizationUrl,
+      });
+      assert.strictEqual(connected._tag, "Connected");
+      const snapshot = yield* Connect.inspect("app.example.com");
+      assert.strictEqual(snapshot.authorization?.method, "oauth");
+    }).pipe(withPrincipal, Effect.provide(layer));
+  });
+
   it.effect("keeps the continuation when persistence fails after the exchange", () => {
     const fake = Testing.provider({ zones: ["example.com"], oauth: true });
     let commits = 0;
