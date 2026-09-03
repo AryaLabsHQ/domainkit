@@ -1,0 +1,15 @@
+/* #region layer */
+/*
+ * The stylesheet ships inside `@layer domainkit`, which sits below any unlayered rule, so your own
+ * CSS and your utility classes win without out-specifying a part selector.
+ *
+ * To let the package win instead, order a layer of your own below it.
+ */
+@layer domainkit, app;
+
+@layer app {
+  [data-domainkit-part="records-panel"] {
+    border-radius: 0;
+  }
+}
+/* #endregion layer */

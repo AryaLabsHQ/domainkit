@@ -55,7 +55,10 @@ From this directory: `bun run reference:check`, `bun run typecheck`, `bun run te
 `bun run registry:check`. From the repository root: `bun run typecheck:examples`. Inspect the
 rendered primary journeys when navigation or UI changes.
 
-`test:preview` pins the component previews' remount key. Each preview runs the real lifecycle
+`bun run test` runs both docs checks. `test:snippets` pins the reader that slices the samples:
+region names match whole, because eight names in the gallery are prefixes of another
+(`connect` and `connect-token`, `token` and `token-only`). `test:preview` pins the component
+previews' remount key. Each preview runs the real lifecycle
 against a fake server built from its dial values, so a value the key misses leaves a controller
 holding a connection, a plan, or readiness the replacement server never issued. Add a case there
 before adding a dial.

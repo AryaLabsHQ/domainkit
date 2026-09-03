@@ -37,6 +37,8 @@ export interface PreviewState {
   /** Offer OAuth beside the token method, so the connect dialog shows both. */
   readonly oauth: boolean;
   readonly providerId: string;
+  /** Render the story the way a member sees it: status without the controls that change it. */
+  readonly readOnly: boolean;
   readonly requirements: ReadonlyArray<DnsRecord.Model>;
   /** Seed the zone with the TXT requirement, so the plan shows one Create and one Noop. */
   readonly seeded: boolean;
@@ -51,6 +53,7 @@ export function stateFromSearch(search: string): PreviewState {
   const parameters = new URLSearchParams(search);
   const story = parameters.get("story");
   const mode = parameters.get("mode");
+  const readOnly = parameters.get("readOnly");
   const theme = parameters.get("theme");
   const colorScheme =
     mode === "dark" ||
@@ -64,6 +67,7 @@ export function stateFromSearch(search: string): PreviewState {
     domain: "app.example.com",
     oauth: true,
     providerId: "cloudflare",
+    readOnly: readOnly === "1" || readOnly === "true",
     requirements: defaultRequirements,
     seeded: true,
     story: story !== null && isStoryId(story) ? story : "domain-flow",

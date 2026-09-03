@@ -69,6 +69,48 @@ a provider. Every mounted domain re-inspects.
 The package entry carries `"use client"`. A transport is an object of functions, so build it inside
 a client module rather than passing one down from a server component.
 
+## The member view
+
+A customer who may read a domain but not change it gets `readOnly`. Status, records, and evidence
+render; every control that would start a write is gone rather than disabled, because a dead button
+is a worse answer than no button.
+
+<Snippet file="examples/react/read-only.tsx" region="root" title="Read-only for the whole tree" />
+
+<Snippet file="examples/react/read-only.tsx" region="per-domain" title="One domain among several" />
+
+Capability gating is the other half and is unchanged: a group the transport never declares still
+never renders. `readOnly` covers the authorization a transport cannot express, such as a member of
+an organisation who reaches the same routes and would get a 403 from any write.
+
+Observation stays available, because checking DNS reads the world rather than changing the domain.
+Retrying does not: a flow that becomes read-only after a write failed keeps the failure on screen
+and drops the retry.
+
+<Snippet
+  file="examples/react/read-only.tsx"
+  region="observe"
+  title="When members may not observe either"
+/>
+
+## Verification without a connection
+
+The flow observes the requirements it was given, so a domain with no provider attached still reports
+which records are in place instead of failing on the missing receipt.
+
+<Snippet
+  file="examples/react/read-only.tsx"
+  region="unattached"
+  title="Observing an unattached domain"
+/>
+
+## Where an interactive provider returns
+
+<Snippet file="examples/react/domain-settings.tsx" region="return-to" title="Naming the return" />
+
+`returnTo` defaults to the page the customer started from, read when they connect rather than when
+the flow renders. Pass `null` to send none and leave the server's `defaultReturnTo` in charge.
+
 ## Styles
 
 ```ts
@@ -77,6 +119,12 @@ import "@domainkit/react/styles.css";
 
 The stylesheet is opt-in and every colour in it is a `--domainkit-*` custom property, so a host that
 imports it can still restyle everything through `theme`.
+
+Every rule ships inside `@layer domainkit`, which sits below any unlayered rule. Your own stylesheet
+wins without out-specifying a part selector, and a utility class lands where you put it. To let the
+package win instead, order a layer of your own below it.
+
+<Snippet file="examples/react/styles.css" region="layer" title="Letting the package win" />
 
 ## Next
 

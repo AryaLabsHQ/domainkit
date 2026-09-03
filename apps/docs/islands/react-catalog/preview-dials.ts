@@ -7,6 +7,7 @@ export interface PreviewDialValues {
   readonly domain?: string;
   readonly oauth?: boolean;
   readonly provider?: string;
+  readonly readOnly?: boolean;
   readonly records?: {
     readonly cname?: { readonly name?: string; readonly target?: string };
     readonly txt?: { readonly name?: string; readonly value?: string };
@@ -23,6 +24,13 @@ const recordStories = new Set<StoryId>([
   "verification",
 ]);
 const connectStories = new Set<StoryId>(["connect", "domain-flow", "slots"]);
+const readOnlyStories = new Set<StoryId>([
+  "cleanup",
+  "connect",
+  "domain-flow",
+  "provision",
+  "slots",
+]);
 const zoneStories = new Set<StoryId>(["cleanup", "domain-flow", "provision", "slots"]);
 
 const first = (records: PreviewState["requirements"]) => records[0];
@@ -45,6 +53,9 @@ export function previewDialConfig(state: PreviewState): DialConfig {
   }
   if (connectStories.has(state.story)) {
     config.oauth = state.oauth;
+  }
+  if (readOnlyStories.has(state.story)) {
+    config.readOnly = state.readOnly;
   }
   if (zoneStories.has(state.story)) {
     config.seeded = state.seeded;
@@ -112,6 +123,7 @@ export function stateFromDials(initial: PreviewState, values: PreviewDialValues)
     domain: withinZone(values.domain, initial.domain),
     oauth: values.oauth ?? initial.oauth,
     providerId,
+    readOnly: values.readOnly ?? initial.readOnly,
     requirements,
     seeded: values.seeded ?? initial.seeded,
   };

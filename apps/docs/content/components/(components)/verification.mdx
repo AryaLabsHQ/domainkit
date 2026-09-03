@@ -53,6 +53,15 @@ not the same as finding nothing, so `missing` stays the one status that reports 
 | `Verify.ObserveAction` | A button that observes again now                      |
 | `Verify.Outcome`       | The last failure, as a sentence from the catalog      |
 
+## Without a connection
+
+The controller takes the requirements to look for, and `Domain.Flow` passes its own, so a domain
+with no provider attached still reports which records are in place. Without them the server uses the
+attachment's latest provisioning receipt, which an unattached domain does not have.
+
+Observing stays available in read-only: checking DNS reads the world rather than changing the
+domain.
+
 ## Polling
 
 The controller observes on mount and then follows the readiness row's own `nextCheckAt` while it is

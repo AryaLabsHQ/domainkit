@@ -66,3 +66,15 @@ Each namespace exports a `Flow` of its own when only one step belongs in a scree
 <ReactExample story="provision" />
 
 <ReactExample story="cleanup" />
+
+## Read-only
+
+`readOnly` on `DomainKit.Root`, or on one `Domain.Flow`, removes every slot's write surface rather
+than disabling it. The connection slot renders the catalog's `notConnected` sentence instead of a
+connect control, the actions slot renders nothing, and the records and verification slots are
+untouched.
+
+A slot of your own asks which mode it is in through `DomainKit.useReadOnly()`, and
+`DomainKit.ReadOnly` narrows a subtree.
+
+<Snippet file="examples/react/read-only.tsx" region="hook" title="A part that knows the mode" />

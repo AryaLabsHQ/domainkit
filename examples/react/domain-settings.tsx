@@ -51,4 +51,23 @@ export function DomainSettingsWithEvents() {
 }
 // #endregion events
 
+// #region return-to
+/**
+ * An interactive provider returns the customer to the page they started from, read when they
+ * connect rather than when the flow renders. Name a different destination, or pass `null` to leave
+ * the server's `defaultReturnTo` in charge.
+ */
+export function DomainSettingsWithReturn() {
+  return (
+    <DomainKit.Root transport={transport}>
+      <Domain.Flow
+        domain="app.example.com"
+        requirements={requirements}
+        returnTo="/settings/domains?connected=1"
+      />
+    </DomainKit.Root>
+  );
+}
+// #endregion return-to
+
 declare function track(name: string, properties: Record<string, string>): void;
