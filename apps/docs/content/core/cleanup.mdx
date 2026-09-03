@@ -18,11 +18,13 @@ becomes a `Conflict`.
 
 <Snippet file="examples/core/cleanup.ts" region="review" title="What the customer sees" />
 
-| Conflict reason  | Means                                                             |
-| ---------------- | ----------------------------------------------------------------- |
-| `missing`        | The record is already gone                                        |
-| `value-mismatch` | Someone changed it, so it is no longer the record DomainKit wrote |
-| `opaque`         | The provider now reports something DomainKit cannot model         |
+| Conflict reason  | Means                                                      |
+| ---------------- | ---------------------------------------------------------- |
+| `missing`        | The record is already gone                                 |
+| `value-mismatch` | It no longer matches what the receipt says DomainKit wrote |
+
+A record the provider now reports as something DomainKit cannot model is a `value-mismatch` too:
+whatever is there, it is not what was written.
 
 A conflict is never deleted. A record the customer edited belongs to the customer.
 

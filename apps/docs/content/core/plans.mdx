@@ -30,12 +30,20 @@ before the planner reads the zone, so tenants sharing a zone cannot plan into ea
 
 ## The four operations
 
-| Operation  | Means                                                                                                         |
-| ---------- | ------------------------------------------------------------------------------------------------------------- |
-| `Create`   | The record is missing and will be created                                                                     |
-| `Noop`     | An exact match already exists. `ttlDrift` says whether its TTL differs                                        |
-| `Conflict` | Incompatible state. `reason` is `exclusive-name`, `cname-collision`, `value-mismatch`, `opaque`, or `missing` |
-| `Delete`   | Cleanup only: remove a record a receipt proves DomainKit created                                              |
+| Operation  | Means                                                                  |
+| ---------- | ---------------------------------------------------------------------- |
+| `Create`   | The record is missing and will be created                              |
+| `Noop`     | An exact match already exists. `ttlDrift` says whether its TTL differs |
+| `Conflict` | Incompatible state, with a `reason` for what is in the way             |
+| `Delete`   | Cleanup only: remove a record a receipt proves DomainKit created       |
+
+| Conflict reason   | Raised when                                                             | By           |
+| ----------------- | ----------------------------------------------------------------------- | ------------ |
+| `cname-collision` | A CNAME would share a name with another record, in either direction     | Provisioning |
+| `opaque`          | A record at that name and type is one DomainKit cannot model            | Provisioning |
+| `exclusive-name`  | An exclusive requirement meets a different record at that name and type | Provisioning |
+| `missing`         | The record a receipt names is already gone                              | Cleanup      |
+| `value-mismatch`  | The record a receipt names no longer matches what was written           | Cleanup      |
 
 The planner is additive. DomainKit never updates, overwrites, or deletes a record it did not create,
 so a conflict is reported and the write does not happen.

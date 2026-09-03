@@ -14,10 +14,11 @@ one of them keeps happening.
 ## The plan will not apply
 
 **`Conflict`.** The zone already holds something incompatible. The reason carries the conflicting
-operations, each with the requirement and what was found there. Show them: `exclusive-name` and
-`cname-collision` mean a record has to move before the plan can run, `value-mismatch` means the
-same name and type holds a different value, and `opaque` means the provider reports something
-DomainKit will not touch.
+operations, each with the requirement and what was found there. Show them: `cname-collision` and
+`exclusive-name` mean a record has to move before the plan can run, and `opaque` means the provider
+reports something at that name DomainKit will not touch. A cleanup plan conflicts differently:
+`missing` and `value-mismatch` say the record a receipt names is gone or has been edited, and
+cleanup leaves it alone.
 
 Approve the rest with `allowPartial` and a conflict-free selection when the customer wants to make
 progress before resolving the rest.
