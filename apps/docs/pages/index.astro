@@ -1,13 +1,22 @@
 ---
+import CodeBlock from "blume/components/content/CodeBlock.astro";
 import PageLayout from "blume/components/layout/PageLayout.astro";
 import data from "blume:data";
 
 import ProviderLogo from "../components/ProviderLogo.astro";
+import { snippet } from "../components/snippets.ts";
 
 const { config } = data;
-const pageTitle = "Add custom domains to your app | DomainKit";
+const pageTitle = "Custom domains for your SaaS | DomainKit";
 const pageDescription =
-  "Connect a DNS provider, review the records your product needs, and apply the approved plan while your app keeps control of credentials.";
+  "Your app declares the DNS records it needs. DomainKit plans the changes, applies only what the customer approved, and verifies they landed.";
+
+// The same regions the documentation renders, so the landing page cannot drift from the API.
+const lifecycle = snippet("examples/core/lifecycle.ts", "program");
+const identity = snippet("examples/server/mount.ts", "identity");
+const mount = snippet("examples/server/mount.ts", "mount");
+const transport = snippet("examples/react/domain-settings.tsx", "setup");
+const flow = snippet("examples/react/domain-settings.tsx", "flow");
 ---
 
 <PageLayout
@@ -27,37 +36,111 @@ const pageDescription =
 >
   <main class="landing">
     <section class="hero">
-      <h1>Add custom domains to your app</h1>
+      <h1>Custom domains for your SaaS, without the DNS support tickets</h1>
       <p class="lede">
-        DomainKit connects a DNS provider, shows the exact changes, and applies
-        only the approved plan. Your app keeps control of credentials, storage,
-        policy, and the customer experience.
+        Your app declares the DNS records it needs. DomainKit plans the changes, applies only what
+        the customer approved, and verifies they landed.
       </p>
+      <p class="install"><code>bun add domainkit effect@rc</code></p>
       <div class="actions">
-        <a class="primary" href="/docs">Read the docs</a>
-        <a href="https://github.com/AryaLabsHQ/domainkit">View on GitHub</a>
+        <a class="primary" href="/docs/quickstart">Quickstart</a>
+        <a href="/docs">Read the docs</a>
+        <a href="https://github.com/AryaLabsHQ/domainkit">GitHub</a>
+      </div>
+      <p class="tech">
+        Effect 4 · HttpApi group for your server · React flow for your settings page · Cloudflare
+        and Vercel
+      </p>
+    </section>
+
+    <section class="split">
+      <div class="caption">
+        <h2>The whole lifecycle is four calls</h2>
+        <p>
+          Plans are additive and fail closed. Approval binds a digest, and apply refuses a zone that
+          moved.
+        </p>
+        <p class="aside">
+          Every failure is one <code>DomainKit.Error</code> whose <code>reason</code> is a tagged class,
+          so <code>catchTag</code> and <code>Match</code> do the routing.
+        </p>
+      </div>
+      <div class="code">
+        <CodeBlock code={lifecycle} lang="ts" title="examples/core/lifecycle.ts#program" />
       </div>
     </section>
 
-    <section class="features" aria-label="DomainKit capabilities">
+    <section class="principles" aria-label="What DomainKit guarantees">
       <article>
-        <span>01</span>
-        <h2>Review before writing</h2>
-        <p>Show exact creates, no-ops, and conflicts before a user approves a write.</p>
+        <h2>Review before write</h2>
+        <p>
+          <code>Provision.plan</code> returns creates, exact no-ops, and conflicts. It never updates
+          or deletes.
+        </p>
+      </article>
+      <article>
+        <h2>Consent is a digest</h2>
+        <p>
+          Approval binds the plan digest. <code>apply</code> re-plans first and fails{" "}
+          <code>Stale</code> if the zone moved.
+        </p>
       </article>
       <article>
         <div class="provider-pair">
           <ProviderLogo provider="cloudflare" size={24} />
           <ProviderLogo provider="vercel" size={20} />
         </div>
-        <h2>Keep control in your app</h2>
-        <p>Use Cloudflare or Vercel while your application owns consent, secrets, and storage.</p>
+        <h2>Your app keeps custody</h2>
+        <p>
+          Your <code>Custody</code> seals credentials, your <code>Storage</code> holds the rows, your
+          session is the <code>Identity</code>. No credential reaches the browser.
+        </p>
       </article>
       <article>
-        <span>03</span>
-        <h2>Choose your interface</h2>
-        <p>Use ready-made React flows, build your own screen, or render DNS records directly.</p>
+        <h2>Verification with evidence</h2>
+        <p>
+          <code>Verify.observe</code> records what the provider and each public resolver saw, and
+          schedules the next check.
+        </p>
       </article>
+    </section>
+
+    <section class="split">
+      <div class="caption">
+        <h2>Mount it in your API</h2>
+        <p>
+          One HttpApi group, fifteen routes, OpenAPI for free. <code>Identity</code> is the one
+          service you write.
+        </p>
+      </div>
+      <div class="code">
+        <CodeBlock code={identity} lang="ts" title="examples/server/mount.ts#identity" />
+        <CodeBlock code={mount} lang="ts" title="examples/server/mount.ts#mount" />
+      </div>
+    </section>
+
+    <section class="split">
+      <div class="caption">
+        <h2>Ship the UI or bring your own</h2>
+        <p>
+          Two components run the whole lifecycle. Replace any slot and keep the rest.
+        </p>
+        <p class="aside">
+          Or take the controllers without the components: <code>Connect.useController</code> and its
+          three siblings each return tagged state you render however you like.
+        </p>
+      </div>
+      <div class="code">
+        <CodeBlock code={transport} lang="tsx" title="examples/react/domain-settings.tsx#setup" />
+        <CodeBlock code={flow} lang="tsx" title="examples/react/domain-settings.tsx#flow" />
+      </div>
+    </section>
+
+    <section class="strip" aria-label="What DomainKit is built on">
+      <span>Built on Effect 4</span>
+      <span>Cloudflare and Vercel</span>
+      <span>Postgres storage through CapsuleDB</span>
+      <span>MIT</span>
     </section>
   </main>
 </PageLayout>
@@ -65,12 +148,13 @@ const pageDescription =
 <style>
   .landing {
     margin: 0 auto;
-    max-width: 76rem;
+    /* Wide enough that the example regions render without a horizontal scrollbar. */
+    max-width: 84rem;
     padding: clamp(5rem, 11vw, 9rem) 1.5rem 5rem;
   }
 
   .hero {
-    max-width: 60rem;
+    max-width: none;
   }
 
   h1 {
@@ -85,10 +169,22 @@ const pageDescription =
 
   .lede {
     color: var(--blume-muted-foreground);
-    font-size: clamp(1.1rem, 2vw, 1.35rem);
-    line-height: 1.6;
-    margin: 2rem 0 0;
-    max-width: 48rem;
+    font-size: clamp(1.35rem, 2vw, 1.5rem);
+    line-height: 1.5;
+    margin: 1.25rem 0 0;
+    max-width: 40rem;
+  }
+
+  .install {
+    margin: 1.75rem 0 0;
+  }
+
+  .install code {
+    border: 1px solid var(--blume-border);
+    border-radius: var(--blume-radius);
+    font-family: var(--blume-font-mono);
+    font-size: 0.9rem;
+    padding: 0.55rem 0.85rem;
   }
 
   .actions {
@@ -96,7 +192,14 @@ const pageDescription =
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
-    margin-top: 2.25rem;
+    margin-top: 1.75rem;
+  }
+
+  .tech {
+    color: var(--blume-muted-foreground);
+    font-family: var(--blume-font-mono);
+    font-size: 0.8rem;
+    margin: 1.5rem 0 0;
   }
 
   .actions a {
@@ -114,41 +217,88 @@ const pageDescription =
     color: var(--blume-action-foreground);
   }
 
-  .features {
+  .split {
     border-top: 1px solid var(--blume-border);
     display: grid;
     gap: 2.5rem;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin-top: clamp(5rem, 10vw, 9rem);
+    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+    margin-top: clamp(4rem, 8vw, 7rem);
     padding-top: 2.5rem;
   }
 
-  article > span {
+  .caption h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    letter-spacing: -0.02em;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+  }
+
+  .caption p {
     color: var(--blume-muted-foreground);
-    font-family: var(--blume-font-mono);
-    font-size: 0.75rem;
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .caption .aside {
+    border-top: 1px solid var(--blume-border);
+    font-size: 0.9rem;
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+  }
+
+  .code {
+    display: grid;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  .principles {
+    border-top: 1px solid var(--blume-border);
+    display: grid;
+    gap: 2.5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: clamp(4rem, 8vw, 7rem);
+    padding-top: 2.5rem;
+  }
+
+  .principles h2 {
+    font-size: 1.1rem;
+    margin: 0 0 0.55rem;
+  }
+
+  .principles p {
+    color: var(--blume-muted-foreground);
+    line-height: 1.55;
+    margin: 0;
   }
 
   .provider-pair {
     align-items: center;
     display: flex;
     gap: 0.65rem;
+    margin-bottom: 1rem;
     min-height: 1.5rem;
   }
 
-  h2 {
-    font-size: 1.1rem;
-    margin: 1rem 0 0.55rem;
+  code {
+    font-family: var(--blume-font-mono);
+    font-size: 0.875em;
   }
 
-  article p {
+  .strip {
+    border-top: 1px solid var(--blume-border);
     color: var(--blume-muted-foreground);
-    line-height: 1.55;
-    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+    gap: 0.75rem 1.75rem;
+    margin-top: clamp(4rem, 8vw, 7rem);
+    padding-top: 2rem;
   }
 
   @media (max-width: 48rem) {
-    .features {
+    .split,
+    .principles {
       grid-template-columns: 1fr;
     }
   }

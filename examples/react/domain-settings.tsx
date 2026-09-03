@@ -7,7 +7,11 @@ import { Domain, DomainKit } from "@domainkit/react";
 const transport = Transport.fromFetch("/api/domainkit");
 
 const requirements = [
-  DnsRecord.cname({ name: "app.example.com", target: "edge.acme.dev", purpose: "Serve your site" }),
+  DnsRecord.cname({
+    name: "app.example.com",
+    target: "edge.acme.dev",
+    purpose: "Serve your site",
+  }),
   DnsRecord.txt({
     name: "_acme.app.example.com",
     value: "acme-verify=7f3a",

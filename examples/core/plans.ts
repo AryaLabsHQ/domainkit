@@ -3,7 +3,11 @@ import { DnsRecord, Plan, Provision, Receipt } from "domainkit";
 
 // #region requirements
 export const requirements = [
-  DnsRecord.cname({ name: "app.example.com", target: "edge.acme.dev", purpose: "Serve your site" }),
+  DnsRecord.cname({
+    name: "app.example.com",
+    target: "edge.acme.dev",
+    purpose: "Serve your site",
+  }),
   DnsRecord.txt({
     name: "_acme.app.example.com",
     value: "acme-verify=7f3a",
