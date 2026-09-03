@@ -10,13 +10,14 @@ export const porkbun = Provider.make({
   context: Context,
   contextVersion: "porkbun.v1",
   auth: {
-    token: {
+    token: Provider.tokenAuth({
       label: "API key",
       docsUrl: "https://porkbun.com/account/api",
       requiredCapabilities: ["dns:read", "dns:write"],
-      authenticate: (token) =>
+      fields: Schema.Struct({ token: Schema.RedactedFromValue(Schema.String) }),
+      authenticate: ({ token }) =>
         Effect.succeed({ secret: token, context: { apiKey: "pk1" }, expiresAt: null }),
-    },
+    }),
   },
   session: (credential) => ({
     capabilities: () => Effect.succeed(["dns:read", "dns:write"]),
