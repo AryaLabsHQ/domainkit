@@ -1,5 +1,5 @@
 /**
- * `Storage.Service` on PostgreSQL.
+ * `Storage.Interface` on PostgreSQL.
  *
  * Every method reads `Principal` and filters by `owner_id`, so a row belonging to another tenant
  * is indistinguishable from a row that does not exist. Aggregate transitions run inside one
@@ -10,32 +10,32 @@
  * Storage never sees plaintext. `Connect` seals a credential through `Custody` before it reaches
  * `upsert` or `rotate`, so this module only ever moves a ciphertext string.
  */
-import { DomainKitError, Principal, Storage } from "domainkit";
+import { DomainKit, Principal, Reason, Storage } from "domainkit";
 import { DateTime, Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlError from "effect/unstable/sql/SqlError";
 
 import type { Tables } from "./tables.ts";
 
-type Fail = DomainKitError.DomainKitError;
+type Fail = DomainKit.Error;
 
 // ---------------------------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------------------------
 
-const fail = (reason: DomainKitError.Reason) => DomainKitError.fail(reason);
+const fail = (reason: Reason.Model) => Effect.fail(new DomainKit.Error({ reason }));
 
-const notFound = (entity: DomainKitError.NotFound["entity"], id: string) =>
-  fail(new DomainKitError.NotFound({ entity, id }));
+const notFound = (entity: Reason.NotFound["entity"], id: string) =>
+  fail(new Reason.NotFound({ entity, id }));
 
 const invalid = (message: string, field?: string) =>
-  fail(new DomainKitError.InvalidInput({ message, ...(field === undefined ? {} : { field }) }));
+  fail(new Reason.InvalidInput({ message, ...(field === undefined ? {} : { field }) }));
 
-const busy = (key: string) => fail(new DomainKitError.Busy({ key }));
+const busy = (key: string) => fail(new Reason.Busy({ key }));
 
 const storageFailed = (operation: string, message: string) =>
-  new DomainKitError.DomainKitError({
-    reason: new DomainKitError.StorageFailed({ operation, message }),
+  new DomainKit.Error({
+    reason: new Reason.StorageFailed({ operation, message }),
   });
 
 const sqlMessage = (error: SqlError.SqlError): string =>
@@ -44,20 +44,16 @@ const sqlMessage = (error: SqlError.SqlError): string =>
     : `${error.reason._tag}: ${String(error.reason.cause)}`;
 
 /**
- * Collapse the SQL error channel into `DomainKitError`.
+ * Collapse the SQL error channel into `DomainKit.Error`.
  *
- * A `DomainKitError` raised by the body is the deliberate outcome of an invariant and passes
+ * A `DomainKit.Error` raised by the body is the deliberate outcome of an invariant and passes
  * through unchanged; anything else is a driver failure and becomes `StorageFailed`.
  */
 const guard =
   (operation: string) =>
   <A, R>(effect: Effect.Effect<A, SqlError.SqlError | Fail, R>): Effect.Effect<A, Fail, R> =>
     Effect.catch(effect, (error) =>
-      Effect.fail(
-        DomainKitError.isDomainKitError(error)
-          ? error
-          : storageFailed(operation, sqlMessage(error)),
-      ),
+      Effect.fail(DomainKit.isError(error) ? error : storageFailed(operation, sqlMessage(error))),
     );
 
 // ---------------------------------------------------------------------------------------------
@@ -284,7 +280,7 @@ const readinessOf = (row: ReadinessRow) =>
   });
 
 const stale = (attempt: Storage.Attempt) =>
-  fail(new DomainKitError.Stale({ planId: attempt.id, digest: attempt.plan.digest }));
+  fail(new Reason.Stale({ planId: attempt.id, digest: attempt.plan.digest }));
 
 /** `prefix_<uuid>`, the same identifier shape the memory implementation mints. */
 const fresh = (prefix: string) => Effect.sync(() => `${prefix}_${crypto.randomUUID()}`);
@@ -293,7 +289,9 @@ const fresh = (prefix: string) => Effect.sync(() => `${prefix}_${crypto.randomUU
 // Service
 // ---------------------------------------------------------------------------------------------
 
-export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlClient.SqlClient> =>
+export const make = (
+  tables: Tables,
+): Effect.Effect<Storage.Interface, never, SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
     // A host may configure result-name transforms for its own tables; these queries read the exact
@@ -388,10 +386,10 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
         WHERE id = ${id} AND owner_id = ${owner} AND credential_ciphertext = ${ciphertext}
       `;
 
-    const service: Storage.Service = {
+    const service: Storage.Interface = {
       authorizations: {
         upsert: ({ authorization, credential, expectedId }) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {
               if (authorization.ownerId !== ownerId) {
                 return yield* invalid(
@@ -452,7 +450,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("authorizations.upsert")),
         get: (id) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql<AuthorizationRow>`
               SELECT * FROM ${authorizations} WHERE id = ${id} AND owner_id = ${ownerId}
             `.pipe(
@@ -462,7 +460,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("authorizations.get")),
         credential: (id) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql<AuthorizationRow>`
               SELECT * FROM ${authorizations} WHERE id = ${id} AND owner_id = ${ownerId}
             `.pipe(
@@ -472,7 +470,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("authorizations.credential")),
         rotate: (id, credential) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {
               const secret = yield* credentialCodec.write(credential);
               const updated = yield* sql<{ readonly id: string }>`
@@ -487,7 +485,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("authorizations.rotate")),
         promoteCapabilities: (id, capabilities) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const current = yield* authorizationOf(yield* lockedAuthorization(ownerId, id));
@@ -501,7 +499,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("authorizations.promoteCapabilities")),
         revoke: (id, revoke) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {
               const ciphertext = yield* prepareRevocation(ownerId, id).pipe(
                 guard("authorizations.revoke"),
@@ -513,7 +511,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ),
         recoverRevocations: (revoke) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {
               const rows = yield* sql<AuthorizationRow>`
                 SELECT * FROM ${authorizations}
@@ -534,7 +532,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
       },
       connections: {
         create: (authorizationId) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 yield* lockedAuthorization(ownerId, authorizationId);
@@ -555,11 +553,11 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("connections.create")),
         get: (id) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.flatMap(requireConnection(ownerId, id), connectionOf),
           ).pipe(guard("connections.get")),
         list: (filter) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.flatMap(
               filter?.provider === undefined
                 ? sql<ConnectionRow>`
@@ -575,7 +573,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("connections.list")),
         remove: (id) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const rows = yield* sql<ConnectionRow>`
@@ -597,7 +595,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
       },
       attachments: {
         create: (input) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 yield* requireConnection(ownerId, input.connectionId);
@@ -628,11 +626,11 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attachments.create")),
         get: (id) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.flatMap(requireAttachment(ownerId, id), attachmentOf),
           ).pipe(guard("attachments.get")),
         byDomain: (domain) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql<AttachmentRow>`
               SELECT * FROM ${attachments} WHERE owner_id = ${ownerId} AND domain = ${domain}
             `.pipe(
@@ -644,7 +642,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attachments.byDomain")),
         list: (connectionId) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {
               yield* requireConnection(ownerId, connectionId);
               const rows = yield* sql<AttachmentRow>`
@@ -656,7 +654,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("attachments.list")),
         remove: (id) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 yield* requireAttachment(ownerId, id);
@@ -674,7 +672,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
       },
       continuations: {
         put: (continuation) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {
               if (continuation.ownerId !== ownerId) {
                 return yield* invalid("Continuation owner does not match the principal", "ownerId");
@@ -697,7 +695,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("continuations.put")),
         get: (id) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {
               // A read, not a claim: the row survives so `consume` can still spend it.
               const rows = yield* sql<ContinuationRow>`
@@ -708,12 +706,12 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
               const instant = yield* DateTime.now;
               return DateTime.toEpochMillis(continuation.expiresAt) <=
                 DateTime.toEpochMillis(instant)
-                ? yield* fail(new DomainKitError.Expired({ entity: "continuation", id }))
+                ? yield* fail(new Reason.Expired({ entity: "continuation", id }))
                 : continuation;
             }),
           ).pipe(guard("continuations.get")),
         consume: (id) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {
               // The delete is the claim: a second consume finds nothing, expired or not.
               const rows = yield* sql<ContinuationRow>`
@@ -725,14 +723,14 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
               const instant = yield* DateTime.now;
               return DateTime.toEpochMillis(continuation.expiresAt) <=
                 DateTime.toEpochMillis(instant)
-                ? yield* fail(new DomainKitError.Expired({ entity: "continuation", id }))
+                ? yield* fail(new Reason.Expired({ entity: "continuation", id }))
                 : continuation;
             }),
           ).pipe(guard("continuations.consume")),
       },
       attempts: {
         create: (attempt) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {
               if (attempt.ownerId !== ownerId) {
                 return yield* invalid("Attempt owner does not match the principal", "ownerId");
@@ -759,7 +757,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("attempts.create")),
         get: (id) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql<AttemptRow>`
               SELECT * FROM ${attempts} WHERE id = ${id} AND owner_id = ${ownerId}
             `.pipe(
@@ -769,7 +767,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.get")),
         byApproval: (id) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql<AttemptRow>`
               SELECT * FROM ${attempts} WHERE approval_id = ${id} AND owner_id = ${ownerId}
             `.pipe(
@@ -779,7 +777,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.byApproval")),
         byReceipt: (id) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql<AttemptRow>`
               SELECT * FROM ${attempts} WHERE receipt_id = ${id} AND owner_id = ${ownerId}
             `.pipe(
@@ -789,7 +787,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.byReceipt")),
         latest: (attachmentId, kind) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql<AttemptRow>`
               SELECT * FROM ${attempts}
               WHERE owner_id = ${ownerId} AND attachment_id = ${attachmentId} AND kind = ${kind}
@@ -803,7 +801,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.latest")),
         approve: (id, approval) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const current = yield* lockedAttempt(ownerId, id);
@@ -830,14 +828,14 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.approve")),
         reject: (id, input) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const current = yield* lockedAttempt(ownerId, id);
                 // Terminal: a second rejection is the same outcome, so it returns the first one.
                 if (current.status === "rejected") return current;
                 if (current.status === "expired") {
-                  return yield* fail(new DomainKitError.Expired({ entity: "plan", id }));
+                  return yield* fail(new Reason.Expired({ entity: "plan", id }));
                 }
                 // A digest mismatch means the reviewer declined a plan that is no longer current.
                 if (current.status !== "planned" || current.plan.digest !== input.digest) {
@@ -863,7 +861,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.reject")),
         claim: (id, lease) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const current = yield* lockedAttempt(ownerId, id);
@@ -898,7 +896,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.claim")),
         complete: (id, receipt) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const current = yield* lockedAttempt(ownerId, id);
@@ -925,7 +923,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.complete")),
         fail: (id, message) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const current = yield* lockedAttempt(ownerId, id);
@@ -953,7 +951,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
       },
       readiness: {
         put: (row) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {
               if (row.ownerId !== ownerId) {
                 return yield* invalid("Readiness owner does not match the principal", "ownerId");
@@ -982,7 +980,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("readiness.put")),
         get: (domain) =>
-          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
             sql<ReadinessRow>`
               SELECT * FROM ${readiness}
               WHERE owner_id = ${ownerId} AND domain = ${domain}
@@ -996,7 +994,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
           ).pipe(guard("readiness.get")),
       },
       withLock: (key, effect) =>
-        Effect.flatMap(Principal.Principal, ({ ownerId }) =>
+        Effect.flatMap(Principal.Service, ({ ownerId }) =>
           Effect.scoped(
             Effect.gen(function* () {
               // A session lock, not a transaction lock: the guarded effect refreshes a credential

@@ -15,19 +15,19 @@ suite is a poor substitute for shipping one implementation that holds them.
 
 ## Decision
 
-DomainKit ships one optional package, `@domainkit/capsuledb`, that implements `Storage.Storage` on
+DomainKit ships one optional package, `@domainkit/capsuledb`, that implements `Storage.Service` on
 PostgreSQL through a declarative CapsuleDB capsule. The `domainkit` root has no dependency on it;
 a host that persists elsewhere provides its own `Storage`, in Effect or through the async adapter.
 
 The capsule declares six tables under a `domainkit` prefix — authorizations, connections,
 attachments, continuations, attempts, readiness — and one additive migration. Every table carries
-`owner_id`, and every query filters by the `Principal`, so a row belonging to another tenant reads
+`owner_id`, and every query filters by the `Principal.Service`, so a row belonging to another tenant reads
 as absent rather than forbidden. The package declares no foreign keys, to host tables or between its
 own; a host adds the ones it wants in the SQL it applies.
 
 `PgStorage.layer()` composes the capsule through CapsuleDB's registry: create the ledger, apply
 pending migrations, then provide `Storage`. It requires only the host's `SqlClient`, because
-credentials are sealed through `Custody` before they reach a row and Storage never handles
+credentials are sealed through `Custody.Service` before they reach a row and Storage never handles
 plaintext. A host that owns its migration pipeline runs `capsuledb emit`, applies the SQL itself,
 and boots with `mode: "assert"`, which touches no schema and fails unless the database already
 matches the capsule.

@@ -38,14 +38,14 @@ afterAll(async () => {
  */
 const run = <A>(
   ownerId: string,
-  effect: Effect.Effect<A, unknown, DomainKit.Services | Storage.Storage | Principal.Principal>,
+  effect: Effect.Effect<A, unknown, DomainKit.Services | Storage.Service | Principal.Service>,
 ) => {
   const client = postgres?.layer;
   if (client === undefined) throw new Error("the Postgres container was not started");
   const fake = Testing.provider({ zones: ["example.com"] });
   return Effect.runPromise(
     effect.pipe(
-      Effect.provideService(Principal.Principal, Principal.make({ ownerId, actorId: "actor" })),
+      Effect.provideService(Principal.Service, Principal.make({ ownerId, actorId: "actor" })),
       Effect.provide(
         DomainKit.layer({ providers: [fake], resolver: Testing.resolver() }).pipe(
           Layer.provideMerge(
@@ -88,7 +88,7 @@ describe("lifecycle on PgStorage", () => {
           assert.strictEqual(receipt.status, "complete");
 
           // Everything the lifecycle wrote has to survive a read that goes back to Postgres.
-          const storage = yield* Storage.Storage;
+          const storage = yield* Storage.Service;
           const attempt = yield* storage.attempts.byReceipt(receipt.id);
           assert.strictEqual(attempt.id, plan.id);
           assert.strictEqual(attempt.status, "complete");
@@ -135,7 +135,7 @@ describe("lifecycle on PgStorage", () => {
             domain: "locked.example.com",
           });
           if (started._tag !== "Connected") return;
-          const storage = yield* Storage.Storage;
+          const storage = yield* Storage.Service;
           const before = yield* storage.authorizations.credential(
             (yield* storage.connections.get(started.connection.id)).authorizationId,
           );
@@ -157,7 +157,7 @@ describe("lifecycle on PgStorage", () => {
       run(
         "org-rotate",
         Effect.gen(function* () {
-          const storage = yield* Storage.Storage;
+          const storage = yield* Storage.Service;
           const now = yield* DateTime.now;
           const id = "auth-rotate";
           yield* storage.authorizations.upsert({

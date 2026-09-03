@@ -1,5 +1,5 @@
 /**
- * DomainKit's CapsuleDB capsule: six tables and one `Storage.Storage` implementation.
+ * DomainKit's CapsuleDB capsule: six tables and one `Storage.Service` implementation.
  *
  * The capsule is a plain value, so a host imports it, points `capsuledb emit` at it, or hands it
  * to `Registry.layer` without running an Effect first.
@@ -22,7 +22,7 @@ export { DEFAULT_PREFIX };
  */
 export const make = (
   prefix: string = DEFAULT_PREFIX,
-): Capsule.Capsule<Storage.Storage, never, SqlClient.SqlClient> => {
+): Capsule.Capsule<Storage.Service, never, SqlClient.SqlClient> => {
   const tables = makeTables(prefix);
   return Capsule.make({
     id: "domainkit.storage",
@@ -35,9 +35,9 @@ export const make = (
         steps: list(tables).map(Migration.createTable),
       }),
     ],
-    layer: Layer.effect(Storage.Storage)(makeService(tables)),
+    layer: Layer.effect(Storage.Service)(makeService(tables)),
   });
 };
 
 /** The capsule under the default `domainkit` prefix. `capsuledb emit --export capsule` reads this. */
-export const capsule: Capsule.Capsule<Storage.Storage, never, SqlClient.SqlClient> = make();
+export const capsule: Capsule.Capsule<Storage.Service, never, SqlClient.SqlClient> = make();

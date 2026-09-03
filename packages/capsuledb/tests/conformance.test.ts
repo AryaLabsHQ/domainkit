@@ -8,7 +8,7 @@ import { type Postgres, start } from "./postgres.ts";
 
 let postgres: Postgres | undefined;
 let scope: Scope.Closeable | undefined;
-let service: Storage.Service | undefined;
+let service: Storage.Interface | undefined;
 
 /**
  * The service the suite prepared, deferred so cases can register before the container exists.
@@ -16,7 +16,7 @@ let service: Storage.Service | undefined;
  * Every case shares one prepared database, which is what a deployment looks like; the suite's
  * cases already use disjoint identifiers.
  */
-const layer = Layer.effect(Storage.Storage)(
+const layer = Layer.effect(Storage.Service)(
   Effect.suspend(() =>
     service === undefined
       ? Effect.die(new Error("the Postgres container was not started"))
@@ -30,7 +30,7 @@ beforeAll(async () => {
   const context = await Effect.runPromise(
     Scope.provide(Layer.build(PgStorage.layer().pipe(Layer.provide(postgres.layer))), scope),
   );
-  service = Context.get(context, Storage.Storage);
+  service = Context.get(context, Storage.Service);
 }, 180_000);
 
 afterAll(async () => {

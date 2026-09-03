@@ -98,7 +98,7 @@ describe("emitted SQL", () => {
         Layer.build(PgStorage.layer({ mode: "assert" }).pipe(Layer.provide(suite.layer))),
       ),
     );
-    assert.strictEqual(typeof Context.get(context, Storage.Storage).withLock, "function");
+    assert.strictEqual(typeof Context.get(context, Storage.Service).withLock, "function");
   }, 180_000);
 
   it("declares the six tables the emitted SQL creates", async () => {

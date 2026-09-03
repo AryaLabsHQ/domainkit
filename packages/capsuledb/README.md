@@ -85,7 +85,7 @@ Readiness is keyed by domain rather than by attachment, so a host observing publ
 the same row; `attachment_id` links the attachment when one exists and is cleared when it is
 removed.
 
-Every table carries `owner_id`, and every query filters by the `Principal` your host provides, so a
+Every table carries `owner_id`, and every query filters by the `Principal.Service` your host provides, so a
 row belonging to another tenant reads as absent. No foreign keys are declared, to your tables or
 between these; add the ones you want in the emitted SQL.
 

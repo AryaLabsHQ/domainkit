@@ -29,7 +29,7 @@ export interface Options {
 
 export const layer = (
   options: Options = {},
-): Layer.Layer<Storage.Storage, RegistryTypes.RegistryRuntimeError, SqlClient.SqlClient> =>
+): Layer.Layer<Storage.Service, RegistryTypes.RegistryRuntimeError, SqlClient.SqlClient> =>
   Registry.layer({
     provider: Pg.profile,
     capsules: [
