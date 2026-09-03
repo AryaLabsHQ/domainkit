@@ -13,14 +13,19 @@ const execFileAsync = promisify(execFile);
 
 const PackResult = Schema.Array(Schema.Struct({ filename: Schema.String }));
 
-/** The lifecycle every consumer runs: connect a fake provider, plan, approve, apply, observe. */
+/**
+ * The lifecycle every consumer runs: connect a fake provider, plan, approve, apply, observe, then
+ * read the same domain back through the mounted server group.
+ */
 const lifecycle = `
 import { Cloudflare, Connect, Custody, DnsRecord, DomainKit, Principal, Provision, Vercel, Verify, VERSION } from "domainkit";
+import { Server } from "domainkit/server";
 import { Testing } from "domainkit/testing";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 
-export const run = () => {
+export const run = async () => {
   const fake = Testing.provider({ zones: ["example.com"] });
+  const services = DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() });
   const program = Effect.gen(function* () {
     const started = yield* Connect.start({
       provider: fake.id,
@@ -44,9 +49,25 @@ export const run = () => {
     };
   }).pipe(
     Effect.provideService(Principal.Service, Testing.principal),
-    Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
+    Effect.provide(services),
   );
-  return Effect.runPromise(program);
+  const lifecycleResult = await Effect.runPromise(program);
+  const { handler, dispose } = Server.toWebHandler(
+    services.pipe(
+      Layer.merge(
+        Layer.succeed(Server.Identity)({ principal: () => Effect.succeed(Testing.principal) }),
+      ),
+    ),
+    { prefix: "/api/domainkit" },
+  );
+  try {
+    const response = await handler(
+      new Request("https://consumer.example/api/domainkit/domains/app.example.com"),
+    );
+    return { ...lifecycleResult, snapshot: response.status };
+  } finally {
+    await dispose();
+  }
 };
 `;
 
@@ -58,6 +79,7 @@ const expected = (version: string) => ({
   providers: ["cloudflare", "vercel"],
   keyLength: 43,
   version,
+  snapshot: 200,
 });
 
 describe("packed consumers", () => {
@@ -108,6 +130,7 @@ if (JSON.stringify(result) !== JSON.stringify(expected)) {
         `
 import { Effect, Layer, Redacted } from "effect";
 import { Custody, DomainKit, type Provider, type Storage } from "domainkit";
+import { Server } from "domainkit/server";
 import { Testing } from "domainkit/testing";
 
 export type PublicProvider = Provider.Definition;
@@ -121,6 +144,11 @@ export const live: Layer.Layer<DomainKit.Services, DomainKit.Error, Storage.Serv
     Layer.provide(Custody.layer({ key: Redacted.make(Custody.generateKey()) })),
   );
 export const cases = Testing.conformance.storage(Testing.storage).map((item) => item.name);
+export type PublicIdentity = Server.IdentityService;
+export type PublicSnapshot = Server.Snapshot;
+export type PublicStarted = Server.Started;
+export type PublicReadiness = Server.Readiness;
+export const routes = Object.keys(Server.api.groups);
 export const noRuntimeExit: Effect.Effect<void, unknown> = Effect.void;
 `,
       );

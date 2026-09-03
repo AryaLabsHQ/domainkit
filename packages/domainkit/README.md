@@ -106,6 +106,48 @@ redirect and `Connect.complete`), attaches domains, refreshes credentials before
 revokes them on disconnect. `Verify.observe` reads the provider and public DNS, stores readiness
 per requirement, and tells you when to look again.
 
+## Mount the routes
+
+```ts
+import { Layer } from "effect";
+import { HttpApi, HttpApiBuilder } from "effect/unstable/httpapi";
+import { Server } from "domainkit/server";
+
+const IdentityLive = Layer.succeed(Server.Identity)({
+  principal: (request) =>
+    Effect.succeed({
+      ownerId: request.headers["x-org-id"]!,
+      actorId: request.headers["x-user-id"]!,
+    }),
+});
+
+export const Api = HttpApi.make("app").add(Server.group);
+
+export const ApiLive = HttpApiBuilder.layer(Api).pipe(
+  Layer.provide(Server.layer(Api, { defaultReturnTo: "/settings/domains" })),
+  Layer.provide([DomainKitLive, IdentityLive]),
+);
+```
+
+`Server.group` is one `HttpApiGroup` with thirteen typed endpoints covering the whole lifecycle:
+inspect, connect, callback, attach, detach, disconnect, plan, approve, apply, read a plan or a
+receipt, observe, and build a cleanup plan. `Identity` is the only service you write; every handler
+derives the `Principal` for the request it is serving. `Server.group.prefix("/internal/dns")` moves
+every route, and the OAuth callback URL follows the mount. `OpenApi.fromApi(Server.api)` documents
+the group.
+
+Failures cross the wire as the `DomainKitError` value with the status its `reason` derives, so a
+`Conflict` is a 409 carrying the conflicting operations and a `Reconnect` is a 403 naming the
+connection.
+
+Hosts that are not on Effect's HTTP stack use the Promise edge:
+
+```ts
+const { handler, dispose } = Server.toWebHandler(Layer.mergeAll(DomainKitLive, IdentityLive), {
+  prefix: "/api/domainkit",
+});
+```
+
 ## Test against the seam
 
 `domainkit/testing` ships `Testing.provider` (a token and OAuth provider over in-memory zones),
@@ -116,6 +158,7 @@ a real account before shipping.
 ## Public entry points
 
 - `domainkit` — the Effect-native root: lifecycle services, host seams, providers, and values;
+- `domainkit/server` — the mountable route group, its layers, and the wire schemas;
 - `domainkit/testing` — fakes and conformance runners.
 
 Your app owns identity, tenancy, persistence, keys, routes, and consent. DomainKit supplies the
@@ -124,6 +167,7 @@ lifecycle, not a hosted control plane.
 ## Learn more
 
 - [Executable quickstart](https://github.com/AryaLabsHQ/domainkit/blob/main/packages/domainkit/examples/effect/quickstart.ts)
+- [Mounting the routes](https://github.com/AryaLabsHQ/domainkit/blob/main/packages/domainkit/examples/effect/server.ts)
 - [Writing a provider](https://github.com/AryaLabsHQ/domainkit/blob/main/packages/domainkit/examples/effect/provider.ts)
 - [Architecture decisions](https://github.com/AryaLabsHQ/domainkit/tree/main/packages/domainkit/docs/adr)
 - [Issues](https://github.com/AryaLabsHQ/domainkit/issues)

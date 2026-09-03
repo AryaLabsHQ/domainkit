@@ -16,6 +16,8 @@ const requiredFiles = new Set([
   "README.md",
   "dist/index.d.mts",
   "dist/index.mjs",
+  "dist/server.d.mts",
+  "dist/server.mjs",
   "dist/testing.d.mts",
   "dist/testing.mjs",
   "package.json",

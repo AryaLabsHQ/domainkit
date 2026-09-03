@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Schema } from "effect";
 
 import packageJson from "../../package.json" with { type: "json" };
+import { Server } from "../../src/entry/server.ts";
 import { Testing } from "../../src/entry/testing.ts";
 import * as root from "../../src/index.ts";
 
@@ -36,11 +37,41 @@ describe("public namespaces", () => {
     assert.deepStrictEqual(Object.keys(root).sort(), [...modules, "VERSION"].sort());
   });
 
-  it("keeps the entry points to the root and testing until the server layer lands", () => {
-    assert.deepStrictEqual(Object.keys(packageJson.exports), [".", "./testing", "./package.json"]);
+  it("publishes the root, server, and testing entry points", () => {
+    assert.deepStrictEqual(Object.keys(packageJson.exports), [
+      ".",
+      "./server",
+      "./testing",
+      "./package.json",
+    ]);
     assert.strictEqual("./promise" in packageJson.exports, false);
-    assert.strictEqual("./server" in packageJson.exports, false);
-    assert.strictEqual("./client" in packageJson.exports, false);
+  });
+
+  it("keeps the server surface to the group, its layers, and the wire schemas", () => {
+    assert.deepStrictEqual(Object.keys(Server).sort(), [
+      "ApprovePayload",
+      "AttachPayload",
+      "Attempt",
+      "Candidate",
+      "Connected",
+      "ConnectionStatus",
+      "Identity",
+      "Integration",
+      "Method",
+      "OAuth",
+      "PlanPayload",
+      "Readiness",
+      "Redirect",
+      "SelectionRequired",
+      "Snapshot",
+      "StartPayload",
+      "Started",
+      "Token",
+      "api",
+      "group",
+      "layer",
+      "toWebHandler",
+    ]);
   });
 
   it("names every service tag and value module after its concept", () => {
