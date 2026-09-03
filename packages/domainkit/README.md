@@ -87,7 +87,11 @@ export const DomainKitLive = DomainKit.layer({
     }),
     Vercel.provider(), // tokens only
   ],
-}).pipe(Layer.provide([YourStorage, Custody.layerConfig()]));
+}).pipe(
+  // `provideMerge`, not `provide`: `domainkit/server`'s handlers read attempts and receipts
+  // straight from Storage, so the layer they are given has to still carry it.
+  Layer.provideMerge(Layer.mergeAll(YourStorage, Custody.layerConfig())),
+);
 ```
 
 The host provides two services beneath the layer and one per request:

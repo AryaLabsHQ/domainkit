@@ -19,7 +19,9 @@ export const DomainKitLive = DomainKit.layer({
     Vercel.provider(),
   ],
 }).pipe(
-  Layer.provide([PgStorage.layer(), Custody.layerConfig()]),
+  // `provideMerge`, not `provide`: the route handlers read attempts and receipts straight from
+  // Storage, so the layer they are given has to still carry it.
+  Layer.provideMerge(Layer.mergeAll(PgStorage.layer(), Custody.layerConfig())),
   Layer.provide(PgClient.layerConfig({ url: Config.redacted("DATABASE_URL") })),
 );
 // #endregion wire
