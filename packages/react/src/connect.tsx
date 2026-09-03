@@ -118,11 +118,14 @@ export function useController({ domain }: Options): Controller {
     setInspected(domain);
     setState(State.Loading({ snapshot: null }));
   }
-  const held = useRef<{ snapshot: Snapshot | null; discovery: Discovery | null }>({
-    discovery: null,
-    snapshot: null,
-  });
-  const lastCommand = useRef<(() => void) | null>(null);
+  // What was read travels with the domain it was read for, so a command raised before the reset
+  // commits still refuses to run: one domain's attachment must never be detached for another.
+  const held = useRef<{
+    domain: string;
+    snapshot: Snapshot | null;
+    discovery: Discovery | null;
+  }>({ discovery: null, domain, snapshot: null });
+  const lastCommand = useRef<{ domain: string; run: () => void } | null>(null);
 
   const onFailure = useCallback(
     (error: DomainKitError.DomainKitError) => {
@@ -135,7 +138,7 @@ export function useController({ domain }: Options): Controller {
   const load = useCallback(() => {
     if (connection === undefined) return;
     lastCommand.current = null;
-    held.current = { discovery: null, snapshot: null };
+    held.current = { discovery: null, domain, snapshot: null };
     // A refresh keeps the snapshot on screen; a domain change already cleared it.
     setState((previous) => State.Loading({ snapshot: snapshotOf(previous) }));
     runner.run(
@@ -150,7 +153,7 @@ export function useController({ domain }: Options): Controller {
       {
         onFailure,
         onSuccess: ({ discovery, snapshot }) => {
-          held.current = { discovery, snapshot };
+          held.current = { discovery, domain, snapshot };
           setState(settled(snapshot, discovery));
         },
       },
@@ -163,7 +166,7 @@ export function useController({ domain }: Options): Controller {
     (result: Transport.Started) => {
       switch (result._tag) {
         case "Connected":
-          held.current = { discovery: null, snapshot: result.snapshot };
+          held.current = { discovery: null, domain, snapshot: result.snapshot };
           setState(settled(result.snapshot, null));
           if (result.snapshot.connectionId !== null) {
             emit(
@@ -195,14 +198,15 @@ export function useController({ domain }: Options): Controller {
 
   const submit = useCallback(
     (effect: Effect.Effect<Transport.Started, DomainKitError.DomainKitError>) => {
+      if (held.current.domain !== domain) return;
       const command = () => {
         setState(State.Submitting({ snapshot: held.current.snapshot }));
         runner.run(effect, { onFailure, onSuccess: started });
       };
-      lastCommand.current = command;
+      lastCommand.current = { domain, run: command };
       command();
     },
-    [onFailure, runner, started],
+    [domain, onFailure, runner, started],
   );
 
   const connect = useCallback(
@@ -244,6 +248,7 @@ export function useController({ domain }: Options): Controller {
 
   const release = useCallback(
     (effect: Effect.Effect<void, DomainKitError.DomainKitError>, event: Event) => {
+      if (held.current.domain !== domain) return;
       const command = () => {
         setState(State.Submitting({ snapshot: held.current.snapshot }));
         runner.run(effect, {
@@ -254,29 +259,29 @@ export function useController({ domain }: Options): Controller {
           },
         });
       };
-      lastCommand.current = command;
+      lastCommand.current = { domain, run: command };
       command();
     },
-    [emit, load, onFailure, runner],
+    [domain, emit, load, onFailure, runner],
   );
 
   const detach = useCallback(() => {
     const attachmentId = held.current.snapshot?.attachmentId;
-    if (connection === undefined || attachmentId === undefined || attachmentId === null) return;
+    if (connection === undefined || attachmentId == null || held.current.domain !== domain) return;
     release(connection.detach(attachmentId), Event.Detached({ domain }));
   }, [connection, domain, release]);
 
   const disconnect = useCallback(() => {
     const connectionId = held.current.snapshot?.connectionId;
-    if (connection === undefined || connectionId === undefined || connectionId === null) return;
+    if (connection === undefined || connectionId == null || held.current.domain !== domain) return;
     release(connection.disconnect(connectionId), Event.Disconnected({ connectionId, domain }));
   }, [connection, domain, release]);
 
   const retry = useCallback(() => {
     const command = lastCommand.current;
-    if (command === null) load();
-    else command();
-  }, [load]);
+    if (command === null || command.domain !== domain) load();
+    else command.run();
+  }, [domain, load]);
 
   return {
     connect,
