@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 
-import { DnsRecord, DomainKit, DomainKitError, Plan } from "../../src/index.ts";
+import { DnsRecord, DomainKit, Plan } from "../../src/index.ts";
 import { Transport } from "../../src/entry/client.ts";
 import { Server } from "../../src/entry/server.ts";
 import { Testing } from "../../src/entry/testing.ts";
@@ -41,7 +41,7 @@ const inProcess = (
 };
 
 /** Every group is present in these tests; narrow once instead of asserting at each call site. */
-const groups = (transport: Transport.Transport) => {
+const groups = (transport: Transport.Interface) => {
   const { connection, provisioning, verification, cleanup } = transport;
   if (
     connection === undefined ||
@@ -149,7 +149,7 @@ describe("Transport.fromFetch", () => {
       });
 
       const conflict = yield* Effect.flip(provisioning.approve({ planId: plan.id }));
-      assert.strictEqual(DomainKitError.isDomainKitError(conflict), true);
+      assert.strictEqual(DomainKit.isError(conflict), true);
       assert.strictEqual(conflict.reason._tag, "Conflict");
       assert.strictEqual(conflict.httpStatus, 409);
       assert.strictEqual(conflict.category, "plan");
@@ -226,7 +226,7 @@ describe("Transport.fromFetch", () => {
   });
 
   it("typechecks a transport that carries connection alone", () => {
-    const connectionOnly: Transport.Transport = {
+    const connectionOnly: Transport.Interface = {
       connection: {
         inspect: () => Effect.die("unused"),
         discover: () => Effect.die("unused"),

@@ -34,7 +34,7 @@ The OAuth callback redirects to the destination stored on the continuation the c
 request created, or to `defaultReturnTo`, and only after checking it is a path on this server or a
 URL on the callback's origin. The provider's query string never chooses where the customer lands.
 
-Failures cross the wire as the `DomainKitError` value itself, with the status `DomainKitError`
+Failures cross the wire as the `DomainKit.Error` value itself, with the status `DomainKit.Error`
 already derives from its reason: 400 `InvalidInput`, 401 `Unauthenticated`, 403 `Forbidden` and
 `Reconnect`, 404 `NotFound`, 409 `Conflict`, `Stale`, `Expired`, `Busy` and `ProviderConflict`,
 501 `Unsupported`, 502 `ProviderRejected`, 503 `ProviderUnavailable`, 500 for the internal reasons. Hosts that map their own routes use the
@@ -76,6 +76,6 @@ that renders only what the server can serve.
 
 - `src/Server.ts`
 - `src/Transport.ts`
-- `src/DomainKitError.ts`
+- `src/Reason.ts`
 - `tests/server/httpapi.test.ts`
 - `tests/client/transport.test.ts`

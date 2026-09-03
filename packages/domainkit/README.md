@@ -111,7 +111,7 @@ per requirement, and tells you when to look again.
 ```ts
 import { Effect, Layer } from "effect";
 import { HttpApi, HttpApiBuilder } from "effect/unstable/httpapi";
-import { DomainKitError } from "domainkit";
+import { DomainKit, Reason } from "domainkit";
 import { Server } from "domainkit/server";
 
 // Verify a credential you issued and look the tenant up yourself. A request never names its own
@@ -121,7 +121,9 @@ const IdentityLive = Layer.succeed(Server.Identity)({
   principal: (request) =>
     Effect.flatMap(yourSessions.verify(request.cookies.session), (session) =>
       session === null
-        ? DomainKitError.fail(new DomainKitError.Unauthenticated({ message: "No session" }))
+        ? Effect.fail(
+            new DomainKit.Error({ reason: new Reason.Unauthenticated({ message: "No session" }) }),
+          )
         : Effect.succeed({ ownerId: session.orgId, actorId: session.userId }),
     ),
 });
@@ -149,7 +151,7 @@ started with, or to `defaultReturnTo`. The destination is resolved against the c
 land on its origin, so neither the provider nor a crafted `returnTo` can steer the customer off the
 application.
 
-Failures cross the wire as the `DomainKitError` value with the status its `reason` derives, so a
+Failures cross the wire as the `DomainKit.Error` value with the status its `reason` derives, so a
 `Conflict` is a 409 carrying the conflicting operations and a `Reconnect` is a 403 naming the
 connection.
 
@@ -188,8 +190,8 @@ Capability groups are optional. A host that mounts only the connection routes de
 reports what is there, and the parts of `@domainkit/react` that plan or clean up do not render.
 `Transport.fromAsync` adapts a Promise-shaped transport of your own.
 
-Failures arrive as the same `DomainKitError` the lifecycle raised, reason intact, so a `Conflict`
-still carries its conflicting operations. A response the transport cannot read as a `DomainKitError`
+Failures arrive as the same `DomainKit.Error` the lifecycle raised, reason intact, so a `Conflict`
+still carries its conflicting operations. A response the transport cannot read as a `DomainKit.Error`
 becomes a retryable `ProviderUnavailable` naming the base URL.
 
 ## Test against the seam

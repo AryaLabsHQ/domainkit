@@ -6,19 +6,20 @@
  *   const transport = Transport.fromFetch("/api/domainkit")
  *
  * Every method decodes the same wire schemas `domainkit/server` encodes, so a failure arrives as
- * the `DomainKitError` the lifecycle raised, reason intact.
+ * the `DomainKit.Error` the lifecycle raised, reason intact.
  */
 import { Effect, Schema } from "effect";
 
 import * as Approval from "./Approval.ts";
 import type * as DnsRecord from "./DnsRecord.ts";
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Errors from "./internal/error.ts";
 import * as Http from "./internal/http.ts";
 import * as Plan from "./Plan.ts";
+import * as Reason from "./Reason.ts";
 import * as Receipt from "./Receipt.ts";
 import * as Server from "./Server.ts";
 
-type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError>;
+type Fx<A> = Effect.Effect<A, Errors.DomainKitError>;
 
 export type Snapshot = Server.Snapshot;
 export type Started = Server.Started;
@@ -61,18 +62,18 @@ export interface ConnectionGroup {
 export interface ProvisioningGroup {
   readonly plan: (input: {
     readonly domain: string;
-    readonly requirements: ReadonlyArray<DnsRecord.DnsRecord>;
-  }) => Fx<Plan.Plan>;
+    readonly requirements: ReadonlyArray<DnsRecord.Model>;
+  }) => Fx<Plan.Model>;
   readonly approve: (input: {
     readonly planId: Plan.PlanId;
     readonly operationIds?: ReadonlyArray<Plan.OperationId>;
-  }) => Fx<Approval.Approval>;
+  }) => Fx<Approval.Model>;
   /** Decline the plan; terminal, and approving it afterwards fails `Stale`. */
   readonly reject: (input: {
     readonly planId: Plan.PlanId;
     readonly reason?: string;
   }) => Fx<Attempt>;
-  readonly apply: (approvalId: Approval.ApprovalId) => Fx<Receipt.Receipt>;
+  readonly apply: (approvalId: Approval.ApprovalId) => Fx<Receipt.Model>;
   /** The stored plan with its status, approval, receipt, and rejection. */
   readonly attempt: (planId: Plan.PlanId) => Fx<Attempt>;
 }
@@ -82,26 +83,26 @@ export interface VerificationGroup {
 }
 
 export interface CleanupGroup {
-  readonly plan: (receiptId: Receipt.ReceiptId) => Fx<Plan.Plan>;
+  readonly plan: (receiptId: Receipt.ReceiptId) => Fx<Plan.Model>;
   readonly approve: (input: {
     readonly planId: Plan.PlanId;
     readonly operationIds?: ReadonlyArray<Plan.OperationId>;
-  }) => Fx<Approval.Approval>;
+  }) => Fx<Approval.Model>;
   readonly reject: (input: {
     readonly planId: Plan.PlanId;
     readonly reason?: string;
   }) => Fx<Attempt>;
-  readonly apply: (approvalId: Approval.ApprovalId) => Fx<Receipt.Receipt>;
+  readonly apply: (approvalId: Approval.ApprovalId) => Fx<Receipt.Model>;
 }
 
-export interface Transport {
+export interface Interface {
   readonly connection?: ConnectionGroup;
   readonly provisioning?: ProvisioningGroup;
   readonly verification?: VerificationGroup;
   readonly cleanup?: CleanupGroup;
 }
 
-export type Capability = keyof Transport;
+export type Capability = keyof Interface;
 
 export const allCapabilities: ReadonlyArray<Capability> = [
   "connection",
@@ -111,7 +112,7 @@ export const allCapabilities: ReadonlyArray<Capability> = [
 ];
 
 /** Which groups this transport actually carries, in declaration order. */
-export const capabilities = (transport: Transport): ReadonlyArray<Capability> =>
+export const capabilities = (transport: Interface): ReadonlyArray<Capability> =>
   allCapabilities.filter((capability) => transport[capability] !== undefined);
 
 export interface FetchOptions {
@@ -126,7 +127,7 @@ export interface FetchOptions {
 // ---------------------------------------------------------------------------------------------
 
 /** A transport over `domainkit/server` routes mounted at `baseUrl`. */
-export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transport => {
+export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Interface => {
   const base = baseUrl.replace(/\/+$/, "");
   const source = safeOrigin(base);
   const call = options.fetch ?? globalThis.fetch;
@@ -152,15 +153,15 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
         },
       });
       if (!reply.ok) {
-        // The server answers failures with the `DomainKitError` value itself. Anything else came
+        // The server answers failures with the `DomainKit.Error` value itself. Anything else came
         // from in front of it: a proxy, a login page, a maintenance window.
         const decoded = yield* Effect.result(
-          DomainKitError.decode(DomainKitError.DomainKitError, reply.body, "response"),
+          Errors.decode(Errors.DomainKitError, reply.body, "response"),
         );
         return yield* decoded._tag === "Success"
           ? Effect.fail(decoded.success)
           : Effect.fail(
-              new DomainKitError.DomainKitError({
+              new Errors.DomainKitError({
                 reason: Http.classify(
                   source,
                   reply.status,
@@ -171,7 +172,7 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
             );
       }
       if (input.success === null) return undefined as A;
-      return yield* DomainKitError.decode(input.success, reply.body, "response");
+      return yield* Errors.decode(input.success, reply.body, "response");
     });
 
   /** Provisioning and cleanup share these routes; the attempt knows its kind. */
@@ -185,7 +186,7 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
       body: Schema.encodeSync(Server.ApprovePayload)(
         input.operationIds === undefined ? {} : { operationIds: input.operationIds },
       ),
-      success: Approval.Approval,
+      success: Approval.Model,
     });
 
   const reject = (input: { readonly planId: Plan.PlanId; readonly reason?: string }) =>
@@ -202,7 +203,7 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
     request({
       method: "POST",
       path: `/approvals/${encodeURIComponent(approvalId)}/apply`,
-      success: Receipt.Receipt,
+      success: Receipt.Model,
     });
 
   const connection: ConnectionGroup = {
@@ -256,7 +257,7 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
         method: "POST",
         path: `/domains/${encodeURIComponent(input.domain)}/plans`,
         body: Schema.encodeSync(Server.PlanPayload)({ requirements: input.requirements }),
-        success: Plan.Plan,
+        success: Plan.Model,
       }),
     approve,
     reject,
@@ -283,7 +284,7 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
       request({
         method: "POST",
         path: `/receipts/${encodeURIComponent(receiptId)}/cleanup-plans`,
-        success: Plan.Plan,
+        success: Plan.Model,
       }),
     approve,
     reject,
@@ -304,17 +305,17 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Transpor
 
 /** The same transport in Promises, for hosts and tests that do not run Effect. */
 export type AsyncTransport = {
-  readonly [K in keyof Transport]?: {
-    readonly [M in keyof NonNullable<Transport[K]>]: NonNullable<Transport[K]>[M] extends (
+  readonly [K in keyof Interface]?: {
+    readonly [M in keyof NonNullable<Interface[K]>]: NonNullable<Interface[K]>[M] extends (
       ...args: infer A
-    ) => Effect.Effect<infer R, DomainKitError.DomainKitError>
+    ) => Effect.Effect<infer R, Errors.DomainKitError>
       ? (...args: A) => Promise<R>
       : never;
   };
 };
 
-/** Adapt a Promise-shaped transport; a rejection that is not a `DomainKitError` becomes one. */
-export const fromAsync = (transport: AsyncTransport): Transport =>
+/** Adapt a Promise-shaped transport; a rejection that is not a `DomainKit.Error` becomes one. */
+export const fromAsync = (transport: AsyncTransport): Interface =>
   mapGroups(
     transport,
     (method) =>
@@ -322,24 +323,24 @@ export const fromAsync = (transport: AsyncTransport): Transport =>
         Effect.tryPromise({
           try: () => method(...args) as Promise<unknown>,
           catch: (cause) =>
-            DomainKitError.isDomainKitError(cause)
+            Errors.isDomainKitError(cause)
               ? cause
-              : new DomainKitError.DomainKitError({
-                  reason: new DomainKitError.ProviderUnavailable({
+              : new Errors.DomainKitError({
+                  reason: new Reason.ProviderUnavailable({
                     provider: "domainkit",
                     message: `The transport rejected: ${String(cause)}`,
                   }),
                 }),
         }),
-  ) as Transport;
+  ) as Interface;
 
-/** Adapt to Promises; every rejection is the `DomainKitError` the lifecycle raised. */
-export const toAsync = (transport: Transport): AsyncTransport =>
+/** Adapt to Promises; every rejection is the `DomainKit.Error` the lifecycle raised. */
+export const toAsync = (transport: Interface): AsyncTransport =>
   mapGroups(
     transport,
     (method) =>
       (...args: ReadonlyArray<never>) =>
-        Effect.runPromise(method(...args) as Effect.Effect<unknown, DomainKitError.DomainKitError>),
+        Effect.runPromise(method(...args) as Effect.Effect<unknown, Errors.DomainKitError>),
   ) as AsyncTransport;
 
 type AnyMethod = (...args: ReadonlyArray<never>) => unknown;

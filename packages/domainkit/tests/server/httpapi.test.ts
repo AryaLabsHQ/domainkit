@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { HttpApi, OpenApi } from "effect/unstable/httpapi";
 
-import { DnsRecord, DomainKit, DomainKitError, Plan } from "../../src/index.ts";
+import { DnsRecord, DomainKit, Plan, Reason } from "../../src/index.ts";
 import { Server } from "../../src/entry/server.ts";
 import { Testing } from "../../src/entry/testing.ts";
 
@@ -336,7 +336,11 @@ describe("Server.group over the lifecycle", () => {
       principal: (request) =>
         request.cookies.session === "s3cret"
           ? Effect.succeed(Testing.principal)
-          : DomainKitError.fail(new DomainKitError.Unauthenticated({ message: "No session" })),
+          : Effect.fail(
+              new DomainKit.Error({
+                reason: new Reason.Unauthenticated({ message: "No session" }),
+              }),
+            ),
     });
     const { handler, dispose } = Server.toWebHandler(
       DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() }).pipe(
@@ -536,29 +540,29 @@ describe("Server.api", () => {
       .map(Number)
       .filter((status) => status >= 400);
 
-    const reasons: ReadonlyArray<DomainKitError.Reason> = [
-      new DomainKitError.InvalidInput({ message: "bad" }),
-      new DomainKitError.Unauthenticated({ message: "no" }),
-      new DomainKitError.Forbidden({ message: "no" }),
-      new DomainKitError.NotFound({ entity: "plan", id: "plan_1" }),
-      new DomainKitError.Conflict({ planId: Plan.PlanId.make("plan_1"), operations: [] }),
-      new DomainKitError.Stale({
+    const reasons: ReadonlyArray<Reason.Model> = [
+      new Reason.InvalidInput({ message: "bad" }),
+      new Reason.Unauthenticated({ message: "no" }),
+      new Reason.Forbidden({ message: "no" }),
+      new Reason.NotFound({ entity: "plan", id: "plan_1" }),
+      new Reason.Conflict({ planId: Plan.PlanId.make("plan_1"), operations: [] }),
+      new Reason.Stale({
         planId: Plan.PlanId.make("plan_1"),
         digest: Plan.Digest.make("digest"),
       }),
-      new DomainKitError.Expired({ entity: "plan", id: "plan_1" }),
-      new DomainKitError.Busy({ key: "apply" }),
-      new DomainKitError.ProviderRejected({ provider: "fake", message: "no" }),
-      new DomainKitError.ProviderConflict({ provider: "fake", message: "taken" }),
-      new DomainKitError.Unsupported({ provider: "fake", operation: "dns:write", message: "no" }),
-      new DomainKitError.ProviderUnavailable({ provider: "fake", message: "later" }),
-      new DomainKitError.Reconnect({ provider: "fake", connectionId: "conn_1" }),
-      new DomainKitError.StorageFailed({ operation: "put", message: "no" }),
-      new DomainKitError.CryptoFailed({ operation: "seal" }),
-      new DomainKitError.ResolverFailed({ resolver: "fake", message: "no" }),
+      new Reason.Expired({ entity: "plan", id: "plan_1" }),
+      new Reason.Busy({ key: "apply" }),
+      new Reason.ProviderRejected({ provider: "fake", message: "no" }),
+      new Reason.ProviderConflict({ provider: "fake", message: "taken" }),
+      new Reason.Unsupported({ provider: "fake", operation: "dns:write", message: "no" }),
+      new Reason.ProviderUnavailable({ provider: "fake", message: "later" }),
+      new Reason.Reconnect({ provider: "fake", connectionId: "conn_1" }),
+      new Reason.StorageFailed({ operation: "put", message: "no" }),
+      new Reason.CryptoFailed({ operation: "seal" }),
+      new Reason.ResolverFailed({ resolver: "fake", message: "no" }),
     ];
     const unserved = reasons
-      .map((reason) => new DomainKitError.DomainKitError({ reason }))
+      .map((reason) => new DomainKit.Error({ reason }))
       .filter((error) => !declared.includes(error.httpStatus))
       .map((error) => `${error.reason._tag} -> ${error.httpStatus}`);
     assert.deepStrictEqual(unserved, []);

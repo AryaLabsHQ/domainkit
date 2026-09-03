@@ -167,9 +167,9 @@ export type PublicSnapshot = Server.Snapshot;
 export type PublicStarted = Server.Started;
 export type PublicReadiness = Server.Readiness;
 export const routes = Object.keys(Server.api.groups);
-export type PublicTransport = Transport.Transport;
+export type PublicTransport = Transport.Interface;
 /** A host that exposes only connection routes still gets a transport that typechecks. */
-export const connectionOnly: Transport.Transport = {
+export const connectionOnly: Transport.Interface = {
   connection: {
     inspect: () => Effect.die("unused"),
     discover: () => Effect.die("unused"),

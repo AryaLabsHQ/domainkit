@@ -6,7 +6,7 @@
  *     Layer.provide([Server.layer(Api), DomainKitLive, IdentityLive]),
  *   )
  *
- * The host provides `Identity` (request -> `Principal.Shape`). Everything else comes from
+ * The host provides `Identity` (request -> `Principal.Interface`). Everything else comes from
  * `DomainKit.layer`. Non-HttpApi hosts use `toWebHandler`. The group carries no prefix of its
  * own, so `group.prefix("/internal/dns")` or a host router mount is all a different base path
  * takes; callback URLs follow the mount.
@@ -22,15 +22,15 @@ import * as HttpApiGroup from "effect/unstable/httpapi/HttpApiGroup";
 import * as HttpApiSchema from "effect/unstable/httpapi/HttpApiSchema";
 
 import * as Approval from "./Approval.ts";
-import { Cleanup } from "./Cleanup.ts";
-import * as ConnectModule from "./Connect.ts";
-import { Connect } from "./Connect.ts";
+import * as Cleanup from "./Cleanup.ts";
+import * as Connect from "./Connect.ts";
 import * as DnsRecord from "./DnsRecord.ts";
-import * as DomainKitError from "./DomainKitError.ts";
+import * as Errors from "./internal/error.ts";
 import * as Plan from "./Plan.ts";
 import * as Principal from "./Principal.ts";
-import { Providers } from "./Providers.ts";
-import { Provision } from "./Provision.ts";
+import * as Providers from "./Providers.ts";
+import * as Provision from "./Provision.ts";
+import * as Reason from "./Reason.ts";
 import * as Receipt from "./Receipt.ts";
 import * as Storage from "./Storage.ts";
 import * as Verify from "./Verify.ts";
@@ -39,7 +39,7 @@ import * as Verify from "./Verify.ts";
 export interface IdentityService {
   readonly principal: (
     request: HttpServerRequest.HttpServerRequest,
-  ) => Effect.Effect<Principal.Shape, DomainKitError.DomainKitError>;
+  ) => Effect.Effect<Principal.Interface, Errors.DomainKitError>;
 }
 
 export class Identity extends Context.Service<Identity, IdentityService>()(
@@ -173,7 +173,7 @@ export const AttachPayload = Schema.Struct({
 export type AttachPayload = typeof AttachPayload.Type;
 
 export const PlanPayload = Schema.Struct({
-  requirements: Schema.Array(DnsRecord.DnsRecord),
+  requirements: Schema.Array(DnsRecord.Model),
 });
 export type PlanPayload = typeof PlanPayload.Type;
 
@@ -191,10 +191,10 @@ export type RejectPayload = typeof RejectPayload.Type;
 
 /** One durable plan -> approval -> receipt lifecycle, as `GET /plans/:planId` returns it. */
 export const Attempt = Schema.Struct({
-  plan: Plan.Plan,
+  plan: Plan.Model,
   status: Storage.AttemptStatus,
-  approval: Schema.NullOr(Approval.Approval),
-  receipt: Schema.NullOr(Receipt.Receipt),
+  approval: Schema.NullOr(Approval.Model),
+  receipt: Schema.NullOr(Receipt.Model),
   rejection: Schema.NullOr(Storage.Rejection),
 });
 export type Attempt = typeof Attempt.Type;
@@ -207,7 +207,7 @@ export const Readiness = Schema.Struct({
   requirements: Schema.Array(
     Schema.Struct({
       operationId: Schema.NullOr(Plan.OperationId),
-      record: DnsRecord.DnsRecord,
+      record: DnsRecord.Model,
       status: Storage.RequirementStatus,
       evidence: Schema.Array(Verify.Evidence),
     }),
@@ -223,13 +223,13 @@ const Redirected = HttpApiSchema.WithHeaders(HttpApiSchema.Empty(302), {
 });
 
 // ---------------------------------------------------------------------------------------------
-// Errors: one wire body, the status from `DomainKitError.httpStatus`
+// Errors: one wire body, the status from `DomainKit.Error.httpStatus`
 // ---------------------------------------------------------------------------------------------
 
-/** `DomainKitError` narrowed to the reasons that answer with `status`. */
+/** `DomainKit.Error` narrowed to the reasons that answer with `status`. */
 const errorAt = (status: number) =>
-  DomainKitError.DomainKitError.check(
-    Schema.makeFilter((error: DomainKitError.DomainKitError) => error.httpStatus === status),
+  Errors.DomainKitError.check(
+    Schema.makeFilter((error: Errors.DomainKitError) => error.httpStatus === status),
   ).pipe(HttpApiSchema.status(status));
 
 const errors = [400, 401, 403, 404, 409, 500, 501, 502, 503].map(errorAt);
@@ -297,7 +297,7 @@ export const group = HttpApiGroup.make("domainkit")
     HttpApiEndpoint.post("createPlan", "/domains/:domain/plans", {
       params: { domain: Schema.String },
       payload: PlanPayload,
-      success: Plan.Plan,
+      success: Plan.Model,
       error: errors,
     }),
   )
@@ -305,7 +305,7 @@ export const group = HttpApiGroup.make("domainkit")
     HttpApiEndpoint.post("approve", "/plans/:planId/approvals", {
       params: { planId: Plan.PlanId },
       payload: ApprovePayload,
-      success: Approval.Approval,
+      success: Approval.Model,
       error: errors,
     }),
   )
@@ -320,7 +320,7 @@ export const group = HttpApiGroup.make("domainkit")
   .add(
     HttpApiEndpoint.post("apply", "/approvals/:approvalId/apply", {
       params: { approvalId: Approval.ApprovalId },
-      success: Receipt.Receipt,
+      success: Receipt.Model,
       error: errors,
     }),
   )
@@ -334,7 +334,7 @@ export const group = HttpApiGroup.make("domainkit")
   .add(
     HttpApiEndpoint.get("receipt", "/receipts/:receiptId", {
       params: { receiptId: Receipt.ReceiptId },
-      success: Receipt.Receipt,
+      success: Receipt.Model,
       error: errors,
     }),
   )
@@ -348,7 +348,7 @@ export const group = HttpApiGroup.make("domainkit")
   .add(
     HttpApiEndpoint.post("cleanupPlan", "/receipts/:receiptId/cleanup-plans", {
       params: { receiptId: Receipt.ReceiptId },
-      success: Plan.Plan,
+      success: Plan.Model,
       error: errors,
     }),
   );
@@ -368,12 +368,12 @@ export interface Options {
 
 /** Everything the handlers need: the lifecycle services, Storage, and the host's `Identity`. */
 export type Services =
-  | Provision
-  | Cleanup
-  | Connect
-  | Verify.Verify
-  | Providers
-  | Storage.Storage
+  | Provision.Service
+  | Cleanup.Service
+  | Connect.Service
+  | Verify.Service
+  | Providers.Service
+  | Storage.Service
   | Identity;
 
 // ---------------------------------------------------------------------------------------------
@@ -383,14 +383,12 @@ export type Services =
 const START_PATH = "/connections";
 
 const invalid = (message: string, field?: string) =>
-  DomainKitError.fail(
-    new DomainKitError.InvalidInput({ message, ...(field === undefined ? {} : { field }) }),
-  );
+  Errors.fail(new Reason.InvalidInput({ message, ...(field === undefined ? {} : { field }) }));
 
 /** The request as an absolute URL: the web original when there is one, else scheme plus `Host`. */
 const absoluteUrl = (
   request: HttpServerRequest.HttpServerRequest,
-): Effect.Effect<URL, DomainKitError.DomainKitError> =>
+): Effect.Effect<URL, Errors.DomainKitError> =>
   Effect.suspend(() => {
     try {
       return Effect.succeed(new URL(request.originalUrl));
@@ -407,7 +405,7 @@ const callbackUrlFor = (input: {
   readonly request: HttpServerRequest.HttpServerRequest;
   readonly provider: string;
   readonly options: Options;
-}): Effect.Effect<string, DomainKitError.DomainKitError> =>
+}): Effect.Effect<string, Errors.DomainKitError> =>
   Effect.suspend(() => {
     const suffix = `/callback/${encodeURIComponent(input.provider)}`;
     const configured = input.options.callbackBaseUrl;
@@ -442,7 +440,7 @@ const sameOrigin = (destination: string, callback: URL): string | null => {
   }
 };
 
-const snapshotOf = (snapshot: ConnectModule.Snapshot): Snapshot => ({
+const snapshotOf = (snapshot: Connect.Snapshot): Snapshot => ({
   domain: snapshot.domain,
   attachmentId: snapshot.attachment?.id ?? null,
   connectionId: snapshot.connection?.id ?? null,
@@ -464,16 +462,16 @@ const snapshotOf = (snapshot: ConnectModule.Snapshot): Snapshot => ({
 });
 
 /** The wire method as `Connect` takes it; interactive cases carry the caller's return destination. */
-const methodOf = (method: Method): ConnectModule.Method => {
+const methodOf = (method: Method): Connect.Method => {
   switch (method._tag) {
     case "Token":
-      return ConnectModule.Method.token(method.values);
+      return Connect.Method.token(method.values);
     case "OAuth":
-      return ConnectModule.Method.oauth(
+      return Connect.Method.oauth(
         method.returnTo === undefined ? {} : { returnTo: method.returnTo },
       );
     case "Integration":
-      return ConnectModule.Method.integration(
+      return Connect.Method.integration(
         method.returnTo === undefined ? {} : { returnTo: method.returnTo },
       );
   }
@@ -496,24 +494,24 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
   HttpApiBuilder.group(api as unknown as HttpApi.HttpApi<ApiId, Group>, "domainkit", (handlers) =>
     Effect.gen(function* () {
       const identity = yield* Identity;
-      const connect = yield* Connect;
-      const provision = yield* Provision;
-      const cleanup = yield* Cleanup;
-      const verify = yield* Verify.Verify;
-      const storage = yield* Storage.Storage;
+      const connect = yield* Connect.Service;
+      const provision = yield* Provision.Service;
+      const cleanup = yield* Cleanup.Service;
+      const verify = yield* Verify.Service;
+      const storage = yield* Storage.Service;
 
       /** Run a lifecycle effect as the principal the host derives from this request. */
       const as = <A>(
         request: HttpServerRequest.HttpServerRequest,
-        effect: Effect.Effect<A, DomainKitError.DomainKitError, Principal.Principal>,
-      ): Effect.Effect<A, DomainKitError.DomainKitError> =>
+        effect: Effect.Effect<A, Errors.DomainKitError, Principal.Service>,
+      ): Effect.Effect<A, Errors.DomainKitError> =>
         Effect.flatMap(identity.principal(request), (principal) =>
-          Effect.provideService(effect, Principal.Principal, principal),
+          Effect.provideService(effect, Principal.Service, principal),
         );
 
       const snapshot = (domain: string) => Effect.map(connect.inspect(domain), snapshotOf);
 
-      const discovered = (discovery: ConnectModule.Discovery): Discovery => {
+      const discovered = (discovery: Connect.Discovery): Discovery => {
         switch (discovery._tag) {
           case "Resolved":
             return new DiscoveryResolved({
@@ -538,9 +536,9 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         Effect.map(snapshot(domain), (value) => new Connected({ snapshot: value }));
 
       const startedOf = (
-        started: ConnectModule.Started,
+        started: Connect.Started,
         domain: string,
-      ): Effect.Effect<Started, DomainKitError.DomainKitError, Principal.Principal> => {
+      ): Effect.Effect<Started, Errors.DomainKitError, Principal.Service> => {
         switch (started._tag) {
           case "Connected":
             return connected(domain);
@@ -564,7 +562,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         readonly connectionId: string;
         readonly domain: string;
         readonly zone: string | undefined;
-      }): Effect.Effect<Started, DomainKitError.DomainKitError, Principal.Principal> =>
+      }): Effect.Effect<Started, Errors.DomainKitError, Principal.Service> =>
         Effect.gen(function* () {
           const first = yield* connect.attach({
             connectionId: input.connectionId,
@@ -579,9 +577,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
           }
           const target = first.candidates.find(({ zone }) => zone === input.zone);
           if (target === undefined) {
-            return yield* DomainKitError.fail(
-              new DomainKitError.NotFound({ entity: "zone", id: input.zone }),
-            );
+            return yield* Errors.fail(new Reason.NotFound({ entity: "zone", id: input.zone }));
           }
           yield* connect.attach({
             connectionId: input.connectionId,
@@ -720,9 +716,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
             request,
             Effect.flatMap(storage.attempts.byReceipt(params.receiptId), (attempt) =>
               attempt.receipt === null
-                ? DomainKitError.fail(
-                    new DomainKitError.NotFound({ entity: "receipt", id: params.receiptId }),
-                  )
+                ? Errors.fail(new Reason.NotFound({ entity: "receipt", id: params.receiptId }))
                 : Effect.succeed(attempt.receipt),
             ),
           ),
@@ -746,7 +740,7 @@ export interface WebHandlerOptions extends Options {
 
 /** The Promise edge: a `fetch`-shaped handler over the group for hosts that are not Effect-native. */
 export const toWebHandler = (
-  services: Layer.Layer<Services, DomainKitError.DomainKitError>,
+  services: Layer.Layer<Services, Errors.DomainKitError>,
   options: WebHandlerOptions = {},
 ): {
   readonly handler: (request: Request) => Promise<Response>;

@@ -279,7 +279,7 @@ type TransportMethod = (
   ...args: ReadonlyArray<never>
 ) => Effect.Effect<unknown, Errors.DomainKitError>;
 
-export interface RecordingTransport extends Transport.Transport {
+export interface RecordingTransport extends Transport.Interface {
   readonly calls: ReadonlyArray<RecordedCall>;
 }
 
@@ -317,7 +317,7 @@ export const transport = (options: TransportOptions = {}): RecordingTransport =>
         ),
       ),
     ]),
-  ) as Transport.Transport;
+  ) as Transport.Interface;
   return { ...recorded, calls };
 };
 

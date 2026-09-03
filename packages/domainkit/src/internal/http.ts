@@ -60,7 +60,7 @@ export const requestJson = (input: {
 /** Host-supplied request headers, given as a value or as a thunk that may await a fresh token. */
 export const headersFrom = (
   source: HeadersInit | (() => HeadersInit | Promise<HeadersInit>) | undefined,
-): Effect.Effect<Headers, DomainKitError.DomainKitError> =>
+): Effect.Effect<Headers, Errors.DomainKitError> =>
   source === undefined
     ? Effect.sync(() => new Headers())
     : typeof source !== "function"
@@ -68,10 +68,10 @@ export const headersFrom = (
       : Effect.tryPromise({
           try: async () => new Headers(await source()),
           catch: (cause) =>
-            DomainKitError.isDomainKitError(cause)
+            Errors.isDomainKitError(cause)
               ? cause
-              : new DomainKitError.DomainKitError({
-                  reason: new DomainKitError.Unauthenticated({
+              : new Errors.DomainKitError({
+                  reason: new Reason.Unauthenticated({
                     message:
                       cause instanceof Error ? cause.message : "Request headers were unavailable",
                   }),

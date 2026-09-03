@@ -1,15 +1,7 @@
 // Add custom domains to an Effect app: providers, storage, routes. Nothing else to write.
 import { Config, Effect, Layer } from "effect";
 import { HttpApi, HttpApiBuilder } from "effect/unstable/httpapi";
-import {
-  Cloudflare,
-  Custody,
-  DomainKit,
-  DomainKitError,
-  type Principal,
-  Storage,
-  Vercel,
-} from "domainkit";
+import { Cloudflare, Custody, DomainKit, type Principal, Reason, Storage, Vercel } from "domainkit";
 import { Server } from "domainkit/server";
 
 const DomainKitLive = DomainKit.layer({
@@ -31,7 +23,7 @@ const DomainKitLive = DomainKit.layer({
 // tenant up yourself — a request never names its own `ownerId` — and fail closed when it does not
 // check out. Every Storage read and write is scoped by whatever this returns.
 declare const sessions: {
-  readonly verify: (token: string) => Effect.Effect<Principal.Shape | null>;
+  readonly verify: (token: string) => Effect.Effect<Principal.Interface | null>;
 };
 
 // Read the credential from a cookie, not an `Authorization` header: `/callback/:provider` is a
@@ -43,8 +35,10 @@ const IdentityLive = Layer.succeed(Server.Identity)({
       const token = request.cookies.session;
       const session = token === undefined ? null : yield* sessions.verify(token);
       return session === null
-        ? yield* DomainKitError.fail(
-            new DomainKitError.Unauthenticated({ message: "The request carries no session" }),
+        ? yield* Effect.fail(
+            new DomainKit.Error({
+              reason: new Reason.Unauthenticated({ message: "The request carries no session" }),
+            }),
           )
         : session;
     }),
