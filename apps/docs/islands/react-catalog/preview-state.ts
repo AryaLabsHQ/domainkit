@@ -70,3 +70,23 @@ export function stateFromSearch(search: string): PreviewState {
     theme: theme !== null && isWorkshopThemeId(theme) ? theme : "neutral",
   };
 }
+
+/** What the zone holds before the customer starts: the TXT requirements, when seeding is on. */
+export const seedOf = (state: PreviewState): ReadonlyArray<DnsRecord.Model> =>
+  state.seeded ? state.requirements.filter((record) => record._tag === "TXT") : [];
+
+const identify = (record: DnsRecord.Model): string =>
+  `${record._tag} ${record.name} ${DnsRecord.data(record)}`;
+
+/**
+ * Everything the story is about. Any edit invalidates what the controllers hold: a seeded record
+ * changes what the provider already has, and any requirement changes the plan and the readiness
+ * observed against it. Content, not array identity, so an unchanged edit box keeps the story.
+ */
+export const storyKey = (state: PreviewState): string =>
+  [
+    state.providerId,
+    state.oauth ? "oauth" : "token",
+    state.seeded ? "seeded" : "empty",
+    ...state.requirements.map(identify),
+  ].join("|");

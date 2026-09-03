@@ -13,7 +13,13 @@ import {
   type Event,
 } from "@domainkit/react";
 
-import { defaultRequirements, previewZone, type PreviewState } from "./preview-state.ts";
+import {
+  defaultRequirements,
+  previewZone,
+  seedOf,
+  storyKey,
+  type PreviewState,
+} from "./preview-state.ts";
 import { workshopTheme } from "./themes.ts";
 
 interface ProviderSettings {
@@ -37,21 +43,6 @@ const makeTransport = (settings: ProviderSettings) =>
       records: settings.seed.map((record) => ({ record, zone: previewZone })),
     },
   });
-
-/** What the zone holds before the customer starts: the TXT requirements, when seeding is on. */
-const seedOf = (state: PreviewState): ReadonlyArray<DnsRecord.Model> =>
-  state.seeded ? state.requirements.filter((record) => record._tag === "TXT") : [];
-
-/**
- * Everything the fake server is built from. Editing a seeded record has to reach the provider that
- * already holds it, so the key carries the seed's content rather than the array's identity.
- */
-const serverKey = (state: PreviewState, seed: ReadonlyArray<DnsRecord.Model>): string =>
-  [
-    state.providerId,
-    state.oauth ? "oauth" : "token",
-    ...seed.map((record) => `${record._tag} ${record.name} ${DnsRecord.data(record)}`),
-  ].join("|");
 
 function Verification({ domain }: { readonly domain: string }) {
   const controller = Verify.useController({ domain });
@@ -123,7 +114,7 @@ export function Preview({ state }: { readonly state: PreviewState }) {
     return () => window.clearTimeout(timeout);
   }, [event]);
   const seed = seedOf(state);
-  const key = serverKey(state, seed);
+  const key = storyKey(state);
   const transport = useMemo(
     () => makeTransport({ oauth: state.oauth, providerId: state.providerId, seed }),
     [key],
@@ -137,8 +128,8 @@ export function Preview({ state }: { readonly state: PreviewState }) {
       </div>
     );
   return (
-    // A new fake server is a new world: the controllers hold plans, receipts, and readiness the
-    // replacement has never heard of, so the story remounts with it rather than mixing the two.
+    // A new server is a new world: the controllers hold a connection, a plan, and readiness the
+    // replacement never issued, so the story remounts with it rather than mixing the two.
     <DomainKit.Root
       colorScheme={state.colorScheme}
       key={key}

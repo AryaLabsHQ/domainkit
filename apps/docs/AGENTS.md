@@ -50,9 +50,15 @@ render it:
 
 ## Checks
 
-From this directory: `bun run reference:check`, `./node_modules/.bin/blume validate --strict`,
-`bun run build`, `bun run audit --strict`, and `bun run typecheck`. From the repository root:
-`bun run typecheck:examples`. Inspect the rendered primary journeys when navigation or UI changes.
+From this directory: `bun run reference:check`, `bun run typecheck`, `bun run test:preview`,
+`bun run build`, `./node_modules/.bin/blume validate --strict`, `bun run audit --strict`, and
+`bun run registry:check`. From the repository root: `bun run typecheck:examples`. Inspect the
+rendered primary journeys when navigation or UI changes.
+
+`test:preview` pins the component previews' remount key. Each preview runs the real lifecycle
+against a fake server built from its dial values, so a value the key misses leaves a controller
+holding a connection, a plan, or readiness the replacement server never issued. Add a case there
+before adding a dial.
 
 `audit --strict` fails on warnings, so a page needs a 110–160 character `description`, a rendered
 title of 60 columns or fewer, and at least one link to it from another page's body.

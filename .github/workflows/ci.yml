@@ -63,6 +63,9 @@ jobs:
       - name: Typecheck the docs app
         run: bun run --filter @domainkit/docs typecheck
 
+      - name: Check the component previews
+        run: bun run --filter @domainkit/docs test:preview
+
       - name: Build the docs site
         run: bun run --filter @domainkit/docs build
 
