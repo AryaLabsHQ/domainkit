@@ -90,18 +90,20 @@ export function useAttempt(options: Options): Controller {
   }>({ approval: null, key, plan: null });
   const lastCommand = useRef<{ key: string; run: () => void } | null>(null);
   const build = useRef(options.plan);
-  const lastKey = useRef(key);
   useEffect(() => {
     build.current = options.plan;
   });
-  useEffect(() => {
-    if (lastKey.current === key) return;
-    lastKey.current = key;
+
+  // Abandoning while rendering, not one effect later, is what makes the guards below sound: a
+  // reply that lands in between finds the new key already recorded and drops itself.
+  const [current, setCurrent] = useState(key);
+  if (current !== key) {
+    setCurrent(key);
     runner.cancel();
     held.current = { approval: null, key, plan: null };
     lastCommand.current = null;
     setState(State.Idle());
-  }, [key, runner]);
+  }
 
   const onFailure = useCallback(
     (error: DomainKitError.DomainKitError) => {
@@ -139,6 +141,7 @@ export function useAttempt(options: Options): Controller {
       runner.run(effect, {
         onFailure,
         onSuccess: (plan) => {
+          if (held.current.key !== key) return;
           held.current = { approval: null, key, plan };
           setState(State.Planned({ plan }));
         },
@@ -162,6 +165,7 @@ export function useAttempt(options: Options): Controller {
           {
             onFailure,
             onSuccess: (approval) => {
+              if (held.current.key !== key) return;
               held.current = { approval, key, plan };
               applyWith(plan, approval);
             },

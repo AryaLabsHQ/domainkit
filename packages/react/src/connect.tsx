@@ -113,19 +113,24 @@ export function useController({ domain }: Options): Controller {
 
   // The snapshot and the discovery belong to the domain they were read for, so a controller
   // pointed at a new domain drops both while rendering rather than one effect later.
-  const [inspected, setInspected] = useState(domain);
-  if (inspected !== domain) {
-    setInspected(domain);
-    setState(State.Loading({ snapshot: null }));
-  }
-  // What was read travels with the domain it was read for, so a command raised before the reset
-  // commits still refuses to run: one domain's attachment must never be detached for another.
+  // What was read travels with the domain it was read for, so a command or a reply that arrives
+  // after the controller moved refuses to act: one domain's attachment must never be detached for
+  // another.
   const held = useRef<{
     domain: string;
     snapshot: Snapshot | null;
     discovery: Discovery | null;
   }>({ discovery: null, domain, snapshot: null });
   const lastCommand = useRef<{ domain: string; run: () => void } | null>(null);
+
+  const [inspected, setInspected] = useState(domain);
+  if (inspected !== domain) {
+    setInspected(domain);
+    runner.cancel();
+    held.current = { discovery: null, domain, snapshot: null };
+    lastCommand.current = null;
+    setState(State.Loading({ snapshot: null }));
+  }
 
   const onFailure = useCallback(
     (error: DomainKitError.DomainKitError) => {
@@ -153,6 +158,7 @@ export function useController({ domain }: Options): Controller {
       {
         onFailure,
         onSuccess: ({ discovery, snapshot }) => {
+          if (held.current.domain !== domain) return;
           held.current = { discovery, domain, snapshot };
           setState(settled(snapshot, discovery));
         },
@@ -164,6 +170,7 @@ export function useController({ domain }: Options): Controller {
 
   const started = useCallback(
     (result: Transport.Started) => {
+      if (held.current.domain !== domain) return;
       switch (result._tag) {
         case "Connected":
           held.current = { discovery: null, domain, snapshot: result.snapshot };
