@@ -289,6 +289,8 @@ export interface RecordingTransport extends Transport.Transport {
  */
 export const transport = (options: TransportOptions = {}): RecordingTransport => {
   const fake = provider(options.provider);
+  // The handler's layer holds memory Storage and a throwaway custody key, so there is nothing to
+  // release; a test that wants the server disposed builds `Server.toWebHandler` itself.
   const { handler } = Server.toWebHandler(
     DomainKit.layerMemory({ providers: [fake], resolver: resolver() }).pipe(
       Layer.merge(Layer.succeed(Server.Identity)({ principal: () => Effect.succeed(principal) })),

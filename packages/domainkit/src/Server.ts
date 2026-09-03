@@ -201,6 +201,9 @@ export const group = HttpApiGroup.make("domainkit")
   .add(
     HttpApiEndpoint.get("callback", "/callback/:provider", {
       params: { provider: Schema.String },
+      // `Connect.complete` reads every callback parameter off the request URL, because a provider
+      // may return `error`, `teamId`, or `configurationId` too. These three are declared so the
+      // OpenAPI document names what a provider is expected to send back.
       query: {
         state: Schema.String,
         code: Schema.optionalKey(Schema.String),
@@ -381,6 +384,8 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
   api: HttpApi.HttpApi<ApiId, Groups>,
   options: Options = {},
 ): Layer.Layer<HttpApiGroup.Service<ApiId, "domainkit">, never, Services | Identity> =>
+  // The host's API carries its own groups beside this one; only `"domainkit"` is implemented here,
+  // and `HttpApiBuilder.group` needs the group's own endpoint types to check the handlers.
   HttpApiBuilder.group(api as unknown as HttpApi.HttpApi<ApiId, Group>, "domainkit", (handlers) =>
     Effect.gen(function* () {
       const identity = yield* Identity;
@@ -597,7 +602,7 @@ export const api: HttpApi.HttpApi<"domainkit", Group> = HttpApi.make("domainkit"
 
 export interface WebHandlerOptions extends Options {
   /** Mount every route under this path, e.g. `/api/domainkit`. */
-  readonly prefix?: string;
+  readonly prefix?: `/${string}`;
 }
 
 /** The Promise edge: a `fetch`-shaped handler over the group for hosts that are not Effect-native. */
@@ -608,12 +613,15 @@ export const toWebHandler = (
   readonly handler: (request: Request) => Promise<Response>;
   readonly dispose: () => Promise<void>;
 } => {
+  // `group.prefix` widens the endpoint paths in the type, which `Group` states unprefixed; the
+  // handlers are keyed by endpoint identifier, so the routes still line up.
   const prefixed =
     options.prefix === undefined
       ? api
-      : (HttpApi.make("domainkit").add(
-          group.prefix(options.prefix as `/${string}`),
-        ) as unknown as HttpApi.HttpApi<"domainkit", Group>);
+      : (HttpApi.make("domainkit").add(group.prefix(options.prefix)) as unknown as HttpApi.HttpApi<
+          "domainkit",
+          Group
+        >);
   const app = HttpApiBuilder.layer(prefixed).pipe(
     Layer.provide(layer(prefixed, options)),
     Layer.provide(services),
