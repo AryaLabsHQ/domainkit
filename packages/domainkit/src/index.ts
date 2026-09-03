@@ -20,4 +20,6 @@ export * as DnsRecord from "./DnsRecord.ts";
 export * as DomainKitError from "./DomainKitError.ts";
 export * as DomainName from "./DomainName.ts";
 export * as Plan from "./Plan.ts";
+export * as Principal from "./Principal.ts";
 export * as Receipt from "./Receipt.ts";
+export * as Storage from "./Storage.ts";

@@ -22,7 +22,7 @@ tester.run("domainkit/no-runtime-exit", noRuntimeExit, {
       code: "Effect.runPromise(program);",
     },
     {
-      filename: path.join(process.cwd(), "packages/domainkit/examples/effect/quickstart.ts"),
+      filename: path.join(process.cwd(), "packages/domainkit/src/internal/conformance/storage.ts"),
       code: "Effect.runPromise(program);",
     },
   ],

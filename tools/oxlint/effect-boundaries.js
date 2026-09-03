@@ -3,8 +3,8 @@ import path from "node:path";
 const repoRoot = process.cwd();
 const coreSource = "packages/domainkit/src/";
 
-/** Files that may leave the Effect runtime. The core never does; hosts run their own runtime. */
-const runtimeExitFiles = new Set([]);
+/** Files that may leave the Effect runtime: only the test-runner registration in conformance. */
+const runtimeExitFiles = new Set([`${coreSource}internal/conformance/storage.ts`]);
 
 /** Declared foreign Promise boundaries: Web Crypto, fetch, oauth4webapi, and host async adapters. */
 const foreignPromiseFiles = new Set([
