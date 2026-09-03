@@ -179,8 +179,7 @@ describe("Verify", () => {
           ),
           (outcomes) => [
             ...outcomes,
-            {
-              _tag: "Answered",
+            Resolver.Outcome.Answered({
               answer: {
                 resolver: "stale-cache",
                 records:
@@ -190,7 +189,7 @@ describe("Verify", () => {
                 negative: false,
                 ttl: 60,
               },
-            },
+            }),
           ],
         ),
     });

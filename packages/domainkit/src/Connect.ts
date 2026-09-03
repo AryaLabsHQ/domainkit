@@ -3,7 +3,7 @@
  * (OAuth, integration) return a redirect and complete on callback; token methods connect in one
  * call. Reuse of an existing connection for a new domain is `attach`.
  */
-import { Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect";
+import { Context, Data, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect";
 
 import { Custody } from "./Custody.ts";
 import * as DomainKitError from "./DomainKitError.ts";
@@ -11,26 +11,26 @@ import * as DomainName from "./DomainName.ts";
 import { fresh } from "./internal/ids.ts";
 import * as OAuth from "./internal/oauth.ts";
 import { Principal } from "./Principal.ts";
-import type * as Provider from "./Provider.ts";
+import * as Provider from "./Provider.ts";
 import { Providers } from "./Providers.ts";
 import * as Storage from "./Storage.ts";
 
 type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError, Principal>;
 
-export type Method =
-  | { readonly _tag: "Token"; readonly token: Redacted.Redacted<string> }
-  | { readonly _tag: "OAuth"; readonly returnTo?: string }
-  | { readonly _tag: "Integration"; readonly returnTo?: string };
+export type Method = Data.TaggedEnum<{
+  Token: { readonly token: Redacted.Redacted<string> };
+  OAuth: { readonly returnTo?: string };
+  Integration: { readonly returnTo?: string };
+}>;
+const MethodEnum = Data.taggedEnum<Method>();
+/** Lowercase constructors accept a plain token string and wrap it in `Redacted`. */
 export const Method = {
-  token: (token: Redacted.Redacted<string> | string): Method => ({
-    _tag: "Token",
-    token: typeof token === "string" ? Redacted.make(token) : token,
-  }),
-  oauth: (options: { readonly returnTo?: string } = {}): Method => ({ _tag: "OAuth", ...options }),
-  integration: (options: { readonly returnTo?: string } = {}): Method => ({
-    _tag: "Integration",
-    ...options,
-  }),
+  ...MethodEnum,
+  token: (token: Redacted.Redacted<string> | string): Method =>
+    MethodEnum.Token({ token: typeof token === "string" ? Redacted.make(token) : token }),
+  oauth: (options: { readonly returnTo?: string } = {}): Method => MethodEnum.OAuth(options),
+  integration: (options: { readonly returnTo?: string } = {}): Method =>
+    MethodEnum.Integration(options),
 } as const;
 
 /** Everything the UI needs about a domain's provider state. */
@@ -56,26 +56,26 @@ export interface Snapshot {
   }>;
 }
 
-export type Started =
-  | {
-      readonly _tag: "Connected";
-      readonly connection: Storage.Connection;
-      readonly attachment: Storage.Attachment | null;
-    }
-  | {
-      readonly _tag: "Redirect";
-      readonly authorizationUrl: string;
-      readonly continuationId: string;
-    }
-  | {
-      readonly _tag: "SelectionRequired";
-      readonly connection: Storage.Connection;
-      readonly candidates: ReadonlyArray<Provider.Target>;
-    };
+export type Started = Data.TaggedEnum<{
+  Connected: {
+    readonly connection: Storage.Connection;
+    readonly attachment: Storage.Attachment | null;
+  };
+  Redirect: { readonly authorizationUrl: string; readonly continuationId: string };
+  SelectionRequired: {
+    readonly connection: Storage.Connection;
+    readonly candidates: ReadonlyArray<Provider.Target>;
+  };
+}>;
+export const Started = Data.taggedEnum<Started>();
 
-export type Attached =
-  | Storage.Attachment
-  | { readonly _tag: "SelectionRequired"; readonly candidates: ReadonlyArray<Provider.Target> };
+/** `attach` either attached the domain or needs the caller to pick a zone. */
+export type Selection = Data.TaggedEnum<{
+  SelectionRequired: { readonly candidates: ReadonlyArray<Provider.Target> };
+}>;
+export const Selection = Data.taggedEnum<Selection>();
+
+export type Attached = Storage.Attachment | Selection;
 
 export type Refreshed = "current" | "refreshed" | "reconnect";
 
@@ -316,10 +316,10 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
         const resolution: Provider.Resolution =
           input.target === undefined
             ? yield* input.session.resolveTarget(domain)
-            : { _tag: "Resolved", target: input.target };
+            : Provider.Resolution.Resolved({ target: input.target });
         switch (resolution._tag) {
           case "SelectionRequired":
-            return { _tag: "SelectionRequired", candidates: resolution.candidates } as const;
+            return Selection.SelectionRequired({ candidates: resolution.candidates });
           case "NotFound":
             return yield* DomainKitError.fail(
               new DomainKitError.NotFound({ entity: "zone", id: domain }),
@@ -336,10 +336,10 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
 
     const started = (connection: Storage.Connection, attached: Attached | null): Started =>
       attached === null
-        ? { _tag: "Connected", connection, attachment: null }
+        ? Started.Connected({ connection, attachment: null })
         : attached instanceof Storage.Attachment
-          ? { _tag: "Connected", connection, attachment: attached }
-          : { _tag: "SelectionRequired", connection, candidates: attached.candidates };
+          ? Started.Connected({ connection, attachment: attached })
+          : Started.SelectionRequired({ connection, candidates: attached.candidates });
 
     const inspect: Service["inspect"] = (input) =>
       Effect.gen(function* () {
@@ -465,11 +465,10 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
                 ),
               }),
             );
-            return {
-              _tag: "Redirect",
+            return Started.Redirect({
               authorizationUrl: redirect.authorizationUrl,
               continuationId,
-            };
+            });
           }
         }
       });

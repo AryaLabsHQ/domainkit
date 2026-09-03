@@ -7,7 +7,7 @@ import { bail } from "./recorded-fetch.ts";
 const session = (): Provider.Session => ({
   capabilities: () => Effect.succeed(["dns:read"]),
   listTargets: () => Effect.succeed([]),
-  resolveTarget: () => Effect.succeed({ _tag: "NotFound" }),
+  resolveTarget: () => Effect.succeed(Provider.Resolution.NotFound()),
   dns: () => ({
     list: () => Effect.succeed([]),
     create: () => Effect.succeed({ providerRecordId: "pb-1" }),

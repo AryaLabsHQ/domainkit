@@ -2,7 +2,7 @@
  * Public DNS observation. The default layer fans out to Cloudflare and Google DNS-over-HTTPS and
  * keeps every answer, so verification can show "found at Cloudflare, missing at Google".
  */
-import { Context, Effect, Layer } from "effect";
+import { Context, Data, Effect, Layer } from "effect";
 
 import type * as DnsRecord from "./DnsRecord.ts";
 import * as DomainKitError from "./DomainKitError.ts";
@@ -17,10 +17,12 @@ export interface Answer {
   readonly ttl: number | null;
 }
 
-export type Outcome =
-  | { readonly _tag: "Answered"; readonly answer: Answer }
-  | { readonly _tag: "Failed"; readonly resolver: string; readonly message: string }
-  | { readonly _tag: "TimedOut"; readonly resolver: string };
+export type Outcome = Data.TaggedEnum<{
+  Answered: { readonly answer: Answer };
+  Failed: { readonly resolver: string; readonly message: string };
+  TimedOut: { readonly resolver: string };
+}>;
+export const Outcome = Data.taggedEnum<Outcome>();
 
 export interface Service {
   /** Never fails: each resolver's outcome is preserved. */
@@ -69,14 +71,12 @@ export const make = (
       Doh.query({ resolver: endpoint.name, url: endpoint.url, fetch, name, type }).pipe(
         Effect.timeout(timeoutMs),
         Effect.match({
-          onSuccess: (answer): Outcome => ({
-            _tag: "Answered",
-            answer: { resolver: endpoint.name, ...answer },
-          }),
+          onSuccess: (answer): Outcome =>
+            Outcome.Answered({ answer: { resolver: endpoint.name, ...answer } }),
           onFailure: (failure): Outcome =>
             failure._tag === "TimeoutError"
-              ? { _tag: "TimedOut", resolver: endpoint.name }
-              : { _tag: "Failed", resolver: endpoint.name, message: failure.message },
+              ? Outcome.TimedOut({ resolver: endpoint.name })
+              : Outcome.Failed({ resolver: endpoint.name, message: failure.message }),
         }),
       );
     return {
@@ -84,11 +84,9 @@ export const make = (
         DomainName.decode(input).pipe(
           Effect.match({
             onFailure: (failure): ReadonlyArray<Outcome> =>
-              endpoints.map((endpoint) => ({
-                _tag: "Failed",
-                resolver: endpoint.name,
-                message: failure.message,
-              })),
+              endpoints.map((endpoint) =>
+                Outcome.Failed({ resolver: endpoint.name, message: failure.message }),
+              ),
             onSuccess: (name) => name,
           }),
           Effect.flatMap((name) =>

@@ -22,14 +22,15 @@ export const porkbun = Provider.make({
     listTargets: () =>
       Effect.succeed([{ zone: "example.com", label: "example.com", context: credential.context }]),
     resolveTarget: (domain) =>
-      Effect.succeed({
-        _tag: "Resolved",
-        target: {
-          zone: domain.split(".").slice(-2).join("."),
-          label: domain,
-          context: credential.context,
-        },
-      }),
+      Effect.succeed(
+        Provider.Resolution.Resolved({
+          target: {
+            zone: domain.split(".").slice(-2).join("."),
+            label: domain,
+            context: credential.context,
+          },
+        }),
+      ),
     dns: () => ({
       list: (zone) => porkbunApi(credential, "GET", `/dns/retrieve/${zone}`),
       create: (zone, record) => porkbunApi(credential, "POST", `/dns/create/${zone}`, record),

@@ -3,7 +3,7 @@
  * only issues personal tokens declares `token` and nothing else. The definition drives connection
  * routes, refresh, the UI method catalog, and rebuilding a session from stored context.
  */
-import type { DateTime, Effect, Redacted, Schema } from "effect";
+import { Data, type DateTime, type Effect, type Redacted, type Schema } from "effect";
 
 import type * as DnsRecord from "./DnsRecord.ts";
 import * as DomainKitError from "./DomainKitError.ts";
@@ -37,10 +37,12 @@ export interface Target {
   readonly label: string;
 }
 
-export type Resolution =
-  | { readonly _tag: "Resolved"; readonly target: Target }
-  | { readonly _tag: "SelectionRequired"; readonly candidates: ReadonlyArray<Target> }
-  | { readonly _tag: "NotFound" };
+export type Resolution = Data.TaggedEnum<{
+  Resolved: { readonly target: Target };
+  SelectionRequired: { readonly candidates: ReadonlyArray<Target> };
+  NotFound: {};
+}>;
+export const Resolution = Data.taggedEnum<Resolution>();
 
 /** A credential bound to provider account context. */
 export interface Session {
@@ -161,10 +163,10 @@ export const resolveAmong = (
   for (const candidate of DomainName.candidates(domain)) {
     const matches = targets.filter((target) => target.zone === candidate);
     const [only] = matches;
-    if (matches.length === 1 && only !== undefined) return { _tag: "Resolved", target: only };
-    if (matches.length > 1) return { _tag: "SelectionRequired", candidates: matches };
+    if (matches.length === 1 && only !== undefined) return Resolution.Resolved({ target: only });
+    if (matches.length > 1) return Resolution.SelectionRequired({ candidates: matches });
   }
-  return { _tag: "NotFound" };
+  return Resolution.NotFound();
 };
 
 /** Decode stored context with the definition's schema; a mismatch is `InvalidInput`. */

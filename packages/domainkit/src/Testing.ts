@@ -231,10 +231,9 @@ export const resolver = (
           (record) => (record._tag === "Opaque" ? record.type : record._tag) === type,
         );
         return [
-          {
-            _tag: "Answered",
+          Resolver.Outcome.Answered({
             answer: { resolver: "fake", records, negative: records.length === 0, ttl: 60 },
-          },
+          }),
         ];
       }),
   });
