@@ -27,7 +27,9 @@
     "registry:build": "shadcn build registry.json --output public/r",
     "registry:check": "bun run registry:build && bun scripts/test-registry.mts",
     "registry:validate": "shadcn registry validate registry.json",
+    "test": "bun scripts/test-snippets.mts && bun scripts/test-preview.mts",
     "test:preview": "bun scripts/test-preview.mts",
+    "test:snippets": "bun scripts/test-snippets.mts",
     "typecheck": "blume check"
   },
   "dependencies": {

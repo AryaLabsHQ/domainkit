@@ -18,20 +18,20 @@ The package entry carries `"use client"`. Namespaces mirror the core lifecycle.
 
 ## Namespaces
 
-| Namespace    | Carries                                                                                            |
-| ------------ | -------------------------------------------------------------------------------------------------- |
-| `DomainKit`  | `Root`, `useTransport`, `useCapabilities`, `useDomainKit`                                          |
-| `Domain`     | `Flow`, its slot props, and the slot defaults                                                      |
-| `Connect`    | `useController`, `Flow`, `Card`, `Dialog`, `Form`, `Status`, `Outcome`, `Root`                     |
-| `Provision`  | `useController`, `Flow`, `Actions`, `Dialog`, `Status`, `Outcome`, `Root`, `State`                 |
-| `Cleanup`    | The same set over a plan built from an apply receipt                                               |
-| `Verify`     | `useController`, `Status`, `Evidence`, `ObserveAction`, `Outcome`, `Root`, `State`                 |
-| `Records`    | `Table`, `Card`, `ZoneFile`, `CopyValue`, `Status`, the table leaf parts, `identity`, `toZoneFile` |
-| `Operations` | `List`, `Item`, and the leaf parts one plan operation renders as                                   |
-| `Provider`   | `Mark`, `Marks`, and the provider `Descriptor` the snapshot carries                                |
-| `Messages`   | `Catalog`, `english`, `merge`, and `failure(error, catalog)`                                       |
-| `Theme`      | The `Theme` shape and `toStyle`, over the `--domainkit-*` custom properties                        |
-| `Testing`    | `transport`, re-exported from `domainkit/testing` for UI tests                                     |
+| Namespace    | Carries                                                                                                               |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `DomainKit`  | `Root`, `ReadOnly`, `useTransport`, `useCapabilities`, `useReadOnly`, `useDomainKit`                                  |
+| `Domain`     | `Flow`, its slot props, and the slot defaults                                                                         |
+| `Connect`    | `useController`, `Flow`, `Card`, `Dialog`, `Form`, `Status`, `Outcome`, `Root`                                        |
+| `Provision`  | `useController`, `Flow`, `Actions`, `Dialog`, `Status`, `Outcome`, `Root`, `State`                                    |
+| `Cleanup`    | The same set over a plan built from an apply receipt                                                                  |
+| `Verify`     | `useController`, `Status`, `Evidence`, `ObserveAction`, `Outcome`, `Root`, `State`                                    |
+| `Records`    | `Table`, `Card`, `ZoneFile`, `CopyValue`, `Status`, the table leaf parts, `identity`, `requirementsKey`, `toZoneFile` |
+| `Operations` | `List`, `Item`, and the leaf parts one plan operation renders as                                                      |
+| `Provider`   | `Mark`, `Marks`, and the provider `Descriptor` the snapshot carries                                                   |
+| `Messages`   | `Catalog`, `english`, `merge`, and `failure(error, catalog)`                                                          |
+| `Theme`      | The `Theme` shape and `toStyle`, over the `--domainkit-*` custom properties                                           |
+| `Testing`    | `transport`, re-exported from `domainkit/testing` for UI tests                                                        |
 
 ## Top-level exports
 
@@ -70,6 +70,7 @@ the element outright.
 | `navigate`        | Where an interactive provider flow sends the customer. Defaults to `window.location` |
 | `portalContainer` | The element dialogs and popovers portal into                                         |
 | `onEvent`         | A `Listener` for finished steps                                                      |
+| `readOnly`        | Render the state without the controls that change it                                 |
 
 ## Controllers
 
@@ -77,10 +78,10 @@ Each takes one options object and returns a controller whose `state` is a tagged
 
 | Hook                      | Options                                | State tags                                                                                                       |
 | ------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `Connect.useController`   | `{ domain }`                           | `Loading`, `Disconnected`, `Connected`, `Reconnect`, `Submitting`, `Redirecting`, `SelectionRequired`, `Failure` |
+| `Connect.useController`   | `{ domain, returnTo? }`                | `Loading`, `Disconnected`, `Connected`, `Reconnect`, `Submitting`, `Redirecting`, `SelectionRequired`, `Failure` |
 | `Provision.useController` | `{ domain, requirements, onApplied? }` | `Idle`, `Planning`, `Planned`, `Approving`, `Applying`, `Applied`, `Rejecting`, `Rejected`, `Failure`            |
 | `Cleanup.useController`   | `{ domain, receiptId?, onCleaned? }`   | The same set                                                                                                     |
-| `Verify.useController`    | `{ domain, polling? }`                 | `Idle`, `Observing`, `Observed`, `Failure`                                                                       |
+| `Verify.useController`    | `{ domain, polling?, requirements? }`  | `Idle`, `Observing`, `Observed`, `Failure`                                                                       |
 
 <Snippet file="examples/react/controllers.tsx" region="hooks" title="Composing the flow yourself" />
 
@@ -96,3 +97,32 @@ Each takes one options object and returns a controller whose `state` is a tagged
 | `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline, Remove records           |
 
 <Snippet file="examples/react/slots.tsx" region="one-slot" title="Replacing one slot" />
+
+`Domain.Flow` also takes `returnTo` for the connection it owns, and `readOnly` for one domain among
+several.
+
+## Read-only
+
+`readOnly` renders the state without the controls that change it. A write surface is removed rather
+than disabled, so connect, detach, disconnect, review, approve, decline, cleanup, and every `retry`
+disappear. Re-inspecting and observing stay, because both only read.
+
+| Export                  | Answers                                                       |
+| ----------------------- | ------------------------------------------------------------- |
+| `DomainKit.useReadOnly` | Whether this part may offer a control that changes the domain |
+| `DomainKit.ReadOnly`    | Narrows one subtree, overriding the root for its children     |
+
+<Snippet file="examples/react/read-only.tsx" region="hook" title="Reading the mode" />
+
+It is not capability gating. A group the transport never declares still never renders; `readOnly`
+covers the authorization a transport cannot express, such as a member who reaches the same routes
+and would get a 403 from any write. Where a connect control would be, the catalog's `notConnected`
+sentence takes its place.
+
+## Styles
+
+Every rule in `@domainkit/react/styles.css` ships inside `@layer domainkit`, which sits below any
+unlayered rule, so a host's own CSS wins without out-specifying a part selector. A host that wants
+the package to win orders a layer of its own below it.
+
+<Snippet file="examples/react/styles.css" region="layer" title="Ordering the layers" />

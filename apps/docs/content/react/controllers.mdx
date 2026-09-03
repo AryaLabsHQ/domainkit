@@ -14,7 +14,7 @@ Every part of the flow is a hook. Each takes one options object and returns a co
 
 ## Connection
 
-`Connect.useController({ domain })`
+`Connect.useController({ domain, returnTo? })`
 
 | State               | Means                                                                                     |
 | ------------------- | ----------------------------------------------------------------------------------------- |
@@ -38,6 +38,11 @@ Every part of the flow is a hook. Each takes one options object and returns a co
 Discovery runs on mount whenever the transport declares it and the domain has no connection yet. A
 discovery failure leaves `discovery` null and the provider list still renders: discovery is an
 optimisation, not a step the customer asked for.
+
+`returnTo` is where an interactive method sends the customer back to. It defaults to the page they
+started from, read when they connect rather than when the controller renders, so a flow mounted on
+one screen and used on another still returns to the right place. Pass `null` to send none and leave
+the server's `defaultReturnTo` in charge; a per-call `connect({ returnTo })` still wins.
 
 ## Provisioning and cleanup
 
@@ -68,9 +73,20 @@ afterwards fails `Stale`.
 
 ## Verification
 
-`Verify.useController({ domain, polling? })` observes on mount, then re-observes at the readiness
-row's own `nextCheckAt` while it stays mounted. `readiness` holds the latest observation even while
-a new one runs, so the table does not blink.
+`Verify.useController({ domain, polling?, requirements? })` observes on mount, then re-observes at
+the readiness row's own `nextCheckAt` while it stays mounted. `readiness` holds the latest
+observation even while a new one runs, so the table does not blink.
+
+`requirements` says what to look for. Without it the server uses the attachment's latest
+provisioning receipt, so a domain with nothing attached has nothing to observe; with it, that domain
+still reports which records are in place. The set identifies itself by content, so writing the array
+inline does not send the mount effect observing in a loop.
+
+<Snippet
+  file="examples/react/read-only.tsx"
+  region="unattached"
+  title="Observing an unattached domain"
+/>
 
 A requirement that is not satisfied renders what it expected, what each observer found for that
 name, and the observer's own detail line. An observer whose status is `unknown` never answered, so
@@ -95,10 +111,19 @@ raised from a layout effect in the same commit cannot act on the previous domain
 The failed state carries the `DomainKit.Error` itself, so a host reads `reason`, `category`, and
 `isRetryable` instead of parsing text. `Messages.failure(error, catalog)` picks the sentence.
 
-## Capabilities
+## Capabilities and permission
 
 <Snippet
   file="examples/react/controllers.tsx"
   region="capabilities"
   title="Rendering only what the server serves"
 />
+
+Capabilities say what the server can serve. `readOnly` says what this customer may do with it, which
+no transport can express. A part of your own reads it through `DomainKit.useReadOnly()`, and
+`DomainKit.ReadOnly` narrows one subtree without touching the rest of the page.
+
+<Snippet file="examples/react/read-only.tsx" region="hook" title="Asking which mode a part is in" />
+
+Read-only removes a write surface rather than disabling it, and `retry` goes with it: re-running a
+failed write is still a write. Re-inspecting and observing stay, because both only read.

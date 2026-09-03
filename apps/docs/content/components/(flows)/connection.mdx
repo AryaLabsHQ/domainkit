@@ -31,6 +31,17 @@ silent: the provider list still renders.
 | `Connect.Status`  | One line of what the connection is doing                      |
 | `Connect.Outcome` | The last failure, as a sentence from the catalog              |
 
+## Where the customer comes back to
+
+An interactive method returns the customer to the page they started from, read when they connect
+rather than when the flow renders. `returnTo` names a different destination, and `null` leaves the
+server's `defaultReturnTo` in charge.
+
+## Read-only
+
+Connecting is a write, so the whole surface goes rather than a disabled trigger: the slot renders
+the catalog's `notConnected` sentence instead.
+
 ## Composing it yourself
 
 `Connect.useController({ domain })` returns the state and the five commands. See

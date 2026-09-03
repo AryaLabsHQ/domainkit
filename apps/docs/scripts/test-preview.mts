@@ -7,7 +7,8 @@ import { seedOf, stateFromSearch, storyKey } from "../islands/react-catalog/prev
  * The component previews run the real lifecycle against a fake server built from the dial values.
  * `storyKey` decides when that server is replaced and the flow remounts with it, so a value the key
  * misses leaves a controller holding a connection, a plan, or readiness the new server never
- * issued. That has regressed twice; these cases pin it.
+ * issued. That has regressed twice; these cases pin it, including the one input that must not
+ * remount.
  */
 const initial = stateFromSearch("?story=domain-flow");
 const base = storyKey(initial);
@@ -39,6 +40,10 @@ assert.notEqual(
 assert.notEqual(edit({ seeded: false }), base, "clearing the seed keeps the seeded plan");
 assert.notEqual(edit({ provider: "vercel" }), base, "switching provider keeps the old connection");
 assert.notEqual(edit({ oauth: false }), base, "dropping OAuth keeps the old connect methods");
+
+// `readOnly` is the exception: it changes which controls render, not what the fake server holds, so
+// remounting on it would throw away the connection the reader just made.
+assert.equal(edit({ readOnly: true }), base, "toggling read-only restarts the story");
 
 // The seed is the records the zone already holds, which is the TXT requirement and nothing else.
 assert.deepEqual(

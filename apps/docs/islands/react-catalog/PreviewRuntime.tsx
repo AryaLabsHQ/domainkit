@@ -134,6 +134,7 @@ export function Preview({ state }: { readonly state: PreviewState }) {
       colorScheme={state.colorScheme}
       key={key}
       onEvent={setEvent}
+      readOnly={state.readOnly}
       theme={workshopTheme(state.theme, state.colorScheme)}
       transport={transport}
     >

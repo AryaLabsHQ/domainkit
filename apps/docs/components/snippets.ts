@@ -59,19 +59,37 @@ const trimBlankEdges = (lines: ReadonlyArray<string>): ReadonlyArray<string> => 
   return lines.slice(start, end);
 };
 
-const isMarker = (line: string): boolean =>
-  /^\/\/ #(?:region\b|endregion\b)/.test(line.trimStart());
+/** A line-comment marker in TypeScript, the same marker inside a block comment in CSS. */
+const MARKER = /^(?:\/\/|\/\*)\s*#(region|endregion)(?:\s+([\w-]+))?\s*(?:\*\/)?$/;
+
+export interface Marker {
+  readonly kind: "endregion" | "region";
+  readonly name: string | null;
+}
+
+/**
+ * The marker a line is, or `null` when it is ordinary code. Names match whole: a region called
+ * `plan` is never found by a line that opens `planning`.
+ */
+export const markerOf = (line: string): Marker | null => {
+  const match = MARKER.exec(line.trim());
+  if (match === null) return null;
+  return { kind: match[1] as Marker["kind"], name: match[2] ?? null };
+};
 
 /** A `// #region name` … `// #endregion` slice, or the whole file when no region is named. */
 export const snippet = (file: string, region?: string): string => {
   const lines = read(file).split("\n");
   if (region === undefined) {
-    return trimBlankEdges(lines.filter((line) => !isMarker(line))).join("\n");
+    return trimBlankEdges(lines.filter((line) => markerOf(line) === null)).join("\n");
   }
-  const start = lines.findIndex((line) => line.trim() === `// #region ${region}`);
+  const start = lines.findIndex((line) => {
+    const marker = markerOf(line);
+    return marker?.kind === "region" && marker.name === region;
+  });
   if (start < 0) throw new Error(`Snippet ${file} has no region ${region}`);
   const end = lines.findIndex(
-    (line, index) => index > start && line.trim().startsWith("// #endregion"),
+    (line, index) => index > start && markerOf(line)?.kind === "endregion",
   );
   if (end < 0) throw new Error(`Snippet ${file} never closes region ${region}`);
   return trimBlankEdges(dedent(lines.slice(start + 1, end))).join("\n");
