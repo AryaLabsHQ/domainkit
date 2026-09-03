@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -46,6 +46,17 @@ describe("packed React package", () => {
       ),
     ).toEqual([]);
     expect(files).toContain("dist/styles.css");
+  });
+
+  it("ships every rule inside the domainkit cascade layer", async () => {
+    const styles = await readFile("dist/styles.css", "utf8");
+    // Comments aside, the layer is the only thing at the top level: a host's own rules outrank
+    // every part selector without having to out-specify it.
+    const outside = styles.replaceAll(/\/\*[\s\S]*?\*\//g, "").trim();
+    expect(outside.startsWith("@layer domainkit {")).toBe(true);
+    expect(outside.endsWith("}")).toBe(true);
+    expect(outside.slice("@layer domainkit {".length, -1)).not.toContain("@layer");
+    expect(styles).toContain("[data-domainkit-part=");
   });
 
   it("declares a compatible packed DomainKit runtime", async () => {

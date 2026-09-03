@@ -85,7 +85,7 @@ createRoot(container).render(
       {parameters.get("view") === "evidence" ? (
         <VerifyUi.Evidence readiness={mismatched} />
       ) : (
-        <Domain.Flow domain={domain} requirements={requirements} />
+        <Domain.Flow className="host-flow" domain={domain} requirements={requirements} />
       )}
     </DomainKit.Root>
   </StrictMode>,

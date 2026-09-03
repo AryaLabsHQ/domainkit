@@ -88,6 +88,17 @@ test("names the expected value and what each observer read for a failing require
   await evidence.screenshot({ path: shot("evidence") });
 });
 
+test("lets a host's own rule beat a part, because the package ships in a cascade layer", async ({
+  page,
+}) => {
+  await open(page, "browser7.example");
+  const flow = page.locator("[data-domainkit-part='domain-flow']");
+  // The package sets `gap: 0.75rem` on this part; the host's unlayered `.host-flow` wins.
+  await expect(flow).toHaveClass(/host-flow/);
+  await expect(flow).toHaveCSS("gap", "48px");
+  await flow.screenshot({ path: shot("host-override") });
+});
+
 test("takes theme tokens and the color scheme from the root", async ({ page }) => {
   await open(page, "browser4.example", "dark");
   const root = page.locator("[data-domainkit-root]").first();
