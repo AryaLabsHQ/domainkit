@@ -127,6 +127,7 @@ export function useController({ domain }: Options): Controller {
   const load = useCallback(() => {
     if (connection === undefined) return;
     lastCommand.current = null;
+    held.current = { discovery: null, snapshot: null };
     setState(State.Loading());
     runner.run(
       Effect.flatMap(connection.inspect(domain), (snapshot) =>

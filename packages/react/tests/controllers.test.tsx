@@ -47,6 +47,24 @@ const connectDomain = async (transport: Transport.Transport, domain: string) => 
   view.unmount();
 };
 
+/** Observation needs a receipt, so a domain under test is connected and applied first. */
+const applyDomain = async (
+  transport: Transport.Transport,
+  domain: string,
+  requirements: ReadonlyArray<DnsRecord.DnsRecord>,
+) => {
+  await connectDomain(transport, domain);
+  const view = render(
+    <DomainKit.Root transport={transport}>
+      <Provision.Flow domain={domain} requirements={requirements} />
+    </DomainKit.Root>,
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Review changes" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Approve" }));
+  await screen.findByText("DNS records added.");
+  view.unmount();
+};
+
 describe("DomainKit.Root", () => {
   it("keeps transport identity across renders, so an inline value does not restart controllers", async () => {
     const { domain, transport: base } = scenario();
@@ -221,5 +239,50 @@ describe("Cleanup.useController", () => {
     await userEvent.click(screen.getByRole("button", { name: "plan" }));
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("That receipt no longer exists.");
+  });
+});
+
+describe("controller inputs", () => {
+  it("abandons the plan when the domain changes, and keeps it when only the array identity does", async () => {
+    const { domain, requirements, sibling, transport } = scenario();
+    await connectDomain(transport, domain);
+    function Harness({ target }: { readonly target: string }) {
+      return (
+        <DomainKit.Root transport={transport}>
+          <Provision.Flow domain={target} requirements={[...requirements]} />
+        </DomainKit.Root>
+      );
+    }
+    const view = render(<Harness target={domain} />);
+    await userEvent.click(screen.getByRole("button", { name: "Review changes" }));
+    await screen.findByRole("button", { name: "Approve" });
+
+    // A fresh `requirements` array with the same records is the same attempt.
+    view.rerender(<Harness target={domain} />);
+    expect(screen.getByRole("button", { name: "Approve" })).toBeDefined();
+
+    // A different domain is a different attempt, so the old plan can no longer be approved.
+    view.rerender(<Harness target={sibling} />);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Approve" })).toBeNull());
+  });
+
+  it("drops readiness when the domain changes", async () => {
+    const { domain, requirements, sibling, transport } = scenario();
+    await applyDomain(transport, domain, requirements);
+    function Probe({ target }: { readonly target: string }) {
+      const controller = Verify.useController({ domain: target, polling: false });
+      return <output>{controller.readiness?.attachmentId ?? "none"}</output>;
+    }
+    function Harness({ target }: { readonly target: string }) {
+      return (
+        <DomainKit.Root transport={transport}>
+          <Probe target={target} />
+        </DomainKit.Root>
+      );
+    }
+    const view = render(<Harness target={domain} />);
+    await waitFor(() => expect(screen.getByRole("status").textContent).not.toBe("none"));
+    view.rerender(<Harness target={sibling} />);
+    expect(screen.getByRole("status").textContent).toBe("none");
   });
 });

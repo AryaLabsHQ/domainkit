@@ -7,7 +7,7 @@ import type { Approval, DomainKitError, Plan, Receipt } from "domainkit";
 import type { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useDomainKit } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
@@ -58,6 +58,11 @@ export interface Controller {
 
 export interface Options {
   readonly domain: string;
+  /**
+   * Identifies the inputs this attempt is for. When it changes the attempt is abandoned, because a
+   * plan, approval, and receipt only mean anything for the inputs that produced them.
+   */
+  readonly key: string;
   readonly group: Group | undefined;
   /** The plan call, or `null` when this flow has nothing to plan yet. */
   readonly plan: () => Effect.Effect<Plan.Plan, DomainKitError.DomainKitError> | null;
@@ -72,7 +77,7 @@ const needsNewPlan = (error: DomainKitError.DomainKitError): boolean =>
   error.reason._tag === "Conflict";
 
 export function useAttempt(options: Options): Controller {
-  const { domain, done, group, onDone, plan: buildEffect } = options;
+  const { domain, done, group, key, onDone } = options;
   const { emit } = useDomainKit();
   const runner = useRunner();
   const [state, setState] = useState<State>(State.Idle());
@@ -81,6 +86,19 @@ export function useAttempt(options: Options): Controller {
     plan: null,
   });
   const lastCommand = useRef<(() => void) | null>(null);
+  const build = useRef(options.plan);
+  const lastKey = useRef(key);
+  useEffect(() => {
+    build.current = options.plan;
+  });
+  useEffect(() => {
+    if (lastKey.current === key) return;
+    lastKey.current = key;
+    runner.cancel();
+    held.current = { approval: null, plan: null };
+    lastCommand.current = null;
+    setState(State.Idle());
+  }, [key, runner]);
 
   const onFailure = useCallback(
     (error: DomainKitError.DomainKitError) => {
@@ -111,7 +129,7 @@ export function useAttempt(options: Options): Controller {
   );
 
   const buildPlan = useCallback(() => {
-    const effect = buildEffect();
+    const effect = build.current();
     if (effect === null) return;
     const command = () => {
       setState(State.Planning());
@@ -125,7 +143,7 @@ export function useAttempt(options: Options): Controller {
     };
     lastCommand.current = command;
     command();
-  }, [buildEffect, onFailure, runner]);
+  }, [onFailure, runner]);
 
   const approve = useCallback(
     (operationIds?: ReadonlyArray<Plan.OperationId>) => {

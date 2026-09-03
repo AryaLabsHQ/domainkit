@@ -1,4 +1,4 @@
-import type { DnsRecord, Receipt } from "domainkit";
+import { DnsRecord, type Receipt } from "domainkit";
 import { useCallback, type ReactElement, type ReactNode } from "react";
 
 import { State, useAttempt, type Controller } from "./attempt.ts";
@@ -6,6 +6,7 @@ import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
+import * as Records from "./records.tsx";
 import * as Review from "./review.tsx";
 
 export { State };
@@ -18,11 +19,16 @@ export interface Options {
 }
 
 /** Plan, approve, apply. `approve` authorizes the digest and applies it in the same action. */
+/** Requirements identify themselves by content, so an inline array does not abandon the attempt. */
+const keyOf = (domain: string, requirements: ReadonlyArray<DnsRecord.DnsRecord>): string =>
+  [domain, ...requirements.map((record) => Records.identity(record))].join("|");
+
 export function useController({ domain, onApplied, requirements }: Options): Controller {
   const { transport } = useDomainKit();
   const group = transport.provisioning;
   return useAttempt({
     domain,
+    key: keyOf(domain, requirements),
     done: (receipt) => Event.Applied({ domain, receipt }),
     group,
     onDone: onApplied,

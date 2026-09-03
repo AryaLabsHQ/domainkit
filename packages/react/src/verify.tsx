@@ -68,9 +68,15 @@ export function useController({ domain, polling = true }: Options): Controller {
     });
   }, [domain, emit, runner, verification]);
 
+  const lastDomain = useRef(domain);
   useEffect(() => {
+    if (lastDomain.current !== domain) {
+      lastDomain.current = domain;
+      // Readiness belongs to the domain that was observed; the new one has none yet.
+      held.current = null;
+    }
     observe();
-  }, [observe, revision]);
+  }, [domain, observe, revision]);
 
   useEffect(() => {
     if (!polling || state._tag !== "Observed") return;

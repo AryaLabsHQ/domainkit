@@ -29,6 +29,7 @@ export function useController({ domain, onCleaned, receiptId }: Options): Contro
   const connection = transport.connection;
   return useAttempt({
     domain,
+    key: [domain, receiptId ?? ""].join("|"),
     done: (receipt) => Event.Cleaned({ domain, receipt }),
     group,
     onDone: onCleaned,
