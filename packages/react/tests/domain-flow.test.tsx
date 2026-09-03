@@ -306,6 +306,34 @@ describe("Domain.Flow verification requirements", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("observes again when a requirement changes in a way only the wire sees", async () => {
+    const { domain, requirements, transport } = scenario();
+    const first = requirements[0];
+    if (first === undefined) throw new Error("the scenario has no requirements");
+    // Same type, name, and data; a different policy, which is what readiness turns on.
+    const restated = [
+      DnsRecord.cname({ name: first.name, purpose: "Serve your site", target: "edge.example.com" }),
+      DnsRecord.txt({
+        name: `_acme.${domain}`,
+        policy: "exclusive",
+        purpose: "Prove ownership",
+        value: "acme-verify=7f3a",
+      }),
+    ];
+    function Harness({ set }: { readonly set: ReadonlyArray<DnsRecord.Model> }) {
+      return (
+        <DomainKit.Root transport={transport}>
+          <Domain.Flow domain={domain} requirements={set} />
+        </DomainKit.Root>
+      );
+    }
+    const view = render(<Harness set={requirements} />);
+    await waitFor(() => expect(observeCalls(transport)).toHaveLength(1));
+    view.rerender(<Harness set={restated} />);
+    await waitFor(() => expect(observeCalls(transport)).toHaveLength(2));
+    expect(observeCalls(transport)[1]?.input).toEqual([domain, { requirements: restated }]);
+  });
+
   it("does not re-observe when the host writes the requirements inline", async () => {
     const { domain, requirements, transport } = scenario();
     function Harness() {

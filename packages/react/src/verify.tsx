@@ -19,7 +19,7 @@ import { useDomainKit } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
 import { useIcons } from "./icons.tsx";
 import { failure as describeFailure } from "./messages.ts";
-import { identity, Status as RecordStatus } from "./records.tsx";
+import { identity, requirementsKey, Status as RecordStatus } from "./records.tsx";
 import { useRunner } from "./task.ts";
 
 export type Readiness = Transport.Readiness;
@@ -81,8 +81,9 @@ export function useController({ domain, polling = true, requirements }: Options)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Requirements identify themselves by content, so a host writing the array inline does not
-  // rebuild `observe` on every render and set the mount effect observing in a loop.
-  const signature = requirements === undefined ? null : requirements.map(identity).join("|");
+  // rebuild `observe` on every render and set the mount effect observing in a loop. The key covers
+  // every field, because `policy` and `ttl` ride the wire and `policy` decides readiness.
+  const signature = requirements === undefined ? null : requirementsKey(requirements);
   const requested = useMemo(
     () => (requirements === undefined ? undefined : { requirements }),
     [signature],
