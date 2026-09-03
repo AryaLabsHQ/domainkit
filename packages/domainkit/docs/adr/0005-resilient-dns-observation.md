@@ -21,7 +21,9 @@ only when its message id is zero, its single question matches the query in name,
 it is not truncated, and every answer carries a TTL; a host may pass its own `AbortSignal`.
 
 Readiness is recorded per requirement with its evidence (`ProviderEvidence`, one
-`PublicDnsEvidence` per resolver, and `HostEvidence` the host attaches). A requirement is
+`PublicDnsEvidence` per resolver, and `HostEvidence` the host attaches). Provider and public
+evidence carry `values`, what the observer returned for the record's name and type, and `detail`,
+`null` when satisfied and otherwise the mismatch summary or the resolver's error. A requirement is
 `satisfied` by an exact match, `mismatch` when an exclusive record meets a conflicting same-set
 record, `missing` otherwise, and `unknown` when no source answered. A mismatch at any resolver
 outranks agreement elsewhere; `Verify.Policy.quorum` (`any` by default, `all`, or a minimum) sets

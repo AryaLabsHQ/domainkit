@@ -50,8 +50,23 @@ describe("Verify", () => {
           ["PublicDns", "satisfied"],
         ],
       );
+      assert.deepStrictEqual(
+        readiness.requirements[0]?.evidence.map((evidence) =>
+          evidence._tag === "Host" ? null : [evidence.values, evidence.detail],
+        ),
+        [
+          [["edge.acme.dev"], null],
+          [["edge.acme.dev"], null],
+        ],
+      );
       assert.ok(readiness.requirements.every(({ operationId }) => operationId !== null));
       const latest = yield* Verify.latest("app.example.com");
+      assert.deepStrictEqual(
+        latest?.requirements[1]?.evidence.map((evidence) =>
+          evidence._tag === "Host" ? null : evidence.values,
+        ),
+        [["acme-verify=7f3a"], ["acme-verify=7f3a"]],
+      );
       assert.strictEqual(latest?.overall, "ready");
       assert.strictEqual(latest?.requirements.length, 2);
     }).pipe(
@@ -99,6 +114,7 @@ describe("Verify", () => {
               source: "ses",
               status: "failed",
               label: "SES identity",
+              detail: null,
               observedAt: evenLater,
             }),
           ],
@@ -112,6 +128,7 @@ describe("Verify", () => {
               source: "ses",
               status: "pending",
               label: "SES identity",
+              detail: null,
               observedAt: evenLater,
             }),
           ],
@@ -153,6 +170,18 @@ describe("Verify", () => {
         ["mismatch", "missing"],
       );
       assert.strictEqual(readiness.requirements[0]?.operationId, null);
+      // Provider evidence alone: the fake resolver also answers from every other fake zone.
+      assert.deepStrictEqual(
+        readiness.requirements.map(({ evidence }) =>
+          evidence.flatMap((item) =>
+            item._tag === "Provider" ? [[item.values, item.detail]] : [],
+          ),
+        ),
+        [
+          [[["other.acme.dev"], "expected edge.acme.dev; found other.acme.dev"]],
+          [[[], "no TXT record at _acme.app.example.com"]],
+        ],
+      );
       const unattached = yield* Verify.observe({ domain: "nobody.example.com", requirements });
       assert.strictEqual(unattached.attachmentId, null);
       assert.deepStrictEqual(
@@ -204,6 +233,13 @@ describe("Verify", () => {
       });
       assert.strictEqual(readiness.overall, "failed");
       assert.strictEqual(readiness.requirements[0]?.status, "mismatch");
+      const stale = readiness.requirements[0]?.evidence.find(
+        (item) => item._tag === "PublicDns" && item.resolver === "stale-cache",
+      );
+      assert.deepStrictEqual(
+        stale === undefined || stale._tag === "Host" ? null : [stale.values, stale.detail],
+        [["old.acme.dev"], "expected edge.acme.dev; found old.acme.dev"],
+      );
       const empty = yield* Verify.observe({ domain: "app.example.com", requirements: [] }).pipe(
         Effect.flip,
       );

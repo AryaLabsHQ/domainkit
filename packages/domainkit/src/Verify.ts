@@ -15,11 +15,19 @@ import * as Principal from "./Principal.ts";
 import * as Resolver from "./Resolver.ts";
 import * as Storage from "./Storage.ts";
 
+/**
+ * Every piece of evidence carries `values`, what the observer returned for the requirement's name
+ * and type (empty when nothing was found, the lookup timed out, or the resolver failed), and
+ * `detail`, `null` when the requirement is satisfied and otherwise the mismatch summary or the
+ * resolver's error text, so a host can render "found X, expected Y".
+ */
 export class ProviderEvidence extends Schema.TaggedClass<ProviderEvidence>(
   "@domainkit/Evidence/Provider",
 )("Provider", {
   provider: Schema.String,
   status: Storage.RequirementStatus,
+  values: Schema.Array(Schema.String),
+  detail: Schema.NullOr(Schema.String),
   observedAt: Schema.DateTimeUtcFromString,
 }) {}
 export class PublicDnsEvidence extends Schema.TaggedClass<PublicDnsEvidence>(
@@ -27,6 +35,8 @@ export class PublicDnsEvidence extends Schema.TaggedClass<PublicDnsEvidence>(
 )("PublicDns", {
   resolver: Schema.String,
   status: Storage.RequirementStatus,
+  values: Schema.Array(Schema.String),
+  detail: Schema.NullOr(Schema.String),
   observedAt: Schema.DateTimeUtcFromString,
 }) {}
 /** Anything the host knows that DomainKit cannot observe: SES identity status, a CDN cert, ... */
@@ -36,7 +46,7 @@ export class HostEvidence extends Schema.TaggedClass<HostEvidence>("@domainkit/E
     source: Schema.String,
     status: Schema.Literals(["ok", "pending", "failed"]),
     label: Schema.String,
-    detail: Schema.optionalKey(Schema.String),
+    detail: Schema.NullOr(Schema.String),
     observedAt: Schema.DateTimeUtcFromString,
   },
 ) {}
@@ -130,6 +140,31 @@ export const statusAgainst = (
     return "mismatch";
   }
   return "missing";
+};
+
+interface Observation {
+  readonly status: Storage.RequirementStatus;
+  readonly values: ReadonlyArray<string>;
+  readonly detail: string | null;
+}
+
+const render = (observed: DnsRecord.Observed): string =>
+  observed._tag === "Opaque" ? JSON.stringify(observed.raw) : DnsRecord.data(observed);
+
+/** Status plus what the observer holds for the requirement's name and type. */
+const observation = (
+  record: DnsRecord.Model,
+  observed: ReadonlyArray<DnsRecord.Observed>,
+): Observation => {
+  const status = statusAgainst(record, observed);
+  const values = observed.filter((candidate) => DnsRecord.sameSet(candidate, record)).map(render);
+  const detail =
+    status === "satisfied"
+      ? null
+      : values.length === 0
+        ? `no ${record._tag} record at ${record.name}`
+        : `expected ${DnsRecord.data(record)}; found ${values.join(", ")}`;
+  return { status, values, detail };
 };
 
 const combine = (statuses: ReadonlyArray<Storage.RequirementStatus>): Storage.RequirementStatus => {
@@ -360,23 +395,29 @@ export const make: Effect.Effect<
               ? [
                   new ProviderEvidence({
                     provider: providerSide.value.provider,
-                    status: statusAgainst(record, providerSide.value.records),
+                    ...observation(record, providerSide.value.records),
                     observedAt: now,
                   }),
                 ]
               : [];
             const outcomes = yield* resolver.resolve(record.name, record._tag);
-            const publicEvidence = outcomes.map(
-              (outcome) =>
-                new PublicDnsEvidence({
-                  resolver:
-                    outcome._tag === "Answered" ? outcome.answer.resolver : outcome.resolver,
-                  status:
-                    outcome._tag === "Answered"
-                      ? statusAgainst(record, outcome.answer.records)
-                      : "unknown",
-                  observedAt: now,
-                }),
+            const publicEvidence = outcomes.map((outcome) =>
+              outcome._tag === "Answered"
+                ? new PublicDnsEvidence({
+                    resolver: outcome.answer.resolver,
+                    ...observation(record, outcome.answer.records),
+                    observedAt: now,
+                  })
+                : new PublicDnsEvidence({
+                    resolver: outcome.resolver,
+                    status: "unknown",
+                    values: [],
+                    detail:
+                      outcome._tag === "TimedOut"
+                        ? `${outcome.resolver} timed out`
+                        : outcome.message,
+                    observedAt: now,
+                  }),
             );
             const publicStatus = quorumStatus(
               policy.quorum,
