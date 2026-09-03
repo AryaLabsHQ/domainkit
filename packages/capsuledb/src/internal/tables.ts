@@ -116,8 +116,10 @@ export const make = (prefix: string): Tables => ({
   }),
   readiness: Schema.table(`${prefix}_readiness`, {
     columns: {
-      attachment_id: Schema.text(),
       owner_id: Schema.text(),
+      domain: Schema.text(),
+      /** Set while an attachment covers the domain; observe-only readiness leaves it null. */
+      attachment_id: Schema.text({ nullable: true }),
       overall: Schema.text(),
       requirements: Schema.json(),
       host: Schema.json(),
@@ -125,9 +127,10 @@ export const make = (prefix: string): Tables => ({
       checked_at: Schema.timestamp(),
       next_check_at: Schema.timestamp({ nullable: true }),
     },
-    // Readiness is keyed by attachment, not by attempt, so observe-only hosts still get a row.
-    primaryKey: ["attachment_id"],
-    indexes: [{ columns: ["owner_id", "next_check_at"] }],
+    // Keyed by domain, not by attachment, so a host observing public DNS alone gets the same row.
+    primaryKey: ["owner_id", "domain"],
+    // The sweep index drives the backoff ladder; the attachment index is for clearing the link.
+    indexes: [{ columns: ["owner_id", "next_check_at"] }, { columns: ["attachment_id"] }],
   }),
 });
 

@@ -100,14 +100,24 @@ describe("lifecycle on PgStorage", () => {
 
           const readiness = yield* Verify.observe({ domain: "app.example.com" });
           assert.strictEqual(readiness.overall, "ready");
-          const stored = yield* storage.readiness.get(started.attachment.id);
+          const stored = yield* storage.readiness.get("app.example.com");
           assert.strictEqual(Option.isSome(stored) && stored.value.overall, "ready");
+          assert.strictEqual(
+            Option.isSome(stored) && stored.value.attachmentId,
+            started.attachment.id,
+          );
 
           const cleanup = yield* Cleanup.plan({ receiptId: receipt.id });
           const cleanupReceipt = yield* Cleanup.apply(yield* Cleanup.approve(cleanup));
           assert.strictEqual(cleanupReceipt.status, "complete");
           const cleanupAttempt = yield* storage.attempts.get(cleanup.id);
           assert.strictEqual(cleanupAttempt.sourceReceiptId, receipt.id);
+
+          // Readiness is keyed by domain, so removing the attachment clears the link and keeps
+          // what was observed about the domain.
+          yield* storage.attachments.remove(started.attachment.id);
+          const unlinked = yield* storage.readiness.get("app.example.com");
+          assert.strictEqual(Option.isSome(unlinked) && unlinked.value.attachmentId, null);
         }),
       ),
     180_000,

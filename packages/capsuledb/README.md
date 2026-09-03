@@ -79,7 +79,11 @@ folder against the current capsule in CI.
 | `domainkit_attachments`    | `id`, unique `(owner_id, domain)` | domain, zone, provider target                                     |
 | `domainkit_continuations`  | `id`                              | interactive-flow state with a TTL                                 |
 | `domainkit_attempts`       | `id`                              | plan, approval, receipt, status, lease, failure                   |
-| `domainkit_readiness`      | `attachment_id`                   | latest observation, per-requirement evidence, backoff             |
+| `domainkit_readiness`      | `(owner_id, domain)`              | latest observation, per-requirement evidence, backoff             |
+
+Readiness is keyed by domain rather than by attachment, so a host observing public DNS alone gets
+the same row; `attachment_id` links the attachment when one exists and is cleared when it is
+removed.
 
 Every table carries `owner_id`, and every query filters by the `Principal` your host provides, so a
 row belonging to another tenant reads as absent. No foreign keys are declared, to your tables or

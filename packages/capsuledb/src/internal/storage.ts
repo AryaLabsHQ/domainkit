@@ -192,8 +192,9 @@ interface AttemptRow {
 }
 
 interface ReadinessRow {
-  readonly attachment_id: string;
   readonly owner_id: string;
+  readonly domain: string;
+  readonly attachment_id: string | null;
   readonly overall: string;
   readonly requirements: unknown;
   readonly host: unknown;
@@ -271,6 +272,7 @@ const attemptOf = (row: AttemptRow) =>
 
 const readinessOf = (row: ReadinessRow) =>
   readinessCodec.read({
+    domain: row.domain,
     attachmentId: row.attachment_id,
     ownerId: row.owner_id,
     overall: row.overall,
@@ -658,9 +660,11 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             sql.withTransaction(
               Effect.gen(function* () {
                 yield* requireAttachment(ownerId, id);
-                // Readiness is keyed by attachment and meaningless without it.
+                // Readiness is keyed by domain and outlives the attachment, so clear the link
+                // rather than the row: what was observed about the domain is still true, and a
+                // dangling attachment id would fail the next `readiness.put`.
                 yield* sql`
-                  DELETE FROM ${readiness}
+                  UPDATE ${readiness} SET attachment_id = NULL
                   WHERE attachment_id = ${id} AND owner_id = ${ownerId}
                 `;
                 yield* sql`DELETE FROM ${attachments} WHERE id = ${id} AND owner_id = ${ownerId}`;
@@ -954,19 +958,20 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
               if (row.ownerId !== ownerId) {
                 return yield* invalid("Readiness owner does not match the principal", "ownerId");
               }
-              yield* requireAttachment(ownerId, row.attachmentId);
+              // A linked attachment has to exist for this owner; observe-only readiness has none.
+              if (row.attachmentId !== null) yield* requireAttachment(ownerId, row.attachmentId);
               const encoded = yield* readinessCodec.write(row);
               yield* sql`
                 INSERT INTO ${readiness} (
-                  attachment_id, owner_id, overall, requirements, host, pending_since,
+                  owner_id, domain, attachment_id, overall, requirements, host, pending_since,
                   checked_at, next_check_at
                 ) VALUES (
-                  ${encoded.attachmentId}, ${encoded.ownerId}, ${encoded.overall},
-                  ${toJson(encoded.requirements)}, ${toJson(encoded.host)},
+                  ${encoded.ownerId}, ${encoded.domain}, ${encoded.attachmentId},
+                  ${encoded.overall}, ${toJson(encoded.requirements)}, ${toJson(encoded.host)},
                   ${atOrNull(encoded.pendingSince)}, ${at(encoded.checkedAt)},
                   ${atOrNull(encoded.nextCheckAt)}
-                ) ON CONFLICT (attachment_id) DO UPDATE SET
-                  owner_id = EXCLUDED.owner_id,
+                ) ON CONFLICT (owner_id, domain) DO UPDATE SET
+                  attachment_id = EXCLUDED.attachment_id,
                   overall = EXCLUDED.overall,
                   requirements = EXCLUDED.requirements,
                   host = EXCLUDED.host,
@@ -976,11 +981,11 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
               `;
             }),
           ).pipe(guard("readiness.put")),
-        get: (attachmentId) =>
+        get: (domain) =>
           Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql<ReadinessRow>`
               SELECT * FROM ${readiness}
-              WHERE attachment_id = ${attachmentId} AND owner_id = ${ownerId}
+              WHERE owner_id = ${ownerId} AND domain = ${domain}
             `.pipe(
               Effect.flatMap((rows) =>
                 rows[0] === undefined
