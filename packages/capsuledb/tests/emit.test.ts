@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 import { Storage } from "domainkit";
@@ -43,10 +44,19 @@ let directory: string | undefined;
 beforeAll(async () => {
   postgres = await start(4);
   directory = await mkdtemp(join(tmpdir(), "domainkit-capsuledb-emit-"));
-  // The CLI only runs when it is invoked through its own bin path, so use the shim npm installs.
+  // The CLI guards on argv[1] resolving to its own module, so it needs its real path rather than a
+  // bin shim, which a workspace install may hoist or omit.
+  const cli = await realpath(
+    join(
+      dirname(createRequire(import.meta.url).resolve("capsuledb/package.json")),
+      "dist",
+      "cli.mjs",
+    ),
+  );
   await execFileAsync(
-    join(packageRoot, "node_modules", ".bin", "capsuledb"),
+    "node",
     [
+      cli,
       "emit",
       "--module",
       join(packageRoot, "src", "capsule.ts"),
