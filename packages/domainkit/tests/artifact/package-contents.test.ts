@@ -11,18 +11,14 @@ const PackResult = Schema.Array(
   Schema.Struct({ files: Schema.Array(Schema.Struct({ path: Schema.String })) }),
 );
 
+const exportTargets = Object.values(packageJson.exports).flatMap((target) =>
+  typeof target === "string" ? [] : [target.types, target.import],
+);
 const requiredFiles = new Set([
   "LICENSE",
   "README.md",
-  "dist/client.mjs",
-  "dist/index.mjs",
-  "dist/server.mjs",
-  "dist/testing.mjs",
-  "dist/types/entry/client.d.ts",
-  "dist/types/entry/server.d.ts",
-  "dist/types/entry/testing.d.ts",
-  "dist/types/index.d.ts",
   "package.json",
+  ...exportTargets.map((target) => target.replace(/^\.\//, "")),
 ]);
 
 const generatedSuffixes = [".d.ts", ".mjs", ".mjs.map"];

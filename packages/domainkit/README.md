@@ -223,7 +223,10 @@ a real account before shipping.
 - `domainkit` — the Effect-native root: lifecycle services, host seams, providers, and values;
 - `domainkit/server` — the mountable route group, its layers, and the wire schemas;
 - `domainkit/client` — the capability-gated fetch transport and its Promise adapters;
-- `domainkit/testing` — fakes and conformance runners.
+- `domainkit/testing` — fakes and conformance runners;
+- `domainkit/<Module>` — every root namespace as its own subpath (`domainkit/Principal`,
+  `domainkit/DnsRecord`, ...), the same module instances the root re-exports, for declaration
+  emit and bundlers that want the declaring module.
 
 Your app owns identity, tenancy, persistence, keys, routes, and consent. DomainKit supplies the
 lifecycle, not a hosted control plane.

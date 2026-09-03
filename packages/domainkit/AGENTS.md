@@ -1,10 +1,10 @@
 # Core package guide
 
-The package root is the canonical Effect API. Public entry points are `domainkit` and
-`domainkit/testing`, as declared in `package.json`; `domainkit/server` and `domainkit/client`
-arrive with the server layer. The source entry files (`src/index.ts`, `src/entry/testing.ts`) and
-packed artifact tests are authoritative; `src/internal/**` and superseded ADR examples are not
-public API.
+The package root is the canonical Effect API. Public entry points are `domainkit`,
+`domainkit/server`, `domainkit/client`, `domainkit/testing`, and one subpath per root namespace
+(`domainkit/Principal`, `domainkit/DnsRecord`, ...), as declared in `package.json` and pinned to
+`src/index.ts` by `tests/artifact/exports.test.ts`. The source entry files (`src/index.ts`,
+`src/entry/*.ts`) and packed artifact tests are authoritative; `src/internal/**` is not public API.
 
 ## Public contract
 

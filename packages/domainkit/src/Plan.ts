@@ -9,6 +9,10 @@ import { Effect, Schema } from "effect";
 import * as DnsRecord from "./DnsRecord.ts";
 import * as Errors from "./internal/error.ts";
 
+// Read lazily: DnsRecord sits in the same import cycle (see DnsRecord.ts).
+const Record = Schema.suspend(() => DnsRecord.Model);
+const Observed = Schema.suspend(() => DnsRecord.Observed);
+
 export const PlanId = Schema.String.pipe(Schema.brand("@domainkit/PlanId"));
 export type PlanId = typeof PlanId.Type;
 
@@ -23,18 +27,18 @@ export type Kind = typeof Kind.Type;
 
 export class Create extends Schema.TaggedClass<Create>("@domainkit/Plan/Create")("Create", {
   id: OperationId,
-  record: DnsRecord.Model,
+  record: Record,
 }) {}
 export class Noop extends Schema.TaggedClass<Noop>("@domainkit/Plan/Noop")("Noop", {
   id: OperationId,
-  record: DnsRecord.Model,
-  existing: DnsRecord.Observed,
+  record: Record,
+  existing: Observed,
   ttlDrift: Schema.Boolean,
 }) {}
 export class Conflict extends Schema.TaggedClass<Conflict>("@domainkit/Plan/Conflict")("Conflict", {
   id: OperationId,
-  record: DnsRecord.Model,
-  existing: Schema.Array(DnsRecord.Observed),
+  record: Record,
+  existing: Schema.Array(Observed),
   reason: Schema.Literals([
     "exclusive-name",
     "cname-collision",
@@ -46,7 +50,7 @@ export class Conflict extends Schema.TaggedClass<Conflict>("@domainkit/Plan/Conf
 /** Cleanup only: remove the provider record a receipt proves DomainKit created. */
 export class Delete extends Schema.TaggedClass<Delete>("@domainkit/Plan/Delete")("Delete", {
   id: OperationId,
-  record: DnsRecord.Model,
+  record: Record,
   providerRecordId: Schema.String,
 }) {}
 export const Operation = Schema.Union([Create, Noop, Conflict, Delete]);
