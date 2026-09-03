@@ -153,10 +153,12 @@ describe("Verify", () => {
         ["mismatch", "missing"],
       );
       assert.strictEqual(readiness.requirements[0]?.operationId, null);
-      const unattached = yield* Verify.observe({ domain: "nobody.example.com", requirements }).pipe(
-        Effect.flip,
+      const unattached = yield* Verify.observe({ domain: "nobody.example.com", requirements });
+      assert.strictEqual(unattached.attachmentId, null);
+      assert.deepStrictEqual(
+        unattached.requirements.map(({ evidence }) => evidence.map(({ _tag }) => _tag)),
+        [["PublicDns"], ["PublicDns"]],
       );
-      assert.strictEqual(unattached.reason._tag, "NotFound");
     }).pipe(
       withPrincipal,
       Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
