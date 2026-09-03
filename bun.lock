@@ -16,13 +16,13 @@
       "name": "@domainkit/docs",
       "dependencies": {
         "@base-ui/react": "^1.7.0",
-        "@domainkit/react": "workspace:^0.8.0",
+        "@domainkit/react": "workspace:^0.9.0",
         "@effect/atom-react": "4.0.0-rc.112",
         "@hugeicons/core-free-icons": "4.3.0",
         "@hugeicons/react": "1.1.10",
         "blume": "1.5.3",
         "dialkit": "1.4.3",
-        "domainkit": "workspace:^0.8.0",
+        "domainkit": "workspace:^0.9.0",
         "effect": "4.0.0-rc.112",
         "lucide-react": "0.474.0",
         "motion": "13.1.1",
@@ -40,7 +40,6 @@
     },
     "examples": {
       "name": "@domainkit/examples",
-      "version": "0.0.0",
       "dependencies": {
         "@domainkit/capsuledb": "workspace:*",
         "@domainkit/react": "workspace:*",
@@ -59,9 +58,9 @@
     },
     "packages/capsuledb": {
       "name": "@domainkit/capsuledb",
-      "version": "0.1.2",
+      "version": "0.9.0",
       "dependencies": {
-        "domainkit": "workspace:^0.8.0",
+        "domainkit": "workspace:^0.9.0",
       },
       "devDependencies": {
         "@effect/sql-pg": "4.0.0-rc.112",
@@ -82,7 +81,7 @@
     },
     "packages/domainkit": {
       "name": "domainkit",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@leichtgewicht/dns-packet": "6.0.3",
         "oauth4webapi": "^3.8.7",
@@ -103,10 +102,10 @@
     },
     "packages/react": {
       "name": "@domainkit/react",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@base-ui/react": "^1.7.0",
-        "domainkit": "workspace:^0.8.0",
+        "domainkit": "workspace:^0.9.0",
       },
       "devDependencies": {
         "@playwright/test": "1.57.0",

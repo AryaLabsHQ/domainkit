@@ -1,3 +1,35 @@
+## domainkit@0.9.0
+
+### One Effect-native lifecycle: Connect, Provision, Cleanup, Verify
+
+The root exports nineteen modules. Lifecycle services are `Connect`, `Provision`, `Cleanup`, and
+`Verify`; host seams are `Storage`, `Custody`, and `Principal`; providers are declared with
+`Provider.make` and registered through `DomainKit.layer({ providers })`. Every service module
+exports `Service` and `Interface`, every schema-backed value exports `Model`, and every operation
+fails with `DomainKit.Error` carrying one of sixteen `Reason` classes.
+
+Plans are additive and digest-bound: `Provision.plan` reads provider state, `approve` records
+consent, `reject` records refusal, and `apply` creates records under a durable attempt with a lease,
+partial success in the success channel, and replay idempotency. `Cleanup` removes only what a receipt
+proves DomainKit created. `Verify.observe` persists readiness per domain with a backoff ladder,
+public DNS evidence that carries the observed values, and host evidence such as SES status; it
+accepts the requirements to observe, so a domain with no attachment verifies too.
+`Connect` owns token, OAuth, and integration connections with stored continuations, library-owned
+refresh single-flighted through `Storage.withLock`, two-phase revocation, schema-declared token
+fields, and `Connect.discover` for nameserver-based connection discovery.
+
+`domainkit/server` mounts the whole lifecycle as one HttpApi group with fifteen routes, a host
+`Identity` service with an optional per-route `authorize` hook, callbacks that follow the mount, and
+`Server.toWebHandler` for hosts outside HttpApi. `domainkit/client` ships `Transport.fromFetch` with
+capability groups. `domainkit/testing` ships fakes and the Storage and provider conformance suites.
+
+Each root namespace is also a subpath export (`domainkit/Principal`, `domainkit/DnsRecord`, and the
+rest) whose runtime and types resolve to the same unbundled module, so a host that emits
+declarations names DomainKit types portably. Declarations ship one file per module.
+
+Breaking: the Promise root, the sixteen error classes, `ManagedDnsConnections`, the Digest module,
+and the two-route server are gone; hosts provide `Storage` and `Custody` beneath `DomainKit.layer`.
+
 ## domainkit@0.8.0
 
 ### Standardize callable constructors
