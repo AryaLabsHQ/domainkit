@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * @domainkit/react — React flows over a host-owned, browser-safe transport.
  *

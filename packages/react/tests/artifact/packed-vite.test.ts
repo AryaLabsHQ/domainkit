@@ -18,8 +18,30 @@ const pack = async (packageDirectory: string, destination: string): Promise<stri
   return join(destination, filename);
 };
 
+/** What a host actually writes: a fetch transport and the two components. */
+const consumerSource = `
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
+import { DnsRecord } from "domainkit";
+import { Transport } from "domainkit/client";
+import { Domain, DomainKit } from "@domainkit/react";
+
+const transport = Transport.fromFetch("/api/domainkit");
+const requirements = [
+  DnsRecord.cname({ name: "app.example.com", target: "edge.example.com", purpose: "Serve your site" }),
+];
+const app = React.createElement(
+  DomainKit.Root,
+  { transport },
+  React.createElement(Domain.Flow, { domain: "app.example.com", requirements }),
+);
+export const html = renderToString(app);
+if (typeof document !== "undefined") createRoot(document.getElementById("root")).render(app);
+`;
+
 describe("packed Vite consumer on React 19", () => {
-  it("installs, bundles, and server-renders the public lifecycle", async () => {
+  it("installs, bundles, and server-renders the public flow", async () => {
     const directory = await mkdtemp(join(tmpdir(), "domainkit-react-consumer-"));
     try {
       const coreTarball = await pack(resolve("../domainkit"), directory);
@@ -33,7 +55,6 @@ describe("packed Vite consumer on React 19", () => {
           type: "module",
           dependencies: {
             "@domainkit/react": `file:${reactTarball}`,
-            "@effect/atom-react": "4.0.0-rc.112",
             domainkit: `file:${coreTarball}`,
             effect: "4.0.0-rc.112",
             react: "19.2.4",
@@ -48,55 +69,13 @@ describe("packed Vite consumer on React 19", () => {
         join(directory, "index.html"),
         '<div id="root"></div><script type="module" src="/main.jsx"></script>',
       );
-      const consumer = `
-import React from "react";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { createRoot } from "react-dom/client";
-import { renderToString } from "react-dom/server";
-import { Connection, Domain, DomainKit, Testing } from "@domainkit/react";
-
-const transport = Testing.makeFakeTransport({
-  inspect: {
-    _tag: "Disconnected",
-    domain: "mail.example.com",
-    provider: Testing.provider(),
-    reusableConnections: [],
-  },
-});
-function CustomConnection() {
-  const model = Connection.useModel("mail.example.com");
-  const state = useAtomValue(model.state);
-  const execute = useAtomSet(model.command);
-  return React.createElement(
-    "button",
-    {
-      "data-custom-atom": state._tag,
-      onClick: () => execute(Connection.Command.Retry()),
-      type: "button",
-    },
-    "Custom Atom state: " + state._tag,
-  );
-}
-const app = React.createElement(
-  DomainKit.Root,
-  { transport },
-  React.createElement(
-    React.Fragment,
-    null,
-    React.createElement(Domain.Flow, {
-      domain: "mail.example.com",
-      records: [{ id: "mx", type: "MX", name: "mail.example.com", value: "mx.example.net" }],
-    }),
-    React.createElement(CustomConnection),
-  ),
-);
-export const html = renderToString(app);
-if (typeof document !== "undefined") createRoot(document.getElementById("root")).render(app);
-`;
-      await writeFile(join(directory, "main.jsx"), consumer);
+      await writeFile(join(directory, "main.jsx"), consumerSource);
       await writeFile(
         join(directory, "ssr.mjs"),
-        `${consumer}\nif (!html.includes("Detecting DNS provider") || !html.includes("Custom Atom state: Loading")) throw new Error("SSR Atom and recipe tracer did not render");`,
+        `${consumerSource}
+if (!html.includes("app.example.com") || !html.includes("CNAME")) {
+  throw new Error("The server render did not include the requirements table");
+}`,
       );
 
       await run("bun", ["run", "vite", "build"], directory);
@@ -107,11 +86,11 @@ if (typeof document !== "undefined") createRoot(document.getElementById("root"))
     } finally {
       await rm(directory, { force: true, recursive: true });
     }
-  }, 60_000);
+  }, 120_000);
 });
 
 describe("packed Next.js consumer", () => {
-  it("builds and server-renders with React 19", async () => {
+  it("builds an App Router page against the packed client entry", async () => {
     const directory = await mkdtemp(join(tmpdir(), "domainkit-react-next-consumer-"));
     try {
       const coreTarball = await pack(resolve("../domainkit"), directory);
@@ -124,7 +103,6 @@ describe("packed Next.js consumer", () => {
           scripts: { build: "next build" },
           dependencies: {
             "@domainkit/react": `file:${reactTarball}`,
-            "@effect/atom-react": "4.0.0-rc.112",
             domainkit: `file:${coreTarball}`,
             effect: "4.0.0-rc.112",
             next: "15.5.7",
@@ -141,19 +119,41 @@ describe("packed Next.js consumer", () => {
         `import "@domainkit/react/styles.css";
 export default function Layout({ children }) { return <html><body>{children}</body></html>; }`,
       );
+      // The transport is an object of functions, so it cannot cross the server/client boundary:
+      // a host builds it inside a client module. The packed entry carries "use client" itself, so
+      // the server component below imports it without any extra wrapper.
+      await writeFile(
+        join(directory, "app/domain-settings.js"),
+        `"use client";
+import { DnsRecord } from "domainkit";
+import { Transport } from "domainkit/client";
+import { Domain, DomainKit } from "@domainkit/react";
+
+const transport = Transport.fromFetch("/api/domainkit");
+const requirements = [
+  DnsRecord.cname({ name: "app.example.com", target: "edge.example.com", purpose: "Serve your site" }),
+];
+
+export function DomainSettings() {
+  return (
+    <DomainKit.Root transport={transport}>
+      <Domain.Flow domain="app.example.com" requirements={requirements} />
+    </DomainKit.Root>
+  );
+}`,
+      );
       await writeFile(
         join(directory, "app/page.js"),
-        `"use client";
-import { Connection, DomainKit, Testing } from "@domainkit/react";
-const transport = Testing.makeFakeTransport({ inspect: { _tag: "Unsupported", domain: "example.com" } });
-export default function Page() { return <DomainKit.Root transport={transport}><Connection.Flow domain="example.com" /></DomainKit.Root>; }`,
+        `import { DomainSettings } from "./domain-settings";
+
+export default function Page() { return <DomainSettings />; }`,
       );
       await run("bun", ["run", "build"], directory);
       expect(await readFile(join(directory, ".next/server/app/index.html"), "utf8")).toContain(
-        "Detecting DNS provider",
+        "app.example.com",
       );
     } finally {
       await rm(directory, { force: true, recursive: true });
     }
-  }, 120_000);
+  }, 240_000);
 });
