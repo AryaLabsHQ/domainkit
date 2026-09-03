@@ -1309,3 +1309,27 @@
   flex-wrap: wrap;
   gap: 0.375rem;
 }
+
+[data-domainkit-part="observation-expected"] {
+  color: var(--domainkit-muted);
+  font-size: 0.8125rem;
+  margin: 0;
+}
+
+/* The source line above these is a small uppercase label; the values under it are data. */
+[data-domainkit-part="observation-observed"] {
+  color: var(--domainkit-text);
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  margin-top: 0.125rem;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+
+[data-domainkit-part="observation-source"] [data-domainkit-part="observation-note"] {
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}

@@ -71,6 +71,20 @@ test("opens the verification popover and reads per-requirement evidence", async 
   });
 });
 
+test("names the expected value and what each observer read for a failing requirement", async ({
+  page,
+}) => {
+  await page.goto("/?zone=browser6.example&view=evidence");
+  const evidence = page.locator("[data-domainkit-part='observation-list']");
+  await expect(evidence).toBeVisible();
+  await expect(evidence.getByText("Expected edge.example.com")).toBeVisible();
+  await expect(evidence.getByText("Found old.example.com", { exact: true })).toBeVisible();
+  await expect(evidence.getByText("Found old.example.com, older.example.com")).toBeVisible();
+  await expect(evidence.getByText("Found nothing")).toBeVisible();
+  await expect(evidence.getByText("The name resolves somewhere else.")).toBeVisible();
+  await evidence.screenshot({ path: shot("evidence") });
+});
+
 test("takes theme tokens and the color scheme from the root", async ({ page }) => {
   await open(page, "browser4.example", "dark");
   const root = page.locator("[data-domainkit-root]").first();

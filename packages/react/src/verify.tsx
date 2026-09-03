@@ -1,5 +1,5 @@
 import { Popover as BasePopover } from "@base-ui/react/popover";
-import type { DomainKit } from "domainkit";
+import { DnsRecord, type DomainKit } from "domainkit";
 import type { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
@@ -17,6 +17,14 @@ import { useRunner } from "./task.ts";
 export type Readiness = Transport.Readiness;
 export type HostEvidence = Readiness["host"][number];
 export type Requirement = Readiness["requirements"][number];
+export type Evidence = Requirement["evidence"][number];
+
+/**
+ * What the observer read back for the requirement's name. Host evidence reports a status the host
+ * reached rather than values read off a name, so it has none.
+ */
+const valuesOf = (evidence: Evidence): ReadonlyArray<string> | null =>
+  evidence._tag === "Host" ? null : evidence.values;
 
 /**
  * Readiness rides on the state rather than a ref, so it can never outlive the render that
@@ -169,23 +177,44 @@ export function Evidence({ readiness }: EvidenceProps): ReactElement {
   const icons = useIcons();
   return (
     <div data-domainkit-part="observation-list">
-      {readiness.requirements.map((requirement) => (
-        <section data-domainkit-part="observation-group" key={identity(requirement.record)}>
-          <div data-domainkit-part="observation-row">
-            <span data-domainkit-part="observation-record">
-              {messages.recordType(requirement.record)} {requirement.record.name}
-            </span>
-            <RecordStatus status={requirement.status} />
-          </div>
-          <ul>
-            {requirement.evidence.map((evidence, index) => (
-              <li data-domainkit-part="observation-source" key={evidenceKey(evidence, index)}>
-                {messages.evidenceSource(evidence)}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {readiness.requirements.map((requirement) => {
+        const settled = requirement.status === "satisfied";
+        return (
+          <section data-domainkit-part="observation-group" key={identity(requirement.record)}>
+            <div data-domainkit-part="observation-row">
+              <span data-domainkit-part="observation-record">
+                {messages.recordType(requirement.record)} {requirement.record.name}
+              </span>
+              <RecordStatus status={requirement.status} />
+            </div>
+            {settled ? null : (
+              <p data-domainkit-part="observation-expected">
+                {messages.expectedValue(DnsRecord.data(requirement.record))}
+              </p>
+            )}
+            <ul>
+              {requirement.evidence.map((evidence, index) => {
+                const values = settled ? null : valuesOf(evidence);
+                return (
+                  <li data-domainkit-part="observation-source" key={evidenceKey(evidence, index)}>
+                    {messages.evidenceSource(evidence)}
+                    {values === null ? null : (
+                      <span data-domainkit-part="observation-observed">
+                        {values.length === 0
+                          ? messages.observedNothing
+                          : messages.observedValues(values)}
+                      </span>
+                    )}
+                    {evidence.detail === null ? null : (
+                      <p data-domainkit-part="observation-note">{evidence.detail}</p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
       {readiness.host.length === 0 ? null : (
         <section data-domainkit-part="observation-group" data-source="host">
           <h3 data-domainkit-part="observation-source">{messages.hostEvidence}</h3>
@@ -203,7 +232,7 @@ export function Evidence({ readiness }: EvidenceProps): ReactElement {
                 <span data-domainkit-part="record-status" data-status={evidence.status}>
                   {messages.hostEvidenceStatus(evidence.status)}
                 </span>
-                {evidence.detail === undefined ? null : (
+                {evidence.detail === null ? null : (
                   <p data-domainkit-part="observation-note">{evidence.detail}</p>
                 )}
               </li>
