@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { DateTime, Effect, Layer } from "effect";
+import { DateTime, Effect, Layer, Schema } from "effect";
 import { TestClock } from "effect/testing";
 
 import {
@@ -351,6 +351,23 @@ describe("Verify", () => {
         ["PublicDns"],
       );
     }).pipe(withPrincipal, Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver })));
+  });
+
+  it("decodes evidence rows written before values and detail existed", () => {
+    const observedAt = "2026-09-04T00:00:00.000Z";
+    const rows = Schema.decodeUnknownSync(Schema.Array(Verify.Evidence))([
+      { _tag: "PublicDns", resolver: "google", status: "satisfied", observedAt },
+      { _tag: "Provider", provider: "cloudflare", status: "missing", observedAt },
+      { _tag: "Host", source: "ses", status: "ok", label: "SES identity", observedAt },
+    ]);
+    assert.deepStrictEqual(
+      rows.map((row) => [row.detail, row._tag === "Host" ? null : row.values]),
+      [
+        [null, []],
+        [null, []],
+        [null, null],
+      ],
+    );
   });
 
   it.effect("requires every resolver under the all quorum", () => {

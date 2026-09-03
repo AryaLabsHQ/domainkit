@@ -21,13 +21,19 @@ import * as Storage from "./Storage.ts";
  * `detail`, `null` when the requirement is satisfied and otherwise the mismatch summary or the
  * resolver's error text, so a host can render "found X, expected Y".
  */
+// Rows written before these fields existed decode with the empty values.
+const Values = Schema.Array(Schema.String).pipe(Schema.withDecodingDefaultKey(Effect.succeed([])));
+const Detail = Schema.NullOr(Schema.String).pipe(
+  Schema.withDecodingDefaultKey(Effect.succeed(null)),
+);
+
 export class ProviderEvidence extends Schema.TaggedClass<ProviderEvidence>(
   "@domainkit/Evidence/Provider",
 )("Provider", {
   provider: Schema.String,
   status: Storage.RequirementStatus,
-  values: Schema.Array(Schema.String),
-  detail: Schema.NullOr(Schema.String),
+  values: Values,
+  detail: Detail,
   observedAt: Schema.DateTimeUtcFromString,
 }) {}
 export class PublicDnsEvidence extends Schema.TaggedClass<PublicDnsEvidence>(
@@ -35,8 +41,8 @@ export class PublicDnsEvidence extends Schema.TaggedClass<PublicDnsEvidence>(
 )("PublicDns", {
   resolver: Schema.String,
   status: Storage.RequirementStatus,
-  values: Schema.Array(Schema.String),
-  detail: Schema.NullOr(Schema.String),
+  values: Values,
+  detail: Detail,
   observedAt: Schema.DateTimeUtcFromString,
 }) {}
 /** Anything the host knows that DomainKit cannot observe: SES identity status, a CDN cert, ... */
@@ -46,7 +52,7 @@ export class HostEvidence extends Schema.TaggedClass<HostEvidence>("@domainkit/E
     source: Schema.String,
     status: Schema.Literals(["ok", "pending", "failed"]),
     label: Schema.String,
-    detail: Schema.NullOr(Schema.String),
+    detail: Detail,
     observedAt: Schema.DateTimeUtcFromString,
   },
 ) {}
