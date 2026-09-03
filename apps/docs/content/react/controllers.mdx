@@ -72,6 +72,10 @@ afterwards fails `Stale`.
 row's own `nextCheckAt` while it stays mounted. `readiness` holds the latest observation even while
 a new one runs, so the table does not blink.
 
+A requirement that is not satisfied renders what it expected, what each observer found for that
+name, and the observer's own detail line. An observer whose status is `unknown` never answered, so
+it reports no values, and host evidence carries none either.
+
 <ReactExample story="verification" />
 
 ## Abandoning an attempt

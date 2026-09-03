@@ -20,6 +20,30 @@ returned, and, when the requirement is not satisfied, a detail explaining why.
 
 `Verify.Evidence` renders that breakdown on its own, inside a popover by default.
 
+## What a failing check says
+
+```text
+CNAME app.example.com                    ⊗ Different value
+Expected edge.acme.dev
+CLOUDFLARE
+Found old.acme.dev
+PUBLIC DNS VIA GOOGLE
+Found nothing
+The name resolves somewhere else.
+```
+
+| Line            | Comes from                        | Renders when                                                |
+| --------------- | --------------------------------- | ----------------------------------------------------------- |
+| Expected value  | The requirement's own record data | The requirement is not satisfied                            |
+| Observed values | `evidence.values`, per observer   | The requirement is not satisfied and that observer answered |
+| Detail          | `evidence.detail`                 | The observer supplied one                                   |
+
+A satisfied requirement stays quiet: no expected line and no observed line.
+
+Host evidence reports a status your app reached rather than values read off a name, so it carries no
+observed line. Neither does an observer whose own status is `unknown`: it never answered, which is
+not the same as finding nothing, so `missing` stays the one status that reports an empty name.
+
 ## Parts
 
 | Part                   | Renders                                               |
