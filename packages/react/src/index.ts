@@ -10,6 +10,7 @@
  */
 export * as Cleanup from "./cleanup.tsx";
 export * as Connect from "./connect.tsx";
+export * as Domain from "./domain.tsx";
 export * as DomainKit from "./domain-kit.tsx";
 export * as Messages from "./messages.ts";
 export * as Operations from "./operations.tsx";

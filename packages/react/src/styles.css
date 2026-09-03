@@ -99,6 +99,10 @@
   [data-domainkit-part="disconnect-trigger"],
   [data-domainkit-part="actions-trigger"],
   [data-domainkit-part="token-connect"] button,
+  [data-domainkit-part="connection-trigger"],
+  [data-domainkit-part="token-submit"],
+  [data-domainkit-part="plan-decline"],
+  [data-domainkit-part="verification-retry"],
   [data-domainkit-part="copy-action"],
   [data-domainkit-part="zone-copy"],
   [data-domainkit-part="zone-download"],
@@ -129,7 +133,9 @@
   [data-domainkit-part="integration-connect"],
   [data-domainkit-part="oauth-connect"],
   [data-domainkit-part="plan-trigger"],
-  [data-domainkit-part="plan-apply"]
+  [data-domainkit-part="plan-apply"],
+  [data-domainkit-part="connection-trigger"],
+  [data-domainkit-part="token-submit"]
 ) {
   --domainkit-button-face: color-mix(in oklch, var(--domainkit-accent), white 22%);
   --domainkit-button-glint: color-mix(in oklch, var(--domainkit-accent), white 42%);
@@ -152,7 +158,9 @@
   [data-domainkit-part="integration-connect"]:hover:not(:disabled),
   [data-domainkit-part="oauth-connect"]:hover:not(:disabled),
   [data-domainkit-part="plan-trigger"]:hover:not(:disabled),
-  [data-domainkit-part="plan-apply"]:hover:not(:disabled)
+  [data-domainkit-part="plan-apply"]:hover:not(:disabled),
+  [data-domainkit-part="connection-trigger"]:hover:not(:disabled),
+  [data-domainkit-part="token-submit"]:hover:not(:disabled)
 ) {
   --domainkit-button-face: color-mix(in oklch, var(--domainkit-accent), white 28%);
 }
@@ -162,7 +170,9 @@
   [data-domainkit-part="integration-connect"]:active:not(:disabled),
   [data-domainkit-part="oauth-connect"]:active:not(:disabled),
   [data-domainkit-part="plan-trigger"]:active:not(:disabled),
-  [data-domainkit-part="plan-apply"]:active:not(:disabled)
+  [data-domainkit-part="plan-apply"]:active:not(:disabled),
+  [data-domainkit-part="connection-trigger"]:active:not(:disabled),
+  [data-domainkit-part="token-submit"]:active:not(:disabled)
 ) {
   background-image: linear-gradient(
     to bottom,
@@ -180,7 +190,7 @@
   [data-domainkit-part="observe-action"],
   [data-domainkit-part="zone-copy"],
   [data-domainkit-part="zone-download"],
-  [data-domainkit-part="token-connect"] button
+  [data-domainkit-part="plan-decline"]
 ) {
   background-color: var(--domainkit-background);
   border-color: var(--domainkit-border);
@@ -198,7 +208,7 @@
   [data-domainkit-part="observe-action"]:hover:not(:disabled),
   [data-domainkit-part="zone-copy"]:hover:not(:disabled),
   [data-domainkit-part="zone-download"]:hover:not(:disabled),
-  [data-domainkit-part="token-connect"] button:hover:not(:disabled)
+  [data-domainkit-part="plan-decline"]:hover:not(:disabled)
 ) {
   background-color: var(--domainkit-fill);
 }
@@ -1180,4 +1190,122 @@
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Domain.Flow, the connection form, and the review actions
+ * ------------------------------------------------------------------------------------------- */
+
+[data-domainkit-part="domain-flow"] {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+
+[data-domainkit-part="domain-flow"] > [data-domainkit-part="records-panel"],
+[data-domainkit-part="domain-flow"] > [data-domainkit-part="connected-card"] {
+  justify-self: stretch;
+  width: 100%;
+}
+
+[data-domainkit-part="connection-form"] {
+  display: grid;
+  gap: 1rem;
+}
+
+[data-domainkit-part="provider-heading"] {
+  align-items: center;
+  color: var(--domainkit-text);
+  display: flex;
+  font-size: 0.875rem;
+  gap: 0.5rem;
+}
+
+[data-domainkit-part="token-connect"] {
+  display: grid;
+  gap: 0.5rem;
+}
+
+[data-domainkit-part="token-field"] {
+  display: grid;
+  gap: 0.25rem;
+}
+
+[data-domainkit-part="token-field-label"] {
+  align-items: baseline;
+  color: var(--domainkit-muted);
+  display: flex;
+  font-size: 0.8125rem;
+  gap: 0.375rem;
+}
+
+[data-domainkit-part="token-field-optional"] {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+[data-domainkit-part="token-field-input"] {
+  background-color: var(--domainkit-background);
+  border: 1px solid var(--domainkit-border);
+  border-radius: var(--domainkit-control-radius);
+  color: var(--domainkit-text);
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.4375rem 0.625rem;
+  width: 100%;
+}
+
+[data-domainkit-part="token-field-input"]:focus-visible {
+  border-color: var(--domainkit-accent);
+  outline: none;
+}
+
+[data-domainkit-part="token-docs"] {
+  align-items: center;
+  color: var(--domainkit-muted);
+  display: inline-flex;
+  font-size: 0.8125rem;
+  gap: 0.25rem;
+  justify-self: start;
+  text-decoration: none;
+}
+
+[data-domainkit-part="discovery-resolved"],
+[data-domainkit-part="discovery-candidates"] {
+  display: grid;
+  gap: 0.5rem;
+}
+
+[data-domainkit-part="review-actions"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+[data-domainkit-part="provisioning-status"],
+[data-domainkit-part="cleanup-status"],
+[data-domainkit-part="plan-decline-reason"],
+[data-domainkit-part="plan-empty"] {
+  color: var(--domainkit-muted);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+[data-domainkit-part="provisioning-status"]:empty,
+[data-domainkit-part="cleanup-status"]:empty,
+[data-domainkit-part="connection-status"]:empty {
+  display: none;
+}
+
+[data-domainkit-part="record-purpose"] {
+  color: var(--domainkit-muted);
+  display: block;
+  font-size: 0.8125rem;
+}
+
+[data-domainkit-part="host-evidence"] {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
 }

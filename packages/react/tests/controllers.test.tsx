@@ -6,13 +6,26 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { Cleanup, Connect, DomainKit, Provision, Testing, Verify } from "../src/index.ts";
 
-const requirements = [
-  DnsRecord.cname({
-    name: "app.example.com",
-    purpose: "Serve your site",
-    target: "edge.example.com",
-  }),
-];
+/** One zone per case: fake providers share a process-wide zone table. */
+let cases = 0;
+const scenario = (
+  options: { readonly capabilities?: ReadonlyArray<Transport.Capability> } = {},
+) => {
+  const zone = `unit${(cases += 1)}.example`;
+  const domain = `app.${zone}`;
+  return {
+    domain,
+    requirements: [
+      DnsRecord.cname({ name: domain, purpose: "Serve your site", target: "edge.example.com" }),
+    ],
+    sibling: `mail.${zone}`,
+    transport: Testing.transport({
+      ...(options.capabilities === undefined ? {} : { capabilities: options.capabilities }),
+      provider: { zones: [zone] },
+    }),
+    zone,
+  };
+};
 
 const wrap = (transport: Transport.Transport) =>
   function Wrapper({ children }: { readonly children: ReactNode }) {
@@ -36,7 +49,7 @@ const connectDomain = async (transport: Transport.Transport, domain: string) => 
 
 describe("DomainKit.Root", () => {
   it("keeps transport identity across renders, so an inline value does not restart controllers", async () => {
-    const base = Testing.transport();
+    const { domain, transport: base } = scenario();
     const { calls, ...groups } = base;
     function Harness() {
       const [, setTick] = useState(0);
@@ -47,7 +60,7 @@ describe("DomainKit.Root", () => {
       // A new object every render: exactly what writing the transport inline in JSX produces.
       return (
         <DomainKit.Root transport={{ ...groups }}>
-          <Connect.Flow domain="app.example.com" />
+          <Connect.Flow domain={domain} />
         </DomainKit.Root>
       );
     }
@@ -60,7 +73,7 @@ describe("DomainKit.Root", () => {
   });
 
   it("exposes the transport and the capabilities the host declared", async () => {
-    const transport = Testing.transport({ capabilities: ["connection", "verification"] });
+    const { transport } = scenario({ capabilities: ["connection", "verification"] });
     function Probe() {
       const held = DomainKit.useTransport();
       return <output>{Object.keys(held).sort().join(",")}</output>;
@@ -76,10 +89,10 @@ describe("DomainKit.Root", () => {
 
 describe("Connect.useController", () => {
   it("renders the token fields the provider declares and connects with their values", async () => {
-    const transport = Testing.transport();
+    const { domain, requirements, transport } = scenario();
     render(
       <DomainKit.Root transport={transport}>
-        <Connect.Flow domain="app.example.com" />
+        <Connect.Flow domain={domain} />
       </DomainKit.Root>,
     );
     await userEvent.click(await screen.findByRole("button", { name: "Connect" }));
@@ -91,16 +104,16 @@ describe("Connect.useController", () => {
     await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
     const start = transport.calls.find((call) => call.method === "connection.start");
     expect(start?.input).toMatchObject({
-      domain: "app.example.com",
+      domain,
       method: { _tag: "Token", values: { token: "secret-token" } },
       provider: "fake",
     });
   });
 
   it("renders a failure from the error's reason, never from its tag", async () => {
-    const transport = Testing.transport();
+    const { domain, requirements, transport } = scenario();
     function Panel() {
-      const controller = Connect.useController({ domain: "app.example.com" });
+      const controller = Connect.useController({ domain });
       return (
         <>
           <button
@@ -123,16 +136,16 @@ describe("Connect.useController", () => {
   });
 
   it("preselects a connection discovery already found for the zone", async () => {
-    const transport = Testing.transport();
-    await connectDomain(transport, "app.example.com");
+    const { domain, sibling, transport, zone } = scenario();
+    await connectDomain(transport, domain);
     render(
       <DomainKit.Root transport={transport}>
-        <Connect.Flow domain="mail.example.com" />
+        <Connect.Flow domain={sibling} />
       </DomainKit.Root>,
     );
     await userEvent.click(await screen.findByRole("button", { name: "Connect" }));
-    await screen.findByText("example.com already serves this domain");
-    await userEvent.click(screen.getByRole("button", { name: "Use example.com" }));
+    await screen.findByText(`${zone} already serves this domain`);
+    await userEvent.click(screen.getByRole("button", { name: `Use ${zone}` }));
     await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
     expect(transport.calls.some((call) => call.method === "connection.discover")).toBe(true);
   });
@@ -140,13 +153,13 @@ describe("Connect.useController", () => {
 
 describe("Provision.useController", () => {
   it("plans, approves, and applies, handing the receipt to the host", async () => {
-    const transport = Testing.transport();
-    await connectDomain(transport, "app.example.com");
+    const { domain, requirements, transport } = scenario();
+    await connectDomain(transport, domain);
     const applied: Array<string> = [];
     render(
       <DomainKit.Root transport={transport}>
         <Provision.Flow
-          domain="app.example.com"
+          domain={domain}
           onApplied={(receipt) => applied.push(receipt.status)}
           requirements={requirements}
         />
@@ -160,11 +173,11 @@ describe("Provision.useController", () => {
   });
 
   it("declines a plan and reports the attempt as declined", async () => {
-    const transport = Testing.transport();
-    await connectDomain(transport, "app.example.com");
+    const { domain, requirements, transport } = scenario();
+    await connectDomain(transport, domain);
     render(
       <DomainKit.Root transport={transport}>
-        <Provision.Flow domain="app.example.com" requirements={requirements} />
+        <Provision.Flow domain={domain} requirements={requirements} />
       </DomainKit.Root>,
     );
     await userEvent.click(screen.getByRole("button", { name: "Review changes" }));
@@ -176,10 +189,10 @@ describe("Provision.useController", () => {
 
 describe("Verify.useController", () => {
   it("observes on mount and reports readiness per requirement", async () => {
-    const transport = Testing.transport();
-    await connectDomain(transport, "app.example.com");
+    const { domain, transport } = scenario();
+    await connectDomain(transport, domain);
     function Panel() {
-      const controller = Verify.useController({ domain: "app.example.com", polling: false });
+      const controller = Verify.useController({ domain, polling: false });
       return <Verify.Status controller={controller} />;
     }
     render(<Panel />, { wrapper: wrap(transport) });
@@ -191,10 +204,10 @@ describe("Verify.useController", () => {
 
 describe("Cleanup.useController", () => {
   it("fails with a rendered reason when the domain has no receipt to undo", async () => {
-    const transport = Testing.transport();
-    await connectDomain(transport, "app.example.com");
+    const { domain, transport } = scenario();
+    await connectDomain(transport, domain);
     function Panel() {
-      const controller = Cleanup.useController({ domain: "app.example.com" });
+      const controller = Cleanup.useController({ domain });
       return (
         <>
           <button onClick={controller.plan} type="button">

@@ -45,6 +45,8 @@ export interface Catalog {
 
   // Connection
   readonly connectTitle: (provider: string) => string;
+  /** The dialog heading before a provider is chosen. */
+  readonly connectAnyTitle: string;
   readonly connectDescription: (domain: string) => string;
   readonly connectedTo: (provider: string) => string;
   readonly reconnectRequired: (provider: string) => string;
@@ -205,6 +207,7 @@ export const english: Catalog = {
   observing: "Checking DNS…",
 
   connectTitle: (provider) => `Connect ${provider}`,
+  connectAnyTitle: "Connect your DNS provider",
   connectDescription: (domain) => `Authorize DNS changes for ${domain}.`,
   connectedTo: (provider) => `${provider} connected`,
   reconnectRequired: (provider) => `${provider} needs to be reconnected`,

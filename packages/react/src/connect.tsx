@@ -589,7 +589,12 @@ export function Dialog({
   const [open, setOpen] = useState(false);
   const busy = controller.state._tag === "Submitting";
   const snapshot = controller.snapshot;
-  const heading = title ?? messages.connectTitle(snapshot?.provider ?? messages.connect);
+  const provider = snapshot?.provider;
+  const heading =
+    title ??
+    (provider === null || provider === undefined
+      ? messages.connectAnyTitle
+      : messages.connectTitle(provider));
   const body = children ?? <Form controller={controller} />;
   if (render !== undefined) return <>{render({ children: body, open: true })}</>;
   return (
