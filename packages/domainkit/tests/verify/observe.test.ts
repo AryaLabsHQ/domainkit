@@ -238,6 +238,20 @@ describe("Verify", () => {
         DateTime.toEpochMillis(changed.nextCheckAt ?? now) - DateTime.toEpochMillis(now),
         15_000,
       );
+      yield* TestClock.adjust("30 minutes");
+      const repolicied = yield* Verify.observe({
+        domain: "app.example.com",
+        requirements: requirements.map((record) =>
+          record._tag === "TXT"
+            ? DnsRecord.txt({ name: record.name, value: record.value, policy: "exclusive" })
+            : record,
+        ),
+      });
+      const later = yield* DateTime.now;
+      assert.strictEqual(
+        DateTime.toEpochMillis(repolicied.nextCheckAt ?? later) - DateTime.toEpochMillis(later),
+        15_000,
+      );
     }).pipe(
       withPrincipal,
       Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver([]) })),
