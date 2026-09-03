@@ -183,11 +183,14 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
         });
       });
 
+    /** Plaintext credential with the context decoded from its stored envelope. */
     const open = (authorization: Storage.Authorization): Fx<Provider.Credential> =>
       Effect.gen(function* () {
+        const definition = yield* providers.get(authorization.provider);
         const row = yield* storage.authorizations.credential(authorization.id);
         const secret = yield* custody.open(row.ciphertext);
-        return { secret, context: authorization.context };
+        const context = yield* Provider.decodeContext(definition, authorization.context);
+        return { secret, context };
       });
 
     const refresherFor = (definition: Provider.Definition, method: Storage.AuthMethod) =>
@@ -300,7 +303,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
           provider: input.definition.id,
           method: input.method,
           capabilities: held,
-          context: input.issued.context,
+          context: yield* Provider.encodeContext(input.definition, input.issued.context),
           revocation: "active",
           createdBy: principal.actorId,
           createdAt: yield* DateTime.now,
@@ -314,6 +317,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
       });
 
     const attachWith = (input: {
+      readonly definition: Provider.Definition;
       readonly connection: Storage.Connection;
       readonly session: Provider.Session;
       readonly domain: string;
@@ -342,7 +346,10 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
               connectionId: input.connection.id,
               domain,
               zone: resolution.target.zone,
-              target: resolution.target,
+              target: {
+                ...resolution.target,
+                context: yield* Provider.encodeContext(input.definition, resolution.target.context),
+              },
             });
         }
       });
@@ -430,7 +437,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
             const attached =
               input.domain === undefined
                 ? null
-                : yield* attachWith({ connection, session, domain: input.domain });
+                : yield* attachWith({ definition, connection, session, domain: input.domain });
             return started(connection, attached);
           }
           case "OAuth":
@@ -564,7 +571,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
             const attached =
               payload.domain === null
                 ? null
-                : yield* attachWith({ connection, session, domain: payload.domain });
+                : yield* attachWith({ definition, connection, session, domain: payload.domain });
             // The connection is durable at this point. A continuation that expired or was spent
             // while the exchange ran no longer changes the outcome, so the result is returned.
             yield* storage.continuations.consume(input.continuationId).pipe(
@@ -581,8 +588,11 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
     const attach: Service["attach"] = (input) =>
       Effect.gen(function* () {
         const connection = yield* storage.connections.get(input.connectionId);
+        const authorization = yield* storage.authorizations.get(connection.authorizationId);
+        const definition = yield* providers.get(authorization.provider);
         const session = yield* sessionFor(connection);
         return yield* attachWith({
+          definition,
           connection,
           session,
           domain: input.domain,
@@ -611,7 +621,13 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
       Effect.gen(function* () {
         const attachment = yield* storage.attachments.get(attachmentId);
         const connection = yield* storage.connections.get(attachment.connectionId);
-        const target = yield* DomainKitError.decode(Target, attachment.target, "target");
+        const authorization = yield* storage.authorizations.get(connection.authorizationId);
+        const definition = yield* providers.get(authorization.provider);
+        const stored = yield* DomainKitError.decode(Target, attachment.target, "target");
+        const target: Provider.Target = {
+          ...stored,
+          context: yield* Provider.decodeContext(definition, stored.context),
+        };
         const built = yield* sessionFor(connection);
         // The zone must still be reachable by this credential: it may have moved account, been
         // deleted, or become a kind the provider cannot host records in.

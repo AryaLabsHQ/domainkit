@@ -91,6 +91,7 @@ export const provider = (options: Options = {}): Provider.Definition<TeamContext
     id: "vercel",
     name: "Vercel",
     context: TeamContext,
+    contextVersion: "vercel.v1",
     auth: {
       token: Provider.tokenAuth({
         label: "Access token",

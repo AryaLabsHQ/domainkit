@@ -213,8 +213,31 @@ export interface Definition<Context = unknown> {
   };
   /** Schema for the account/zone context stored on authorizations and attachments. */
   readonly context: Schema.Codec<Context, unknown, never, never>;
+  /** Tag written into every stored context envelope, e.g. `cloudflare.v1`; bump it with the schema. */
+  readonly contextVersion: string;
+  /** Upgrade an envelope written under an older `contextVersion`; absent means `Unsupported`. */
+  readonly migrateContext?: (envelope: Envelope) => Fx<Context>;
   readonly session: (credential: Credential) => Session;
 }
+
+/** How provider context is persisted: the definition's version tag beside the encoded value. */
+export const Envelope = Schema.Struct({ version: Schema.String, value: Schema.Unknown });
+export type Envelope = typeof Envelope.Type;
+
+/** Wrap a context value for storage; a value the schema rejects fails `InvalidInput`. */
+export const encodeContext = <Context>(
+  definition: Definition<Context>,
+  value: Context,
+): Effect.Effect<Envelope, DomainKitError.DomainKitError> =>
+  Schema.encodeEffect(definition.context)(value).pipe(
+    Effect.map((encoded) => ({ version: definition.contextVersion, value: encoded })),
+    Effect.mapError(
+      (cause) =>
+        new DomainKitError.DomainKitError({
+          reason: new DomainKitError.InvalidInput({ message: cause.message, field: "context" }),
+        }),
+    ),
+  );
 
 export type AuthMethod = "token" | "oauth" | "integration";
 
@@ -232,6 +255,9 @@ export const make = <Context>(definition: Definition<Context>): Definition<Conte
   }
   if (methods(definition).length === 0) {
     throw invalid(`Provider ${definition.id} declares no auth method`, "auth");
+  }
+  if (definition.contextVersion.length === 0) {
+    throw invalid(`Provider ${definition.id} needs a contextVersion`, "contextVersion");
   }
   return definition;
 };
@@ -261,9 +287,26 @@ export const resolveAmong = (
   return Resolution.NotFound();
 };
 
-/** Decode stored context with the definition's schema; a mismatch is `InvalidInput`. */
+/**
+ * Decode a stored envelope: the current version decodes with `context`, an older one goes
+ * through `migrateContext`, anything else fails `Unsupported`.
+ */
 export const decodeContext = <Context>(
   definition: Definition<Context>,
-  context: unknown,
+  stored: unknown,
 ): Effect.Effect<Context, DomainKitError.DomainKitError> =>
-  DomainKitError.decode(definition.context, context, "context");
+  DomainKitError.decode(Envelope, stored, "context").pipe(
+    Effect.flatMap((envelope) => {
+      if (envelope.version === definition.contextVersion) {
+        return DomainKitError.decode(definition.context, envelope.value, "context");
+      }
+      if (definition.migrateContext !== undefined) return definition.migrateContext(envelope);
+      return DomainKitError.fail(
+        new DomainKitError.Unsupported({
+          provider: definition.id,
+          operation: "context",
+          message: `${definition.id} context version ${envelope.version} is not supported (current ${definition.contextVersion})`,
+        }),
+      );
+    }),
+  );

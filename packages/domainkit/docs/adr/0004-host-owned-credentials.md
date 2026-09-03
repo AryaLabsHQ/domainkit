@@ -19,7 +19,9 @@ continuations, attempts, and readiness scoped by that principal. `Custody` seals
 the core ships AES-256-GCM over Web Crypto from one configured key, and a host with a KMS provides
 its own implementation.
 
-`Storage` never sees plaintext: `Connect` seals a credential through `Custody` before writing it
+Provider context is persisted as an envelope `{ version, value }` tagged with the definition's
+`contextVersion`; decoding a newer or unknown version fails `Unsupported` unless the definition
+migrates it. `Storage` never sees plaintext: `Connect` seals a credential through `Custody` before writing it
 and opens it after reading it. Every session handed to `Provision`, `Cleanup`, or `Verify` is re-checked against the provider:
 the attached zone must still be among the targets the credential can reach, else `NotFound`.
 Token methods declare their input once as a `fields` schema (secrets as `Redacted`, optional

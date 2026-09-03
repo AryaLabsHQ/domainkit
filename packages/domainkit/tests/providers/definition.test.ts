@@ -20,6 +20,7 @@ const tokenOnly = Provider.make({
   id: "porkbun",
   name: "Porkbun",
   context: Schema.Struct({ apiKey: Schema.String }),
+  contextVersion: "porkbun.v1",
   auth: {
     token: Provider.tokenAuth({
       label: "API key",
@@ -62,10 +63,36 @@ describe("Provider.make and Providers", () => {
       const missing = yield* registry.get("nope").pipe(Effect.flip);
       assert.strictEqual(missing.reason._tag, "NotFound");
       assert.throws(() => Providers.make([tokenOnly, tokenOnly]));
-      const context = yield* Provider.decodeContext(tokenOnly, { apiKey: "k" });
+      const envelope = yield* Provider.encodeContext(tokenOnly, { apiKey: "k" });
+      assert.deepStrictEqual(envelope, { version: "porkbun.v1", value: { apiKey: "k" } });
+      const context = yield* Provider.decodeContext(tokenOnly, envelope);
       assert.deepStrictEqual(context, { apiKey: "k" });
-      const invalid = yield* Provider.decodeContext(tokenOnly, {}).pipe(Effect.flip);
+      const invalid = yield* Provider.decodeContext(tokenOnly, { apiKey: "k" }).pipe(Effect.flip);
       assert.strictEqual(invalid.reason._tag, "InvalidInput");
+      const older = yield* Provider.decodeContext(tokenOnly, {
+        version: "porkbun.v0",
+        value: {},
+      }).pipe(Effect.flip);
+      assert.strictEqual(older.reason._tag, "Unsupported");
+      const migrating = Provider.make({
+        ...tokenOnly,
+        migrateContext: (stored) =>
+          stored.version === "porkbun.v0"
+            ? Effect.succeed({ apiKey: String((stored.value as { key?: string }).key ?? "") })
+            : DomainKitError.fail(
+                new DomainKitError.Unsupported({
+                  provider: "porkbun",
+                  operation: "context",
+                  message: "no",
+                }),
+              ),
+      });
+      const migrated = yield* Provider.decodeContext(migrating, {
+        version: "porkbun.v0",
+        value: { key: "legacy" },
+      });
+      assert.deepStrictEqual(migrated, { apiKey: "legacy" });
+      assert.throws(() => Provider.make({ ...tokenOnly, contextVersion: "" }));
       const issued = yield* (tokenOnly.auth.token ?? bail("token")).authenticate({
         token: Redacted.make("t"),
       });

@@ -63,6 +63,20 @@ describe("Connect", () => {
         started.connection.authorizationId,
       );
       assert.ok(!credential.ciphertext.includes("secret"));
+      const authorization = yield* storage.authorizations.get(started.connection.authorizationId);
+      assert.deepStrictEqual(authorization.context, {
+        version: "fake.v1",
+        value: { account: "fake" },
+      });
+      assert.strictEqual(
+        (yield* Connect.session(started.attachment?.id ?? "")).target.zone,
+        "example.com",
+      );
+      assert.deepStrictEqual(started.attachment?.target, {
+        zone: "example.com",
+        label: "example.com",
+        context: { version: "fake.v1", value: { zone: "example.com" } },
+      });
       const { session, target } = yield* Connect.session(started.attachment?.id ?? "");
       assert.strictEqual(target.zone, "example.com");
       assert.deepStrictEqual(yield* session.dns(target).list("example.com"), []);

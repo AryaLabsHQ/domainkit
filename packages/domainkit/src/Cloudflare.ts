@@ -192,6 +192,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
     id: "cloudflare",
     name: "Cloudflare",
     context: AccountContext,
+    contextVersion: "cloudflare.v1",
     auth: {
       token: Provider.tokenAuth({
         label: "API token",

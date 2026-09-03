@@ -34,7 +34,7 @@ export interface FakeProviderOptions {
   readonly failWrite?: (index: number) => boolean;
 }
 
-export interface FakeProvider extends Provider.Definition<{ readonly account: string }> {
+export interface FakeProvider extends Provider.Definition<FakeContext> {
   readonly records: (zone: string) => ReadonlyArray<DnsRecord.Observed>;
   /** Every credential the fake issued, oldest first. */
   readonly issued: () => ReadonlyArray<string>;
@@ -50,7 +50,12 @@ interface Zone {
 /** Every fake zone created in this process, so `resolver()` can answer from them. */
 const registry = new Set<Zone>();
 
-const Context = Schema.Struct({ account: Schema.String });
+/** Account context carries `account`; target context carries `zone`. One schema covers both. */
+const Context = Schema.Struct({
+  account: Schema.optionalKey(Schema.String),
+  zone: Schema.optionalKey(Schema.String),
+});
+type FakeContext = typeof Context.Type;
 const TargetContext = Schema.Struct({ zone: Schema.String });
 
 /** A provider definition with a token method (and optional OAuth) over in-memory zones. */
@@ -125,10 +130,11 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
     revoke: () => Effect.sync(() => void (revokedCount += 1)),
   };
 
-  const definition = Provider.make<{ readonly account: string }>({
+  const definition = Provider.make<FakeContext>({
     id,
     name: `Fake ${id}`,
     context: Context,
+    contextVersion: "fake.v1",
     auth: {
       token: Provider.tokenAuth({
         label: "Token (fake)",

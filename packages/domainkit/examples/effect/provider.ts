@@ -8,6 +8,7 @@ export const porkbun = Provider.make({
   id: "porkbun",
   name: "Porkbun",
   context: Context,
+  contextVersion: "porkbun.v1",
   auth: {
     token: {
       label: "API key",

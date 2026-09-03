@@ -7,7 +7,7 @@ import * as DnsRecord from "../../DnsRecord.ts";
 import * as DomainKitError from "../../DomainKitError.ts";
 import * as DomainKit from "../../DomainKit.ts";
 import * as Principal from "../../Principal.ts";
-import type * as Provider from "../../Provider.ts";
+import * as Provider from "../../Provider.ts";
 import * as Provision from "../../Provision.ts";
 import * as Receipt from "../../Receipt.ts";
 import * as Resolver from "../../Resolver.ts";
@@ -54,7 +54,7 @@ const attachZone = (
       provider: definition.id,
       method: "token",
       capabilities: ["dns:read", "dns:write"],
-      context: credential.context,
+      context: yield* Provider.encodeContext(definition, credential.context),
       revocation: "active",
       createdBy: principal.actorId,
       createdAt: now,
