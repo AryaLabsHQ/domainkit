@@ -94,7 +94,11 @@ transport does not declare never renders, so a transport built with
 provisioning and cleanup. `readOnly` covers the authorization a transport cannot express, such as a
 member of an organisation who reaches the same routes.
 
-Observation stays available, because checking DNS reads the world rather than changing the domain.
+Verification does not wait for a connection: the flow observes the requirements it was given, so a
+domain with no provider attached still reports which records are in place.
+
+Observation stays available in read-only, because checking DNS reads the world rather than changing
+the domain.
 If your `Identity.authorize` denies `observe` to members, pass `slots={{ verification: () => null }}`.
 
 ## Controllers

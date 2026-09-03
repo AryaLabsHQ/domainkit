@@ -134,6 +134,26 @@ test("renders a read-only domain as state with no controls", async ({ page }) =>
   await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("read-only") });
 });
 
+test("verifies a domain with no attachment from the requirements the flow was given", async ({
+  page,
+}) => {
+  await open(page, "browser10.example");
+  // Nothing is connected, so the receipt path has nothing to look for; the flow names its own.
+  await expect(page.getByRole("button", { name: "Connect" })).toBeVisible();
+  // A status column only appears once an observation came back.
+  await expect(page.getByRole("columnheader", { name: "Status" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Missing" })).toHaveCount(2);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Check/ }).click();
+  const evidence = page.locator("[data-domainkit-part='observation-list']");
+  await expect(evidence).toBeVisible();
+  await expect(evidence.locator("[data-domainkit-part='observation-group']")).toHaveCount(2);
+  await page
+    .locator("[data-domainkit-part='verification-popover']")
+    .screenshot({ path: shot("unattached-verify") });
+});
+
 test("takes theme tokens and the color scheme from the root", async ({ page }) => {
   await open(page, "browser4.example", "dark");
   const root = page.locator("[data-domainkit-root]").first();

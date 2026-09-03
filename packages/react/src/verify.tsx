@@ -3,7 +3,15 @@ import { DnsRecord, type DomainKit } from "domainkit";
 import type { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
-import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
@@ -55,17 +63,30 @@ export interface Controller {
 
 export interface Options {
   readonly domain: string;
+  /**
+   * What to look for. Supplied requirements win over the attachment's latest provisioning receipt,
+   * which is what lets a domain with no attachment be verified at all.
+   */
+  readonly requirements?: ReadonlyArray<DnsRecord.Model>;
   /** Re-observe at each `nextCheckAt` while mounted. Default true. */
   readonly polling?: boolean;
 }
 
 /** Observe once on mount, then follow the readiness's own `nextCheckAt` while polling is on. */
-export function useController({ domain, polling = true }: Options): Controller {
+export function useController({ domain, polling = true, requirements }: Options): Controller {
   const { emit, revision, transport } = useDomainKit();
   const verification = transport.verification;
   const runner = useRunner();
   const [state, setState] = useState<State>(State.Idle());
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Requirements identify themselves by content, so a host writing the array inline does not
+  // rebuild `observe` on every render and set the mount effect observing in a loop.
+  const signature = requirements === undefined ? null : requirements.map(identity).join("|");
+  const requested = useMemo(
+    () => (requirements === undefined ? undefined : { requirements }),
+    [signature],
+  );
 
   // Readiness belongs to the domain that was observed. Dropping it while rendering, rather than
   // in an effect, keeps the first frame for a new domain free of the previous one's evidence.
@@ -79,14 +100,19 @@ export function useController({ domain, polling = true }: Options): Controller {
     if (verification === undefined) return;
     clearTimeout(timer.current);
     setState((previous) => State.Observing({ readiness: readinessOf(previous) }));
-    runner.run(verification.observe(domain), {
-      onFailure: (error) => {
-        setState((previous) => State.Failure({ error, readiness: readinessOf(previous) }));
-        emit(Event.Failed({ domain, error }));
+    runner.run(
+      requested === undefined
+        ? verification.observe(domain)
+        : verification.observe(domain, requested),
+      {
+        onFailure: (error) => {
+          setState((previous) => State.Failure({ error, readiness: readinessOf(previous) }));
+          emit(Event.Failed({ domain, error }));
+        },
+        onSuccess: (readiness) => setState(State.Observed({ readiness })),
       },
-      onSuccess: (readiness) => setState(State.Observed({ readiness })),
-    });
-  }, [domain, emit, runner, verification]);
+    );
+  }, [domain, emit, requested, runner, verification]);
 
   useEffect(() => {
     observe();

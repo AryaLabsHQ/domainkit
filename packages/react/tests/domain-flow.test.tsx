@@ -2,6 +2,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DnsRecord, type Receipt } from "domainkit";
 
+import { useEffect, useState } from "react";
+
 import { Connect, Domain, DomainKit, Records, Testing } from "../src/index.ts";
 
 /**
@@ -281,5 +283,46 @@ describe("Domain.Flow read-only", () => {
     );
     expect(await screen.findByRole("button", { name: "Review changes" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Detach domain" })).toBeDefined();
+  });
+});
+
+describe("Domain.Flow verification requirements", () => {
+  const observeCalls = (transport: {
+    readonly calls: ReadonlyArray<{ method: string; input: unknown }>;
+  }) => transport.calls.filter((call) => call.method === "verification.observe");
+
+  it("verifies a domain with no attachment by naming what it asked for", async () => {
+    const { domain, requirements, transport } = scenario();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await waitFor(() => expect(observeCalls(transport).length).toBeGreaterThan(0));
+    // Two arguments, so the fake records the list: the domain, then what to look for.
+    expect(observeCalls(transport)[0]?.input).toEqual([domain, { requirements }]);
+    // Nothing is attached, so the receipt path would have failed the call outright.
+    await waitFor(() => expect(screen.getByRole("button", { name: /Check/ })).toBeDefined());
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("does not re-observe when the host writes the requirements inline", async () => {
+    const { domain, requirements, transport } = scenario();
+    function Harness() {
+      const [, setTick] = useState(0);
+      useEffect(() => {
+        setTick(1);
+        setTick(2);
+      }, []);
+      return (
+        <DomainKit.Root transport={transport}>
+          <Domain.Flow domain={domain} requirements={[...requirements]} />
+        </DomainKit.Root>
+      );
+    }
+    render(<Harness />);
+    await waitFor(() => expect(observeCalls(transport).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Check/ })).toBeDefined());
+    expect(observeCalls(transport)).toHaveLength(1);
   });
 });

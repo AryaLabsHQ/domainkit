@@ -179,7 +179,8 @@ export function Flow({
       ? {}
       : { receiptId: Receipt.ReceiptId.make(connection.snapshot.lastReceiptId) }),
   });
-  const verification = Verify.useController({ domain });
+  // The flow knows what it asked for, so a domain with no attachment can still be verified.
+  const verification = Verify.useController({ domain, requirements });
   const readiness = verification.readiness;
   return usePart(
     "div",

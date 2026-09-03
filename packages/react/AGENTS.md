@@ -19,6 +19,9 @@ tenancy, or product verification policy.
 - `readOnly` on `DomainKit.Root` or `Domain.Flow` renders the state without the controls that
   change it, for authorization a transport cannot express. Parts read it through `useReadOnly()`.
   Observation stays available: checking DNS reads the world rather than changing the domain.
+- `Verify.useController` and `Domain.Flow` pass the flow's requirements to `observe`, so a domain
+  with no attachment verifies against what the host asked for rather than a receipt it has not
+  earned yet. The requirement set is keyed by content, never array identity.
 - An interactive connect returns the customer to the page they started from. `returnTo` on the
   connect controller and both flows names another destination; `null` defers to the server.
 - `src/styles.css` ships wholly inside `@layer domainkit`, so a host's own rules win by default. An
