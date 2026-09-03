@@ -27,7 +27,7 @@ const scenario = (
   };
 };
 
-const wrap = (transport: Transport.Transport) =>
+const wrap = (transport: Transport.Interface) =>
   function Wrapper({ children }: { readonly children: ReactNode }) {
     return <DomainKit.Root transport={transport}>{children}</DomainKit.Root>;
   };
@@ -43,7 +43,7 @@ const click = async (name: string | RegExp) => {
 };
 
 /** Connect a domain with the fake provider's token method and wait for the snapshot. */
-const connectDomain = async (transport: Transport.Transport, domain: string) => {
+const connectDomain = async (transport: Transport.Interface, domain: string) => {
   const view = render(
     <DomainKit.Root transport={transport}>
       <Connect.Flow domain={domain} />
@@ -59,9 +59,9 @@ const connectDomain = async (transport: Transport.Transport, domain: string) => 
 
 /** Observation needs a receipt, so a domain under test is connected and applied first. */
 const applyDomain = async (
-  transport: Transport.Transport,
+  transport: Transport.Interface,
   domain: string,
-  requirements: ReadonlyArray<DnsRecord.DnsRecord>,
+  requirements: ReadonlyArray<DnsRecord.Model>,
 ) => {
   await connectDomain(transport, domain);
   const view = render(

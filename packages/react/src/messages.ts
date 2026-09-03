@@ -3,7 +3,7 @@
  * status literal directly: each one arrives here first, so a host translates the whole surface by
  * passing `messages` to `DomainKit.Root`.
  */
-import type { DnsRecord, DomainKitError, Plan, Receipt, Storage } from "domainkit";
+import type { DnsRecord, DomainKit, Plan, Reason, Receipt, Storage } from "domainkit";
 
 export interface Catalog {
   // Actions
@@ -88,8 +88,8 @@ export interface Catalog {
   readonly recordType: (record: DnsRecord.Observed) => string;
 
   // Receipts
-  readonly applied: (receipt: Receipt.Receipt) => string;
-  readonly cleaned: (receipt: Receipt.Receipt) => string;
+  readonly applied: (receipt: Receipt.Model) => string;
+  readonly cleaned: (receipt: Receipt.Model) => string;
   readonly partiallyApplied: string;
   readonly partiallyCleaned: string;
   readonly outcome: (outcome: Receipt.Outcome) => string;
@@ -105,23 +105,23 @@ export interface Catalog {
   readonly hostEvidence: string;
   readonly noEvidence: string;
 
-  // Failures, rendered from `DomainKitError.reason`
-  readonly invalidInput: (reason: DomainKitError.InvalidInput) => string;
-  readonly unauthenticated: (reason: DomainKitError.Unauthenticated) => string;
-  readonly forbidden: (reason: DomainKitError.Forbidden) => string;
-  readonly notFound: (reason: DomainKitError.NotFound) => string;
-  readonly conflict: (reason: DomainKitError.Conflict) => string;
-  readonly stale: (reason: DomainKitError.Stale) => string;
-  readonly expired: (reason: DomainKitError.Expired) => string;
-  readonly busy: (reason: DomainKitError.Busy) => string;
-  readonly providerRejected: (reason: DomainKitError.ProviderRejected) => string;
-  readonly providerUnavailable: (reason: DomainKitError.ProviderUnavailable) => string;
-  readonly providerConflict: (reason: DomainKitError.ProviderConflict) => string;
-  readonly unsupported: (reason: DomainKitError.Unsupported) => string;
-  readonly reconnect: (reason: DomainKitError.Reconnect) => string;
-  readonly storageFailed: (reason: DomainKitError.StorageFailed) => string;
-  readonly cryptoFailed: (reason: DomainKitError.CryptoFailed) => string;
-  readonly resolverFailed: (reason: DomainKitError.ResolverFailed) => string;
+  // Failures, rendered from the error's reason
+  readonly invalidInput: (reason: Reason.InvalidInput) => string;
+  readonly unauthenticated: (reason: Reason.Unauthenticated) => string;
+  readonly forbidden: (reason: Reason.Forbidden) => string;
+  readonly notFound: (reason: Reason.NotFound) => string;
+  readonly conflict: (reason: Reason.Conflict) => string;
+  readonly stale: (reason: Reason.Stale) => string;
+  readonly expired: (reason: Reason.Expired) => string;
+  readonly busy: (reason: Reason.Busy) => string;
+  readonly providerRejected: (reason: Reason.ProviderRejected) => string;
+  readonly providerUnavailable: (reason: Reason.ProviderUnavailable) => string;
+  readonly providerConflict: (reason: Reason.ProviderConflict) => string;
+  readonly unsupported: (reason: Reason.Unsupported) => string;
+  readonly reconnect: (reason: Reason.Reconnect) => string;
+  readonly storageFailed: (reason: Reason.StorageFailed) => string;
+  readonly cryptoFailed: (reason: Reason.CryptoFailed) => string;
+  readonly resolverFailed: (reason: Reason.ResolverFailed) => string;
 }
 
 /** The evidence shapes `Verify` produces, structurally, so the catalog needs no service import. */
@@ -130,7 +130,7 @@ export type EvidenceLike =
   | { readonly _tag: "Provider"; readonly provider: string }
   | { readonly _tag: "PublicDns"; readonly resolver: string };
 
-const entity: Readonly<Record<DomainKitError.NotFound["entity"], string>> = {
+const entity: Readonly<Record<Reason.NotFound["entity"], string>> = {
   approval: "approval",
   attachment: "domain attachment",
   authorization: "provider authorization",
@@ -143,7 +143,7 @@ const entity: Readonly<Record<DomainKitError.NotFound["entity"], string>> = {
   zone: "DNS zone",
 };
 
-const expiredEntity: Readonly<Record<DomainKitError.Expired["entity"], string>> = {
+const expiredEntity: Readonly<Record<Reason.Expired["entity"], string>> = {
   approval: "approval",
   continuation: "sign-in attempt",
   credential: "provider credential",
@@ -391,7 +391,7 @@ export const english: Catalog = {
 export const merge = (overrides: Partial<Catalog> = {}): Catalog => ({ ...english, ...overrides });
 
 /** The user-facing sentence for a failure, chosen by the error's reason. */
-export const failure = (error: DomainKitError.DomainKitError, catalog: Catalog): string => {
+export const failure = (error: DomainKit.Error, catalog: Catalog): string => {
   const reason = error.reason;
   switch (reason._tag) {
     case "InvalidInput":

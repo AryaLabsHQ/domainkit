@@ -3,7 +3,7 @@
  * which plan they build and which event they emit when the receipt lands, so the machine lives
  * here once and each namespace exports its own controller over it.
  */
-import type { Approval, DomainKitError, Plan, Receipt } from "domainkit";
+import type { Approval, DomainKit, Plan, Receipt } from "domainkit";
 import type { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -16,13 +16,13 @@ import { useRunner } from "./task.ts";
 export type State = Data.TaggedEnum<{
   Idle: {};
   Planning: {};
-  Planned: { readonly plan: Plan.Plan };
-  Approving: { readonly plan: Plan.Plan };
-  Applying: { readonly plan: Plan.Plan; readonly approval: Approval.Approval };
-  Applied: { readonly plan: Plan.Plan | null; readonly receipt: Receipt.Receipt };
-  Rejecting: { readonly plan: Plan.Plan };
-  Rejected: { readonly plan: Plan.Plan; readonly attempt: Transport.Attempt };
-  Failure: { readonly error: DomainKitError.DomainKitError };
+  Planned: { readonly plan: Plan.Model };
+  Approving: { readonly plan: Plan.Model };
+  Applying: { readonly plan: Plan.Model; readonly approval: Approval.Model };
+  Applied: { readonly plan: Plan.Model | null; readonly receipt: Receipt.Model };
+  Rejecting: { readonly plan: Plan.Model };
+  Rejected: { readonly plan: Plan.Model; readonly attempt: Transport.Attempt };
+  Failure: { readonly error: DomainKit.Error };
 }>;
 export const State = Data.taggedEnum<State>();
 
@@ -31,14 +31,14 @@ export interface Group {
   readonly approve: (input: {
     readonly planId: Plan.PlanId;
     readonly operationIds?: ReadonlyArray<Plan.OperationId>;
-  }) => Effect.Effect<Approval.Approval, DomainKitError.DomainKitError>;
+  }) => Effect.Effect<Approval.Model, DomainKit.Error>;
   readonly reject: (input: {
     readonly planId: Plan.PlanId;
     readonly reason?: string;
-  }) => Effect.Effect<Transport.Attempt, DomainKitError.DomainKitError>;
+  }) => Effect.Effect<Transport.Attempt, DomainKit.Error>;
   readonly apply: (
     approvalId: Approval.ApprovalId,
-  ) => Effect.Effect<Receipt.Receipt, DomainKitError.DomainKitError>;
+  ) => Effect.Effect<Receipt.Model, DomainKit.Error>;
 }
 
 export interface Controller {
@@ -65,13 +65,13 @@ export interface Options {
   readonly key: string;
   readonly group: Group | undefined;
   /** The plan call, or `null` when this flow has nothing to plan yet. */
-  readonly plan: () => Effect.Effect<Plan.Plan, DomainKitError.DomainKitError> | null;
-  readonly done: (receipt: Receipt.Receipt) => Event;
-  readonly onDone: ((receipt: Receipt.Receipt) => void) | undefined;
+  readonly plan: () => Effect.Effect<Plan.Model, DomainKit.Error> | null;
+  readonly done: (receipt: Receipt.Model) => Event;
+  readonly onDone: ((receipt: Receipt.Model) => void) | undefined;
 }
 
 /** Reasons that mean the plan itself is gone: retrying the same step would fail the same way. */
-const needsNewPlan = (error: DomainKitError.DomainKitError): boolean =>
+const needsNewPlan = (error: DomainKit.Error): boolean =>
   error.reason._tag === "Stale" ||
   error.reason._tag === "Expired" ||
   error.reason._tag === "Conflict";
@@ -85,8 +85,8 @@ export function useAttempt(options: Options): Controller {
   // refuses to run: a plan built for one domain must never be approved for another.
   const held = useRef<{
     key: string;
-    plan: Plan.Plan | null;
-    approval: Approval.Approval | null;
+    plan: Plan.Model | null;
+    approval: Approval.Model | null;
   }>({ approval: null, key, plan: null });
   const lastCommand = useRef<{ key: string; run: () => void } | null>(null);
   const build = useRef(options.plan);
@@ -106,7 +106,7 @@ export function useAttempt(options: Options): Controller {
   }
 
   const onFailure = useCallback(
-    (error: DomainKitError.DomainKitError) => {
+    (error: DomainKit.Error) => {
       setState(State.Failure({ error }));
       emit(Event.Failed({ domain, error }));
     },
@@ -114,7 +114,7 @@ export function useAttempt(options: Options): Controller {
   );
 
   const applyWith = useCallback(
-    (plan: Plan.Plan, approval: Approval.Approval) => {
+    (plan: Plan.Model, approval: Approval.Model) => {
       if (group === undefined || held.current.key !== key) return;
       const command = () => {
         setState(State.Applying({ approval, plan }));

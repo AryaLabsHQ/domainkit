@@ -12,7 +12,7 @@ import * as Records from "./records.tsx";
 import * as Verify from "./verify.tsx";
 
 export interface RecordsSlotProps {
-  readonly records: ReadonlyArray<DnsRecord.DnsRecord>;
+  readonly records: ReadonlyArray<DnsRecord.Model>;
   readonly readiness: Verify.Readiness | null;
   readonly controller: Verify.Controller;
   readonly domain: string;
@@ -57,10 +57,10 @@ export interface FlowState extends Record<string, unknown> {
 
 export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children"> {
   readonly domain: string;
-  readonly requirements: ReadonlyArray<DnsRecord.DnsRecord>;
+  readonly requirements: ReadonlyArray<DnsRecord.Model>;
   readonly slots?: Slots;
-  readonly onApplied?: (receipt: Receipt.Receipt) => void;
-  readonly onCleaned?: (receipt: Receipt.Receipt) => void;
+  readonly onApplied?: (receipt: Receipt.Model) => void;
+  readonly onCleaned?: (receipt: Receipt.Model) => void;
 }
 
 function DefaultConnection({ controller }: ConnectionSlotProps): ReactElement {
@@ -138,7 +138,7 @@ export function Flow({
   const provisioning = Provision.useController({
     domain,
     onApplied: useCallback(
-      (receipt: Receipt.Receipt) => {
+      (receipt: Receipt.Model) => {
         refresh();
         onApplied?.(receipt);
       },
@@ -149,7 +149,7 @@ export function Flow({
   const cleanup = Cleanup.useController({
     domain,
     onCleaned: useCallback(
-      (receipt: Receipt.Receipt) => {
+      (receipt: Receipt.Model) => {
         refresh();
         onCleaned?.(receipt);
       },

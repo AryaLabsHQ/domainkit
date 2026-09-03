@@ -63,7 +63,7 @@ export function Root({ count = 0, kind, ...props }: RootProps): ReactElement {
 }
 
 export interface ListProps extends Omit<RootProps, "children" | "count" | "kind"> {
-  readonly plan: Plan.Plan;
+  readonly plan: Plan.Model;
 }
 
 /** Every operation the plan holds, in plan order, so a customer reviews exactly what will run. */

@@ -1,29 +1,29 @@
 import { render, screen } from "@testing-library/react";
-import { DnsRecord, DomainKitError, Plan } from "domainkit";
+import { DnsRecord, DomainKit as Kit, Plan, Reason } from "domainkit";
 import type { Transport } from "domainkit/client";
 
 import { Connect, DomainKit, Messages, Provider, Records, Testing } from "../src/index.ts";
 
-const reasons: ReadonlyArray<DomainKitError.Reason> = [
-  new DomainKitError.InvalidInput({ field: "accountId", message: "must not be empty" }),
-  new DomainKitError.Unauthenticated({ message: "bad token" }),
-  new DomainKitError.Forbidden({ message: "not yours" }),
-  new DomainKitError.NotFound({ entity: "connection", id: "c1" }),
-  new DomainKitError.Conflict({ operations: [], planId: Plan.PlanId.make("p1") }),
-  new DomainKitError.Stale({
+const reasons: ReadonlyArray<Reason.Model> = [
+  new Reason.InvalidInput({ field: "accountId", message: "must not be empty" }),
+  new Reason.Unauthenticated({ message: "bad token" }),
+  new Reason.Forbidden({ message: "not yours" }),
+  new Reason.NotFound({ entity: "connection", id: "c1" }),
+  new Reason.Conflict({ operations: [], planId: Plan.PlanId.make("p1") }),
+  new Reason.Stale({
     digest: Plan.Digest.make("d1"),
     planId: Plan.PlanId.make("p1"),
   }),
-  new DomainKitError.Expired({ entity: "approval", id: "a1" }),
-  new DomainKitError.Busy({ key: "apply:a1" }),
-  new DomainKitError.ProviderRejected({ message: "nope", provider: "fake" }),
-  new DomainKitError.ProviderUnavailable({ message: "down", provider: "fake" }),
-  new DomainKitError.ProviderConflict({ message: "exists", provider: "fake" }),
-  new DomainKitError.Unsupported({ message: "no", operation: "delete", provider: "fake" }),
-  new DomainKitError.Reconnect({ connectionId: "c1", provider: "fake" }),
-  new DomainKitError.StorageFailed({ message: "io", operation: "put" }),
-  new DomainKitError.CryptoFailed({ operation: "open" }),
-  new DomainKitError.ResolverFailed({ message: "timeout", resolver: "cloudflare" }),
+  new Reason.Expired({ entity: "approval", id: "a1" }),
+  new Reason.Busy({ key: "apply:a1" }),
+  new Reason.ProviderRejected({ message: "nope", provider: "fake" }),
+  new Reason.ProviderUnavailable({ message: "down", provider: "fake" }),
+  new Reason.ProviderConflict({ message: "exists", provider: "fake" }),
+  new Reason.Unsupported({ message: "no", operation: "delete", provider: "fake" }),
+  new Reason.Reconnect({ connectionId: "c1", provider: "fake" }),
+  new Reason.StorageFailed({ message: "io", operation: "put" }),
+  new Reason.CryptoFailed({ operation: "open" }),
+  new Reason.ResolverFailed({ message: "timeout", resolver: "cloudflare" }),
 ];
 
 const provider: Provider.Descriptor = {
@@ -32,15 +32,12 @@ const provider: Provider.Descriptor = {
   name: "Fake DNS",
 };
 
-const transport: Transport.Transport = Testing.transport({ capabilities: ["connection"] });
+const transport: Transport.Interface = Testing.transport({ capabilities: ["connection"] });
 
 describe("Messages", () => {
-  it("renders a sentence for every DomainKitError reason and never its tag", () => {
+  it("renders a sentence for every failure reason and never its tag", () => {
     for (const reason of reasons) {
-      const text = Messages.failure(
-        new DomainKitError.DomainKitError({ reason }),
-        Messages.english,
-      );
+      const text = Messages.failure(new Kit.Error({ reason }), Messages.english);
       // A reason never reaches a customer as its own tag; it reaches them as a sentence.
       expect(text).not.toBe(reason._tag);
       expect(text).toMatch(/\s/);

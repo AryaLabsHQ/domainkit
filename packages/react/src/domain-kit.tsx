@@ -41,7 +41,7 @@ export interface RootProps extends Omit<PartProps<"div", RootState>, "children">
   readonly revision?: number;
   readonly theme?: Theme;
   /** The transport, by value. Rebuilding it inline on every render does not restart controllers. */
-  readonly transport: Transport.Transport;
+  readonly transport: Transport.Interface;
 }
 
 interface ContextValue {
@@ -54,7 +54,7 @@ interface ContextValue {
   readonly portalContainer: RefObject<HTMLElement | null>;
   readonly revision: number;
   readonly themeStyle: ReturnType<typeof toStyle>;
-  readonly transport: Transport.Transport;
+  readonly transport: Transport.Interface;
 }
 
 const Context = createContext<ContextValue | null>(null);
@@ -67,7 +67,7 @@ const navigateInBrowser = (url: string): void => {
 };
 
 export interface StableTransport {
-  readonly transport: Transport.Transport;
+  readonly transport: Transport.Interface;
   readonly capabilities: ReadonlyArray<Transport.Capability>;
 }
 
@@ -79,7 +79,7 @@ type Method = (...args: ReadonlyArray<never>) => Effect.Effect<unknown, unknown>
  * inline and controllers still see one transport for the whole mount. Swapping in a transport
  * that declares different capability groups rebuilds it, and every controller re-runs.
  */
-const useStableTransport = (transport: Transport.Transport): StableTransport => {
+const useStableTransport = (transport: Transport.Interface): StableTransport => {
   const latest = useRef(transport);
   useLayoutEffect(() => {
     latest.current = transport;
@@ -108,7 +108,7 @@ const useStableTransport = (transport: Transport.Transport): StableTransport => 
           ),
         ];
       }),
-    ) as Transport.Transport;
+    ) as Transport.Interface;
     return { capabilities, transport: stable };
   }, [signature]);
 };
@@ -212,7 +212,7 @@ export function useDomainKit(): ContextValue {
 }
 
 /** The transport `DomainKit.Root` holds, with the identity it keeps for the whole mount. */
-export function useTransport(): Transport.Transport {
+export function useTransport(): Transport.Interface {
   return useDomainKit().transport;
 }
 

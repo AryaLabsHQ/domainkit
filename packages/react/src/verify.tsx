@@ -1,5 +1,5 @@
 import { Popover as BasePopover } from "@base-ui/react/popover";
-import type { DomainKitError } from "domainkit";
+import type { DomainKit } from "domainkit";
 import type { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
@@ -26,7 +26,7 @@ export type State = Data.TaggedEnum<{
   Idle: {};
   Observing: { readonly readiness: Readiness | null };
   Observed: { readonly readiness: Readiness };
-  Failure: { readonly error: DomainKitError.DomainKitError; readonly readiness: Readiness | null };
+  Failure: { readonly error: DomainKit.Error; readonly readiness: Readiness | null };
 }>;
 export const State = Data.taggedEnum<State>();
 

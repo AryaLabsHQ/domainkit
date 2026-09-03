@@ -93,7 +93,7 @@ one is gone, and re-runs the failed step otherwise.
 
 `DomainKit.Root` takes `messages`, `marks`, `icons`, `theme`, `colorScheme`, and `portalContainer`,
 so branding stays in your app. `Messages.Catalog` holds every user-visible string, including one
-sentence per `DomainKitError` reason; nothing renders a tag. Provider artwork comes from `marks`,
+sentence per `DomainKit.Error` reason; nothing renders a tag. Provider artwork comes from `marks`,
 with the provider's initial as the fallback and no request at render time. The stylesheet is
 opt-in and every color is a `--domainkit-*` custom property.
 

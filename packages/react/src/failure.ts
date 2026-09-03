@@ -1,12 +1,12 @@
-import type { DomainKitError } from "domainkit";
+import type { DomainKit } from "domainkit";
 import * as Data from "effect/Data";
 
 /**
- * The failed member every controller state shares. It carries the `DomainKitError` itself, so a
+ * The failed member every controller state shares. It carries the `DomainKit.Error` itself, so a
  * host reads `error.reason`, `error.category`, and `error.isRetryable` instead of parsing text.
  */
 export type Failure = Data.TaggedEnum<{
-  Failure: { readonly error: DomainKitError.DomainKitError };
+  Failure: { readonly error: DomainKit.Error };
 }>;
 export const Failure = Data.taggedEnum<Failure>();
 

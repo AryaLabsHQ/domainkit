@@ -3,7 +3,7 @@
  * `useRunner`, which interrupts the call in flight when a newer one starts or the component
  * unmounts, and drops results that arrive after either.
  */
-import { DomainKitError } from "domainkit";
+import { DomainKit, Reason } from "domainkit";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
@@ -15,10 +15,10 @@ export interface Runner {
    * only while this call is still the newest and the component is mounted.
    */
   readonly run: <A>(
-    effect: Effect.Effect<A, DomainKitError.DomainKitError>,
+    effect: Effect.Effect<A, DomainKit.Error>,
     handlers: {
       readonly onSuccess: (value: A) => void;
-      readonly onFailure: (error: DomainKitError.DomainKitError) => void;
+      readonly onFailure: (error: DomainKit.Error) => void;
     },
   ) => void;
   /** Stop the call in flight without starting another. */
@@ -26,9 +26,9 @@ export interface Runner {
 }
 
 /** A defect is not a lifecycle failure; report it in the shape the UI already renders. */
-const defect = (cause: unknown): DomainKitError.DomainKitError =>
-  new DomainKitError.DomainKitError({
-    reason: new DomainKitError.ProviderUnavailable({
+const defect = (cause: unknown): DomainKit.Error =>
+  new DomainKit.Error({
+    reason: new Reason.ProviderUnavailable({
       provider: "domainkit",
       message: `The transport failed: ${String(cause)}`,
     }),

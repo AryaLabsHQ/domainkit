@@ -1,4 +1,4 @@
-import { DomainKitError, Receipt } from "domainkit";
+import { DomainKit, Reason, Receipt } from "domainkit";
 import * as Effect from "effect/Effect";
 import { useCallback, type ReactElement, type ReactNode } from "react";
 
@@ -16,7 +16,7 @@ export interface Options {
   readonly domain: string;
   /** Which apply to undo. Without it, the domain's latest provisioning receipt. */
   readonly receiptId?: Receipt.ReceiptId;
-  readonly onCleaned?: (receipt: Receipt.Receipt) => void;
+  readonly onCleaned?: (receipt: Receipt.Model) => void;
 }
 
 /**
@@ -39,8 +39,10 @@ export function useController({ domain, onCleaned, receiptId }: Options): Contro
       if (connection === undefined) return null;
       return Effect.flatMap(connection.inspect(domain), (snapshot) =>
         snapshot.lastReceiptId === null
-          ? DomainKitError.fail(
-              new DomainKitError.NotFound({ entity: "receipt", id: snapshot.domain }),
+          ? Effect.fail(
+              new DomainKit.Error({
+                reason: new Reason.NotFound({ entity: "receipt", id: snapshot.domain }),
+              }),
             )
           : group.plan(Receipt.ReceiptId.make(snapshot.lastReceiptId)),
       );
@@ -91,7 +93,7 @@ export function Status(props: StatusProps): ReactElement {
 
 export interface FlowProps extends Omit<RootProps, "controller"> {
   readonly domain: string;
-  readonly onCleaned?: (receipt: Receipt.Receipt) => void;
+  readonly onCleaned?: (receipt: Receipt.Model) => void;
   readonly receiptId?: Receipt.ReceiptId;
   readonly trigger?: ReactNode;
 }

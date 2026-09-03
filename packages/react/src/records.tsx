@@ -47,9 +47,9 @@ const txtValue = (value: string): string => {
 };
 
 /** The RR type as a zone file spells it. The tag and the type name are the same string. */
-const rrType = (record: DnsRecord.DnsRecord): string => record._tag;
+const rrType = (record: DnsRecord.Model): string => record._tag;
 
-const zoneData = (record: DnsRecord.DnsRecord): string => {
+const zoneData = (record: DnsRecord.Model): string => {
   switch (record._tag) {
     case "A":
     case "AAAA":
@@ -69,7 +69,7 @@ const zoneData = (record: DnsRecord.DnsRecord): string => {
   }
 };
 
-export const toZoneFile = (records: ReadonlyArray<DnsRecord.DnsRecord>): string =>
+export const toZoneFile = (records: ReadonlyArray<DnsRecord.Model>): string =>
   `${records
     .map(
       (record) =>
@@ -90,10 +90,8 @@ const downloadText = (filename: string, contents: string): void => {
   URL.revokeObjectURL(url);
 };
 
-export const downloadZoneFile = (
-  domain: string,
-  records: ReadonlyArray<DnsRecord.DnsRecord>,
-): void => downloadText(`${domain}.txt`, toZoneFile(records));
+export const downloadZoneFile = (domain: string, records: ReadonlyArray<DnsRecord.Model>): void =>
+  downloadText(`${domain}.txt`, toZoneFile(records));
 
 // ---------------------------------------------------------------------------------------------
 // Copy
@@ -180,7 +178,7 @@ export function CopyValue({ value, ...props }: CopyValueProps) {
 
 export interface ZoneFileProps extends PartProps<"div", { readonly count: number }> {
   readonly domain: string;
-  readonly records: ReadonlyArray<DnsRecord.DnsRecord>;
+  readonly records: ReadonlyArray<DnsRecord.Model>;
 }
 
 export function ZoneFile({ domain, records, ...props }: ZoneFileProps) {
@@ -230,7 +228,7 @@ export function ZoneFile({ domain, records, ...props }: ZoneFileProps) {
 
 /** The readiness this record reached, or `null` when nothing has observed it. */
 export const statusOf = (
-  record: DnsRecord.DnsRecord,
+  record: DnsRecord.Model,
   readiness: Readiness | null | undefined,
 ): RequirementStatus | null =>
   readiness?.requirements.find((requirement) => DnsRecord.equals(requirement.record, record))
@@ -294,12 +292,12 @@ export function Root({ count = 0, ...props }: RootProps) {
 }
 
 /** A stable React key for a requirement: type, name, and data identify a record. */
-export const identity = (record: DnsRecord.DnsRecord): string =>
+export const identity = (record: DnsRecord.Model): string =>
   [rrType(record), record.name, DnsRecord.data(record)].join(":");
 
 export interface CardProps extends PartProps<"section", { readonly record: string }> {
   readonly readiness?: Readiness | null;
-  readonly record: DnsRecord.DnsRecord;
+  readonly record: DnsRecord.Model;
 }
 
 export function Card({ readiness, record, ...props }: CardProps): ReactElement {
@@ -348,7 +346,7 @@ export function Card({ readiness, record, ...props }: CardProps): ReactElement {
 export interface TableProps extends PartProps<"table", { readonly count: number }> {
   readonly caption?: string;
   readonly readiness?: Readiness | null;
-  readonly records: ReadonlyArray<DnsRecord.DnsRecord>;
+  readonly records: ReadonlyArray<DnsRecord.Model>;
 }
 
 /** The default records presentation: one row per requirement, with readiness when there is any. */

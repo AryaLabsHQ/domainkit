@@ -46,8 +46,8 @@ const connect = async () => {
 describe("Domain.Flow", () => {
   it("runs connect, plan, approve, apply, verify, and cleanup over the fake transport", async () => {
     const { domain, requirements, transport } = scenario();
-    const applied: Array<Receipt.Receipt> = [];
-    const cleaned: Array<Receipt.Receipt> = [];
+    const applied: Array<Receipt.Model> = [];
+    const cleaned: Array<Receipt.Model> = [];
     render(
       <DomainKit.Root transport={transport}>
         <Domain.Flow
@@ -94,7 +94,7 @@ describe("Domain.Flow", () => {
 
   it("replaces the records slot with a host table and the rest of the flow still works", async () => {
     const { domain, requirements, transport } = scenario();
-    const applied: Array<Receipt.Receipt> = [];
+    const applied: Array<Receipt.Model> = [];
     render(
       <DomainKit.Root transport={transport}>
         <Domain.Flow

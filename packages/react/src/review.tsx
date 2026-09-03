@@ -74,7 +74,7 @@ export function Status({ controller, kind, ...props }: StatusProps): ReactElemen
 
 export interface OutcomeProps extends PartProps<"p", ReviewState>, KindProps {}
 
-/** The failure sentence from `DomainKitError.reason`, with the retry the flow allows. */
+/** The failure sentence from the error's reason, with the retry the flow allows. */
 export function Outcome({ controller, kind, ...props }: OutcomeProps): ReactElement | null {
   const { messages } = useDomainKit();
   const state = controller.state;

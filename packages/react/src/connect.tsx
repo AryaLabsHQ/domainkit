@@ -1,5 +1,5 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import type { DomainKitError, Storage } from "domainkit";
+import type { DomainKit, Storage } from "domainkit";
 import { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -38,7 +38,7 @@ export type State = Data.TaggedEnum<{
     readonly connectionId: string;
     readonly candidates: ReadonlyArray<Candidate>;
   };
-  Failure: { readonly error: DomainKitError.DomainKitError };
+  Failure: { readonly error: DomainKit.Error };
 }>;
 export const State = Data.taggedEnum<State>();
 
@@ -133,7 +133,7 @@ export function useController({ domain }: Options): Controller {
   }
 
   const onFailure = useCallback(
-    (error: DomainKitError.DomainKitError) => {
+    (error: DomainKit.Error) => {
       setState(State.Failure({ error }));
       emit(Event.Failed({ domain, error }));
     },
@@ -204,7 +204,7 @@ export function useController({ domain }: Options): Controller {
   );
 
   const submit = useCallback(
-    (effect: Effect.Effect<Transport.Started, DomainKitError.DomainKitError>) => {
+    (effect: Effect.Effect<Transport.Started, DomainKit.Error>) => {
       if (held.current.domain !== domain) return;
       const command = () => {
         setState(State.Submitting({ snapshot: held.current.snapshot }));
@@ -254,7 +254,7 @@ export function useController({ domain }: Options): Controller {
   );
 
   const release = useCallback(
-    (effect: Effect.Effect<void, DomainKitError.DomainKitError>, event: Event) => {
+    (effect: Effect.Effect<void, DomainKit.Error>, event: Event) => {
       if (held.current.domain !== domain) return;
       const command = () => {
         setState(State.Submitting({ snapshot: held.current.snapshot }));
@@ -330,7 +330,7 @@ export interface OutcomeProps extends PartProps<"p", RootState> {
   readonly controller: Controller;
 }
 
-/** The failure sentence, chosen by `DomainKitError.reason`, plus the retry the reason allows. */
+/** The failure sentence, chosen by the error's reason, plus the retry that reason allows. */
 export function Outcome({ controller, ...props }: OutcomeProps): ReactElement | null {
   const { messages } = useDomainKit();
   const state = controller.state;

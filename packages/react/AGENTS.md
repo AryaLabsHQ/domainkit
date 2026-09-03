@@ -17,7 +17,7 @@ tenancy, or product verification policy.
 - Parts render only what `Transport.capabilities()` declares. `Domain.Flow` adds no layout
   container around a slot, so slot output stays a direct child of the flow root.
 - Every user-visible string comes from `Messages.Catalog`, including one sentence per
-  `DomainKitError` reason. No tag, status literal, or reason name reaches a customer.
+  `DomainKit.Error` reason. No tag, status literal, or reason name reaches a customer.
 - Icons come from the one context on `DomainKit.Root`; no part takes an icon prop. Provider artwork
   comes from `marks`, with the provider's initial as the fallback and no request at render time.
 - The package entry carries `"use client"`. A transport cannot cross an RSC boundary; hosts build

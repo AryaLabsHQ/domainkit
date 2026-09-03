@@ -14,13 +14,13 @@ export type { Controller };
 
 export interface Options {
   readonly domain: string;
-  readonly requirements: ReadonlyArray<DnsRecord.DnsRecord>;
-  readonly onApplied?: (receipt: Receipt.Receipt) => void;
+  readonly requirements: ReadonlyArray<DnsRecord.Model>;
+  readonly onApplied?: (receipt: Receipt.Model) => void;
 }
 
 /** Plan, approve, apply. `approve` authorizes the digest and applies it in the same action. */
 /** Requirements identify themselves by content, so an inline array does not abandon the attempt. */
-const keyOf = (domain: string, requirements: ReadonlyArray<DnsRecord.DnsRecord>): string =>
+const keyOf = (domain: string, requirements: ReadonlyArray<DnsRecord.Model>): string =>
   [domain, ...requirements.map((record) => Records.identity(record))].join("|");
 
 export function useController({ domain, onApplied, requirements }: Options): Controller {
@@ -83,8 +83,8 @@ export function Status(props: StatusProps): ReactElement {
 
 export interface FlowProps extends Omit<RootProps, "controller"> {
   readonly domain: string;
-  readonly onApplied?: (receipt: Receipt.Receipt) => void;
-  readonly requirements: ReadonlyArray<DnsRecord.DnsRecord>;
+  readonly onApplied?: (receipt: Receipt.Model) => void;
+  readonly requirements: ReadonlyArray<DnsRecord.Model>;
   readonly trigger?: ReactNode;
 }
 
