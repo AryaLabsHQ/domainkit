@@ -32,7 +32,7 @@ describe("packed manifest", () => {
       };
       assert.strictEqual(
         packed.devDependencies?.capsuledb,
-        "git+https://github.com/aryasaatvik/CapsuleDB.git#561aa127b37055f885c703583c3c5e80b44395f3",
+        "git+https://github.com/aryasaatvik/CapsuleDB.git#c323a6c6657d095fa58541985341ea68036b33f7",
       );
       assert.strictEqual(packed.dependencies?.capsuledb, undefined);
       assert.strictEqual(packed.peerDependencies?.capsuledb, ">=0.1.0 <0.2.0");
