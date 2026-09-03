@@ -109,6 +109,14 @@ describe("Transport.fromFetch", () => {
       assert.strictEqual(readiness.overall, "ready");
       assert.strictEqual(readiness.requirements.length, 2);
       assert.strictEqual(readiness.nextCheckAt, null);
+      const standalone = yield* verification.observe("nobody.example.com", {
+        requirements: [DnsRecord.txt({ name: "_acme.nobody.example.com", value: "acme-verify=1" })],
+      });
+      assert.strictEqual(standalone.attachmentId, null);
+      assert.deepStrictEqual(
+        standalone.requirements.map(({ evidence }) => evidence.map(({ _tag }) => _tag)),
+        [["PublicDns"]],
+      );
 
       const cleanupPlan = yield* cleanup.plan(receipt.id);
       assert.strictEqual(cleanupPlan.kind, "cleanup");

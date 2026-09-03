@@ -79,7 +79,14 @@ export interface ProvisioningGroup {
 }
 
 export interface VerificationGroup {
-  readonly observe: (domain: string) => Fx<Readiness>;
+  /**
+   * Observe the domain's provisioning receipt, or `options.requirements` when supplied (required
+   * for a domain with no attachment).
+   */
+  readonly observe: (
+    domain: string,
+    options?: { readonly requirements?: ReadonlyArray<DnsRecord.Model> },
+  ) => Fx<Readiness>;
 }
 
 export interface CleanupGroup {
@@ -271,10 +278,13 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Interfac
   };
 
   const verification: VerificationGroup = {
-    observe: (domain) =>
+    observe: (domain, input) =>
       request({
         method: "POST",
         path: `/domains/${encodeURIComponent(domain)}/observations`,
+        body: Schema.encodeSync(Server.ObservePayload)(
+          input?.requirements === undefined ? {} : { requirements: input.requirements },
+        ),
         success: Server.Readiness,
       }),
   };

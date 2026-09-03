@@ -107,7 +107,7 @@ describe("Server.group over the lifecycle", () => {
       assert.strictEqual(fetched.status, 200);
       assert.deepStrictEqual(fetched.body, applied.body);
 
-      const observed = await call("POST", "/domains/app.example.com/observations");
+      const observed = await call("POST", "/domains/app.example.com/observations", {});
       assert.strictEqual(observed.status, 200);
       const readiness = observed.body as {
         readonly overall: string;
@@ -115,6 +115,32 @@ describe("Server.group over the lifecycle", () => {
       };
       assert.strictEqual(readiness.overall, "ready");
       assert.strictEqual(readiness.requirements.length, 2);
+
+      const unattached = await call("POST", "/domains/nobody.example.com/observations", {
+        requirements: [
+          {
+            _tag: "TXT",
+            name: "_acme.nobody.example.com",
+            ttl: null,
+            policy: "append",
+            value: "acme-verify=1",
+          },
+        ],
+      });
+      assert.strictEqual(unattached.status, 200);
+      const standalone = unattached.body as {
+        readonly attachmentId: string | null;
+        readonly requirements: ReadonlyArray<{
+          readonly evidence: ReadonlyArray<{ readonly _tag: string }>;
+        }>;
+      };
+      assert.strictEqual(standalone.attachmentId, null);
+      assert.deepStrictEqual(
+        standalone.requirements.map(({ evidence }) => evidence.map(({ _tag }) => _tag)),
+        [["PublicDns"]],
+      );
+      const bare = await call("POST", "/domains/nobody.example.com/observations", {});
+      assert.strictEqual(bare.status, 400);
 
       const cleanupPlan = await call("POST", `/receipts/${receipt.id}/cleanup-plans`);
       assert.strictEqual(cleanupPlan.status, 200);
@@ -487,7 +513,10 @@ describe("Server.group over the lifecycle", () => {
 
       // A member still reads the result.
       assert.strictEqual((await call("GET", "/domains/app.example.com")).status, 200);
-      assert.strictEqual((await call("POST", "/domains/app.example.com/observations")).status, 200);
+      assert.strictEqual(
+        (await call("POST", "/domains/app.example.com/observations", undefined, {})).status,
+        200,
+      );
     } finally {
       await dispose();
     }
@@ -645,6 +674,10 @@ describe("Server.api", () => {
         "domainkit.start",
       ],
     );
+    const observe = spec.paths["/domains/{domain}/observations"]?.post as
+      | { readonly requestBody?: { readonly content: Record<string, unknown> } }
+      | undefined;
+    assert.isDefined(observe?.requestBody?.content["application/json"]);
   });
 
   it("declares a response for every status a DomainKitError reason produces", () => {

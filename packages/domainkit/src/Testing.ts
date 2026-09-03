@@ -272,6 +272,7 @@ export interface TransportOptions {
 export interface RecordedCall {
   /** `connection.inspect`, `provisioning.approve`, ... */
   readonly method: string;
+  /** The call's only argument, or the argument list when the method takes more than one. */
   readonly input: unknown;
 }
 
@@ -310,7 +311,10 @@ export const transport = (options: TransportOptions = {}): RecordingTransport =>
             name,
             (...args: ReadonlyArray<never>) =>
               Effect.suspend(() => {
-                calls.push({ method: `${capability}.${name}`, input: args[0] });
+                calls.push({
+                  method: `${capability}.${name}`,
+                  input: args.length > 1 ? args : args[0],
+                });
                 return method(...args);
               }),
           ],
