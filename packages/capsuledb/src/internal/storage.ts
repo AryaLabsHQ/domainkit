@@ -314,8 +314,6 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
     const attempts = sql(tables.attempts.name);
     const readiness = sql(tables.readiness.name);
 
-    const principal = Principal.Principal;
-
     /** The row this principal owns, locked for the rest of the transaction. */
     const lockedAuthorization = (owner: string, id: string) =>
       sql<AuthorizationRow>`
@@ -384,7 +382,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
     const service: Storage.Service = {
       authorizations: {
         upsert: ({ authorization, credential, expectedId }) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.gen(function* () {
               if (authorization.ownerId !== ownerId) {
                 return yield* invalid(
@@ -404,6 +402,8 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
                     if (authorization.id !== expectedId) {
                       return yield* invalid("Authorization id must match expectedId", "id");
                     }
+                    // A replace overwrites every column the caller supplied, including `created_at`:
+                    // the row it returns has to be the row a later `get` reads back.
                     yield* sql`
                       UPDATE ${authorizations} SET
                         provider = ${row.provider},
@@ -412,6 +412,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
                         context = ${toJson(row.context)},
                         revocation = ${row.revocation},
                         created_by = ${row.createdBy},
+                        created_at = ${at(row.createdAt)},
                         credential_ciphertext = ${secret.ciphertext},
                         credential_expires_at = ${atOrNull(secret.expiresAt)},
                         credential_rotated_at = ${at(secret.rotatedAt)},
@@ -442,7 +443,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("authorizations.upsert")),
         get: (id) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql<AuthorizationRow>`
               SELECT * FROM ${authorizations} WHERE id = ${id} AND owner_id = ${ownerId}
             `.pipe(
@@ -452,7 +453,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("authorizations.get")),
         credential: (id) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql<AuthorizationRow>`
               SELECT * FROM ${authorizations} WHERE id = ${id} AND owner_id = ${ownerId}
             `.pipe(
@@ -462,7 +463,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("authorizations.credential")),
         rotate: (id, credential) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.gen(function* () {
               const secret = yield* credentialCodec.write(credential);
               const updated = yield* sql<{ readonly id: string }>`
@@ -477,7 +478,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("authorizations.rotate")),
         promoteCapabilities: (id, capabilities) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const current = yield* authorizationOf(yield* lockedAuthorization(ownerId, id));
@@ -491,7 +492,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("authorizations.promoteCapabilities")),
         revoke: (id, revoke) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.gen(function* () {
               yield* prepareRevocation(ownerId, id).pipe(guard("authorizations.revoke"));
               yield* revoke;
@@ -501,7 +502,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ),
         recoverRevocations: (revoke) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.gen(function* () {
               const rows = yield* sql<AuthorizationRow>`
                 SELECT * FROM ${authorizations}
@@ -522,7 +523,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
       },
       connections: {
         create: (authorizationId) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 yield* lockedAuthorization(ownerId, authorizationId);
@@ -543,11 +544,11 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("connections.create")),
         get: (id) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.flatMap(requireConnection(ownerId, id), connectionOf),
           ).pipe(guard("connections.get")),
         list: (filter) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.flatMap(
               filter?.provider === undefined
                 ? sql<ConnectionRow>`
@@ -563,7 +564,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("connections.list")),
         remove: (id) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const rows = yield* sql<ConnectionRow>`
@@ -585,7 +586,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
       },
       attachments: {
         create: (input) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 yield* requireConnection(ownerId, input.connectionId);
@@ -616,11 +617,11 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attachments.create")),
         get: (id) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.flatMap(requireAttachment(ownerId, id), attachmentOf),
           ).pipe(guard("attachments.get")),
         byDomain: (domain) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql<AttachmentRow>`
               SELECT * FROM ${attachments} WHERE owner_id = ${ownerId} AND domain = ${domain}
             `.pipe(
@@ -632,7 +633,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attachments.byDomain")),
         list: (connectionId) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.gen(function* () {
               yield* requireConnection(ownerId, connectionId);
               const rows = yield* sql<AttachmentRow>`
@@ -644,7 +645,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("attachments.list")),
         remove: (id) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 yield* requireAttachment(ownerId, id);
@@ -660,7 +661,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
       },
       continuations: {
         put: (continuation) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.gen(function* () {
               if (continuation.ownerId !== ownerId) {
                 return yield* invalid("Continuation owner does not match the principal", "ownerId");
@@ -683,7 +684,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("continuations.put")),
         consume: (id) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.gen(function* () {
               // The delete is the claim: a second consume finds nothing, expired or not.
               const rows = yield* sql<ContinuationRow>`
@@ -702,7 +703,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
       },
       attempts: {
         create: (attempt) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.gen(function* () {
               if (attempt.ownerId !== ownerId) {
                 return yield* invalid("Attempt owner does not match the principal", "ownerId");
@@ -729,7 +730,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("attempts.create")),
         get: (id) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql<AttemptRow>`
               SELECT * FROM ${attempts} WHERE id = ${id} AND owner_id = ${ownerId}
             `.pipe(
@@ -739,7 +740,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.get")),
         byApproval: (id) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql<AttemptRow>`
               SELECT * FROM ${attempts} WHERE approval_id = ${id} AND owner_id = ${ownerId}
             `.pipe(
@@ -749,7 +750,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.byApproval")),
         byReceipt: (id) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql<AttemptRow>`
               SELECT * FROM ${attempts} WHERE receipt_id = ${id} AND owner_id = ${ownerId}
             `.pipe(
@@ -759,7 +760,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.byReceipt")),
         latest: (attachmentId, kind) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql<AttemptRow>`
               SELECT * FROM ${attempts}
               WHERE owner_id = ${ownerId} AND attachment_id = ${attachmentId} AND kind = ${kind}
@@ -773,7 +774,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.latest")),
         approve: (id, approval) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const current = yield* lockedAttempt(ownerId, id);
@@ -800,7 +801,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.approve")),
         claim: (id, lease) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const current = yield* lockedAttempt(ownerId, id);
@@ -835,7 +836,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.claim")),
         complete: (id, receipt) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const current = yield* lockedAttempt(ownerId, id);
@@ -862,7 +863,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             ),
           ).pipe(guard("attempts.complete")),
         fail: (id, message) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql.withTransaction(
               Effect.gen(function* () {
                 const current = yield* lockedAttempt(ownerId, id);
@@ -890,7 +891,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
       },
       readiness: {
         put: (row) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             Effect.gen(function* () {
               if (row.ownerId !== ownerId) {
                 return yield* invalid("Readiness owner does not match the principal", "ownerId");
@@ -918,7 +919,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
             }),
           ).pipe(guard("readiness.put")),
         get: (attachmentId) =>
-          Effect.flatMap(principal, ({ ownerId }) =>
+          Effect.flatMap(Principal.Principal, ({ ownerId }) =>
             sql<ReadinessRow>`
               SELECT * FROM ${readiness}
               WHERE attachment_id = ${attachmentId} AND owner_id = ${ownerId}
@@ -932,7 +933,7 @@ export const make = (tables: Tables): Effect.Effect<Storage.Service, never, SqlC
           ).pipe(guard("readiness.get")),
       },
       withLock: (key, effect) =>
-        Effect.flatMap(principal, ({ ownerId }) =>
+        Effect.flatMap(Principal.Principal, ({ ownerId }) =>
           Effect.scoped(
             Effect.gen(function* () {
               // A session lock, not a transaction lock: the guarded effect refreshes a credential
