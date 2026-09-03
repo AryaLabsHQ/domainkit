@@ -1,287 +1,202 @@
-import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { Menu as BaseMenu } from "@base-ui/react/menu";
-import type { Transport } from "domainkit";
-import { useRef, useState, type RefObject } from "react";
+import { Receipt, type DnsRecord } from "domainkit";
+import { useCallback, type ReactElement, type ReactNode } from "react";
 
+import type { PartProps } from "./composition.tsx";
+import { usePart } from "./composition.tsx";
 import * as Cleanup from "./cleanup.tsx";
-import * as Connection from "./connection.tsx";
+import * as Connect from "./connect.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
-import * as Provider from "./provider.tsx";
-import * as Provisioning from "./provisioning.tsx";
+import { useIcons } from "./icons.tsx";
+import * as Provision from "./provision.tsx";
 import * as Records from "./records.tsx";
-import * as Verification from "./verification.tsx";
+import * as Verify from "./verify.tsx";
 
-export interface FlowProps {
+export interface RecordsSlotProps {
+  readonly records: ReadonlyArray<DnsRecord.Model>;
+  readonly readiness: Verify.Readiness | null;
+  readonly controller: Verify.Controller;
   readonly domain: string;
-  readonly receiptId?: string;
-  readonly records: ReadonlyArray<Transport.DnsRecord>;
 }
 
-export function Flow({ domain, receiptId, records }: FlowProps) {
-  const controller = Connection.useController(domain);
-  const state = controller.state;
-  const connected =
-    state._tag === "Connected" ? state : state._tag === "Detaching" ? state.snapshot : undefined;
-  return (
-    <Connection.Root status={state._tag}>
-      {state._tag === "Connected" || state._tag === "Detaching" ? (
-        <ConnectedCard
-          connection={state._tag === "Connected" ? state : state.snapshot}
-          controller={controller}
-          {...(receiptId === undefined ? {} : { initialReceiptId: receiptId })}
-          records={records}
-          status={state._tag}
-        />
-      ) : (
-        <AvailableCard controller={controller} state={state} />
-      )}
-      <Records.Table records={records} />
-      <Verification.Status
-        config={{
-          ...(connected === undefined ? {} : { connection: connected }),
-          domain,
-          records,
-        }}
-      />
-    </Connection.Root>
+export interface VerificationSlotProps {
+  readonly controller: Verify.Controller;
+  readonly domain: string;
+}
+
+export interface ActionsSlotProps {
+  readonly connection: Connect.Controller;
+  readonly provisioning: Provision.Controller;
+  readonly cleanup: Cleanup.Controller;
+  readonly domain: string;
+}
+
+export interface ConnectionSlotProps {
+  readonly controller: Connect.Controller;
+  readonly domain: string;
+}
+
+/**
+ * Each slot replaces one part of the flow and keeps the rest. Every slot has a default, so
+ * `<Domain.Flow domain requirements />` is complete on its own.
+ */
+export interface Slots {
+  /** The requirements table. Defaults to `Records.Table` with readiness when there is any. */
+  readonly records?: (props: RecordsSlotProps) => ReactNode;
+  /** Defaults to `Verify.Status`. Rendered only when the transport declares `verification`. */
+  readonly verification?: (props: VerificationSlotProps) => ReactNode;
+  /** Defaults to Approve and Decline, plus cleanup when the transport declares it. */
+  readonly actions?: (props: ActionsSlotProps) => ReactNode;
+  /** Defaults to `Connect.Card` once connected and `Connect.Dialog` until then. */
+  readonly connection?: (props: ConnectionSlotProps) => ReactNode;
+}
+
+export interface FlowState extends Record<string, unknown> {
+  readonly connection: Connect.State["_tag"];
+  readonly provisioning: Provision.State["_tag"];
+}
+
+export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children"> {
+  readonly domain: string;
+  readonly requirements: ReadonlyArray<DnsRecord.Model>;
+  readonly slots?: Slots;
+  readonly onApplied?: (receipt: Receipt.Model) => void;
+  readonly onCleaned?: (receipt: Receipt.Model) => void;
+}
+
+function DefaultConnection({ controller }: ConnectionSlotProps): ReactElement {
+  return controller.state._tag === "Connected" ? (
+    <Connect.Card controller={controller} />
+  ) : (
+    <>
+      <Connect.Status controller={controller} />
+      <Connect.Dialog controller={controller} />
+      <Connect.Outcome controller={controller} />
+    </>
   );
 }
 
-function AvailableCard({
-  controller,
-  state,
-}: {
-  readonly controller: Connection.Controller;
-  readonly state: Exclude<Connection.State, Transport.Connected>;
-}) {
-  const { messages } = useDomainKit();
-  const snapshot =
-    state._tag === "Disconnected"
-      ? state
-      : state._tag === "Submitting" || state._tag === "Redirecting"
-        ? state.snapshot
-        : undefined;
-  return (
-    <Connection.Card status={state._tag}>
-      <Connection.CardIdentity status={state._tag}>
-        {snapshot === undefined ? null : <Provider.Mark provider={snapshot.provider} />}
-        <Connection.Status state={state} />
-      </Connection.CardIdentity>
-      <Connection.CardActions status={state._tag}>
-        {state._tag === "Failure" && state.retry !== "never" ? (
-          <Connection.RetryAction
-            controller={controller}
-            kind={state.retry === "after-user-action" ? "after-user-action" : "retry"}
-          />
-        ) : null}
-        {snapshot === undefined ? null : (
-          <BaseDialog.Root
-            onOpenChange={(open, eventDetails) => {
-              if (!open && (state._tag === "Submitting" || state._tag === "Redirecting")) {
-                eventDetails.cancel();
-              }
-            }}
-          >
-            <Connection.ConnectTrigger
-              disabled={state._tag === "Submitting" || state._tag === "Redirecting"}
-              provider={snapshot.provider}
-            >
-              {messages.connectProvider(snapshot.provider.name)}
-            </Connection.ConnectTrigger>
-            <Connection.Dialog controller={controller} snapshot={snapshot} />
-          </BaseDialog.Root>
-        )}
-      </Connection.CardActions>
-    </Connection.Card>
-  );
-}
-
-function ConnectedCard({
-  connection,
-  controller,
-  initialReceiptId,
-  records,
-  status,
-}: {
-  readonly connection: Transport.Connected;
-  readonly controller: Connection.Controller;
-  readonly initialReceiptId?: string;
-  readonly records: ReadonlyArray<Transport.DnsRecord>;
-  readonly status: "Connected" | "Detaching";
-}) {
-  const [receipt, setReceipt] = useState({
-    host: initialReceiptId,
-    value: initialReceiptId,
-  });
-  if (receipt.host !== initialReceiptId) {
-    setReceipt({ host: initialReceiptId, value: initialReceiptId });
-  }
-  const receiptId = receipt.host === initialReceiptId ? receipt.value : initialReceiptId;
-  const disabled = status === "Detaching";
-  const actionsTriggerRef = useRef<HTMLButtonElement>(null);
-  return (
-    <Connection.Card status={status}>
-      <Connection.CardIdentity status={status}>
-        <Provider.Mark provider={connection.provider} />
-        <Connection.Status state={status === "Connected" ? connection : controller.state} />
-      </Connection.CardIdentity>
-      <Connection.CardActions status={status}>
-        <Provisioning.Flow
-          connection={connection}
-          onApplied={(result) => setReceipt({ host: initialReceiptId, value: result.receiptId })}
-          records={records}
-          showRecords={false}
-        />
-        {receiptId === undefined ? (
-          <ProviderActions
-            actionsTriggerRef={actionsTriggerRef}
-            connection={connection}
-            controller={controller}
-            disabled={disabled}
-          />
-        ) : (
-          <ProviderActionsWithCleanup
-            actionsTriggerRef={actionsTriggerRef}
-            connection={connection}
-            controller={controller}
-            disabled={disabled}
-            key={receiptId}
-            onCleaned={() => setReceipt({ host: initialReceiptId, value: undefined })}
-            receiptId={receiptId}
-          />
-        )}
-      </Connection.CardActions>
-    </Connection.Card>
-  );
-}
-
-function ProviderActionsWithCleanup({
-  actionsTriggerRef,
-  connection,
-  controller,
-  disabled,
-  onCleaned,
-  receiptId,
-}: {
-  readonly actionsTriggerRef: RefObject<HTMLButtonElement | null>;
-  readonly connection: Transport.Connected;
-  readonly controller: Connection.Controller;
-  readonly disabled: boolean;
-  readonly onCleaned: () => void;
-  readonly receiptId: string;
-}) {
-  const [cleaned, setCleaned] = useState(false);
-  const cleanup = Cleanup.useController(connection, receiptId, (result) => {
-    if (result._tag === "Cleaned") setCleaned(true);
-  });
-  return (
-    <ProviderActions
-      actionsTriggerRef={actionsTriggerRef}
-      cleanup={cleanup}
-      connection={connection}
-      controller={controller}
-      disabled={disabled}
-      onCleanupCloseComplete={() => {
-        if (cleaned) onCleaned();
-      }}
-    />
-  );
-}
-
-function ProviderActions({
-  actionsTriggerRef: actionsTriggerRefProp,
-  cleanup,
-  connection,
-  controller,
-  disabled,
-  onCleanupCloseComplete,
-}: {
-  readonly actionsTriggerRef?: RefObject<HTMLButtonElement | null>;
-  readonly cleanup?: Cleanup.Controller;
-  readonly connection: Transport.Connected;
-  readonly controller: Connection.Controller;
-  readonly disabled: boolean;
-  readonly onCleanupCloseComplete?: () => void;
-}) {
-  const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
-  const fallbackActionsTriggerRef = useRef<HTMLButtonElement>(null);
-  const actionsTriggerRef = actionsTriggerRefProp ?? fallbackActionsTriggerRef;
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [disconnectOpen, setDisconnectOpen] = useState(false);
+function DefaultActions({ cleanup, connection, provisioning }: ActionsSlotProps): ReactElement {
+  const { capabilities, messages } = useDomainKit();
+  const icons = useIcons();
+  const connected = connection.state._tag === "Connected";
+  const hasReceipt = connection.snapshot?.lastReceiptId != null;
   return (
     <>
-      <BaseMenu.Root disabled={disabled} modal={false} onOpenChange={setMenuOpen} open={menuOpen}>
-        <BaseMenu.Trigger
-          aria-label={messages.moreActions}
-          data-domainkit-part="actions-trigger"
-          ref={actionsTriggerRef}
-        >
-          <span aria-hidden="true">⋯</span>
-        </BaseMenu.Trigger>
-        <BaseMenu.Portal container={portalContainer} keepMounted>
-          <BaseMenu.Positioner align="end" sideOffset={6}>
-            <BaseMenu.Popup
-              data-color-scheme={colorScheme}
-              data-domainkit-part="actions-menu"
-              data-domainkit-root=""
-              style={themeStyle}
-            >
-              {cleanup === undefined ? null : (
-                <>
-                  <BaseMenu.Item
-                    closeOnClick={false}
-                    data-domainkit-part="actions-item"
-                    nativeButton
-                    onClickCapture={() => {
-                      setMenuOpen(false);
-                      queueMicrotask(() => cleanup.plan());
-                    }}
-                    render={<button type="button" />}
-                  >
-                    {messages.reviewCleanup}
-                  </BaseMenu.Item>
-                  <BaseMenu.Separator data-domainkit-part="actions-separator" />
-                </>
-              )}
-              <BaseMenu.Item
-                closeOnClick={false}
-                data-domainkit-part="actions-item"
-                data-tone="danger"
-                nativeButton
-                onClickCapture={() => {
-                  setMenuOpen(false);
-                  queueMicrotask(() => setDisconnectOpen(true));
-                }}
-                render={<button type="button" />}
-              >
-                {messages.disconnectDomain}
-              </BaseMenu.Item>
-            </BaseMenu.Popup>
-          </BaseMenu.Positioner>
-        </BaseMenu.Portal>
-      </BaseMenu.Root>
-      {cleanup === undefined ? null : (
-        <Cleanup.Dialog
-          controller={cleanup}
-          onOpenChangeComplete={(open) => {
-            if (!open) {
-              onCleanupCloseComplete?.();
-              queueMicrotask(() => actionsTriggerRef.current?.focus());
-            }
-          }}
-          trigger={null}
-        />
-      )}
-      <Connection.DisconnectDialog
-        connection={connection}
-        controller={controller}
-        onOpenChange={(open) => {
-          setDisconnectOpen(open);
-          if (!open) queueMicrotask(() => actionsTriggerRef.current?.focus());
-        }}
-        open={disconnectOpen}
-        trigger={null}
-      />
+      {capabilities.includes("provisioning") && connected ? (
+        <>
+          <button
+            data-domainkit-part="plan-trigger"
+            disabled={provisioning.state._tag === "Planning"}
+            onClick={provisioning.plan}
+            type="button"
+          >
+            {messages.reviewChanges}
+          </button>
+          <Provision.Status controller={provisioning} />
+          <Provision.Actions controller={provisioning} />
+          <Provision.Outcome controller={provisioning} />
+        </>
+      ) : null}
+      {capabilities.includes("cleanup") && connected && hasReceipt ? (
+        <>
+          <button
+            data-domainkit-part="cleanup-trigger"
+            disabled={cleanup.state._tag === "Planning"}
+            onClick={cleanup.plan}
+            type="button"
+          >
+            <span aria-hidden="true" data-icon="inline-start">
+              {icons.close}
+            </span>
+            {messages.cleanUp}
+          </button>
+          <Cleanup.Status controller={cleanup} />
+          <Cleanup.Actions controller={cleanup} />
+          <Cleanup.Outcome controller={cleanup} />
+        </>
+      ) : null}
     </>
+  );
+}
+
+/**
+ * The whole lifecycle for one domain: connect, review, apply, observe, clean up. The flow renders
+ * only what the transport declares, and every part of it is a slot with a default. It adds no
+ * layout containers of its own, so a host's grid can place the slot output directly.
+ */
+export function Flow({
+  domain,
+  onApplied,
+  onCleaned,
+  requirements,
+  slots = {},
+  ...props
+}: FlowProps): ReactElement {
+  const { capabilities } = useDomainKit();
+  const connection = Connect.useController({ domain });
+  const refresh = connection.refresh;
+  const provisioning = Provision.useController({
+    domain,
+    onApplied: useCallback(
+      (receipt: Receipt.Model) => {
+        refresh();
+        onApplied?.(receipt);
+      },
+      [onApplied, refresh],
+    ),
+    requirements,
+  });
+  const cleanup = Cleanup.useController({
+    domain,
+    onCleaned: useCallback(
+      (receipt: Receipt.Model) => {
+        refresh();
+        onCleaned?.(receipt);
+      },
+      [onCleaned, refresh],
+    ),
+    ...(connection.snapshot?.lastReceiptId == null
+      ? {}
+      : { receiptId: Receipt.ReceiptId.make(connection.snapshot.lastReceiptId) }),
+  });
+  const verification = Verify.useController({ domain });
+  const readiness = verification.readiness;
+  return usePart(
+    "div",
+    props,
+    { connection: connection.state._tag, provisioning: provisioning.state._tag },
+    {
+      children: (
+        <>
+          {!capabilities.includes("connection") ? null : slots.connection === undefined ? (
+            <DefaultConnection controller={connection} domain={domain} />
+          ) : (
+            slots.connection({ controller: connection, domain })
+          )}
+          {slots.records === undefined ? (
+            <Records.Table readiness={readiness} records={requirements} />
+          ) : (
+            slots.records({ controller: verification, domain, readiness, records: requirements })
+          )}
+          {!capabilities.includes("verification") ? null : slots.verification === undefined ? (
+            <Verify.Status controller={verification} />
+          ) : (
+            slots.verification({ controller: verification, domain })
+          )}
+          {slots.actions === undefined ? (
+            <DefaultActions
+              cleanup={cleanup}
+              connection={connection}
+              domain={domain}
+              provisioning={provisioning}
+            />
+          ) : (
+            slots.actions({ cleanup, connection, domain, provisioning })
+          )}
+        </>
+      ),
+      "data-domainkit-part": "domain-flow",
+      "data-domain": domain,
+    },
   );
 }

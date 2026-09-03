@@ -7,12 +7,12 @@ export default defineConfig({
   deps: {
     neverBundle: [
       "@base-ui/react",
-      "@effect/atom-react",
       "domainkit",
+      "domainkit/client",
+      "domainkit/testing",
       "effect",
       "react",
       "react-dom",
-      "scheduler",
     ],
   },
   fixedExtension: true,

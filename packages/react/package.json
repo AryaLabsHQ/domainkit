@@ -47,32 +47,24 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
-    "domainkit": "workspace:^0.8.0",
-    "scheduler": "0.27.0"
+    "domainkit": "workspace:^0.8.0"
   },
   "devDependencies": {
-    "@effect/atom-react": "4.0.0-rc.112",
-    "@hugeicons/core-free-icons": "^4.3.0",
-    "@hugeicons/react": "^1.1.10",
     "@playwright/test": "1.57.0",
     "@testing-library/react": "16.3.1",
     "@testing-library/user-event": "14.6.1",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "@types/scheduler": "0.26.0",
     "effect": "4.0.0-rc.112",
     "jsdom": "26.1.0",
-    "motion": "13.1.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-grab": "0.2.0",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vite": "7.1.12",
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@effect/atom-react": ">=4.0.0-rc.112 <5.0.0",
     "effect": ">=4.0.0-rc.112 <5.0.0",
     "react": ">=19.0.0 <20.0.0",
     "react-dom": ">=19.0.0 <20.0.0"

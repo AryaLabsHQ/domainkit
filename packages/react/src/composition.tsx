@@ -4,10 +4,14 @@ import type { CSSProperties, ElementType, ReactElement } from "react";
 export type ClassName<State> = string | ((state: State) => string | undefined);
 export type Style<State> = CSSProperties | ((state: State) => CSSProperties | undefined);
 
-export type PartProps<Tag extends ElementType, State extends Record<string, unknown>> = Omit<
-  useRender.ElementProps<Tag>,
-  "className" | "style"
-> & {
+/**
+ * What every rendered part accepts: the element's own props, a state-aware `className` and
+ * `style`, and Base UI's `render` for replacing the element outright.
+ */
+export type PartProps<
+  Tag extends ElementType = "div",
+  State extends Record<string, unknown> = Record<string, unknown>,
+> = Omit<useRender.ElementProps<Tag>, "className" | "style"> & {
   readonly className?: ClassName<State>;
   readonly render?: useRender.RenderProp<State>;
   readonly style?: Style<State>;
@@ -35,4 +39,14 @@ export function usePart<
     ...(style === undefined ? {} : { style }),
   };
   return useRender(parameters);
+}
+
+/** A part with no state of its own: one tag, one `data-domainkit-part`, host props on top. */
+export function leafPart<Tag extends keyof React.JSX.IntrinsicElements>(
+  defaultTagName: Tag,
+  part: string,
+) {
+  return function Leaf(props: PartProps<Tag, Record<string, unknown>>): ReactElement {
+    return usePart(defaultTagName, props, {}, { "data-domainkit-part": part });
+  };
 }

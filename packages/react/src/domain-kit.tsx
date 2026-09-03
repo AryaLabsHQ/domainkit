@@ -1,7 +1,5 @@
-import { RegistryProvider } from "@effect/atom-react";
-import { Transport } from "domainkit";
-import type * as Layer from "effect/Layer";
-import * as Atom from "effect/unstable/reactivity/Atom";
+import { Transport } from "domainkit/client";
+import * as Effect from "effect/Effect";
 import {
   createContext,
   useCallback,
@@ -16,15 +14,14 @@ import {
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
+import type { Listener } from "./events.ts";
 import type { Icons } from "./icons.tsx";
 import { IconsProvider } from "./icons.tsx";
-import type * as Lifecycle from "./lifecycle.ts";
 import type { Catalog } from "./messages.ts";
 import { merge as mergeMessages } from "./messages.ts";
 import type { Marks } from "./provider.tsx";
 import type { Theme } from "./theme.ts";
 import { toStyle } from "./theme.ts";
-import type { Runtime } from "./atom.ts";
 
 export interface RootState extends Record<string, unknown> {
   readonly colorScheme: "dark" | "inherit" | "light";
@@ -34,33 +31,86 @@ export interface RootProps extends Omit<PartProps<"div", RootState>, "children">
   readonly children: ReactNode;
   readonly colorScheme?: RootState["colorScheme"];
   readonly icons?: Partial<Icons>;
-  readonly messages?: Partial<Catalog>;
   readonly marks?: Marks;
+  readonly messages?: Partial<Catalog>;
+  /** Where an interactive provider flow sends the customer. Defaults to `window.location`. */
   readonly navigate?: (url: string) => void;
-  readonly onEvent?: Lifecycle.Listener;
+  readonly onEvent?: Listener;
   readonly portalContainer?: HTMLElement | null;
+  /** Bump to re-inspect every mounted domain after a change the UI did not make. */
+  readonly revision?: number;
   readonly theme?: Theme;
-  readonly transport: Layer.Layer<Transport.Service>;
+  /** The transport, by value. Rebuilding it inline on every render does not restart controllers. */
+  readonly transport: Transport.Interface;
 }
 
 interface ContextValue {
+  readonly capabilities: ReadonlyArray<Transport.Capability>;
   readonly colorScheme: RootState["colorScheme"];
-  readonly navigate: (url: string) => void;
+  readonly emit: Listener;
   readonly marks: Marks;
   readonly messages: Catalog;
-  readonly emit: Lifecycle.Listener;
+  readonly navigate: (url: string) => void;
   readonly portalContainer: RefObject<HTMLElement | null>;
+  readonly revision: number;
   readonly themeStyle: ReturnType<typeof toStyle>;
-  readonly runtime: Runtime;
+  readonly transport: Transport.Interface;
 }
 
 const Context = createContext<ContextValue | null>(null);
 
 const navigateInBrowser = (url: string): void => {
   if (typeof window === "undefined") {
-    throw new Error("DomainKit OAuth navigation requires a browser or a custom navigate function");
+    throw new Error("DomainKit provider authorization requires a browser or a `navigate` prop");
   }
   window.location.assign(url);
+};
+
+export interface StableTransport {
+  readonly transport: Transport.Interface;
+  readonly capabilities: ReadonlyArray<Transport.Capability>;
+}
+
+type Method = (...args: ReadonlyArray<never>) => Effect.Effect<unknown, unknown>;
+
+/**
+ * A transport whose identity survives re-renders. Each method reads the newest transport when it
+ * runs, so a host may write `<DomainKit.Root transport={Transport.fromFetch("/api/domainkit")}>`
+ * inline and controllers still see one transport for the whole mount. Swapping in a transport
+ * that declares different capability groups rebuilds it, and every controller re-runs.
+ */
+const useStableTransport = (transport: Transport.Interface): StableTransport => {
+  const latest = useRef(transport);
+  useLayoutEffect(() => {
+    latest.current = transport;
+  });
+  const signature = Transport.capabilities(transport).join(",");
+  return useMemo(() => {
+    const capabilities = Transport.capabilities(latest.current);
+    const stable = Object.fromEntries(
+      capabilities.map((capability) => {
+        const group = latest.current[capability] as unknown as Record<string, Method>;
+        return [
+          capability,
+          Object.fromEntries(
+            Object.keys(group).map((name) => [
+              name,
+              (...args: ReadonlyArray<never>) =>
+                Effect.suspend(() => {
+                  const live = latest.current[capability] as unknown as Record<string, Method>;
+                  const method = live[name];
+                  if (method === undefined) {
+                    throw new Error(`The transport no longer declares ${capability}.${name}`);
+                  }
+                  return method(...args);
+                }),
+            ]),
+          ),
+        ];
+      }),
+    ) as Transport.Interface;
+    return { capabilities, transport: stable };
+  }, [signature]);
 };
 
 const resolvePortalContainer = (
@@ -100,20 +150,21 @@ export function Root({
   navigate = navigateInBrowser,
   onEvent,
   portalContainer = null,
+  revision = 0,
   theme,
   transport,
   ...props
 }: RootProps) {
-  const runtime = useMemo(() => Atom.runtime(transport), [transport]);
+  const { capabilities, transport: stable } = useStableTransport(transport);
   const onEventRef = useRef(onEvent);
   useLayoutEffect(() => {
     onEventRef.current = onEvent;
   }, [onEvent]);
-  const emit = useCallback<Lifecycle.Listener>((event) => {
+  const emit = useCallback<Listener>((event) => {
     try {
       onEventRef.current?.(event);
     } catch {
-      // Host observers are best-effort and cannot change a completed mutation's outcome.
+      // Host observers are best-effort and cannot change a completed operation's outcome.
     }
   }, []);
   const themeStyle = toStyle(theme);
@@ -122,6 +173,18 @@ export function Root({
     () => ({ current: resolvedPortalContainer }),
     [resolvedPortalContainer],
   );
+  const value: ContextValue = {
+    capabilities,
+    colorScheme,
+    emit,
+    marks,
+    messages: mergeMessages(messages),
+    navigate,
+    portalContainer: portalContainerRef,
+    revision,
+    themeStyle,
+    transport: stable,
+  };
   const content = usePart(
     "div",
     props,
@@ -134,28 +197,26 @@ export function Root({
     },
   );
   return (
-    <RegistryProvider>
-      <Context.Provider
-        value={{
-          colorScheme,
-          emit,
-          marks,
-          messages: mergeMessages(messages),
-          navigate,
-          portalContainer: portalContainerRef,
-          runtime,
-          themeStyle,
-        }}
-      >
-        <IconsProvider {...(icons === undefined ? {} : { icons })}>{content}</IconsProvider>
-      </Context.Provider>
-    </RegistryProvider>
+    <Context.Provider value={value}>
+      <IconsProvider {...(icons === undefined ? {} : { icons })}>{content}</IconsProvider>
+    </Context.Provider>
   );
 }
 
 export function useDomainKit(): ContextValue {
   const value = useContext(Context);
-  if (value === null)
+  if (value === null) {
     throw new Error("DomainKit components must be rendered inside DomainKit.Root");
+  }
   return value;
+}
+
+/** The transport `DomainKit.Root` holds, with the identity it keeps for the whole mount. */
+export function useTransport(): Transport.Interface {
+  return useDomainKit().transport;
+}
+
+/** Which capability groups the host's transport declares, for gating a custom part. */
+export function useCapabilities(): ReadonlyArray<Transport.Capability> {
+  return useDomainKit().capabilities;
 }

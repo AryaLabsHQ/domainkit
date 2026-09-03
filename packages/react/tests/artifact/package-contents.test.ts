@@ -15,9 +15,11 @@ describe("packed React package", () => {
     expect(packageJson.type).toBe("module");
     expect(packageJson.peerDependencies.react).toBe(">=19.0.0 <20.0.0");
     expect(packageJson.peerDependencies["react-dom"]).toBe(">=19.0.0 <20.0.0");
-    expect(packageJson.peerDependencies["@effect/atom-react"]).toBe(">=4.0.0-rc.112 <5.0.0");
     expect(packageJson.peerDependencies.effect).toBe(">=4.0.0-rc.112 <5.0.0");
     expect(packageJson.exports["./styles.css"]).toBe("./dist/styles.css");
+    expect(packageJson.exports["."].types).toBe("./dist/index.d.mts");
+    expect(packageJson.sideEffects).toEqual(["./dist/styles.css"]);
+    expect(Object.keys(packageJson.dependencies).sort()).toEqual(["@base-ui/react", "domainkit"]);
 
     const { stdout } = await execFileAsync("npm", ["pack", "--dry-run", "--json"], {
       cwd: process.cwd(),
