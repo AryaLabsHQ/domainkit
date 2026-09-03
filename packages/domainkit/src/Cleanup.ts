@@ -80,6 +80,10 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
             );
           }
           const attachment = yield* storage.attachments.get(source.attachmentId);
+          yield* Attempts.assertWithin(
+            attachment,
+            source.plan.operations.map((operation) => operation.record),
+          );
           const { session, target } = yield* connect.session(attachment.id);
           const dns = session.dns(target);
           const operations = yield* Effect.forEach(Receipt.applied(receipt), (applied) =>

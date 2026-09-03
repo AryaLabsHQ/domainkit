@@ -103,6 +103,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
         Effect.gen(function* () {
           const policy = yield* Policy;
           const attachment = yield* attachmentFor(input.domain);
+          yield* Attempts.assertWithin(attachment, input.requirements);
           const { session, target } = yield* connect.session(attachment.id);
           const observed = yield* session.dns(target).list(target.zone);
           const operations = yield* Planner.reconcile(

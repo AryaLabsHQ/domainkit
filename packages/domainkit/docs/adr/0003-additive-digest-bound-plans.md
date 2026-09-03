@@ -21,8 +21,10 @@ only with `allowPartial` and a conflict-free selection. `Provision.apply` re-pla
 the first write and fails `Stale` when the digest moved, then revalidates every approved create
 before writing it.
 
-The planner is additive only: missing records are created, exact records are no-ops, and
-incompatible state is a conflict. Requirements declare `exclusive` or `append` policy; CNAME
+Every requirement must sit at or below the attached domain; a name outside it fails
+`InvalidInput` before the planner reads the zone, so tenants that share a zone cannot plan into each
+other's names. The planner is additive only: missing records are created, exact records are no-ops,
+and incompatible state is a conflict. Requirements declare `exclusive` or `append` policy; CNAME
 requirements are always exclusive. DomainKit does not update, overwrite, or delete records it did
 not create.
 

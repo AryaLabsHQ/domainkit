@@ -257,6 +257,43 @@ describe("provisioning and cleanup tracer", () => {
     }).pipe(withPrincipal, provide(fake));
   });
 
+  it.effect("keeps requirements inside the attached domain when tenants share a zone", () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    const tenantB = Principal.make({ ownerId: "org_b", actorId: "user_b" });
+    return Effect.gen(function* () {
+      yield* connectFake(fake);
+      yield* Connect.start({
+        provider: fake.id,
+        method: Connect.Method.token("token-b"),
+        domain: "other.example.com",
+      }).pipe(Effect.provideService(Principal.Principal, tenantB));
+      const crossTenant = yield* Provision.plan({
+        domain: "app.example.com",
+        requirements: [DnsRecord.txt({ name: "other.example.com", value: "hijack" })],
+      }).pipe(Effect.flip);
+      assert.strictEqual(crossTenant.reason._tag, "InvalidInput");
+      if (crossTenant.reason._tag === "InvalidInput") {
+        assert.strictEqual(crossTenant.reason.field, "requirements");
+      }
+      const apex = yield* Provision.plan({
+        domain: "app.example.com",
+        requirements: [DnsRecord.txt({ name: "example.com", value: "apex" })],
+      }).pipe(Effect.flip);
+      assert.strictEqual(apex.reason._tag, "InvalidInput");
+      const sibling = yield* Provision.plan({
+        domain: "app.example.com",
+        requirements: [DnsRecord.txt({ name: "app.example.com.evil.net", value: "x" })],
+      }).pipe(Effect.flip);
+      assert.strictEqual(sibling.reason._tag, "InvalidInput");
+      const child = yield* Provision.plan({
+        domain: "app.example.com",
+        requirements: [DnsRecord.txt({ name: "_acme.app.example.com", value: "ok" })],
+      });
+      assert.strictEqual(child.operations[0]?._tag, "Create");
+      assert.strictEqual(fake.records("example.com").length, 0);
+    }).pipe(withPrincipal, provide(fake));
+  });
+
   it.effect("records a rejection as a terminal attempt state", () => {
     const fake = Testing.provider({ zones: ["example.com"] });
     return Effect.gen(function* () {
