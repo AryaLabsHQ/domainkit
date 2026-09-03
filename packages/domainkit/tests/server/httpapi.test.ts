@@ -237,11 +237,75 @@ describe("Server.group over the lifecycle", () => {
 
       const callback = await handler(new Request(authorizationUrl, { redirect: "manual" }));
       assert.strictEqual(callback.status, 302);
-      assert.strictEqual(callback.headers.get("location"), "/dashboard");
+      assert.strictEqual(callback.headers.get("location"), "/settings/domains");
 
       const inspected = await call("GET", "/domains/app.example.com");
       assert.strictEqual((inspected.body as Server.Snapshot).status, "connected");
       assert.strictEqual((inspected.body as Server.Snapshot).method, "oauth");
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("refuses a callback whose flow points off this origin", async () => {
+    const { fake, call, handler, dispose } = server({ defaultReturnTo: "/dashboard" });
+    try {
+      const started = await call("POST", "/connections", {
+        domain: "app.example.com",
+        provider: fake.id,
+        method: { _tag: "OAuth", returnTo: "https://evil.example/steal" },
+      });
+      const { authorizationUrl } = started.body as { readonly authorizationUrl: string };
+
+      const callback = await handler(new Request(authorizationUrl, { redirect: "manual" }));
+      assert.strictEqual(callback.status, 400);
+      assert.strictEqual(callback.headers.get("location"), null);
+      const refused = JSON.parse(await callback.text()) as {
+        readonly reason: { readonly _tag: string; readonly field?: string };
+      };
+      assert.strictEqual(refused.reason._tag, "InvalidInput");
+      assert.strictEqual(refused.reason.field, "returnTo");
+
+      // The continuation is still unspent, so the flow can be finished from a safe destination.
+      const inspected = await call("GET", "/domains/app.example.com");
+      assert.strictEqual((inspected.body as Server.Snapshot).status, "disconnected");
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("falls back to defaultReturnTo when the flow named no destination", async () => {
+    const { fake, call, handler, dispose } = server({ defaultReturnTo: "/dashboard" });
+    try {
+      const started = await call("POST", "/connections", {
+        domain: "app.example.com",
+        provider: fake.id,
+        method: { _tag: "OAuth" },
+      });
+      const { authorizationUrl } = started.body as { readonly authorizationUrl: string };
+      const callback = await handler(new Request(authorizationUrl, { redirect: "manual" }));
+      assert.strictEqual(callback.status, 302);
+      assert.strictEqual(callback.headers.get("location"), "/dashboard");
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("ignores a returnTo the provider adds to the callback query", async () => {
+    const { fake, call, handler, dispose } = server({ defaultReturnTo: "/dashboard" });
+    try {
+      const started = await call("POST", "/connections", {
+        domain: "app.example.com",
+        provider: fake.id,
+        method: { _tag: "OAuth", returnTo: "/settings/domains" },
+      });
+      const { authorizationUrl } = started.body as { readonly authorizationUrl: string };
+      const tampered = new URL(authorizationUrl);
+      tampered.searchParams.set("returnTo", "https://evil.example/steal");
+
+      const callback = await handler(new Request(tampered, { redirect: "manual" }));
+      assert.strictEqual(callback.status, 302);
+      assert.strictEqual(callback.headers.get("location"), "/settings/domains");
     } finally {
       await dispose();
     }

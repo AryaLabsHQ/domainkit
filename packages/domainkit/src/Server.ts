@@ -11,7 +11,7 @@
  * own, so `group.prefix("/internal/dns")` or a host router mount is all a different base path
  * takes; callback URLs follow the mount.
  */
-import { Context, Effect, Layer, Option, Redacted, Schema } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import * as HttpRouter from "effect/unstable/http/HttpRouter";
 import * as HttpServer from "effect/unstable/http/HttpServer";
 import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
@@ -202,13 +202,9 @@ export const group = HttpApiGroup.make("domainkit")
     HttpApiEndpoint.get("callback", "/callback/:provider", {
       params: { provider: Schema.String },
       // `Connect.complete` reads every callback parameter off the request URL, because a provider
-      // may return `error`, `teamId`, or `configurationId` too. These three are declared so the
+      // may return `error`, `teamId`, or `configurationId` too. These two are declared so the
       // OpenAPI document names what a provider is expected to send back.
-      query: {
-        state: Schema.String,
-        code: Schema.optionalKey(Schema.String),
-        returnTo: Schema.optionalKey(Schema.String),
-      },
+      query: { state: Schema.String, code: Schema.optionalKey(Schema.String) },
       success: Redirected,
       error: errors,
     }),
@@ -359,6 +355,21 @@ const callbackUrlFor = (input: {
     });
   });
 
+/**
+ * Where the callback may send the customer. Only a path on this server or an absolute URL on the
+ * callback's own origin: a destination that leaves the application is an open redirect, whoever
+ * supplied it.
+ */
+const sameOrigin = (destination: string, callback: URL): string | null => {
+  if (destination.startsWith("/") && !destination.startsWith("//")) return destination;
+  try {
+    const url = new URL(destination);
+    return url.origin === callback.origin ? url.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
 const snapshotOf = (snapshot: ConnectModule.Snapshot): Snapshot => ({
   domain: snapshot.domain,
   attachmentId: snapshot.attachment?.id ?? null,
@@ -379,6 +390,22 @@ const snapshotOf = (snapshot: ConnectModule.Snapshot): Snapshot => ({
   })),
   providers: snapshot.providers.map(({ id, name, methods }) => ({ id, name, methods })),
 });
+
+/** The wire method as `Connect` takes it; interactive cases carry the caller's return destination. */
+const methodOf = (method: Method): ConnectModule.Method => {
+  switch (method._tag) {
+    case "Token":
+      return ConnectModule.Method.token(method.token);
+    case "OAuth":
+      return ConnectModule.Method.oauth(
+        method.returnTo === undefined ? {} : { returnTo: method.returnTo },
+      );
+    case "Integration":
+      return ConnectModule.Method.integration(
+        method.returnTo === undefined ? {} : { returnTo: method.returnTo },
+      );
+  }
+};
 
 const candidatesOf = (
   candidates: ReadonlyArray<{ readonly zone: string; readonly label: string }>,
@@ -481,29 +508,16 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
           as(
             request,
             Effect.gen(function* () {
-              const method = payload.method;
+              // Token methods connect in one call; the interactive ones need somewhere to land.
+              const callbackUrl =
+                payload.method._tag === "Token"
+                  ? undefined
+                  : yield* callbackUrlFor({ request, provider: payload.provider, options });
               const started = yield* connect.start({
                 provider: payload.provider,
                 domain: payload.domain,
-                method:
-                  method._tag === "Token"
-                    ? ConnectModule.Method.token(Redacted.make(method.token))
-                    : method._tag === "OAuth"
-                      ? ConnectModule.Method.oauth(
-                          method.returnTo === undefined ? {} : { returnTo: method.returnTo },
-                        )
-                      : ConnectModule.Method.integration(
-                          method.returnTo === undefined ? {} : { returnTo: method.returnTo },
-                        ),
-                ...(method._tag === "Token"
-                  ? {}
-                  : {
-                      callbackUrl: yield* callbackUrlFor({
-                        request,
-                        provider: payload.provider,
-                        options,
-                      }),
-                    }),
+                method: methodOf(payload.method),
+                ...(callbackUrl === undefined ? {} : { callbackUrl }),
               });
               return yield* startedOf(started, payload.domain);
             }),
@@ -514,17 +528,25 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
             request,
             Effect.gen(function* () {
               const url = yield* absoluteUrl(request);
+              // Where the customer lands comes from the continuation this owner started, never
+              // from the provider's query string, and it is resolved before the callback is spent:
+              // a server with nowhere to send them must not connect the provider and then fail.
+              const continuation = yield* storage.continuations.get(query.state);
+              const requested = continuation.returnTo ?? options.defaultReturnTo;
+              if (requested === undefined) {
+                return yield* invalid(
+                  "The flow carried no returnTo and the server has no defaultReturnTo",
+                  "returnTo",
+                );
+              }
+              const destination = sameOrigin(requested, url);
+              if (destination === null) {
+                return yield* invalid(`${requested} leaves this application`, "returnTo");
+              }
               yield* connect.complete({
                 continuationId: query.state,
                 callbackUrl: url.toString(),
               });
-              const destination = query.returnTo ?? options.defaultReturnTo;
-              if (destination === undefined) {
-                return yield* invalid(
-                  "The callback has no returnTo and the server has no defaultReturnTo",
-                  "returnTo",
-                );
-              }
               return HttpApiSchema.withHeaders({
                 body: undefined as void,
                 headers: { location: destination },

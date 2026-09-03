@@ -1,7 +1,7 @@
 // Add custom domains to an Effect app: providers, storage, routes. Nothing else to write.
 import { Config, Effect, Layer } from "effect";
 import { HttpApi, HttpApiBuilder } from "effect/unstable/httpapi";
-import { Cloudflare, Custody, DomainKit, Storage, Vercel } from "domainkit";
+import { Cloudflare, Custody, DomainKit, DomainKitError, Storage, Vercel } from "domainkit";
 import { Server } from "domainkit/server";
 
 const DomainKitLive = DomainKit.layer({
@@ -19,13 +19,18 @@ const DomainKitLive = DomainKit.layer({
   Layer.provideMerge(Layer.mergeAll(Storage.layerMemory, Custody.layerConfig())),
 );
 
-// Who is calling: your session, your tenant model.
+// Who is calling: your session, your tenant model. Fail closed — a request DomainKit cannot
+// attribute must not run under someone else's principal.
 const IdentityLive = Layer.succeed(Server.Identity)({
-  principal: (request) =>
-    Effect.succeed({
-      ownerId: request.headers["x-org-id"] ?? "org_demo",
-      actorId: request.headers["x-user-id"] ?? "user_demo",
-    }),
+  principal: (request) => {
+    const ownerId = request.headers["x-org-id"];
+    const actorId = request.headers["x-user-id"];
+    return ownerId === undefined || actorId === undefined
+      ? DomainKitError.fail(
+          new DomainKitError.Unauthenticated({ message: "The request carries no session" }),
+        )
+      : Effect.succeed({ ownerId, actorId });
+  },
 });
 
 // Mount the group in your API. Every route, typed, with OpenAPI for free.

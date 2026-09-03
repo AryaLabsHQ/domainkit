@@ -26,6 +26,10 @@ group as a standalone API, and `OpenApi.fromApi` documents it without extra work
 to `Connect`, `Provision`, `Cleanup`, and `Verify`, so no route can read across owners. Everything
 else comes from `DomainKit.layer` plus `Storage`.
 
+The OAuth callback redirects to the destination stored on the continuation the customer's own
+request created, or to `defaultReturnTo`, and only after checking it is a path on this server or a
+URL on the callback's origin. The provider's query string never chooses where the customer lands.
+
 Failures cross the wire as the `DomainKitError` value itself, with the status `DomainKitError`
 already derives from its reason: 400 `InvalidInput`, 401 `Unauthenticated`, 403 `Forbidden` and
 `Reconnect`, 404 `NotFound`, 409 `Conflict`, `Stale`, `Expired` and `Busy`, 502 `ProviderRejected`,
@@ -50,6 +54,7 @@ that renders only what the server can serve.
 - The same wire schemas type the server, the fetch transport, and `@domainkit/react`, so the three
   cannot drift.
 - Mounting under a different base path is a prefix, never request re-hosting.
+- A provider cannot turn the callback into an open redirect.
 - Reverse-proxy deployments that cannot see their public origin set `callbackBaseUrl`.
 - Hono, Next.js App Router, and TanStack Start mount the same Web handler.
 

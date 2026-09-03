@@ -129,12 +129,19 @@ export const ApiLive = HttpApiBuilder.layer(Api).pipe(
 );
 ```
 
+`Identity` fails closed: a request DomainKit cannot attribute never runs under another tenant's
+principal.
+
 `Server.group` is one `HttpApiGroup` with thirteen typed endpoints covering the whole lifecycle:
 inspect, connect, callback, attach, detach, disconnect, plan, approve, apply, read a plan or a
 receipt, observe, and build a cleanup plan. `Identity` is the only service you write; every handler
 derives the `Principal` for the request it is serving. `Server.group.prefix("/internal/dns")` moves
 every route, and the OAuth callback URL follows the mount. `OpenApi.fromApi(Server.api)` documents
 the group.
+
+After an interactive connection completes, the callback redirects to the `returnTo` the flow was
+started with, or to `defaultReturnTo`. Either way the destination must be a path on this server or a
+URL on the callback's own origin, so a provider cannot steer the customer off the application.
 
 Failures cross the wire as the `DomainKitError` value with the status its `reason` derives, so a
 `Conflict` is a 409 carrying the conflicting operations and a `Reconnect` is a 403 naming the
