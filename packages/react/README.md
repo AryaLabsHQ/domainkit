@@ -98,7 +98,8 @@ Verification does not wait for a connection: the flow observes the requirements 
 domain with no provider attached still reports which records are in place.
 
 Observation stays available in read-only, because checking DNS reads the world rather than changing
-the domain.
+the domain. Retrying is not: a flow that becomes read-only after a write failed keeps the failure on
+screen and drops the retry.
 If your `Identity.authorize` denies `observe` to members, pass `slots={{ verification: () => null }}`.
 
 ## Controllers

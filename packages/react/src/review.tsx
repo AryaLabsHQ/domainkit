@@ -77,6 +77,7 @@ export interface OutcomeProps extends PartProps<"p", ReviewState>, KindProps {}
 /** The failure sentence from the error's reason, with the retry the flow allows. */
 export function Outcome({ controller, kind, ...props }: OutcomeProps): ReactElement | null {
   const { messages } = useDomainKit();
+  const readOnly = useReadOnly();
   const state = controller.state;
   const partial = state._tag === "Applied" && state.receipt.status === "partial";
   const element = usePart(
@@ -87,14 +88,21 @@ export function Outcome({ controller, kind, ...props }: OutcomeProps): ReactElem
       children:
         state._tag === "Failure" ? (
           <>
-            {describeFailure(state.error, messages)}{" "}
-            <button
-              data-domainkit-part={kind === "provisioning" ? "provisioning-retry" : "cleanup-retry"}
-              onClick={controller.retry}
-              type="button"
-            >
-              {messages.retry}
-            </button>
+            {describeFailure(state.error, messages)}
+            {readOnly ? null : (
+              <>
+                {" "}
+                <button
+                  data-domainkit-part={
+                    kind === "provisioning" ? "provisioning-retry" : "cleanup-retry"
+                  }
+                  onClick={controller.retry}
+                  type="button"
+                >
+                  {messages.retry}
+                </button>
+              </>
+            )}
           </>
         ) : partial ? (
           kind === "provisioning" ? (

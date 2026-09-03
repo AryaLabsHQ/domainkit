@@ -18,7 +18,9 @@ tenancy, or product verification policy.
   container around a slot, so slot output stays a direct child of the flow root.
 - `readOnly` on `DomainKit.Root` or `Domain.Flow` renders the state without the controls that
   change it, for authorization a transport cannot express. Parts read it through `useReadOnly()`.
-  Observation stays available: checking DNS reads the world rather than changing the domain.
+  Observation stays available: checking DNS reads the world rather than changing the domain. A
+  retry is a write too, so read-only hides every retry control and `retry` re-inspects instead of
+  resending the last command.
 - `Verify.useController` and `Domain.Flow` pass the flow's requirements to `observe`, so a domain
   with no attachment verifies against what the host asked for rather than a receipt it has not
   earned yet. The requirement set is keyed by content, never array identity.

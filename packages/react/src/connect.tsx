@@ -116,6 +116,7 @@ const settled = (snapshot: Snapshot, discovery: Discovery | null): State => {
  */
 export function useController({ domain, returnTo }: Options): Controller {
   const { emit, navigate, revision, transport } = useDomainKit();
+  const readOnly = useReadOnly();
   const connection = transport.connection;
   const runner = useRunner();
   const [state, setState] = useState<State>(State.Loading({ snapshot: null }));
@@ -296,9 +297,10 @@ export function useController({ domain, returnTo }: Options): Controller {
 
   const retry = useCallback(() => {
     const command = lastCommand.current;
-    if (command === null || command.domain !== domain) load();
+    // Re-inspecting is a read, so it stays; rerunning the last write does not.
+    if (readOnly || command === null || command.domain !== domain) load();
     else command.run();
-  }, [domain, load]);
+  }, [domain, load, readOnly]);
 
   return {
     connect,
@@ -343,6 +345,7 @@ export interface OutcomeProps extends PartProps<"p", RootState> {
 /** The failure sentence, chosen by the error's reason, plus the retry that reason allows. */
 export function Outcome({ controller, ...props }: OutcomeProps): ReactElement | null {
   const { messages } = useDomainKit();
+  const readOnly = useReadOnly();
   const state = controller.state;
   const element = usePart(
     "p",
@@ -352,10 +355,19 @@ export function Outcome({ controller, ...props }: OutcomeProps): ReactElement | 
       children:
         state._tag === "Failure" ? (
           <>
-            {describeFailure(state.error, messages)}{" "}
-            <button data-domainkit-part="connection-retry" onClick={controller.retry} type="button">
-              {messages.retry}
-            </button>
+            {describeFailure(state.error, messages)}
+            {readOnly ? null : (
+              <>
+                {" "}
+                <button
+                  data-domainkit-part="connection-retry"
+                  onClick={controller.retry}
+                  type="button"
+                >
+                  {messages.retry}
+                </button>
+              </>
+            )}
           </>
         ) : null,
       "data-domainkit-part": "flow-outcome",

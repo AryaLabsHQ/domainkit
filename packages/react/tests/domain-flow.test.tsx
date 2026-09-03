@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DnsRecord, type Receipt } from "domainkit";
 
@@ -352,5 +352,52 @@ describe("Domain.Flow verification requirements", () => {
     await waitFor(() => expect(observeCalls(transport).length).toBeGreaterThan(0));
     await waitFor(() => expect(screen.getByRole("button", { name: /Check/ })).toBeDefined());
     expect(observeCalls(transport)).toHaveLength(1);
+  });
+});
+
+describe("read-only and a failed write", () => {
+  it("offers no retry for a write that failed before the flow became read-only", async () => {
+    const { domain, requirements, transport } = scenario();
+    let controller: Connect.Controller | null = null;
+    function Probe({ readOnly }: { readonly readOnly: boolean }) {
+      controller = Connect.useController({ domain });
+      return (
+        <>
+          <Connect.Outcome controller={controller} />
+          <Domain.Flow domain={domain} readOnly={readOnly} requirements={requirements} />
+        </>
+      );
+    }
+    function Harness({ readOnly }: { readonly readOnly: boolean }) {
+      return (
+        <DomainKit.Root readOnly={readOnly} transport={transport}>
+          <Probe readOnly={readOnly} />
+        </DomainKit.Root>
+      );
+    }
+    const view = render(<Harness readOnly={false} />);
+    await waitFor(() => expect(controller).not.toBeNull());
+    // A write that fails while the flow is still writable.
+    act(() => {
+      controller?.connect({ method: "token", provider: "absent", values: { token: "x" } });
+    });
+    await screen.findByRole("button", { name: "Try again" });
+
+    view.rerender(<Harness readOnly />);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    // The failure itself still reads.
+    expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
+
+    // And the verb refuses too, so a host calling it directly cannot resend the write.
+    const before = transport.calls.filter((call) => call.method === "connection.start").length;
+    act(() => controller?.retry());
+    await waitFor(() =>
+      expect(
+        transport.calls.filter((call) => call.method === "connection.inspect").length,
+      ).toBeGreaterThan(0),
+    );
+    expect(transport.calls.filter((call) => call.method === "connection.start")).toHaveLength(
+      before,
+    );
   });
 });
