@@ -57,6 +57,27 @@ export const requestJson = (input: {
           }),
   });
 
+/** Host-supplied request headers, given as a value or as a thunk that may await a fresh token. */
+export const headersFrom = (
+  source: HeadersInit | (() => HeadersInit | Promise<HeadersInit>) | undefined,
+): Effect.Effect<Headers, DomainKitError.DomainKitError> =>
+  source === undefined
+    ? Effect.sync(() => new Headers())
+    : typeof source !== "function"
+      ? Effect.sync(() => new Headers(source))
+      : Effect.tryPromise({
+          try: async () => new Headers(await source()),
+          catch: (cause) =>
+            DomainKitError.isDomainKitError(cause)
+              ? cause
+              : new DomainKitError.DomainKitError({
+                  reason: new DomainKitError.Unauthenticated({
+                    message:
+                      cause instanceof Error ? cause.message : "Request headers were unavailable",
+                  }),
+                }),
+        });
+
 /**
  * Map an HTTP failure to a reason: 401 -> Unauthenticated, 403 -> Forbidden, 409 or a provider
  * conflict code -> ProviderConflict, 429/5xx -> ProviderUnavailable, else ProviderRejected.

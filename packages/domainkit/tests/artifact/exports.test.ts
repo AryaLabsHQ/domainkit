@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Schema } from "effect";
 
 import packageJson from "../../package.json" with { type: "json" };
+import { Transport } from "../../src/entry/client.ts";
 import { Server } from "../../src/entry/server.ts";
 import { Testing } from "../../src/entry/testing.ts";
 import * as root from "../../src/index.ts";
@@ -37,14 +38,33 @@ describe("public namespaces", () => {
     assert.deepStrictEqual(Object.keys(root).sort(), [...modules, "VERSION"].sort());
   });
 
-  it("publishes the root, server, and testing entry points", () => {
+  it("publishes the root, client, server, and testing entry points", () => {
     assert.deepStrictEqual(Object.keys(packageJson.exports), [
       ".",
+      "./client",
       "./server",
       "./testing",
       "./package.json",
     ]);
     assert.strictEqual("./promise" in packageJson.exports, false);
+  });
+
+  it("keeps the client surface to the transport, its adapters, and the capability list", () => {
+    assert.deepStrictEqual(Object.keys(Transport).sort(), [
+      "Method",
+      "allCapabilities",
+      "capabilities",
+      "fromAsync",
+      "fromFetch",
+      "toAsync",
+    ]);
+    assert.deepStrictEqual(Transport.allCapabilities, [
+      "connection",
+      "provisioning",
+      "verification",
+      "cleanup",
+    ]);
+    assert.strictEqual(typeof Testing.transport, "function");
   });
 
   it("keeps the server surface to the group, its layers, and the wire schemas", () => {

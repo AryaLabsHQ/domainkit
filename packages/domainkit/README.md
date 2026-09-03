@@ -148,10 +148,37 @@ const { handler, dispose } = Server.toWebHandler(Layer.mergeAll(DomainKitLive, I
 });
 ```
 
+## Talk to them from the browser
+
+```ts
+import { Transport } from "domainkit/client";
+
+const transport = Transport.fromFetch("/api/domainkit");
+
+// Effect at the call site, or `Transport.toAsync(transport)` for Promises.
+const started =
+  yield *
+  transport.connection!.start({
+    domain: "app.example.com",
+    provider: "cloudflare",
+    method: Transport.Method.oauth({ returnTo: "/settings/domains" }),
+  });
+```
+
+Capability groups are optional. A host that mounts only the connection routes declares
+`Transport.fromFetch(url, { capabilities: ["connection"] })`, `Transport.capabilities(transport)`
+reports what is there, and the parts of `@domainkit/react` that plan or clean up do not render.
+`Transport.fromAsync` adapts a Promise-shaped transport of your own.
+
+Failures arrive as the same `DomainKitError` the lifecycle raised, reason intact, so a `Conflict`
+still carries its conflicting operations. A response the transport cannot read as a `DomainKitError`
+becomes a retryable `ProviderUnavailable` naming the base URL.
+
 ## Test against the seam
 
 `domainkit/testing` ships `Testing.provider` (a token and OAuth provider over in-memory zones),
-`Testing.resolver`, `Testing.storage`, and the conformance runners, so host tests never stub global
+`Testing.resolver`, `Testing.storage`, `Testing.transport` (the whole lifecycle over an in-memory
+server, recording every call), and the conformance runners, so host tests never stub global
 `fetch`. Provider authors run `Testing.conformance.provider(definition, credential, zone)` against
 a real account before shipping.
 
@@ -159,6 +186,7 @@ a real account before shipping.
 
 - `domainkit` — the Effect-native root: lifecycle services, host seams, providers, and values;
 - `domainkit/server` — the mountable route group, its layers, and the wire schemas;
+- `domainkit/client` — the capability-gated fetch transport and its Promise adapters;
 - `domainkit/testing` — fakes and conformance runners.
 
 Your app owns identity, tenancy, persistence, keys, routes, and consent. DomainKit supplies the

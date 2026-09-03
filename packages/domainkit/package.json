@@ -33,6 +33,10 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
+    "./client": {
+      "types": "./dist/client.d.mts",
+      "import": "./dist/client.mjs"
+    },
     "./server": {
       "types": "./dist/server.d.mts",
       "import": "./dist/server.mjs"

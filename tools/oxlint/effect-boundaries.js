@@ -3,13 +3,17 @@ import path from "node:path";
 const repoRoot = process.cwd();
 const coreSource = "packages/domainkit/src/";
 
-/** Files that may leave the Effect runtime: only the test-runner registration in conformance. */
-const runtimeExitFiles = new Set([`${coreSource}internal/conformance/storage.ts`]);
+/** Files that may leave the Effect runtime: the transport's Promise edge and conformance's runner. */
+const runtimeExitFiles = new Set([
+  `${coreSource}Transport.ts`,
+  `${coreSource}internal/conformance/storage.ts`,
+]);
 
 /** Declared foreign Promise boundaries: Web Crypto, fetch, oauth4webapi, and host async adapters. */
 const foreignPromiseFiles = new Set([
   `${coreSource}Custody.ts`,
   `${coreSource}Storage.ts`,
+  `${coreSource}Transport.ts`,
   `${coreSource}internal/digest.ts`,
   `${coreSource}internal/aes.ts`,
   `${coreSource}internal/doh.ts`,
