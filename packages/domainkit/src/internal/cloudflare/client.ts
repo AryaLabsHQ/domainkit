@@ -11,6 +11,9 @@ export const provider = "cloudflare";
 
 const notFound = new DomainKitError.NotFound({ entity: "zone", id: "cloudflare" });
 
+/** Cloudflare's "record already exists" family (81056 identical, 81057 same name and content, 81058 CNAME). */
+const conflictCodes = new Set([81056, 81057, 81058]);
+
 export interface Options {
   readonly token: string;
   readonly fetch: Fetch;
@@ -36,6 +39,15 @@ const call = <R extends S.ConstraintDecoder<unknown>>(
     const base = S.decodeUnknownOption(Protocol.BaseEnvelope)(reply.body);
     if (!reply.ok || base._tag === "None" || !base.value.success) {
       const detail = base._tag === "Some" ? base.value.errors[0] : undefined;
+      if (detail !== undefined && conflictCodes.has(detail.code)) {
+        return yield* DomainKitError.fail(
+          new DomainKitError.ProviderConflict({
+            provider,
+            code: String(detail.code),
+            message: detail.message,
+          }),
+        );
+      }
       return yield* DomainKitError.fail(
         classify(
           provider,

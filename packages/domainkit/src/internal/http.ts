@@ -56,7 +56,10 @@ export const requestJson = (input: {
           }),
   });
 
-/** Map an HTTP failure to a reason: 401 -> Unauthenticated, 429/5xx -> Unavailable, else Rejected. */
+/**
+ * Map an HTTP failure to a reason: 401 -> Unauthenticated, 403 -> Forbidden, 409 or a provider
+ * conflict code -> ProviderConflict, 429/5xx -> ProviderUnavailable, else ProviderRejected.
+ */
 export const classify = (
   provider: string,
   status: number,
@@ -65,6 +68,14 @@ export const classify = (
   code?: string,
 ): DomainKitError.Reason => {
   if (status === 401) return new DomainKitError.Unauthenticated({ message });
+  if (status === 403) return new DomainKitError.Forbidden({ message });
+  if (status === 409 || code === "conflict") {
+    return new DomainKitError.ProviderConflict({
+      provider,
+      message,
+      code: code ?? String(status),
+    });
+  }
   if (status === 429 || status >= 500) {
     const retryAfterMs = retryAfter(headers.get("retry-after"));
     return new DomainKitError.ProviderUnavailable({

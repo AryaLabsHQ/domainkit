@@ -233,6 +233,9 @@ describe("Cloudflare.provider", () => {
         json: false,
         init: { status: 502, headers: { "content-type": "text/html" } },
       },
+      { body: failure(9106, "Missing X-Auth-Key"), init: { status: 403 } },
+      { body: failure(9000, "Conflict"), init: { status: 409 } },
+      { body: failure(1003, "Invalid or missing zone id."), init: { status: 400 } },
     ]);
     const dns = Cloudflare.provider({ fetch: recording.fetch }).session(credential()).dns(target);
     return Effect.gen(function* () {
@@ -243,11 +246,23 @@ describe("Cloudflare.provider", () => {
       const rejected = yield* dns
         .create("example.com", DnsRecord.txt({ name: "x.example.com", value: "v" }))
         .pipe(Effect.flip);
-      assert.strictEqual(rejected.reason._tag, "ProviderRejected");
-      if (rejected.reason._tag === "ProviderRejected")
+      assert.strictEqual(rejected.reason._tag, "ProviderConflict");
+      if (rejected.reason._tag === "ProviderConflict")
         assert.strictEqual(rejected.reason.code, "81057");
       const html = yield* dns.list("example.com").pipe(Effect.flip);
       assert.strictEqual(html.reason._tag, "ProviderUnavailable");
+      const forbidden = yield* dns.list("example.com").pipe(Effect.flip);
+      assert.strictEqual(forbidden.reason._tag, "Forbidden");
+      const conflict = yield* dns.list("example.com").pipe(Effect.flip);
+      assert.strictEqual(conflict.reason._tag, "ProviderConflict");
+      const bad = yield* dns.list("example.com").pipe(Effect.flip);
+      assert.strictEqual(bad.reason._tag, "ProviderRejected");
+      if (bad.reason._tag === "ProviderRejected") assert.strictEqual(bad.reason.code, "1003");
+      const noZone = Cloudflare.provider({ fetch: recording.fetch })
+        .session(credential())
+        .dns({ zone: "example.com", context: { accountId: "account-1" }, label: "x" });
+      const unsupported = yield* noZone.list("example.com").pipe(Effect.flip);
+      assert.strictEqual(unsupported.reason._tag, "Unsupported");
     });
   });
 

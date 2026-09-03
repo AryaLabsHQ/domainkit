@@ -36,6 +36,7 @@ export class NotFound extends Schema.TaggedError<NotFound>("@domainkit/Reason/No
       "provider",
       "zone",
       "authorization",
+      "record",
     ]),
     id: Schema.String,
   },
@@ -118,6 +119,20 @@ export class ResolverFailed extends Schema.TaggedError<ResolverFailed>(
   "@domainkit/Reason/ResolverFailed",
 )("ResolverFailed", { resolver: Schema.String, message: Schema.String }) {}
 
+/** The provider refused the write because a conflicting record already exists there. */
+export class ProviderConflict extends Schema.TaggedError<ProviderConflict>(
+  "@domainkit/Reason/ProviderConflict",
+)("ProviderConflict", {
+  provider: Schema.String,
+  code: Schema.optionalKey(Schema.String),
+  message: Schema.String,
+}) {}
+/** The provider, or this target within it, cannot do the requested operation. */
+export class Unsupported extends Schema.TaggedError<Unsupported>("@domainkit/Reason/Unsupported")(
+  "Unsupported",
+  { provider: Schema.String, operation: Schema.String, message: Schema.String },
+) {}
+
 export const Reason = Schema.Union([
   InvalidInput,
   Unauthenticated,
@@ -129,6 +144,8 @@ export const Reason = Schema.Union([
   Busy,
   ProviderRejected,
   ProviderUnavailable,
+  ProviderConflict,
+  Unsupported,
   Reconnect,
   StorageFailed,
   CryptoFailed,
@@ -158,6 +175,8 @@ export class DomainKitError extends Schema.TaggedError<DomainKitError>("@domaink
         return "plan";
       case "ProviderRejected":
       case "ProviderUnavailable":
+      case "ProviderConflict":
+      case "Unsupported":
         return "provider";
       case "StorageFailed":
         return "storage";
@@ -194,6 +213,10 @@ export class DomainKitError extends Schema.TaggedError<DomainKitError>("@domaink
         return 409;
       case "ProviderRejected":
         return 502;
+      case "ProviderConflict":
+        return 409;
+      case "Unsupported":
+        return 501;
       case "ProviderUnavailable":
         return 503;
       case "StorageFailed":

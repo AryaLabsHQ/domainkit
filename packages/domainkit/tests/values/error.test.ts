@@ -22,6 +22,8 @@ const reasons: ReadonlyArray<DomainKitError.Reason> = [
   new DomainKitError.StorageFailed({ operation: "attempts.claim", message: "db down" }),
   new DomainKitError.CryptoFailed({ operation: "open" }),
   new DomainKitError.ResolverFailed({ resolver: "google", message: "timeout" }),
+  new DomainKitError.ProviderConflict({ provider: "cloudflare", code: "81057", message: "exists" }),
+  new DomainKitError.Unsupported({ provider: "vercel", operation: "dns", message: "no" }),
 ];
 
 const expected: Record<
@@ -46,6 +48,8 @@ const expected: Record<
   StorageFailed: { category: "storage", status: 500, retryable: true },
   CryptoFailed: { category: "internal", status: 500, retryable: false },
   ResolverFailed: { category: "internal", status: 500, retryable: false },
+  ProviderConflict: { category: "provider", status: 409, retryable: false },
+  Unsupported: { category: "provider", status: 501, retryable: false },
 };
 
 describe("DomainKitError", () => {

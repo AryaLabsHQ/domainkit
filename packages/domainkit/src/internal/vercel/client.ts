@@ -48,6 +48,14 @@ const call = <R extends S.ConstraintDecoder<unknown>>(
         detail._tag === "Some"
           ? detail.value.error.message
           : `Vercel request failed with HTTP ${reply.status}`;
+      if (
+        reply.status === 404 ||
+        (detail._tag === "Some" && detail.value.error.code === "not_found")
+      ) {
+        return yield* DomainKitError.fail(
+          new DomainKitError.NotFound({ entity: "zone", id: decodeURIComponent(target.pathname) }),
+        );
+      }
       const code = detail._tag === "Some" ? detail.value.error.code : undefined;
       const headers = new Headers(reply.headers);
       const resetMs = detail._tag === "Some" ? detail.value.error.limit?.resetMs : undefined;

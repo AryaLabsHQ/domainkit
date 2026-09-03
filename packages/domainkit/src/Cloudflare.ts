@@ -221,9 +221,10 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
           const zoneId = zone._tag === "Some" ? zone.value.zoneId : undefined;
           if (zoneId === undefined) {
             const failure = DomainKitError.fail(
-              new DomainKitError.InvalidInput({
-                message: "Cloudflare target has no zoneId",
-                field: "target",
+              new DomainKitError.Unsupported({
+                provider: "cloudflare",
+                operation: "dns",
+                message: "Cloudflare target has no zone id; only zone targets host records",
               }),
             );
             return {

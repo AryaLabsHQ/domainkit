@@ -50,7 +50,7 @@ describe("Vercel.provider", () => {
       const denied = yield* (definition.auth.token ?? bail("token"))
         .authenticate(token)
         .pipe(Effect.flip);
-      assert.strictEqual(denied.reason._tag, "ProviderRejected");
+      assert.strictEqual(denied.reason._tag, "Forbidden");
     });
   });
 
@@ -229,6 +229,12 @@ describe("Vercel.provider", () => {
         init: { status: 429 },
       },
       { body: { error: { code: "invalid_token", message: "bad" } }, init: { status: 401 } },
+      {
+        body: { error: { code: "not_found", message: "Domain not found" } },
+        init: { status: 404 },
+      },
+      { body: { error: { code: "conflict", message: "Record exists" } }, init: { status: 409 } },
+      { body: { error: { code: "forbidden", message: "Not allowed" } }, init: { status: 403 } },
     ]);
     const dns = Vercel.provider({ fetch: recording.fetch }).session(credential()).dns(target);
     return Effect.gen(function* () {
@@ -238,6 +244,18 @@ describe("Vercel.provider", () => {
         assert.ok((limited.reason.retryAfterMs ?? 0) > 0);
       const invalid = yield* dns.list("example.com").pipe(Effect.flip);
       assert.strictEqual(invalid.reason._tag, "Unauthenticated");
+      const missing = yield* dns.list("example.com").pipe(Effect.flip);
+      assert.strictEqual(missing.reason._tag, "NotFound");
+      if (missing.reason._tag === "NotFound") {
+        assert.strictEqual(missing.reason.entity, "zone");
+        assert.strictEqual(missing.reason.id, "/v5/domains/example.com/records");
+      }
+      const conflict = yield* dns
+        .create("example.com", DnsRecord.txt({ name: "x.example.com", value: "v" }))
+        .pipe(Effect.flip);
+      assert.strictEqual(conflict.reason._tag, "ProviderConflict");
+      const forbidden = yield* dns.list("example.com").pipe(Effect.flip);
+      assert.strictEqual(forbidden.reason._tag, "Forbidden");
     });
   });
 });
