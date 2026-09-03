@@ -263,11 +263,36 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
           .withLock(
             `refresh:${authorization.id}`,
             Effect.gen(function* () {
+              // Disconnect's two-phase revocation does not take this lock: re-read the row here
+              // so a revocation that started meanwhile skips the refresh instead of racing it.
+              const live = yield* storage.authorizations.get(authorization.id).pipe(
+                Effect.map(Option.some),
+                Effect.catchIf(
+                  (error) => error.reason._tag === "NotFound",
+                  () => Effect.succeed(Option.none<Storage.Authorization>()),
+                ),
+              );
+              if (Option.isNone(live) || live.value.revocation !== "active") {
+                return "reconnect" as const;
+              }
               const latest = yield* storage.authorizations.credential(authorization.id);
               if (!dueAt(latest, yield* DateTime.now)) return "current" as const;
               const secret = yield* custody.open(latest.ciphertext);
-              const issued = yield* refresher({ secret, context: authorization.context });
-              yield* storage.authorizations.rotate(authorization.id, yield* seal(issued));
+              const context = yield* Provider.decodeContext(definition, live.value.context);
+              const issued = yield* refresher({ secret, context });
+              // A revocation that completed while the provider was issuing leaves no row to
+              // rotate; revoke the fresh credential so it does not stay live without a home.
+              yield* storage.authorizations
+                .rotate(authorization.id, yield* seal(issued))
+                .pipe(
+                  Effect.tapError((error) =>
+                    error.reason._tag === "NotFound"
+                      ? (
+                          revokerFor(definition, authorization.method)?.(issued) ?? Effect.void
+                        ).pipe(Effect.ignore)
+                      : Effect.void,
+                  ),
+                );
               return "refreshed" as const;
             }),
           )

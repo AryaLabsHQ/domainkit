@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { DateTime, Effect, Layer, Redacted } from "effect";
+import { DateTime, Deferred, Effect, Fiber, Layer, Redacted } from "effect";
 import { TestClock } from "effect/testing";
 
 import {
@@ -173,6 +173,75 @@ describe("Connect", () => {
       }).pipe(withPrincipal, Effect.provide(layerFor(fake)));
     },
   );
+
+  it.effect("never orphans a refreshed credential behind a revocation", () => {
+    const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+    const oauth = fake.auth.oauth ?? assert.fail("oauth expected");
+    let gate: Deferred.Deferred<void> | null = null;
+    const gated: Testing.FakeProvider = {
+      ...fake,
+      auth: {
+        ...fake.auth,
+        oauth: {
+          ...oauth,
+          refresh: (credential) =>
+            (gate === null ? Effect.void : Deferred.await(gate)).pipe(
+              Effect.andThen(oauth.refresh(credential)),
+            ),
+        },
+      },
+    };
+    return Effect.gen(function* () {
+      const redirect = yield* Connect.start({
+        provider: "fake",
+        method: Connect.Method.oauth(),
+        callbackUrl: "https://app.example/cb",
+      });
+      if (redirect._tag !== "Redirect") return assert.fail("expected a redirect");
+      const connected = yield* Connect.complete({
+        continuationId: redirect.continuationId,
+        callbackUrl: redirect.authorizationUrl,
+      });
+      if (connected._tag !== "Connected") return assert.fail("expected a connection");
+      const storage = yield* Storage.Storage;
+      yield* TestClock.adjust("55 minutes");
+
+      // Revocation completes while the provider is issuing the refreshed credential.
+      gate = yield* Deferred.make<void>();
+      const refreshing = yield* Effect.forkChild(
+        Connect.refresh(connected.connection.id).pipe(Effect.result),
+      );
+      yield* Effect.yieldNow;
+      yield* Connect.disconnect(connected.connection.id);
+      yield* Deferred.succeed(gate, undefined);
+      const outcome = yield* Fiber.join(refreshing);
+      assert.strictEqual(outcome._tag, "Failure");
+      if (outcome._tag === "Failure") assert.strictEqual(outcome.failure.reason._tag, "NotFound");
+      assert.strictEqual(fake.issued().length, 2);
+      assert.strictEqual(fake.revoked(), 2);
+
+      // A revocation that is already pending is seen under the lock and skips the refresher.
+      gate = null;
+      const again = yield* Connect.start({
+        provider: "fake",
+        method: Connect.Method.oauth(),
+        callbackUrl: "https://app.example/cb",
+      });
+      if (again._tag !== "Redirect") return assert.fail("expected a redirect");
+      const second = yield* Connect.complete({
+        continuationId: again.continuationId,
+        callbackUrl: again.authorizationUrl,
+      });
+      if (second._tag !== "Connected") return assert.fail("expected a connection");
+      yield* TestClock.adjust("55 minutes");
+      yield* storage.authorizations
+        .revoke(second.connection.authorizationId, Effect.fail(new Error("provider down")))
+        .pipe(Effect.ignore);
+      const issuedBefore = fake.issued().length;
+      assert.strictEqual(yield* Connect.refresh(second.connection.id), "reconnect");
+      assert.strictEqual(fake.issued().length, issuedBefore);
+    }).pipe(withPrincipal, Effect.provide(layerFor(gated)));
+  });
 
   it.effect(
     "re-validates that the attached zone is still reachable before handing out a session",
