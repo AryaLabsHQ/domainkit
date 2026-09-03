@@ -35,6 +35,8 @@ export interface Target {
   readonly zone: string;
   readonly context: unknown;
   readonly label: string;
+  /** The zone's nameservers as the provider reports them; `Connect.discover` matches on them. */
+  readonly nameservers?: ReadonlyArray<string>;
 }
 
 export type Resolution = Data.TaggedEnum<{

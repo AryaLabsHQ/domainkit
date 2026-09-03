@@ -41,6 +41,7 @@ export const provider = (options: Options = {}): Provider.Definition<TeamContext
     zone: domain.name,
     context: { teamId: domain.teamId } satisfies TeamContext,
     label: `${domain.name} (${label})`,
+    nameservers: domain.nameservers.length > 0 ? domain.nameservers : domain.intendedNameservers,
   });
 
   const integration =

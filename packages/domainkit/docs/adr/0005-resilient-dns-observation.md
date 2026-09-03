@@ -36,6 +36,11 @@ and no provider evidence is recorded. Readiness carries `nextCheckAt` from the `
 clears when the attachment is ready. Requirements default to the latest provisioning receipt; an
 explicit set is also accepted and an empty set is rejected.
 
+`Connect.discover` answers which of the principal's connections serves a domain: it resolves the
+closest zone's authoritative nameservers through the pool, lists each connection's zones, and
+resolves to the closest zone; when several connections hold that zone, a connection whose reported
+nameservers cover every authoritative nameserver wins, otherwise the caller selects.
+
 ## Consequences
 
 - One negative cache does not hide a matching independent resolver under the default policy.

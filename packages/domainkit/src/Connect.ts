@@ -13,6 +13,7 @@ import * as OAuth from "./internal/oauth.ts";
 import { Principal } from "./Principal.ts";
 import * as Provider from "./Provider.ts";
 import { Providers } from "./Providers.ts";
+import { Resolver } from "./Resolver.ts";
 import * as Storage from "./Storage.ts";
 
 type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError, Principal>;
@@ -92,8 +93,27 @@ export type Attached = Storage.Attachment | Selection;
 
 export type Refreshed = "current" | "refreshed" | "reconnect";
 
+/** Which of the principal's connections serves a domain, from nameserver evidence and zone lists. */
+export type Discovery = Data.TaggedEnum<{
+  Resolved: { readonly connectionId: string; readonly target: Provider.Target };
+  SelectionRequired: {
+    readonly candidates: ReadonlyArray<{
+      readonly connectionId: string;
+      readonly target: Provider.Target;
+    }>;
+  };
+  NotFound: { readonly nameservers: ReadonlyArray<string> };
+}>;
+export const Discovery = Data.taggedEnum<Discovery>();
+
 export interface Service {
   readonly inspect: (domain: string) => Fx<Snapshot>;
+  /**
+   * Resolve the domain's authoritative nameservers, then match them against the zones each of
+   * the principal's connections can reach: the closest zone wins, a decisive nameserver match
+   * breaks ties, and anything else needs a selection.
+   */
+  readonly discover: (domain: string) => Fx<Discovery>;
   /** Connect a provider and, when `domain` is given, attach it. Token methods finish here. */
   readonly start: (input: {
     readonly provider: string;
@@ -167,11 +187,12 @@ const invalid = (message: string, field?: string) =>
     new DomainKitError.InvalidInput({ message, ...(field === undefined ? {} : { field }) }),
   );
 
-export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Providers> =
+export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Providers | Resolver> =
   Effect.gen(function* () {
     const storage = yield* Storage.Storage;
     const custody = yield* Custody;
     const providers = yield* Providers;
+    const resolver = yield* Resolver;
 
     const seal = (issued: Provider.IssuedCredential) =>
       Effect.gen(function* () {
@@ -360,6 +381,62 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
         : attached instanceof Storage.Attachment
           ? Started.Connected({ connection, attachment: attached })
           : Started.SelectionRequired({ connection, candidates: attached.candidates });
+
+    /** Authoritative nameservers for the closest zone that answers an NS query. */
+    const authoritative = (candidates: ReadonlyArray<DomainName.DomainName>) =>
+      Effect.gen(function* () {
+        for (const zone of candidates) {
+          const outcomes = yield* resolver.resolve(zone, "NS");
+          const names = outcomes.flatMap((outcome) =>
+            outcome._tag === "Answered"
+              ? outcome.answer.records.flatMap((record) =>
+                  record._tag === "NS" ? [record.nameserver] : [],
+                )
+              : [],
+          );
+          if (names.length > 0) return [...new Set(names)].sort();
+        }
+        return [] as ReadonlyArray<string>;
+      });
+
+    const discover: Service["discover"] = (input) =>
+      Effect.gen(function* () {
+        const domain = yield* DomainName.decode(input);
+        const candidates = DomainName.candidates(domain);
+        const nameservers = yield* authoritative(candidates);
+        const reachable: Array<{
+          readonly connectionId: string;
+          readonly target: Provider.Target;
+        }> = [];
+        for (const connection of yield* storage.connections.list()) {
+          const targets = yield* sessionFor(connection).pipe(
+            Effect.flatMap((session) => session.listTargets()),
+            Effect.catch(() => Effect.succeed([] as ReadonlyArray<Provider.Target>)),
+          );
+          for (const target of targets) {
+            if (candidates.includes(target.zone as DomainName.DomainName)) {
+              reachable.push({ connectionId: connection.id, target });
+            }
+          }
+        }
+        const normalize = (name: string) => name.toLowerCase().replace(/\.$/, "");
+        for (const zone of candidates) {
+          const matches = reachable
+            .filter(({ target }) => target.zone === zone)
+            .sort((left, right) => left.connectionId.localeCompare(right.connectionId));
+          if (matches.length === 0) continue;
+          const [only] = matches;
+          if (matches.length === 1 && only !== undefined) return Discovery.Resolved(only);
+          const decisive = matches.filter(({ target }) => {
+            const configured = new Set((target.nameservers ?? []).map(normalize));
+            return nameservers.length > 0 && nameservers.every((name) => configured.has(name));
+          });
+          const [winner] = decisive;
+          if (decisive.length === 1 && winner !== undefined) return Discovery.Resolved(winner);
+          return Discovery.SelectionRequired({ candidates: matches });
+        }
+        return Discovery.NotFound({ nameservers });
+      });
 
     const inspect: Service["inspect"] = (input) =>
       Effect.gen(function* () {
@@ -642,6 +719,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
 
     return {
       inspect,
+      discover,
       start,
       complete,
       attach,
@@ -652,7 +730,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
     };
   });
 
-export const layer: Layer.Layer<Connect, never, Storage.Storage | Custody | Providers> =
+export const layer: Layer.Layer<Connect, never, Storage.Storage | Custody | Providers | Resolver> =
   Layer.effect(Connect)(make);
 
 const accessor =
@@ -663,6 +741,7 @@ const accessor =
     Effect.flatMap(Connect, (service) => pick(service)(...args));
 
 export const inspect = accessor((service) => service.inspect);
+export const discover = accessor((service) => service.discover);
 export const start = accessor((service) => service.start);
 export const complete = accessor((service) => service.complete);
 export const attach = accessor((service) => service.attach);

@@ -32,6 +32,8 @@ export interface FakeProviderOptions {
   readonly oauth?: boolean;
   /** Fail the write at this zero-based index, to exercise partial receipts. */
   readonly failWrite?: (index: number) => boolean;
+  /** Nameservers per zone; default `ns1.<zone>`, `ns2.<zone>`. `resolver()` answers NS queries from them. */
+  readonly nameservers?: Readonly<Record<string, ReadonlyArray<string>>>;
 }
 
 export interface FakeProvider extends Provider.Definition<FakeContext> {
@@ -44,6 +46,7 @@ export interface FakeProvider extends Provider.Definition<FakeContext> {
 
 interface Zone {
   readonly name: string;
+  readonly nameservers: ReadonlyArray<string>;
   readonly rows: Array<{ readonly id: string; readonly record: DnsRecord.Observed }>;
 }
 
@@ -67,7 +70,13 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
   let revokedCount = 0;
   const issued: Array<string> = [];
   for (const name of options.zones ?? ["example.com"]) {
-    const zone: Zone = { name: DomainName.fromStringUnsafe(name), rows: [] };
+    const normalized = DomainName.fromStringUnsafe(name);
+    const zone: Zone = {
+      name: normalized,
+      nameservers: options.nameservers?.[name] ??
+        options.nameservers?.[normalized] ?? [`ns1.${normalized}`, `ns2.${normalized}`],
+      rows: [],
+    };
     zones.set(zone.name, zone);
     registry.add(zone);
   }
@@ -97,6 +106,7 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
       zone: zone.name,
       context: { zone: zone.name },
       label: zone.name,
+      nameservers: zone.nameservers,
     }));
 
   const oauth: Provider.OAuthAuth = {
@@ -209,6 +219,14 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
   };
 };
 
+/** NS records for every fake zone named `name`, so `resolver()` can answer authority queries. */
+const fakeNameservers = (name: string): ReadonlyArray<DnsRecord.Observed> =>
+  [...registry]
+    .filter((zone) => zone.name === name)
+    .flatMap((zone) =>
+      zone.nameservers.map((nameserver) => DnsRecord.ns({ name: zone.name, nameserver })),
+    );
+
 /** Records every fake provider currently holds for `name`, across all fake zones. */
 export const fakeRecords = (name: string): ReadonlyArray<DnsRecord.Observed> =>
   [...registry]
@@ -232,7 +250,7 @@ export const resolver = (
         const lookup = normalized._tag === "Some" ? normalized.value : name;
         const table =
           answers === undefined
-            ? fakeRecords(lookup)
+            ? [...fakeRecords(lookup), ...fakeNameservers(lookup)]
             : answers.filter((entry) => entry.name === lookup).flatMap((entry) => entry.records);
         const records = table.filter(
           (record) => (record._tag === "Opaque" ? record.type : record._tag) === type,

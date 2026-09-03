@@ -20,6 +20,7 @@ const layerFor = (...definitions: ReadonlyArray<Testing.FakeProvider>) =>
         Storage.layerMemory,
         Custody.layer({ key: Redacted.make(Custody.generateKey()) }),
         Providers.layer(definitions),
+        Testing.resolver(),
       ),
     ),
   );
@@ -75,6 +76,7 @@ describe("Connect", () => {
       assert.deepStrictEqual(started.attachment?.target, {
         zone: "example.com",
         label: "example.com",
+        nameservers: ["ns1.example.com", "ns2.example.com"],
         context: { version: "fake.v1", value: { zone: "example.com" } },
       });
       const { session, target } = yield* Connect.session(started.attachment?.id ?? "");
@@ -311,6 +313,7 @@ describe("Connect", () => {
           storage,
           Custody.layer({ key: Redacted.make(Custody.generateKey()) }),
           Providers.layer([fake]),
+          Testing.resolver(),
         ),
       ),
     );

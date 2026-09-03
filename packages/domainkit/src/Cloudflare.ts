@@ -91,6 +91,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
     zone: zone.name,
     context: { accountId: zone.account.id, zoneId: zone.id } satisfies AccountContext,
     label: `${zone.name} (${zone.account.name})`,
+    nameservers: zone.name_servers ?? [],
   });
 
   const oauthClient = (oauth: NonNullable<Options["oauth"]>) =>
