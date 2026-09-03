@@ -476,9 +476,11 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
 
     const complete: Service["complete"] = (input) =>
       Effect.gen(function* () {
-        // Validate the callback before spending the continuation, so a malformed or mismatched
-        // callback leaves the pending flow intact. The provider code itself is single-use, so a
-        // failed exchange or persistence after this point needs a fresh start.
+        // The continuation is spent only after the credential and connection are persisted, so a
+        // failure before that (bad callback, provider outage, storage outage) leaves the flow
+        // retryable. Concurrent callbacks for the same continuation serialize on a lock; the
+        // loser sees Busy or NotFound. A provider code is single-use, so a retry after the
+        // provider already redeemed it fails Unauthenticated and the customer starts over.
         const callback = yield* Effect.try({
           try: () => new URL(input.callbackUrl),
           catch: () =>
@@ -500,51 +502,61 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Custody | Pro
         }
         const code = params.code;
         if (code === undefined) return yield* unauthenticated("Callback has no code");
-        const continuation = yield* storage.continuations.consume(input.continuationId);
-        const payload = yield* DomainKitError.decode(Payload, continuation.payload, "continuation");
-        const definition = yield* providers.get(continuation.provider);
-        const issued =
-          payload.method === "oauth"
-            ? yield* Effect.gen(function* () {
-                const oauth = definition.auth.oauth;
-                if (oauth === undefined || payload.codeVerifier === null) {
-                  return yield* invalid(
-                    `${definition.name} does not offer oauth connections`,
-                    "method",
-                  );
-                }
-                return yield* oauth.complete({
-                  code,
-                  callbackUrl: payload.callbackUrl,
-                  codeVerifier: payload.codeVerifier,
-                  params,
-                });
-              })
-            : yield* Effect.gen(function* () {
-                const integration = definition.auth.integration;
-                if (integration === undefined) {
-                  return yield* invalid(
-                    `${definition.name} does not offer integration connections`,
-                    "method",
-                  );
-                }
-                return yield* integration.complete({
-                  code,
-                  callbackUrl: payload.callbackUrl,
-                  params,
-                });
-              });
-        const { connection, session } = yield* connectWith({
-          definition,
-          method: payload.method,
-          issued,
-          requiredCapabilities: [],
-        });
-        const attached =
-          payload.domain === null
-            ? null
-            : yield* attachWith({ connection, session, domain: payload.domain });
-        return started(connection, attached);
+        return yield* storage.withLock(
+          `continuation:${input.continuationId}`,
+          Effect.gen(function* () {
+            const continuation = yield* storage.continuations.get(input.continuationId);
+            const payload = yield* DomainKitError.decode(
+              Payload,
+              continuation.payload,
+              "continuation",
+            );
+            const definition = yield* providers.get(continuation.provider);
+            const issued =
+              payload.method === "oauth"
+                ? yield* Effect.gen(function* () {
+                    const oauth = definition.auth.oauth;
+                    if (oauth === undefined || payload.codeVerifier === null) {
+                      return yield* invalid(
+                        `${definition.name} does not offer oauth connections`,
+                        "method",
+                      );
+                    }
+                    return yield* oauth.complete({
+                      code,
+                      callbackUrl: payload.callbackUrl,
+                      codeVerifier: payload.codeVerifier,
+                      params,
+                    });
+                  })
+                : yield* Effect.gen(function* () {
+                    const integration = definition.auth.integration;
+                    if (integration === undefined) {
+                      return yield* invalid(
+                        `${definition.name} does not offer integration connections`,
+                        "method",
+                      );
+                    }
+                    return yield* integration.complete({
+                      code,
+                      callbackUrl: payload.callbackUrl,
+                      params,
+                    });
+                  });
+            const { connection, session } = yield* connectWith({
+              definition,
+              method: payload.method,
+              issued,
+              requiredCapabilities: [],
+            });
+            const attached =
+              payload.domain === null
+                ? null
+                : yield* attachWith({ connection, session, domain: payload.domain });
+            yield* storage.continuations.consume(input.continuationId);
+            return started(connection, attached);
+          }),
+        );
       });
 
     const attach: Service["attach"] = (input) =>

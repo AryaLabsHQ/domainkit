@@ -191,6 +191,68 @@ describe("Connect", () => {
     }).pipe(withPrincipal, Effect.provide(layerFor(fake)));
   });
 
+  it.effect("keeps the continuation when persistence fails after the exchange", () => {
+    const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+    let commits = 0;
+    const storage = Storage.layerMemoryWith({
+      beforeCommit: (operation) => {
+        if (operation !== "authorizations.upsert") return Effect.void;
+        commits += 1;
+        return commits === 1
+          ? DomainKitError.fail(
+              new DomainKitError.StorageFailed({ operation, message: "storage outage" }),
+            )
+          : Effect.void;
+      },
+    });
+    const layer = Connect.layer.pipe(
+      Layer.provideMerge(
+        Layer.mergeAll(
+          storage,
+          Custody.layer({ key: Redacted.make(Custody.generateKey()) }),
+          Providers.layer([fake]),
+        ),
+      ),
+    );
+    return Effect.gen(function* () {
+      const redirect = yield* Connect.start({
+        provider: "fake",
+        method: Connect.Method.oauth(),
+        domain: "app.example.com",
+        callbackUrl: "https://app.example/cb",
+      });
+      if (redirect._tag !== "Redirect") return assert.fail("expected a redirect");
+      const outage = yield* Connect.complete({
+        continuationId: redirect.continuationId,
+        callbackUrl: redirect.authorizationUrl,
+      }).pipe(Effect.flip);
+      assert.strictEqual(outage.reason._tag, "StorageFailed");
+      const [first, second] = yield* Effect.all(
+        [
+          Connect.complete({
+            continuationId: redirect.continuationId,
+            callbackUrl: redirect.authorizationUrl,
+          }).pipe(Effect.result),
+          Connect.complete({
+            continuationId: redirect.continuationId,
+            callbackUrl: redirect.authorizationUrl,
+          }).pipe(Effect.result),
+        ],
+        { concurrency: "unbounded" },
+      );
+      const outcomes = [first, second].map((result) =>
+        result._tag === "Success" ? result.success._tag : result.failure.reason._tag,
+      );
+      assert.ok(outcomes.includes("Connected"), JSON.stringify(outcomes));
+      assert.ok(
+        outcomes.includes("Busy") || outcomes.includes("NotFound"),
+        JSON.stringify(outcomes),
+      );
+      const snapshot = yield* Connect.inspect("app.example.com");
+      assert.strictEqual(snapshot.authorization?.method, "oauth");
+    }).pipe(withPrincipal, Effect.provide(layer));
+  });
+
   it.effect("recovers a revocation that failed between prepare and complete", () => {
     let attempts = 0;
     const fake = Testing.provider({ zones: ["example.com"], oauth: true });

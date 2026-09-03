@@ -192,6 +192,8 @@ export interface Service {
   };
   readonly continuations: {
     readonly put: (continuation: Continuation) => Fx<void>;
+    /** Read without spending; a late read fails `Expired`. */
+    readonly get: (id: string) => Fx<Continuation>;
     /** Exactly-once: the second consume of the same id fails `NotFound`; a late one fails `Expired`. */
     readonly consume: (id: string) => Fx<Continuation>;
   };
@@ -307,6 +309,7 @@ export interface AsyncService {
   };
   readonly continuations: {
     readonly put: (principal: PrincipalShape, continuation: Continuation) => Promise<void>;
+    readonly get: (principal: PrincipalShape, id: string) => Promise<Continuation>;
     readonly consume: (principal: PrincipalShape, id: string) => Promise<Continuation>;
   };
   readonly attempts: {
@@ -428,6 +431,7 @@ export const fromAsync = (service: AsyncService): Service => {
     continuations: {
       put: (continuation) =>
         call("continuations.put", (p) => service.continuations.put(p, continuation)),
+      get: (id) => call("continuations.get", (p) => service.continuations.get(p, id)),
       consume: (id) => call("continuations.consume", (p) => service.continuations.consume(p, id)),
     },
     attempts: {

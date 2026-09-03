@@ -290,6 +290,20 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
             state.continuations.set(continuation.id, continuation);
           }),
         ),
+      get: (id) =>
+        read((principal) =>
+          Effect.gen(function* () {
+            const row = owned(state.continuations, principal, id);
+            if (row === undefined) return yield* notFound("continuation", id);
+            const now = yield* DateTime.now;
+            if (DateTime.toEpochMillis(row.expiresAt) <= DateTime.toEpochMillis(now)) {
+              return yield* DomainKitError.fail(
+                new DomainKitError.Expired({ entity: "continuation", id }),
+              );
+            }
+            return row;
+          }),
+        ),
       consume: (id) =>
         write((principal) =>
           Effect.gen(function* () {

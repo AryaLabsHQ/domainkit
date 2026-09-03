@@ -288,8 +288,11 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
             "NotFound",
             "consume by another owner",
           );
+          const peeked = yield* storage.continuations.get("cont-1");
+          yield* expect(peeked.id === "cont-1", "get did not return the continuation");
           const consumed = yield* storage.continuations.consume("cont-1");
           yield* expect(consumed.id === "cont-1", "consume did not return the continuation");
+          yield* expectReason(storage.continuations.get("cont-1"), "NotFound", "get after consume");
           yield* expectReason(
             storage.continuations.consume("cont-1"),
             "NotFound",
@@ -302,6 +305,7 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
               expiresAt: DateTime.subtract(now, { minutes: 1 }),
             }),
           );
+          yield* expectReason(storage.continuations.get("cont-2"), "Expired", "expired get");
           yield* expectReason(
             storage.continuations.consume("cont-2"),
             "Expired",
