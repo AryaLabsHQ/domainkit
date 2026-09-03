@@ -21,8 +21,14 @@ type Fx<A> = Effect.Effect<A, DomainKitError.DomainKitError, Principal>;
 
 export interface Attempt {
   readonly plan: Plan.Plan;
+  readonly status: Storage.AttemptStatus;
   readonly approval: Approval.Approval | null;
   readonly receipt: Receipt.Receipt | null;
+  readonly rejection: Storage.Rejection | null;
+}
+
+export interface RejectOptions {
+  readonly reason?: string;
 }
 
 export interface Service {
@@ -39,6 +45,11 @@ export interface Service {
     plan: Plan.Plan | Plan.PlanId,
     options?: Attempts.ApproveOptions,
   ) => Fx<Approval.Approval>;
+  /**
+   * Decline the plan for the acting principal; terminal. Rejecting again returns the same
+   * attempt; a plan that was approved or applied fails `Stale`.
+   */
+  readonly reject: (plan: Plan.Plan | Plan.PlanId, options?: RejectOptions) => Fx<Attempt>;
   /**
    * Re-plan the zone, fail `Stale` if the digest moved, then create records. Partial success is a
    * `partial` receipt. Applying an attempt that already completed returns its receipt.
@@ -81,8 +92,10 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
 
     const view = (attempt: Storage.Attempt): Attempt => ({
       plan: attempt.plan,
+      status: attempt.status,
       approval: attempt.approval,
       receipt: attempt.receipt,
+      rejection: attempt.rejection,
     });
 
     return {
@@ -105,6 +118,7 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
           });
         }),
       approve: (plan, options) => attempts.approve(plan, options),
+      reject: (plan, options) => Effect.map(attempts.reject(plan, options), view),
       apply: (approval) => Effect.flatMap(Policy, (policy) => attempts.apply(approval, policy)),
       get: (planId) => Effect.map(attempts.attemptOf(planId), view),
       latest: (domain) =>
@@ -129,6 +143,7 @@ const accessor =
 
 export const plan = accessor((service) => service.plan);
 export const approve = accessor((service) => service.approve);
+export const reject = accessor((service) => service.reject);
 export const apply = accessor((service) => service.apply);
 export const get = accessor((service) => service.get);
 export const latest = accessor((service) => service.latest);

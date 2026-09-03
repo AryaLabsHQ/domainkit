@@ -26,9 +26,13 @@ incompatible state is a conflict. Requirements declare `exclusive` or `append` p
 requirements are always exclusive. DomainKit does not update, overwrite, or delete records it did
 not create.
 
-Every step is a stored attempt (`planned -> approved -> applying -> complete | partial | failed`)
-held in `Storage` with an apply lease. Approving an approved plan returns the same approval;
-applying a completed attempt returns its receipt; a claim while the lease is live fails `Busy`.
+Every step is a stored attempt (`planned -> approved | rejected`, `approved -> applying ->
+complete | partial | failed`) held in `Storage` with an apply lease. `Provision.reject` and
+`Cleanup.reject` close a planned attempt for good, recording the actor, an optional reason, and
+the time; the domain stays free for a new plan. Approving an approved plan returns the same
+approval; rejecting a rejected plan returns the same attempt; approving or applying a rejected
+plan fails `Stale`; applying a completed attempt returns its receipt; a claim while the lease is
+live fails `Busy`.
 
 Apply is resumable rather than falsely atomic. A failure after a confirmed write produces a
 `partial` `Receipt` in the success channel that lists every operation: `Applied` with the

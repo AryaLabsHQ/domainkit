@@ -66,7 +66,8 @@ incompatible state is `Conflict`. DomainKit never updates or deletes a record it
 and cleanup is its own plan, approval, and receipt built from the apply receipt.
 
 Every step is a stored attempt, so a host can render the plan in one request, collect consent in
-another, and apply in a third; retrying any step replays its result. Every failure is one
+another, and apply in a third; retrying any step replays its result. A customer who declines calls
+`Provision.reject`, which closes the attempt for good and leaves the domain free for a new plan. Every failure is one
 `DomainKitError` whose `reason` you match on; `category`, `isRetryable`, and `httpStatus` derive
 from it.
 

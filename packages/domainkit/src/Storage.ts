@@ -90,8 +90,17 @@ export const AttemptStatus = Schema.Literals([
   "partial",
   "failed",
   "expired",
+  "rejected",
 ]);
 export type AttemptStatus = typeof AttemptStatus.Type;
+
+/** Who declined the plan, why, and when. Terminal: the domain needs a new plan. */
+export const Rejection = Schema.Struct({
+  actorId: Schema.String,
+  reason: Schema.NullOr(Schema.String),
+  at: Schema.DateTimeUtcFromString,
+});
+export type Rejection = typeof Rejection.Type;
 
 /** One durable plan -> approval -> receipt lifecycle. */
 export class Attempt extends Schema.Class<Attempt>("@domainkit/Storage/Attempt")({
@@ -103,6 +112,7 @@ export class Attempt extends Schema.Class<Attempt>("@domainkit/Storage/Attempt")
   plan: Plan.Plan,
   approval: Schema.NullOr(Approval.Approval),
   receipt: Schema.NullOr(Receipt.Receipt),
+  rejection: Schema.NullOr(Rejection),
   /** Cleanup attempts point at the provisioning receipt they undo. */
   sourceReceiptId: Schema.NullOr(Receipt.ReceiptId),
   leaseExpiresAt: Schema.NullOr(Schema.DateTimeUtcFromString),
@@ -205,6 +215,18 @@ export interface Service {
     readonly latest: (attachmentId: string, kind: Plan.Kind) => Fx<Option.Option<Attempt>>;
     /** `planned` -> `approved`; approving again with the same approval id is a no-op, anything else fails `Stale`. */
     readonly approve: (id: Plan.PlanId, approval: Approval.Approval) => Fx<Attempt>;
+    /**
+     * `planned` -> `rejected` (terminal). Rejecting again returns the row unchanged; any other
+     * status fails `Stale`, `expired` fails `Expired`, and a digest mismatch fails `Stale`.
+     */
+    readonly reject: (
+      id: Plan.PlanId,
+      input: {
+        readonly digest: Plan.Digest;
+        readonly actorId: string;
+        readonly reason: string | null;
+      },
+    ) => Fx<Attempt>;
     /**
      * Atomic transition to `applying` with a lease from `approved`, `failed`, or an expired
      * `applying`; fails `Busy` while a lease is live and `Stale` from any other status.
@@ -327,6 +349,15 @@ export interface AsyncService {
       id: Plan.PlanId,
       approval: Approval.Approval,
     ) => Promise<Attempt>;
+    readonly reject: (
+      principal: PrincipalShape,
+      id: Plan.PlanId,
+      input: {
+        readonly digest: Plan.Digest;
+        readonly actorId: string;
+        readonly reason: string | null;
+      },
+    ) => Promise<Attempt>;
     readonly claim: (
       principal: PrincipalShape,
       id: Plan.PlanId,
@@ -443,6 +474,7 @@ export const fromAsync = (service: AsyncService): Service => {
         option("attempts.latest", (p) => service.attempts.latest(p, attachmentId, kind)),
       approve: (id, approval) =>
         call("attempts.approve", (p) => service.attempts.approve(p, id, approval)),
+      reject: (id, input) => call("attempts.reject", (p) => service.attempts.reject(p, id, input)),
       claim: (id, lease) => call("attempts.claim", (p) => service.attempts.claim(p, id, lease)),
       complete: (id, receipt) =>
         call("attempts.complete", (p) => service.attempts.complete(p, id, receipt)),

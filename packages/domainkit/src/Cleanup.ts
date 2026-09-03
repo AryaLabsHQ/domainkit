@@ -26,6 +26,11 @@ export interface Service {
     plan: Plan.Plan | Plan.PlanId,
     options?: Attempts.ApproveOptions,
   ) => Fx<Approval.Approval>;
+  /** Decline the cleanup plan; terminal, same rules as `Provision.reject`. */
+  readonly reject: (
+    plan: Plan.Plan | Plan.PlanId,
+    options?: Provision.RejectOptions,
+  ) => Fx<Provision.Attempt>;
   readonly apply: (approval: Approval.Approval | Approval.ApprovalId) => Fx<Receipt.Receipt>;
 }
 
@@ -108,6 +113,14 @@ export const make: Effect.Effect<Service, never, Storage.Storage | Connect> = Ef
           });
         }),
       approve: (plan, options) => attempts.approve(plan, options),
+      reject: (plan, options) =>
+        Effect.map(attempts.reject(plan, options), (attempt) => ({
+          plan: attempt.plan,
+          status: attempt.status,
+          approval: attempt.approval,
+          receipt: attempt.receipt,
+          rejection: attempt.rejection,
+        })),
       apply: (approval) =>
         Effect.flatMap(Provision.Policy, (policy) => attempts.apply(approval, policy)),
     };
@@ -126,4 +139,5 @@ const accessor =
 
 export const plan = accessor((service) => service.plan);
 export const approve = accessor((service) => service.approve);
+export const reject = accessor((service) => service.reject);
 export const apply = accessor((service) => service.apply);

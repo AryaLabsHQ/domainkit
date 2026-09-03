@@ -257,6 +257,36 @@ describe("provisioning and cleanup tracer", () => {
     }).pipe(withPrincipal, provide(fake));
   });
 
+  it.effect("records a rejection as a terminal attempt state", () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    return Effect.gen(function* () {
+      yield* connectFake(fake);
+      const plan = yield* Provision.plan({ domain: "app.example.com", requirements });
+      const rejected = yield* Provision.reject(plan, { reason: "wrong zone" });
+      assert.strictEqual(rejected.status, "rejected");
+      assert.strictEqual(rejected.rejection?.actorId, "user_test");
+      assert.strictEqual(rejected.rejection?.reason, "wrong zone");
+      assert.deepStrictEqual(yield* Provision.reject(plan.id), rejected);
+      const approve = yield* Provision.approve(plan).pipe(Effect.flip);
+      assert.strictEqual(approve.reason._tag, "Stale");
+      const latest = yield* Provision.latest("app.example.com");
+      assert.strictEqual(latest?.plan.id, plan.id);
+      assert.strictEqual(latest?.status, "rejected");
+      const next = yield* Provision.plan({ domain: "app.example.com", requirements });
+      const approval = yield* Provision.approve(next);
+      const afterApproval = yield* Provision.reject(next).pipe(Effect.flip);
+      assert.strictEqual(afterApproval.reason._tag, "Stale");
+      const receipt = yield* Provision.apply(approval);
+      const cleanup = yield* Cleanup.plan({ receiptId: receipt.id });
+      const declined = yield* Cleanup.reject(cleanup.id);
+      assert.strictEqual(declined.status, "rejected");
+      assert.strictEqual(declined.rejection?.reason, null);
+      const cleanupApproval = yield* Cleanup.approve(cleanup).pipe(Effect.flip);
+      assert.strictEqual(cleanupApproval.reason._tag, "Stale");
+      assert.strictEqual(fake.records("example.com").length, 2);
+    }).pipe(withPrincipal, provide(fake));
+  });
+
   it.effect("keeps a plan digest stable across labels but not across records", () => {
     const fake = Testing.provider({ zones: ["example.com"] });
     return Effect.gen(function* () {

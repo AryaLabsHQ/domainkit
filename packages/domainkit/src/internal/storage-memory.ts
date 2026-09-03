@@ -380,6 +380,28 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Service
             return next;
           }),
         ),
+      reject: (id, input) =>
+        write((principal) =>
+          Effect.gen(function* () {
+            const row = yield* attempt(principal, id);
+            if (row.status === "rejected") return row;
+            if (row.status === "expired") {
+              return yield* DomainKitError.fail(new DomainKitError.Expired({ entity: "plan", id }));
+            }
+            if (row.status !== "planned" || row.plan.digest !== input.digest)
+              return yield* stale(row);
+            const now = yield* DateTime.now;
+            const next = new Storage.Attempt({
+              ...row,
+              status: "rejected",
+              rejection: { actorId: input.actorId, reason: input.reason, at: now },
+              updatedAt: now,
+            });
+            yield* commit("attempts.reject");
+            state.attempts.set(id, next);
+            return next;
+          }),
+        ),
       claim: (id, lease) =>
         write((principal) =>
           Effect.gen(function* () {

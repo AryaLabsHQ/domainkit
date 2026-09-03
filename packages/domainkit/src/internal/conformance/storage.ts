@@ -111,6 +111,7 @@ const attemptRow = (principal: Principal.Shape, plan: Plan.Plan) =>
     plan,
     approval: null,
     receipt: null,
+    rejection: null,
     sourceReceiptId: null,
     leaseExpiresAt: null,
     failure: null,
@@ -404,6 +405,89 @@ export const cases = (layer: Layer.Layer<Storage.Storage, unknown>): ReadonlyArr
             storage.attempts.get(plan.id).pipe(Effect.provideService(Principal.Principal, other)),
             "NotFound",
             "attempts.get across owners",
+          );
+        }).pipe(Effect.provideService(Principal.Principal, owner)),
+      ),
+    },
+    {
+      name: "rejects a planned attempt once and terminally",
+      run: run(
+        Effect.gen(function* () {
+          const { storage, attachment } = yield* connect(owner, "auth-reject");
+          const now = yield* DateTime.now;
+          const plan = planRow(attachment.id, now, "r1");
+          yield* storage.attempts.create(attemptRow(owner, plan));
+          yield* expectReason(
+            storage.attempts.reject(plan.id, {
+              digest: Plan.Digest.make("other"),
+              actorId: "a",
+              reason: null,
+            }),
+            "Stale",
+            "reject with a digest mismatch",
+          );
+          yield* expectReason(
+            storage.attempts
+              .reject(plan.id, { digest: plan.digest, actorId: other.actorId, reason: null })
+              .pipe(Effect.provideService(Principal.Principal, other)),
+            "NotFound",
+            "reject by another owner",
+          );
+          const rejected = yield* storage.attempts.reject(plan.id, {
+            digest: plan.digest,
+            actorId: owner.actorId,
+            reason: "wrong zone",
+          });
+          yield* expect(
+            rejected.status === "rejected" &&
+              rejected.rejection?.actorId === owner.actorId &&
+              rejected.rejection.reason === "wrong zone" &&
+              DateTime.toEpochMillis(rejected.rejection.at) >= DateTime.toEpochMillis(now),
+            "reject did not record the actor, reason, and time",
+          );
+          const again = yield* storage.attempts.reject(plan.id, {
+            digest: plan.digest,
+            actorId: "someone-else",
+            reason: "later",
+          });
+          yield* expect(
+            again.rejection?.reason === "wrong zone",
+            "rejecting a rejected attempt must return it unchanged",
+          );
+          yield* expectReason(
+            storage.attempts.approve(plan.id, approvalRow(plan, "r1")),
+            "Stale",
+            "approve after reject",
+          );
+          yield* expectReason(
+            storage.attempts.claim(plan.id, DateTime.add(now, { minutes: 2 })),
+            "Stale",
+            "claim after reject",
+          );
+          const approvedPlan = planRow(attachment.id, now, "r2");
+          yield* storage.attempts.create(attemptRow(owner, approvedPlan));
+          yield* storage.attempts.approve(approvedPlan.id, approvalRow(approvedPlan, "r2"));
+          yield* expectReason(
+            storage.attempts.reject(approvedPlan.id, {
+              digest: approvedPlan.digest,
+              actorId: "a",
+              reason: null,
+            }),
+            "Stale",
+            "reject after approve",
+          );
+          const expiredPlan = planRow(attachment.id, now, "r3");
+          yield* storage.attempts.create(
+            new Storage.Attempt({ ...attemptRow(owner, expiredPlan), status: "expired" }),
+          );
+          yield* expectReason(
+            storage.attempts.reject(expiredPlan.id, {
+              digest: expiredPlan.digest,
+              actorId: "a",
+              reason: null,
+            }),
+            "Expired",
+            "reject an expired plan",
           );
         }).pipe(Effect.provideService(Principal.Principal, owner)),
       ),

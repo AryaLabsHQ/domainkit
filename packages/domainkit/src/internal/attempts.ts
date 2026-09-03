@@ -80,6 +80,7 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
           plan,
           approval: null,
           receipt: null,
+          rejection: null,
           sourceReceiptId: input.sourceReceiptId,
           leaseExpiresAt: null,
           failure: null,
@@ -153,6 +154,21 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
       });
       const stored = yield* storage.attempts.approve(attempt.id, approval);
       return stored.approval ?? approval;
+    });
+
+  /** Decline a planned attempt on behalf of the principal's actor. */
+  const reject = (
+    plan: Plan.Plan | Plan.PlanId,
+    options: { readonly reason?: string } = {},
+  ): Fx<Storage.Attempt> =>
+    Effect.gen(function* () {
+      const attempt = yield* attemptOf(plan);
+      const principal = yield* Principal;
+      return yield* storage.attempts.reject(attempt.id, {
+        digest: attempt.plan.digest,
+        actorId: principal.actorId,
+        reason: options.reason ?? null,
+      });
     });
 
   const apply = (
@@ -350,7 +366,7 @@ export const make = (storage: Storage.Service, connect: Connect["Service"], kind
           return operation.providerRecordId;
         });
 
-  return { record, approve, apply, attemptOf };
+  return { record, approve, reject, apply, attemptOf };
 };
 
 /** Read one receipt-proven record back; anything but an exact match is a conflict. */
