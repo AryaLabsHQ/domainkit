@@ -300,7 +300,15 @@ export interface Options {
   readonly defaultReturnTo?: string;
 }
 
-export type Services = Provision | Cleanup | Connect | Verify.Verify | Providers | Storage.Storage;
+/** Everything the handlers need: the lifecycle services, Storage, and the host's `Identity`. */
+export type Services =
+  | Provision
+  | Cleanup
+  | Connect
+  | Verify.Verify
+  | Providers
+  | Storage.Storage
+  | Identity;
 
 // ---------------------------------------------------------------------------------------------
 // Handlers
@@ -383,7 +391,7 @@ const candidatesOf = (
 export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constraint>(
   api: HttpApi.HttpApi<ApiId, Groups>,
   options: Options = {},
-): Layer.Layer<HttpApiGroup.Service<ApiId, "domainkit">, never, Services | Identity> =>
+): Layer.Layer<HttpApiGroup.Service<ApiId, "domainkit">, never, Services> =>
   // The host's API carries its own groups beside this one; only `"domainkit"` is implemented here,
   // and `HttpApiBuilder.group` needs the group's own endpoint types to check the handlers.
   HttpApiBuilder.group(api as unknown as HttpApi.HttpApi<ApiId, Group>, "domainkit", (handlers) =>
@@ -595,7 +603,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
           as(request, cleanup.plan({ receiptId: params.receiptId })),
         );
     }),
-  ) as Layer.Layer<HttpApiGroup.Service<ApiId, "domainkit">, never, Services | Identity>;
+  ) as Layer.Layer<HttpApiGroup.Service<ApiId, "domainkit">, never, Services>;
 
 /** A standalone API for hosts not on HttpApi. Mount at any prefix. */
 export const api: HttpApi.HttpApi<"domainkit", Group> = HttpApi.make("domainkit").add(group);
@@ -607,7 +615,7 @@ export interface WebHandlerOptions extends Options {
 
 /** The Promise edge: a `fetch`-shaped handler over the group for hosts that are not Effect-native. */
 export const toWebHandler = (
-  services: Layer.Layer<Services | Identity, DomainKitError.DomainKitError>,
+  services: Layer.Layer<Services, DomainKitError.DomainKitError>,
   options: WebHandlerOptions = {},
 ): {
   readonly handler: (request: Request) => Promise<Response>;
