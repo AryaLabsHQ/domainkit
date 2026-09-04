@@ -13,3 +13,6 @@ while the words stay in the catalog. `Messages.Catalog` returns a `{ title, desc
 A failed connect keeps its context. `Connect.State.Failure` carries the snapshot, the discovery, and
 the provider and method that were in flight, so the dialog keeps its description, its provider
 forms, and the values already typed, and answers beside the method that failed.
+
+A rejected token answers under the field it is about: the input carries `aria-invalid`, the outcome
+renders in `field-error`, and its title names the provider the customer acted on.

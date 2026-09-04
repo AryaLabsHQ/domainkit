@@ -1365,6 +1365,15 @@
     outline: none;
   }
 
+  [data-domainkit-part="token-field-input"][aria-invalid="true"] {
+    border-color: var(--domainkit-danger);
+  }
+
+  [data-domainkit-part="field-error"] {
+    display: grid;
+    gap: 0.25rem;
+  }
+
   [data-domainkit-part="token-docs"] {
     align-items: center;
     color: var(--domainkit-muted);

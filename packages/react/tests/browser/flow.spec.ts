@@ -204,11 +204,12 @@ test("keeps the domain, the provider list, and the typed token after a rejected 
 
   const outcome = dialog.locator("[data-domainkit-part='outcome']");
   await expect(outcome).toBeVisible();
-  // The failure answers inside the form it came from, on one line.
+  // The failure answers under the field it is about, on one line, and names the provider.
   await expect(outcome).toHaveAttribute("data-layout", "inline");
-  await expect(dialog.locator("[data-domainkit-part='token-connect']")).toContainText(
-    "didn't accept this token",
+  await expect(dialog.locator("[data-domainkit-part='field-error']")).toContainText(
+    "Fake fake didn't accept this token",
   );
+  await expect(dialog.getByLabel("Token")).toHaveAttribute("aria-invalid", "true");
   // The domain the dialog authorizes, and the value the customer typed, both survive.
   await expect(dialog.locator("[data-domainkit-part='dialog-description']")).toHaveText(
     "Authorize DNS changes for app.browser12.example.",

@@ -369,6 +369,10 @@ export function Root({ controller, ...props }: RootProps): ReactElement {
   );
 }
 
+/** The provider as the customer knows it, falling back to the id when the snapshot has no name. */
+const displayName = (controller: Controller, provider: string): string =>
+  controller.providers.find((entry) => entry.id === provider)?.name ?? provider;
+
 export interface OutcomeProps extends OutcomeUi.RootProps {
   readonly controller: Controller;
 }
@@ -382,8 +386,13 @@ export function Outcome({ children, controller, ...props }: OutcomeProps): React
   const readOnly = useReadOnly();
   const state = controller.state;
   if (state._tag !== "Failure") return null;
+  // The reason names an id at best, and `Unauthenticated` names nothing: the flow knows which
+  // provider the customer typed a token for, so it is the flow that supplies the name.
+  const acted =
+    state.attempt === null ? undefined : displayName(controller, state.attempt.provider);
   const words = describeOutcome(state.error, messages, {
     ...(controller.snapshot === null ? {} : { domain: controller.snapshot.domain }),
+    ...(acted === undefined ? {} : { provider: acted }),
   });
   return (
     <OutcomeUi.Provider
@@ -442,6 +451,16 @@ export function Status({ controller, ...props }: StatusProps): ReactElement {
   );
 }
 
+/**
+ * Whether a rejected command was about this field. A provider that turns down credentials is
+ * answering the secret it was given; anything else is about the request, not one input.
+ */
+const rejects = (reason: DomainKit.Error["reason"] | null, field: Field): boolean => {
+  if (reason === null) return false;
+  if (reason._tag === "InvalidInput") return reason.field === field.name;
+  return (reason._tag === "Unauthenticated" || reason._tag === "Forbidden") && field.secret;
+};
+
 interface MethodProps {
   readonly controller: Controller;
   readonly method: MethodDescriptor;
@@ -480,6 +499,8 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
     );
   }
   const fields = method.fields;
+  const rejected = failed && state._tag === "Failure" ? state.error.reason : null;
+  const answered = fields.some((field) => rejects(rejected, field));
   return (
     <form
       data-domainkit-part="token-connect"
@@ -497,23 +518,36 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
         controller.connect({ method: method.kind, provider: provider.id, values });
       }}
     >
-      {fields.map((field) => (
-        <label data-domainkit-part="token-field" key={field.name}>
-          <span data-domainkit-part="token-field-label">
-            {messages.fieldLabel(field.name)}
-            {field.required ? null : (
-              <span data-domainkit-part="token-field-optional">{messages.optionalField}</span>
-            )}
-          </span>
-          <input
-            autoComplete="off"
-            data-domainkit-part="token-field-input"
-            name={field.name}
-            required={field.required}
-            type={field.secret ? "password" : "text"}
-          />
-        </label>
-      ))}
+      {fields.map((field) => {
+        const invalid = rejects(rejected, field);
+        return (
+          <label
+            data-domainkit-part="token-field"
+            data-invalid={invalid ? "" : undefined}
+            key={field.name}
+          >
+            <span data-domainkit-part="token-field-label">
+              {messages.fieldLabel(field.name)}
+              {field.required ? null : (
+                <span data-domainkit-part="token-field-optional">{messages.optionalField}</span>
+              )}
+            </span>
+            <input
+              aria-invalid={invalid ? true : undefined}
+              autoComplete="off"
+              data-domainkit-part="token-field-input"
+              name={field.name}
+              required={field.required}
+              type={field.secret ? "password" : "text"}
+            />
+            {invalid ? (
+              <div data-domainkit-part="field-error">
+                <Outcome controller={controller} layout="inline" />
+              </div>
+            ) : null}
+          </label>
+        );
+      })}
       {method.docsUrl === null ? null : (
         <a data-domainkit-part="token-docs" href={method.docsUrl} rel="noreferrer" target="_blank">
           {messages.getToken}
@@ -522,7 +556,7 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
           </span>
         </a>
       )}
-      {failed ? <Outcome controller={controller} layout="inline" /> : null}
+      {failed && !answered ? <Outcome controller={controller} layout="inline" /> : null}
       <button data-domainkit-part="token-submit" disabled={busy} type="submit">
         {messages.connectWith(method.label)}
       </button>

@@ -26,6 +26,11 @@ the discovery, and the provider and method the customer was using, so the dialog
 description, its provider forms, and the values already typed, and answers with an inline
 [outcome](/components/outcome) beside the method that failed.
 
+A provider that turns down credentials is answering the secret it was given, so that input carries
+`aria-invalid` and the outcome renders in `field-error` under it. The outcome names the provider the
+customer acted on, which the reason itself cannot: "Cloudflare didn't accept this token", never a
+status code.
+
 ## Parts
 
 | Part              | Renders                                                       |
