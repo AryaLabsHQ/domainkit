@@ -336,6 +336,6 @@ export type { Case as StorageCase } from "./internal/conformance/storage.ts";
 export const conformance = {
   /** Runs every Storage invariant (tenant isolation, leases, exactly-once continuations, revocation recovery). */
   storage: storageCases,
-  /** Runs create/readback/cleanup, exact-noop, conflict, stale-plan, partial-apply against a real provider definition. */
+  /** Runs create/readback/cleanup, exact-noop, conflict, stale-plan, partial-apply, and rejected-token against a real provider definition. */
   provider: providerCases,
 };

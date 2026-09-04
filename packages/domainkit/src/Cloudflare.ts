@@ -7,7 +7,7 @@ import * as DomainName from "./DomainName.ts";
 import * as Client from "./internal/cloudflare/client.ts";
 import type * as Protocol from "./internal/cloudflare/protocol.ts";
 import { resolve } from "./internal/config.ts";
-import type { Fetch } from "./internal/http.ts";
+import { type Fetch, rejectedToken } from "./internal/http.ts";
 import * as OAuth from "./internal/oauth.ts";
 import * as Provider from "./Provider.ts";
 
@@ -223,7 +223,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
               context: { accountId: discovered, tokenKind: verified.kind } satisfies AccountContext,
               expiresAt: verified.expiresAt,
             };
-          }),
+          }).pipe(rejectedToken),
       }),
       ...(oauth === undefined ? {} : { oauth }),
     },

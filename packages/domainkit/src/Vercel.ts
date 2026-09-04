@@ -5,7 +5,7 @@ import * as Errors from "./internal/error.ts";
 import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
 import { resolve } from "./internal/config.ts";
-import type { Fetch } from "./internal/http.ts";
+import { type Fetch, rejectedToken } from "./internal/http.ts";
 import * as Client from "./internal/vercel/client.ts";
 import type * as Protocol from "./internal/vercel/protocol.ts";
 import * as Provider from "./Provider.ts";
@@ -108,6 +108,7 @@ export const provider = (options: Options = {}): Provider.Definition<TeamContext
               context: { teamId: teamId ?? null } satisfies TeamContext,
               expiresAt: null,
             })),
+            rejectedToken,
           ),
       }),
       ...(integration === undefined ? {} : { integration }),

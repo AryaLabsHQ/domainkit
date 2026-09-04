@@ -114,6 +114,20 @@ export const classify = (
   });
 };
 
+/**
+ * During token verification a `Forbidden` answer means the provider did not accept the token, so
+ * it reads as `Unauthenticated` with the provider's own message.
+ */
+export const rejectedToken = <A, R>(
+  verification: Effect.Effect<A, Errors.DomainKitError, R>,
+): Effect.Effect<A, Errors.DomainKitError, R> =>
+  verification.pipe(
+    Effect.catchIf(
+      (error) => error.reason._tag === "Forbidden",
+      (error) => Errors.fail(new Reason.Unauthenticated({ message: error.reason.message })),
+    ),
+  );
+
 export const rejected = (provider: string, message: string, code?: string) =>
   new Errors.DomainKitError({
     reason: new Reason.ProviderRejected({

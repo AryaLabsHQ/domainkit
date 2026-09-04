@@ -62,10 +62,10 @@ nothing to dispose.
 
 ## Conformance
 
-| Runner                         | Checks                                                                                 |
-| ------------------------------ | -------------------------------------------------------------------------------------- |
-| `Testing.conformance.storage`  | Tenant isolation, apply leases, exactly-once continuations, revocation recovery, locks |
-| `Testing.conformance.provider` | Create and read back, exact no-op, conflict, stale plan, partial apply, cleanup        |
+| Runner                         | Checks                                                                                          |
+| ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `Testing.conformance.storage`  | Tenant isolation, apply leases, exactly-once continuations, revocation recovery, locks          |
+| `Testing.conformance.provider` | Create and read back, exact no-op, conflict, stale plan, partial apply, cleanup, rejected token |
 
 <Snippet file="examples/testing/conformance.ts" region="storage" title="Storage conformance" />
 

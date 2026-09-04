@@ -51,7 +51,8 @@ describe("Vercel.provider", () => {
       const denied = yield* (definition.auth.token ?? bail("token"))
         .authenticate({ token })
         .pipe(Effect.flip);
-      assert.strictEqual(denied.reason._tag, "Forbidden");
+      assert.strictEqual(denied.reason._tag, "Unauthenticated");
+      assert.strictEqual(denied.reason.message, "nope");
     });
   });
 

@@ -1,4 +1,4 @@
-import { DateTime, Effect, Layer } from "effect";
+import { DateTime, Effect, Layer, Redacted } from "effect";
 
 import * as Cleanup from "../../Cleanup.ts";
 import * as Connect from "../../Connect.ts";
@@ -21,6 +21,7 @@ export const cases = [
   "conflict",
   "stale-plan",
   "partial-apply-cleanup",
+  "rejected-token",
 ] as const;
 export type Case = (typeof cases)[number];
 
@@ -87,8 +88,9 @@ const recordIds = (receipt: Receipt.Model) =>
   Receipt.applied(receipt).map(({ providerRecordId }) => providerRecordId);
 
 /**
- * Runs create/readback/cleanup, exact-noop, conflict, stale-plan, and partial-apply against a
- * real provider definition, through the same Provision and Cleanup services hosts use.
+ * Runs create/readback/cleanup, exact-noop, conflict, stale-plan, partial-apply, and
+ * rejected-token against a real provider definition, through the same Provision and Cleanup
+ * services hosts use.
  */
 export const provider = (
   definition: Provider.Definition,
@@ -296,9 +298,28 @@ export const provider = (
     }).pipe(Effect.ensuring(cleanup(dns, () => created)));
   });
 
-  return Effect.all([createReadbackCleanup, exactNoop, conflict, stalePlan, partialApplyCleanup], {
-    discard: true,
+  /** An empty token must read as `Unauthenticated`: a host tells the customer the provider rejected it. */
+  const rejectedToken = Effect.gen(function* () {
+    const name: Case = "rejected-token";
+    const auth = definition.auth.token;
+    if (auth === undefined) return;
+    const values = Object.fromEntries(
+      Provider.tokenFields(auth)
+        .filter((field) => field.required)
+        .map((field) => [field.name, Redacted.make("")]),
+    );
+    const outcome = yield* auth.authenticate(values).pipe(Effect.result);
+    yield* expect(
+      name,
+      outcome._tag === "Failure" && outcome.failure.reason._tag === "Unauthenticated",
+      "authenticating an empty token must fail Unauthenticated",
+    );
   });
+
+  return Effect.all(
+    [createReadbackCleanup, exactNoop, conflict, stalePlan, partialApplyCleanup, rejectedToken],
+    { discard: true },
+  );
 };
 
 /** Verification is out of scope for the provider contract; keep the pool quiet. */

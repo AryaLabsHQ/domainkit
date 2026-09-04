@@ -39,7 +39,10 @@ customer connects the provider again. `Connect.inspect` reports the same thing a
 `status: "reconnect"` so a settings screen can show it before an action fails.
 
 **`Unauthenticated` from a provider.** The token was revoked or rotated at the provider, or the
-customer pasted the wrong value.
+customer pasted the wrong value. A token the provider rejects while connecting reads the same way
+whatever the provider's status: Cloudflare answers a malformed token with HTTP 400 code 6003 or
+6111 and a forbidden one with 403, Vercel answers 403 `forbidden`. The reason carries the provider's
+own message, and the server answers 401.
 
 **`Forbidden`.** The credential is valid and lacks the permission. Cloudflare tokens need
 `zone:read` and `dns_records:edit`; check the token's scopes and, for an account-owned token, that

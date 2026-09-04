@@ -15,6 +15,9 @@ const notFound = new Reason.NotFound({ entity: "zone", id: "cloudflare" });
 /** Cloudflare's "record already exists" family (81056 identical, 81057 same name and content, 81058 CNAME). */
 const conflictCodes = new Set([81056, 81057, 81058]);
 
+/** Cloudflare answers a malformed bearer token with HTTP 400: 6003 invalid request headers, 6111 invalid Authorization format. */
+const rejectedTokenCodes = new Set([6003, 6111]);
+
 export interface Options {
   readonly token: string;
   readonly fetch: Fetch;
@@ -40,6 +43,9 @@ const call = <R extends S.ConstraintDecoder<unknown>>(
     const base = S.decodeUnknownOption(Protocol.BaseEnvelope)(reply.body);
     if (!reply.ok || base._tag === "None" || !base.value.success) {
       const detail = base._tag === "Some" ? base.value.errors[0] : undefined;
+      if (detail !== undefined && rejectedTokenCodes.has(detail.code)) {
+        return yield* Errors.fail(new Reason.Unauthenticated({ message: detail.message }));
+      }
       if (detail !== undefined && conflictCodes.has(detail.code)) {
         return yield* Errors.fail(
           new Reason.ProviderConflict({

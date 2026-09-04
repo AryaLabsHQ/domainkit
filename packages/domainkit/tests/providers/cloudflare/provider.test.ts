@@ -97,6 +97,31 @@ describe("Cloudflare.provider", () => {
     });
   });
 
+  it.effect(
+    "reads a malformed or forbidden token as Unauthenticated with Cloudflare's text",
+    () => {
+      const recording = recordedFetch([
+        { body: failure(6003, "Invalid request headers"), init: { status: 400 } },
+        { body: failure(6111, "Invalid format for Authorization header"), init: { status: 400 } },
+        { body: failure(9109, "Invalid access token"), init: { status: 403 } },
+      ]);
+      const definition = Cloudflare.provider({ fetch: recording.fetch });
+      const auth = definition.auth.token ?? bail("token");
+      return Effect.gen(function* () {
+        const malformed = yield* auth.authenticate({ token }).pipe(Effect.flip);
+        assert.strictEqual(malformed.reason._tag, "Unauthenticated");
+        assert.strictEqual(malformed.reason.message, "Invalid request headers");
+        const badFormat = yield* auth.authenticate({ token }).pipe(Effect.flip);
+        assert.strictEqual(badFormat.reason._tag, "Unauthenticated");
+        const forbidden = yield* auth
+          .authenticate({ token, accountId: Redacted.make("account-9") })
+          .pipe(Effect.flip);
+        assert.strictEqual(forbidden.reason._tag, "Unauthenticated");
+        assert.strictEqual(forbidden.reason.message, "Invalid access token");
+      });
+    },
+  );
+
   it.effect("lists targets across accounts and resolves domains to the most specific zone", () => {
     const other = { ...zone, id: "zone-2", account: { id: "account-2", name: "Other" } };
     const child = { ...zone, id: "zone-3", name: "mail.example.com" };
