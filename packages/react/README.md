@@ -126,12 +126,26 @@ sentence per `DomainKit.Error` reason; nothing renders a tag. Provider artwork c
 with the provider's initial as the fallback and no request at render time. The stylesheet is
 opt-in and every color is a `--domainkit-*` custom property.
 
-Every rule ships inside `@layer domainkit`, so your own stylesheet wins without out-specifying a
-part selector and a Tailwind utility class lands where you put it. To let the package win instead,
-order a layer of your own below it:
+Every rule ships inside `@layer domainkit`. An unlayered rule of yours already beats every layer, so
+plain CSS needs nothing here.
+
+Once your app uses layers, name the order yourself: a layer's priority is its position in that list,
+and a layer you never declare lands wherever it first appears, so `domainkit` can sort under
+Tailwind's preflight and the package's buttons render as bare text.
 
 ```css
-@layer domainkit, app;
+@layer theme, base, components, domainkit, utilities;
+```
+
+`domainkit` sits after `base` so preflight cannot strip it, and before `utilities` so a utility class
+still wins. Any layer you declare after it wins the same way:
+
+```css
+@layer utilities {
+  [data-domainkit-part="records-panel"] {
+    border-radius: 0;
+  }
+}
 ```
 
 Every dialog and popover takes a `render` prop that replaces the surface with your own.
