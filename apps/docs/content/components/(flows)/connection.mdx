@@ -61,6 +61,10 @@ status code.
 | `Connect.Status`  | One line of what the connection is doing                      |
 | `Connect.Outcome` | The last failure, as an [outcome](/components/outcome)        |
 
+A provider's mark is a squircle: the part is a rounded square on the radius token, and whatever
+`marks` supplies fills it edge to edge (`object-fit: cover`). Nothing rounds it into a circle, so a
+mark that reads as one is circular artwork; pass a square, full-bleed asset.
+
 `Connect.DisconnectDialog` is what the card's Disconnect opens: it removes the records an apply
 receipt proves DomainKit created when the option stays checked, and asks whether the release covers
 this domain or every domain on the connection when it serves more than one.

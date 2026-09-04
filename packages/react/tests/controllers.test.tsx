@@ -72,7 +72,7 @@ const applyDomain = async (
     </DomainKit.Root>,
   );
   await click("Review changes");
-  await click("Approve");
+  await click(/^Add \d+ records?$/);
   await screen.findByText("DNS records added.");
   view.unmount();
 };
@@ -455,7 +455,7 @@ describe("Provision.useController", () => {
       </DomainKit.Root>,
     );
     await click("Review changes");
-    await click("Approve");
+    await click(/^Add \d+ records?$/);
     await waitFor(() => expect(applied).toEqual(["complete"]));
     expect(transport.calls.map((call) => call.method)).toContain("provisioning.approve");
     expect(transport.calls.map((call) => call.method)).toContain("provisioning.apply");
@@ -526,15 +526,17 @@ describe("controller inputs", () => {
     }
     const view = render(<Harness target={domain} />);
     await click("Review changes");
-    await screen.findByRole("button", { name: "Approve" });
+    await screen.findByRole("button", { name: /^Add \d+ records?$/ });
 
     // A fresh `requirements` array with the same records is the same attempt.
     view.rerender(<Harness target={domain} />);
-    expect(screen.getByRole("button", { name: "Approve" })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^Add \d+ records?$/ })).toBeDefined();
 
     // A different domain is a different attempt, so the old plan can no longer be approved.
     view.rerender(<Harness target={sibling} />);
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Approve" })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /^Add \d+ records?$/ })).toBeNull(),
+    );
   });
 
   it("drops readiness when the domain changes", async () => {

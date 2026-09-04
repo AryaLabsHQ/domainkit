@@ -12,6 +12,19 @@ const revealToken = async (dialog: import("@playwright/test").Locator) => {
   if ((await alternate.count()) > 0) await alternate.click();
 };
 
+const flow = (page: import("@playwright/test").Page) =>
+  page.locator("[data-domainkit-part='domain-flow']");
+
+const planDialog = (page: import("@playwright/test").Page) =>
+  page.locator("[data-domainkit-part='plan-dialog']");
+
+/** The plan opens itself on a connection; set it aside the way a customer who is not ready would. */
+const notNow = async (page: import("@playwright/test").Page) => {
+  const plan = planDialog(page);
+  await plan.getByRole("button", { name: "Not now" }).click();
+  await expect(plan).toBeHidden();
+};
+
 /** A zone per test keeps the fixture's fake provider from seeing another test's records. */
 const open = async (page: import("@playwright/test").Page, zone: string, scheme = "light") => {
   await page.goto(`/?zone=${zone}&scheme=${scheme}`);
@@ -54,13 +67,16 @@ test("connects, reviews the plan, and approves it", async ({ page }) => {
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("Connected", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Review changes" }).click();
-  await expect(page.getByRole("button", { name: "Approve" })).toBeEnabled();
-  await page
-    .locator("[data-domainkit-part='domain-flow']")
-    .screenshot({ path: shot("plan-review") });
-  await page.getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByText("DNS records added.")).toBeVisible();
+  // The plan opened itself on the connection: the operations are listed and one action adds them.
+  const plan = page.locator("[data-domainkit-part='plan-dialog']");
+  await expect(plan.locator("[data-domainkit-part='plan-operations'] li")).toHaveCount(2);
+  const add = plan.getByRole("button", { name: "Add 2 records" });
+  await expect(add).toBeEnabled();
+  await expect(plan.getByRole("button", { name: "Not now" })).toBeVisible();
+  await expect(plan).toHaveCSS("opacity", "1");
+  await plan.screenshot({ path: shot("plan-review") });
+  await add.click();
+  await expect(flow(page).getByText("DNS records added.")).toBeVisible();
   await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("applied") });
 
   // Removing the records DomainKit added is one decision inside the disconnect dialog.
@@ -70,10 +86,10 @@ test("connects, reviews the plan, and approves it", async ({ page }) => {
   await expect(disconnect.locator("[data-domainkit-part='dialog-description']")).toHaveText(
     "DomainKit stops managing DNS for app.browser3.example through Fake fake.",
   );
-  await expect(disconnect.getByRole("checkbox")).toBeChecked();
-  await expect(
-    disconnect.getByText("Also remove the records DomainKit added for this domain"),
-  ).toBeVisible();
+  await expect(disconnect.getByRole("switch")).toBeChecked();
+  // The records it would remove are listed, so the decision is taken over the thing itself.
+  await expect(disconnect.locator("[data-domainkit-part='cleanup-operations'] li")).toHaveCount(2);
+  await expect(disconnect.getByText("Remove the 2 records DomainKit added")).toBeVisible();
   await expect(disconnect).toHaveCSS("opacity", "1");
   await disconnect.screenshot({ path: shot("disconnect-dialog") });
   await disconnect.getByRole("button", { name: "Disconnect" }).click();
@@ -87,9 +103,11 @@ test("opens the verification popover and reads per-requirement evidence", async 
   await page.getByRole("dialog").getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("Connected", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Review changes" }).click();
-  await page.getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByText("DNS records added.")).toBeVisible();
+  await page
+    .locator("[data-domainkit-part='plan-dialog']")
+    .getByRole("button", { name: /^Add \d+ records?$/ })
+    .click();
+  await expect(flow(page).getByText("DNS records added.")).toBeVisible();
 
   await page.getByRole("button", { name: /Check/ }).click();
   const evidence = page.locator("[data-domainkit-part='observation-list']");
@@ -122,11 +140,10 @@ test("lets a host's own rule beat a part, because the package ships in a cascade
   page,
 }) => {
   await open(page, "browser7.example");
-  const flow = page.locator("[data-domainkit-part='domain-flow']");
   // The package sets `gap: 0.75rem` on this part; the host's unlayered `.host-flow` wins.
-  await expect(flow).toHaveClass(/host-flow/);
-  await expect(flow).toHaveCSS("gap", "48px");
-  await flow.screenshot({ path: shot("host-override") });
+  await expect(flow(page)).toHaveClass(/host-flow/);
+  await expect(flow(page)).toHaveCSS("gap", "48px");
+  await flow(page).screenshot({ path: shot("host-override") });
 });
 
 test("sends the page the customer started from as the interactive return destination", async ({
@@ -153,6 +170,7 @@ test("renders a read-only domain as state with no controls", async ({ page }) =>
   await page.getByRole("dialog").getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+  await notNow(page);
 
   await page.getByTestId("toggle-readonly").click();
   await expect(page.getByText("Connected", { exact: true })).toBeVisible();
@@ -419,6 +437,7 @@ test("dismisses the connect and disconnect dialogs on an outside press", async (
   await dialog.getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+  await notNow(page);
 
   await page.getByRole("button", { name: "Disconnect" }).click();
   await expect(dialog).toBeVisible();
@@ -435,11 +454,12 @@ test("dismisses the review dialog on an outside press", async ({ page }) => {
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("Connected", { exact: true })).toBeVisible();
 
+  // `Provision.Flow` is the dialog on its own: no flow around it opens the plan, so the trigger does.
   await page.getByRole("button", { name: "Review changes" }).click();
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Approve" })).toBeEnabled();
+  const plan = planDialog(page);
+  await expect(plan.getByRole("button", { name: /^Add \d+ records?$/ })).toBeEnabled();
   await pressOutside(page);
-  await expect(dialog).toBeHidden();
+  await expect(plan).toBeHidden();
 });
 
 test("keeps every dialog open while its own command is in flight", async ({ page }) => {
@@ -460,6 +480,7 @@ test("keeps every dialog open while its own command is in flight", async ({ page
   await dialog.getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+  await notNow(page);
   await page.getByRole("button", { name: "Disconnect" }).click();
   await dialog.getByRole("button", { name: "Disconnect" }).click();
   await expect(dialog.getByText("Disconnecting…")).toBeVisible();
@@ -471,10 +492,9 @@ test("keeps every dialog open while its own command is in flight", async ({ page
   await page.getByRole("button", { exact: true, name: "Connect" }).click();
   await revealToken(dialog);
   await dialog.getByLabel("Token").fill("tok");
+  // The plan opens itself on the connection and never answers, so the progress is what shows.
   await page.getByRole("button", { name: "Connect with an API token" }).click();
-  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Review changes" }).click();
-  await expect(dialog.getByText("Preparing DNS changes…")).toBeVisible();
+  await expect(planDialog(page).getByText("Preparing DNS changes…")).toBeVisible();
   await pressOutside(page);
   await expect(dialog).toBeVisible();
 });

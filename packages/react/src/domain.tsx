@@ -1,5 +1,5 @@
 import { Receipt, type DnsRecord } from "domainkit";
-import { useCallback, useEffect, useRef, type ReactElement, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
@@ -99,6 +99,11 @@ export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children">
   readonly connect?: Connect.Invitation;
   /** Fires whenever what DomainKit has to say about this domain changes, and once on mount. */
   readonly onState?: (state: FlowState) => void;
+  /**
+   * `auto` plans and opens the review the moment a connection lands, so connecting and adding the
+   * records is one pass rather than three. `manual` waits for the trigger.
+   */
+  readonly review?: Review;
 }
 
 /** Built from primitives alone, so the effect that announces it depends on exactly those. */
@@ -118,6 +123,9 @@ const flowState = (input: {
   provisioning: input.planning,
   receiptId: input.receipt === null ? null : Receipt.ReceiptId.make(input.receipt),
 });
+
+/** Whether the flow opens the plan itself once a connection lands, or waits to be asked. */
+export type Review = "auto" | "manual";
 
 interface DefaultConnectionProps extends ConnectionSlotProps {
   readonly onCleaned?: (receipt: Receipt.Model) => void;
@@ -152,37 +160,33 @@ function DefaultConnection({
 }
 
 /**
- * Review, approve, and apply. Removing records is not here: it is the option inside the disconnect
- * dialog, so letting a provider go is one decision. `Cleanup.Flow` stays exported for a host that
- * wants the standalone surface, and the actions slot still receives its controller.
+ * The page carries the trigger and, once an attempt ends, its outcome. What the plan will do,
+ * whether to approve it, and how the apply is going all belong to the dialog the trigger opens:
+ * approving beside no operations is a decision taken without the thing it is about. Removing
+ * records is not here either — it is the option inside the disconnect dialog — and `Cleanup.Flow`
+ * stays exported for a host that wants the standalone surface.
  */
-function DefaultActions({ connection, provisioning }: ActionsSlotProps): ReactElement | null {
-  const { capabilities, messages } = useDomainKit();
+interface DefaultActionsProps extends ActionsSlotProps {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+}
+
+function DefaultActions({
+  connection,
+  onOpenChange,
+  open,
+  provisioning,
+}: DefaultActionsProps): ReactElement | null {
   const readOnly = useReadOnly();
+  const { capabilities } = useDomainKit();
   const connected = connection.state._tag === "Connected";
-  const state = provisioning.state;
-  // A receipt that landed whole leaves nothing to plan. The attempt returns to `Idle` the moment
-  // the requirements change, which is the only thing that could give it something to do again, so
-  // the trigger comes back on its own rather than sitting there inviting the same empty plan.
-  const settled = state._tag === "Applied" && state.receipt.status === "complete";
   // Every control here starts a write; the state a read-only customer may see is rendered above.
   if (readOnly) return null;
   if (!capabilities.includes("provisioning") || !connected) return null;
   return (
     <>
-      {settled ? null : (
-        <button
-          data-domainkit-part="plan-trigger"
-          disabled={state._tag === "Planning"}
-          onClick={provisioning.plan}
-          type="button"
-        >
-          {messages.reviewChanges}
-        </button>
-      )}
-      <Provision.Status controller={provisioning} />
-      <Provision.Actions controller={provisioning} />
-      <Provision.Outcome controller={provisioning} />
+      <Provision.Dialog controller={provisioning} onOpenChange={onOpenChange} open={open} />
+      {open ? null : <Provision.Outcome controller={provisioning} />}
     </>
   );
 }
@@ -201,6 +205,7 @@ export function Flow({
   readOnly,
   requirements,
   returnTo,
+  review = "auto",
   slots = {},
   ...props
 }: FlowProps): ReactElement {
@@ -240,6 +245,20 @@ export function Flow({
   const readiness = verification.readiness;
   const status = connection.state._tag;
   const planning = provisioning.state._tag;
+  // Connecting is the customer saying yes to the records; the plan is what those records are, so
+  // it opens itself rather than waiting behind another click. `established` only ever grows, so
+  // this fires once per connection that landed and never again on a re-render or a reload.
+  const [reviewing, setReviewing] = useState(false);
+  const established = connection.established;
+  const answered = useRef(established);
+  const buildPlan = provisioning.plan;
+  useEffect(() => {
+    if (answered.current === established) return;
+    answered.current = established;
+    if (review === "manual") return;
+    buildPlan();
+    setReviewing(true);
+  }, [buildPlan, established, review]);
   // The same predicate the surface renders on, so the state a host reads and the surface a
   // customer sees never disagree, including while a disconnect is in flight.
   const connected = Connect.holdsConnection(connection);
@@ -283,6 +302,8 @@ export function Flow({
             cleanup={cleanup}
             connection={connection}
             domain={domain}
+            onOpenChange={setReviewing}
+            open={reviewing}
             provisioning={provisioning}
           />
         ) : (

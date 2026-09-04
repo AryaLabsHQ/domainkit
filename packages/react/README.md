@@ -66,6 +66,10 @@ status and its disconnect whatever the invitation says.
 <Domain.Flow domain="app.example.com" requirements={requirements} connect="always" />
 ```
 
+Connecting is the customer saying yes to the records, so the plan opens itself the moment a
+connection lands — after a token connect, and after the customer returns from a provider — and one
+action adds them. `review="manual"` waits for the trigger instead.
+
 `onState` reports what DomainKit has to say about the domain, so your own offers can be ordered
 beside it rather than competing with it:
 

@@ -5,7 +5,7 @@
  */
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import type { Plan } from "domainkit";
-import { useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 
 import type { Controller } from "./attempt.ts";
 import type { PartProps } from "./composition.tsx";
@@ -42,8 +42,10 @@ export function Status({ controller, kind, ...props }: StatusProps): ReactElemen
         return "";
       case "Planning":
         return kind === "provisioning" ? messages.planning : messages.planningCleanup;
+      // What a plan is for is the dialog's own description; the status line is for progress, and
+      // saying it twice under it is how the review read before the operations moved in.
       case "Planned":
-        return kind === "provisioning" ? messages.planConsent : messages.cleanupConsent;
+        return "";
       case "Approving":
         return messages.approving;
       case "Applying":
@@ -128,9 +130,15 @@ export function Outcome({
 
 export interface ActionsProps extends PartProps<"div", ReviewState>, KindProps {}
 
+/** What a plan would actually write: an operation blocked by a conflict is not one of them. */
+const addable = (plan: Plan.Model | null): ReadonlyArray<Plan.Operation> =>
+  plan === null ? [] : plan.operations.filter((operation) => operation._tag !== "Conflict");
+
 /**
- * Approve and Decline. Approve authorizes the digest and applies it; Decline records the refusal
- * and ends the attempt. Neither renders until there is a plan to act on.
+ * The primary action, and Decline. The primary authorizes the digest and applies it in one step,
+ * so it says what it will do; where a conflict blocks part of a plan it approves the rest by id,
+ * and where every operation is blocked it says what to fix instead. Neither renders until there is
+ * a plan to act on.
  */
 export function Actions({ controller, kind, ...props }: ActionsProps): ReactElement | null {
   const { messages } = useDomainKit();
@@ -138,6 +146,8 @@ export function Actions({ controller, kind, ...props }: ActionsProps): ReactElem
   const state = controller.state;
   const plan = state._tag === "Planned" ? state.plan : null;
   const running = busy(state._tag);
+  const writes = addable(plan);
+  const blocked = plan !== null && writes.length === 0;
   const element = usePart(
     "div",
     props,
@@ -147,12 +157,22 @@ export function Actions({ controller, kind, ...props }: ActionsProps): ReactElem
         <>
           <button
             data-domainkit-part={kind === "provisioning" ? "plan-apply" : "cleanup-apply"}
-            disabled={running || plan === null || plan.operations.length === 0}
-            onClick={() => controller.approve()}
+            disabled={running || plan === null || writes.length === 0}
+            onClick={() =>
+              // Naming the ids is what leaves a conflict out; approving the whole plan would not.
+              controller.approve(
+                writes.length === plan?.operations.length
+                  ? undefined
+                  : writes.map((operation) => operation.id),
+              )
+            }
             type="button"
           >
-            {messages.approve}
+            {kind === "provisioning" ? messages.addRecords(writes.length) : messages.approve}
           </button>
+          {blocked ? (
+            <p data-domainkit-part="plan-blocked">{messages.everyRecordConflicts}</p>
+          ) : null}
           <button
             data-domainkit-part="plan-decline"
             disabled={running || plan === null}
@@ -167,7 +187,9 @@ export function Actions({ controller, kind, ...props }: ActionsProps): ReactElem
     },
   );
   if (readOnly) return null;
-  return plan === null && !running ? null : element;
+  // Nothing to act on yet, or nothing left to act on: while a command runs the body carries the
+  // progress, and an action that names a count it does not have yet would be lying about it.
+  return plan === null ? null : element;
 }
 
 export interface BodyProps extends KindProps {}
@@ -227,10 +249,19 @@ export function Dialog({
   const readOnly = useReadOnly();
   const [uncontrolled, setUncontrolled] = useState(false);
   const isOpen = open ?? uncontrolled;
-  const setOpen = (next: boolean) => {
+  const close = useRef<(next: boolean) => void>(() => {});
+  close.current = (next: boolean) => {
     if (open === undefined) setUncontrolled(next);
     onOpenChange?.(next);
   };
+  const setOpen = (next: boolean) => close.current(next);
+  const state = controller.state;
+  // An apply that landed whole is done being reviewed: the receipt reads on the page. A partial
+  // one and a failure keep the surface, because there is still something to answer there.
+  const landed = state._tag === "Applied" && state.receipt.status === "complete";
+  useEffect(() => {
+    if (landed) close.current(false);
+  }, [landed]);
   const running = busy(controller.state._tag);
   const body = children ?? <Body controller={controller} kind={kind} />;
   const title = kind === "provisioning" ? messages.planTitle : messages.cleanupTitle;
@@ -302,7 +333,8 @@ export function Dialog({
             <Actions controller={controller} kind={kind} />
             {running ? null : (
               <BaseDialog.Close data-domainkit-part="dialog-cancel">
-                {messages.cancel}
+                {/* The plan stays where it is; the trigger on the page opens it again. */}
+                {kind === "provisioning" ? messages.notNow : messages.cancel}
               </BaseDialog.Close>
             )}
           </div>

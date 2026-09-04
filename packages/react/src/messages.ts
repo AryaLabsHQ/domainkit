@@ -18,7 +18,13 @@ export interface Catalog {
   readonly close: string;
   readonly retry: string;
   readonly approve: string;
+  /** The provisioning dialog's primary action: what it adds, and how many. */
+  readonly addRecords: (count: number) => string;
   readonly decline: string;
+  /** Leaves the plan where it is: the trigger on the page opens it again. */
+  readonly notNow: string;
+  /** Why the primary action is unavailable: every operation the plan holds is blocked. */
+  readonly everyRecordConflicts: string;
   readonly reviewChanges: string;
   readonly cleanUp: string;
   readonly checkDns: string;
@@ -79,10 +85,12 @@ export interface Catalog {
    */
   readonly disconnectConsent: (domain: string, provider: string) => string;
   /**
-   * The option inside the disconnect dialog. Only this domain's apply receipt proves what
-   * DomainKit created, so the words say which records go.
+   * The option inside the disconnect dialog, over the records it would remove. Only this domain's
+   * apply receipt proves what DomainKit created, so the words say which records go.
    */
-  readonly disconnectWithCleanup: string;
+  readonly disconnectWithCleanup: (count: number) => string;
+  /** What the listed records do when that option is off. */
+  readonly disconnectKeepsRecords: (provider: string) => string;
   readonly detachConsent: string;
   readonly detached: string;
   readonly reusableConnections: string;
@@ -244,7 +252,10 @@ export const english: Catalog = {
   close: "Close",
   retry: "Try again",
   approve: "Approve",
+  addRecords: (count) => (count === 1 ? "Add 1 record" : `Add ${count} records`),
   decline: "Decline",
+  notNow: "Not now",
+  everyRecordConflicts: "Resolve the records above at your provider, then review again.",
   reviewChanges: "Review changes",
   cleanUp: "Remove records",
   checkDns: "Check DNS",
@@ -290,7 +301,11 @@ export const english: Catalog = {
   disconnectTitle: (provider) => `Disconnect ${provider}?`,
   disconnectConsent: (domain, provider) =>
     `DomainKit stops managing DNS for ${domain} through ${provider}.`,
-  disconnectWithCleanup: "Also remove the records DomainKit added for this domain",
+  disconnectWithCleanup: (count) =>
+    count === 1
+      ? "Remove the 1 record DomainKit added"
+      : `Remove the ${count} records DomainKit added`,
+  disconnectKeepsRecords: (provider) => `Records stay in ${provider}.`,
   detachConsent: "This domain is detached from the provider. Existing DNS records are preserved.",
   detached: "Domain detached. DNS records were preserved.",
   reusableConnections: "Connections you already have",

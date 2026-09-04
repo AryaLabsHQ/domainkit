@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DnsRecord, type Receipt } from "domainkit";
-import type { Transport } from "domainkit/client";
+import { Transport } from "domainkit/client";
 import * as Effect from "effect/Effect";
 
 import { useEffect, useState } from "react";
@@ -42,11 +42,50 @@ const click = async (name: string | RegExp) => {
   await user.click(button);
 };
 
+/**
+ * A plan crosses a real in-memory server, custody key and all, before it renders. Under the
+ * runner's parallel files that is not a millisecond job, so the waits for one get the room the
+ * file's own timeout already allows rather than the query default of a second.
+ */
+const patient = { timeout: 20_000 } as const;
+
+/**
+ * The review dialog by name. The connect dialog it followed may still be closing beside it, and a
+ * query by role would take whichever the DOM happens to hold at that instant.
+ */
+const reviewing = async (): Promise<HTMLElement> => {
+  let found: Element | null = null;
+  await waitFor(() => {
+    found = document.querySelector("[data-domainkit-part='plan-dialog']");
+    expect(found).not.toBeNull();
+  }, patient);
+  return found as unknown as HTMLElement;
+};
+
+/** Set the plan that opened itself aside, the way a customer who is not ready would. */
+const notNow = async () => {
+  const dialog = await reviewing();
+  // The plan has to land before there is anything to set aside.
+  await user.click(await within(dialog).findByRole("button", { name: "Not now" }, patient));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+};
+
+/** Open the plan from the page and add what it holds, in the one step the dialog offers. */
+const addRecords = async () => {
+  await click("Review changes");
+  const dialog = await reviewing();
+  const add = await within(dialog).findByRole("button", { name: /^Add \d+ records?$/ }, patient);
+  await waitFor(() => expect(add.hasAttribute("disabled")).toBe(false));
+  await user.click(add);
+};
+
 const connect = async () => {
   await click("Connect");
   await user.type(await screen.findByLabelText(/Token/), "tok");
   await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
   await screen.findByText("Connected");
+  // The plan opens itself on a connection; a test that wants it says so.
+  await notNow();
 };
 
 describe("Domain.Flow", () => {
@@ -67,8 +106,7 @@ describe("Domain.Flow", () => {
 
     await connect();
 
-    await click("Review changes");
-    await click("Approve");
+    await addRecords();
     await waitFor(() => expect(applied).toHaveLength(1));
     expect(applied[0]?.status).toBe("complete");
 
@@ -81,8 +119,10 @@ describe("Domain.Flow", () => {
     // Removing the records DomainKit added is the option inside the disconnect dialog.
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
-    const alsoRemove = within(dialog).getByRole("checkbox");
-    expect((alsoRemove as HTMLInputElement).checked).toBe(true);
+    const alsoRemove = within(dialog).getByRole("switch");
+    expect(alsoRemove.getAttribute("aria-checked")).toBe("true");
+    // What it is about is on screen: the records the receipt proves DomainKit created.
+    expect(within(dialog).getAllByRole("listitem").length).toBeGreaterThan(0);
     await user.click(within(dialog).getByRole("button", { name: "Disconnect" }));
     await waitFor(() => expect(cleaned).toHaveLength(1));
 
@@ -137,8 +177,7 @@ describe("Domain.Flow", () => {
     expect(screen.queryByRole("columnheader", { name: "Type" })).toBeNull();
 
     await connect();
-    await click("Review changes");
-    await click("Approve");
+    await addRecords();
     await waitFor(() => expect(applied).toHaveLength(1));
   });
 
@@ -196,7 +235,9 @@ describe("Domain.Flow", () => {
     );
     await connect();
     await click("Review changes");
-    await click("Decline");
+    const plan = await reviewing();
+    // Decline renders with the plan it would decline, which crosses the fake server first.
+    await user.click(await within(plan).findByRole("button", { name: "Decline" }, patient));
     await waitFor(() => expect(screen.getByText(/Declined by/)).toBeDefined());
   });
 
@@ -232,8 +273,7 @@ describe("Domain.Flow disconnect", () => {
       </DomainKit.Root>,
     );
     await connect();
-    await click("Review changes");
-    await click("Approve");
+    await addRecords();
     await screen.findByText("DNS records added.");
     return scenarioed;
   };
@@ -246,9 +286,10 @@ describe("Domain.Flow disconnect", () => {
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
     // Removing what the receipt proves is the option, and it is on until the customer says no.
-    expect((within(dialog).getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
-    // The plan is done, so nothing invites the customer to review it again.
-    expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
+    const option = within(dialog).getByRole("switch");
+    expect(option.getAttribute("aria-checked")).toBe("true");
+    expect(option.textContent).toBe("");
+    expect(within(dialog).getByText(/Remove the \d+ records? DomainKit added/)).toBeDefined();
     await user.click(within(dialog).getByRole("button", { name: "Disconnect" }));
     await screen.findByText("Owns DNS for this domain.");
     expect(methods(transport)).toEqual(
@@ -265,11 +306,21 @@ describe("Domain.Flow disconnect", () => {
     const { transport } = await applied();
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
-    await user.click(within(dialog).getByRole("checkbox"));
+    // Turning it off keeps the list, muted, and says what happens to those records instead.
+    await user.click(within(dialog).getByRole("switch"));
+    expect(
+      dialog
+        .querySelector("[data-domainkit-part='disconnect-cleanup']")
+        ?.getAttribute("data-state"),
+    ).toBe("off");
+    expect(within(dialog).getByText(/Records stay in/)).toBeDefined();
     await user.click(within(dialog).getByRole("button", { name: "Disconnect" }));
     await screen.findByText("Owns DNS for this domain.");
     expect(methods(transport)).toContain("connection.disconnect");
-    expect(methods(transport)).not.toContain("cleanup.plan");
+    // The dialog planned to show what it would remove, and stopped there: nothing was approved.
+    expect(methods(transport)).toContain("cleanup.plan");
+    expect(methods(transport)).not.toContain("cleanup.approve");
+    expect(methods(transport)).not.toContain("cleanup.apply");
   });
 
   it("names the provider the customer knows and where the connection stands", async () => {
@@ -315,6 +366,8 @@ describe("Domain.Flow disconnect", () => {
     // The connection discovery already found for the zone, rather than a second one for it.
     await click(new RegExp(`^Use ${scenarioed.zone}$`));
     await screen.findByText("Connected");
+    // Attaching a connection this owner already has lands one too, so the plan opens here as well.
+    await notNow();
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("radio", { name: "Only this domain" })).toBeDefined();
@@ -339,8 +392,7 @@ describe("Domain.Flow disconnect", () => {
       </DomainKit.Root>,
     );
     await connect();
-    await click("Review changes");
-    await click("Approve");
+    await addRecords();
     await screen.findByText("DNS records added.");
     view.unmount();
 
@@ -352,10 +404,12 @@ describe("Domain.Flow disconnect", () => {
     await click("Connect a DNS provider");
     await click(new RegExp(`^Use ${scenarioed.zone}$`));
     await screen.findByText("Connected");
+    // Attaching a connection this owner already has lands one too, so the plan opens here as well.
+    await notNow();
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
     // The sibling never applied anything, so there is no receipt and nothing to offer removing.
-    expect(within(dialog).queryByRole("checkbox")).toBeNull();
+    expect(within(dialog).queryByRole("switch")).toBeNull();
     // The option, where there is one, says which records go: only an apply receipt proves any.
     expect(within(dialog).getByRole("radio", { name: "All 2 domains" })).toBeDefined();
     await user.click(within(dialog).getByRole("radio", { name: "All 2 domains" }));
@@ -375,7 +429,167 @@ describe("Domain.Flow disconnect", () => {
     await connect();
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).queryByRole("checkbox")).toBeNull();
+    expect(within(dialog).queryByRole("switch")).toBeNull();
+  });
+});
+
+describe("Domain.Flow one-click onboarding", () => {
+  const opened = reviewing;
+
+  it("opens the plan on a token connect and adds the records in one step", async () => {
+    const { domain, requirements, transport } = scenario();
+    const applied: Array<Receipt.Model> = [];
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow
+          domain={domain}
+          onApplied={(receipt) => applied.push(receipt)}
+          requirements={requirements}
+        />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await user.type(await screen.findByLabelText(/Token/), "tok");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
+
+    // No second click to get here: the plan is what the customer just said yes to.
+    const dialog = await opened();
+    // The action appears with the plan, so waiting for it is waiting for the operations.
+    const add = await within(dialog).findByRole("button", { name: "Add 2 records" }, patient);
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
+    await waitFor(() => expect(add.hasAttribute("disabled")).toBe(false));
+    await user.click(add);
+
+    // One step: approve and apply, the dialog closing on the receipt.
+    await waitFor(() => expect(applied).toHaveLength(1));
+    expect(applied[0]?.status).toBe("complete");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await screen.findByText("DNS records added.");
+    expect(transport.calls.map((call) => call.method)).toEqual(
+      expect.arrayContaining(["provisioning.approve", "provisioning.apply"]),
+    );
+  });
+
+  it("opens the plan when the customer comes back from a provider, and not again after that", async () => {
+    const zone = `oneclick${(cases += 1)}.example`;
+    const domain = `app.${zone}`;
+    const requirements = [
+      DnsRecord.cname({ name: domain, purpose: "Serve your site", target: "edge.example.com" }),
+    ];
+    const transport = Testing.transport({
+      provider: { nameserverSuffixes: [zone], oauth: true, zones: [zone] },
+    });
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    // An interactive method answers with a redirect; where it goes is the provider's business.
+    const redirecting: Transport.Interface = {
+      ...transport,
+      connection: {
+        ...connection,
+        start: (input) =>
+          input.method._tag === "Token"
+            ? connection.start(input)
+            : Effect.succeed<Transport.Started>({
+                _tag: "Redirect",
+                authorizationUrl: "https://provider.test/consent",
+              }),
+      },
+    };
+    const harness = (held: Transport.Interface) => (
+      <DomainKit.Root navigate={() => {}} transport={held}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>
+    );
+
+    // The redirect leaves the page, so what the library knew goes with it: it writes down that it
+    // sent this domain away, and the load that finds a connection reads that once.
+    const first = render(harness(redirecting));
+    await click("Connect");
+    await click("Continue with Fake fake");
+    await waitFor(() => expect(sessionStorage.getItem("domainkit.returning")).toBe(domain));
+    first.unmount();
+
+    // The provider's callback connected the domain while the customer was away.
+    await Effect.runPromise(
+      connection.start({
+        domain,
+        method: Transport.Method.token({ token: "tok" }),
+        provider: "fake",
+      }),
+    );
+
+    const back = render(harness(transport));
+    await reviewing();
+    expect(sessionStorage.getItem("domainkit.returning")).toBeNull();
+    await notNow();
+    back.unmount();
+
+    // A reload after the fact is a page view, not a return: nothing opens itself.
+    render(harness(transport));
+    await screen.findByText("Connected");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("leaves the plan where it is for a host that asks to open it itself", async () => {
+    const { domain, requirements, transport } = scenario();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} review="manual" />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await user.type(await screen.findByLabelText(/Token/), "tok");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
+    await screen.findByText("Connected");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("button", { name: "Review changes" })).toBeDefined();
+  });
+
+  it("adds what it can when a record is in the way, and says what to fix when none can", async () => {
+    const zone = `conflict${(cases += 1)}.example`;
+    const domain = `app.${zone}`;
+    const blocked = DnsRecord.cname({
+      name: domain,
+      purpose: "Serve your site",
+      target: "edge.example.com",
+    });
+    const free = DnsRecord.txt({
+      name: `_acme.${domain}`,
+      purpose: "Prove ownership",
+      value: "acme-verify=7f3a",
+    });
+    // A record already at the name the CNAME wants, which planning reports as a conflict.
+    const transport = Testing.transport({
+      provider: {
+        nameserverSuffixes: [zone],
+        records: [
+          {
+            record: DnsRecord.txt({ name: domain, purpose: "Something else", value: "held" }),
+            zone,
+          },
+        ],
+        zones: [zone],
+      },
+    });
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={[blocked, free]} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await user.type(await screen.findByLabelText(/Token/), "tok");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
+    const dialog = await opened();
+    // The action appears with the plan, so waiting for it is waiting for the operations.
+    const add = await within(dialog).findByRole("button", { name: /^Add \d+ records?$/ }, patient);
+    // The blocked record is not one of them, so the action offers the rest and stays available.
+    await waitFor(() => expect(add.hasAttribute("disabled")).toBe(false));
+    expect(add.textContent).toBe("Add 1 record");
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
+    expect(
+      dialog.querySelector("[data-domainkit-part='operation-item'][data-operation='Conflict']")
+        ?.textContent,
+    ).toMatch(/cannot share a name|already owns this name/);
   });
 });
 
@@ -472,8 +686,7 @@ describe("Domain.Flow state", () => {
     });
 
     // A receipt is what cleanup plans from, so a host's own remove dialog waits for one.
-    await click("Review changes");
-    await click("Approve");
+    await addRecords();
     await waitFor(() => expect(seen.at(-1)?.applied).toBe(true));
     expect(typeof seen.at(-1)?.receiptId).toBe("string");
   });

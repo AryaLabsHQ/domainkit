@@ -1,7 +1,8 @@
 import { Collapsible as BaseCollapsible } from "@base-ui/react/collapsible";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
+import { Switch as BaseSwitch } from "@base-ui/react/switch";
 import { Menu as BaseMenu } from "@base-ui/react/menu";
-import { Receipt, type DomainKit, type Storage } from "domainkit";
+import { Receipt, type DomainKit, type Plan, type Storage } from "domainkit";
 import { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -23,6 +24,7 @@ import { Event } from "./events.ts";
 import { useIcons } from "./icons.tsx";
 import { outcome as describeOutcome } from "./messages.ts";
 import * as OutcomeUi from "./outcome.tsx";
+import * as Operations from "./operations.tsx";
 import * as Provider from "./provider.tsx";
 import { useRunner } from "./task.ts";
 
@@ -77,6 +79,12 @@ export interface ConnectInput {
 
 export interface Controller {
   readonly domain: string;
+  /**
+   * How many times a connection has been established for this domain on this surface: a token
+   * connect that landed, or a load that followed this library's own redirect back. It only ever
+   * grows, so a flow acts on a change rather than on a state that would fire again every render.
+   */
+  readonly established: number;
   readonly state: State;
   readonly snapshot: Snapshot | null;
   readonly discovery: Discovery | null;
@@ -102,6 +110,31 @@ export interface Options {
    */
   readonly returnTo?: string | null;
 }
+
+/**
+ * An interactive method leaves the page and comes back, so what the library knew is gone with it.
+ * It writes down the domain it sent the customer away for, and the load that follows reads it once:
+ * that, not a query parameter a host would have to keep, is how a return is told from a reload.
+ */
+const RETURNING = "domainkit.returning";
+
+const markReturn = (domain: string): void => {
+  try {
+    sessionStorage.setItem(RETURNING, domain);
+  } catch {
+    // A browser with storage turned off simply loses the one-click return.
+  }
+};
+
+const tookReturn = (domain: string): boolean => {
+  try {
+    if (sessionStorage.getItem(RETURNING) !== domain) return false;
+    sessionStorage.removeItem(RETURNING);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /** Read at connect time, not at render, so it is the page the customer is actually on. */
 const currentUrl = (): string | null =>
@@ -160,6 +193,7 @@ export function useController({ domain, returnTo }: Options): Controller {
   // What the customer was doing when it failed, so the dialog can answer beside that method.
   const attempted = useRef<Attempt | null>(null);
 
+  const [established, setEstablished] = useState(0);
   const [inspected, setInspected] = useState(domain);
   if (inspected !== domain) {
     setInspected(domain);
@@ -207,6 +241,11 @@ export function useController({ domain, returnTo }: Options): Controller {
         onSuccess: ({ discovery, snapshot }) => {
           if (held.current.domain !== domain) return;
           held.current = { discovery, domain, snapshot };
+          // The customer came back from a provider and the connection is here: this load is the
+          // other half of the connect they started, not a page they opened again later.
+          if (snapshot.status === "connected" && tookReturn(domain)) {
+            setEstablished((count) => count + 1);
+          }
           setState(settled(snapshot, discovery));
         },
       },
@@ -221,6 +260,7 @@ export function useController({ domain, returnTo }: Options): Controller {
       switch (result._tag) {
         case "Connected":
           held.current = { discovery: null, domain, snapshot: result.snapshot };
+          setEstablished((count) => count + 1);
           setState(settled(result.snapshot, null));
           if (result.snapshot.connectionId !== null) {
             emit(
@@ -233,6 +273,7 @@ export function useController({ domain, returnTo }: Options): Controller {
           }
           return;
         case "Redirect":
+          markReturn(domain);
           setState(State.Redirecting({ url: result.authorizationUrl }));
           navigate(result.authorizationUrl);
           return;
@@ -360,6 +401,7 @@ export function useController({ domain, returnTo }: Options): Controller {
     detach,
     disconnect,
     domain,
+    established,
     discovery:
       state._tag === "Disconnected" || state._tag === "Failure" || state._tag === "Submitting"
         ? state.discovery
@@ -1216,6 +1258,24 @@ export function Prompt({
   return element;
 }
 
+/** The plan an attempt holds, whatever step it is on; `null` before there is one. */
+const planOf = (state: Cleanup.State): Plan.Model | null => {
+  switch (state._tag) {
+    case "Planned":
+    case "Approving":
+    case "Applying":
+    case "Rejecting":
+    case "Rejected":
+      return state.plan;
+    case "Applied":
+      return state.plan;
+    case "Idle":
+    case "Planning":
+    case "Failure":
+      return null;
+  }
+};
+
 export interface DisconnectDialogProps {
   readonly controller: Controller;
   /** The receipt the cleanup this dialog ran produced, for a host that tracks its own state. */
@@ -1257,6 +1317,12 @@ export function DisconnectDialog({
     ...(receiptId === null ? {} : { receiptId: Receipt.ReceiptId.make(receiptId) }),
   });
   const { approve, plan, state: cleaning } = cleanup;
+  // The plan is built when the dialog opens, not when the customer confirms, so what would be
+  // removed is on screen while they decide rather than after.
+  const removals = planOf(cleaning);
+  useEffect(() => {
+    if (open && removable && cleaning._tag === "Idle") plan();
+  }, [cleaning, open, plan, removable]);
   const detach = controller.detach;
   const release = controller.disconnect;
   // A shared connection detaches this domain by default; only "all domains" ends the connection.
@@ -1270,25 +1336,21 @@ export function DisconnectDialog({
 
   useEffect(() => {
     if (!removing) return;
-    if (cleaning._tag === "Planned") {
-      if (cleaning.plan.operations.length === 0) {
-        setRemoving(false);
-        disconnect();
-      } else approve();
-      return;
-    }
     if (cleaning._tag === "Applied") {
       setRemoving(false);
       disconnect();
       return;
     }
     if (cleaning._tag === "Failure" || cleaning._tag === "Rejected") setRemoving(false);
-  }, [approve, cleaning, disconnect, removing]);
+  }, [cleaning, disconnect, removing]);
 
   const busy = removing || releasing;
   const provider = snapshot?.provider ?? null;
   const named = provider === null ? "" : displayName(controller, provider);
   const heading = provider === null ? messages.disconnect : messages.disconnectTitle(named);
+  // Nothing to remove is not a choice: the switch appears over records, or not at all.
+  const count = removals?.operations.length ?? 0;
+  const choosable = removable && count > 0;
   if (readOnly) return <></>;
   return (
     <BaseDialog.Root
@@ -1356,16 +1418,28 @@ export function DisconnectDialog({
                 </label>
               </fieldset>
             ) : null}
-            {removable ? (
-              <label data-domainkit-part="disconnect-cleanup">
-                <input
-                  checked={alsoRemove}
-                  disabled={busy}
-                  onChange={(event) => setAlsoRemove(event.target.checked)}
-                  type="checkbox"
-                />
-                {messages.disconnectWithCleanup}
-              </label>
+            {choosable ? (
+              <div data-domainkit-part="disconnect-cleanup" data-state={alsoRemove ? "on" : "off"}>
+                <label data-domainkit-part="disconnect-cleanup-label">
+                  <BaseSwitch.Root
+                    checked={alsoRemove}
+                    data-domainkit-part="disconnect-cleanup-switch"
+                    disabled={busy}
+                    onCheckedChange={setAlsoRemove}
+                  >
+                    <BaseSwitch.Thumb data-domainkit-part="disconnect-cleanup-thumb" />
+                  </BaseSwitch.Root>
+                  {messages.disconnectWithCleanup(count)}
+                </label>
+                <div data-domainkit-part="disconnect-cleanup-panel">
+                  {removals === null ? null : <Operations.List plan={removals} />}
+                  {alsoRemove ? null : (
+                    <p data-domainkit-part="disconnect-cleanup-note">
+                      {messages.disconnectKeepsRecords(named)}
+                    </p>
+                  )}
+                </div>
+              </div>
             ) : null}
             <Cleanup.Status controller={cleanup} />
             {releasing ? (
@@ -1381,9 +1455,9 @@ export function DisconnectDialog({
               data-domainkit-part="disconnect-confirm"
               disabled={busy}
               onClick={() => {
-                if (removable && alsoRemove) {
+                if (choosable && alsoRemove) {
                   setRemoving(true);
-                  plan();
+                  approve();
                   return;
                 }
                 disconnect();

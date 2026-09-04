@@ -280,8 +280,7 @@ function Hanging({ verb }: { readonly verb: string }) {
   }, [verb]);
   return (
     <DomainKit.Root navigate={() => {}} transport={held}>
-      <Connect.Flow domain={domain} />
-      <Provision.Flow domain={domain} requirements={requirements} />
+      <Domain.Flow domain={domain} requirements={requirements} />
     </DomainKit.Root>
   );
 }
