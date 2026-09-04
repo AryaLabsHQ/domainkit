@@ -121,10 +121,22 @@ The stylesheet is opt-in and every colour in it is a `--domainkit-*` custom prop
 imports it can still restyle everything through `theme`.
 
 Every rule ships inside `@layer domainkit`, which sits below any unlayered rule. Your own stylesheet
-wins without out-specifying a part selector, and a utility class lands where you put it. To let the
-package win instead, order a layer of your own below it.
+wins without out-specifying a part selector, and a utility class lands where you put it.
 
-<Snippet file="examples/react/styles.css" region="layer" title="Letting the package win" />
+Once your app uses layers of its own, name the order. A layer's priority is its position in that
+list, and one you never declare lands wherever it first appears, so `domainkit` can end up under
+Tailwind's preflight and the package's buttons render as bare text.
+
+<Snippet
+  file="examples/react/styles.css"
+  region="layer"
+  title="The order that works with Tailwind"
+/>
+
+`domainkit` sits after `base` so preflight cannot strip it, and before `utilities` so a utility
+class still wins. Any layer you declare after it wins the same way.
+
+<Snippet file="examples/react/styles.css" region="override" title="Overriding a part" />
 
 ## Next
 
