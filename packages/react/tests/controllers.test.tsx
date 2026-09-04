@@ -55,7 +55,7 @@ const connectDomain = async (transport: Transport.Interface, domain: string) => 
   await user.click(screen.getByRole("button", { name: "Connect" }));
   await user.type(await screen.findByLabelText(/Token/), "tok");
   await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-  await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
+  await waitFor(() => expect(screen.getByText("Connected")).toBeDefined());
   view.unmount();
 };
 
@@ -131,7 +131,7 @@ describe("Connect.useController", () => {
     expect(field.getAttribute("name")).toBe("token");
     await user.type(field, "tok");
     await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-    await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Connected")).toBeDefined());
     const start = transport.calls.find((call) => call.method === "connection.start");
     expect(start?.input).toMatchObject({
       domain,
@@ -240,7 +240,7 @@ describe("Connect.useController", () => {
     await click("Connect a DNS provider");
     await screen.findByText(`${zone} already serves this domain`);
     await user.click(screen.getByRole("button", { name: `Use ${zone}` }));
-    await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Connected")).toBeDefined());
     expect(transport.calls.some((call) => call.method === "connection.discover")).toBe(true);
   });
 });
@@ -271,7 +271,7 @@ describe("Connect.Dialog", () => {
     expect(media?.querySelector("[data-domainkit-part='provider-mark']")?.textContent).toBe("F");
   });
 
-  it("offers the interactive method first and keeps the token form behind a disclosure", async () => {
+  it("offers the interactive method first and opens the token form in its place", async () => {
     const { domain, transport } = both();
     render(
       <DomainKit.Root navigate={() => {}} transport={transport}>
@@ -279,19 +279,74 @@ describe("Connect.Dialog", () => {
       </DomainKit.Root>,
     );
     await click("Connect");
-    const section = dialog().querySelector("[data-domainkit-part='provider-authentication']");
-    const oauth = section?.querySelector("[data-domainkit-part='oauth-connect']");
-    const alternative = section?.querySelector("[data-domainkit-part='token-alternative']");
+    const section = () => dialog().querySelector("[data-domainkit-part='provider-authentication']");
+    const oauth = section()?.querySelector("[data-domainkit-part='oauth-connect']");
+    const alternate = section()?.querySelector("[data-domainkit-part='method-alternate']");
     expect(oauth).not.toBeNull();
-    expect(alternative).not.toBeNull();
-    // The click-through method is the primary action, and the token waits under it.
-    expect(oauth?.compareDocumentPosition(alternative as Node)).toBe(
+    // The click-through method is the offer; the token is the plain alternative under it.
+    expect(oauth?.compareDocumentPosition(alternate as Node)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
-    expect(alternative?.hasAttribute("open")).toBe(false);
-    expect(alternative?.querySelector("[data-domainkit-part='token-connect']")).not.toBeNull();
-    await user.click(screen.getByText("Use an API token instead"));
-    expect(alternative?.hasAttribute("open")).toBe(true);
+    expect(dialog().querySelector("[data-domainkit-part='token-connect']")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Use an API token instead" }));
+    expect(screen.getByLabelText(/Token/)).toBeDefined();
+    // The offer it replaced is gone, and the way back is a link rather than a disclosure.
+    expect(dialog().querySelector("[data-domainkit-part='oauth-connect']")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(dialog().querySelector("[data-domainkit-part='oauth-connect']")).not.toBeNull();
+    expect(dialog().querySelector("[data-domainkit-part='token-connect']")).toBeNull();
+  });
+
+  it("re-narrows to the provider the header menu names", async () => {
+    const { domain, transport } = both();
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    // A second descriptor in the snapshot: the menu needs two providers, not two registries.
+    const two: Transport.Interface = {
+      ...transport,
+      connection: {
+        ...connection,
+        inspect: (target) =>
+          Effect.map(connection.inspect(target), (snapshot) => ({
+            ...snapshot,
+            providers: [
+              ...snapshot.providers,
+              {
+                id: "vercel",
+                name: "Fake vercel",
+                methods: [
+                  {
+                    docsUrl: null,
+                    fields: [{ name: "token", required: true, secret: true }],
+                    kind: "token" as const,
+                    label: "Access token",
+                  },
+                ],
+              },
+            ],
+          })),
+      },
+    };
+    render(
+      <DomainKit.Root navigate={() => {}} transport={two}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    const menu = dialog().querySelector("[data-domainkit-part='dialog-provider-menu']");
+    expect(menu?.textContent).toContain("Connect Fake fake");
+    await user.click(menu as HTMLElement);
+    await user.click(await screen.findByRole("menuitem", { name: /Fake vercel/ }));
+    await waitFor(() =>
+      expect(
+        dialog().querySelector("[data-domainkit-part='dialog-provider-menu']")?.textContent,
+      ).toContain("Connect Fake vercel"),
+    );
+    // The body follows the header: one provider, and it is the one the customer picked.
+    const section = dialog().querySelector("[data-domainkit-part='provider-authentication']");
+    expect(section?.getAttribute("data-provider")).toBe("vercel");
   });
 
   it("renders the form directly for a provider that offers a token and nothing else", async () => {

@@ -53,11 +53,15 @@ status code.
 | Part              | Renders                                                       |
 | ----------------- | ------------------------------------------------------------- |
 | `Connect.Prompt`  | The disconnected offer: who serves the zone, and the trigger  |
-| `Connect.Card`    | The connected provider, with detach and disconnect            |
+| `Connect.Card`    | The connected provider, where it stands, and the disconnect   |
 | `Connect.Dialog`  | The connect surface, with a `render` prop for your own dialog |
 | `Connect.Form`    | The method picker and token fields, without the dialog        |
 | `Connect.Status`  | One line of what the connection is doing                      |
 | `Connect.Outcome` | The last failure, as an [outcome](/components/outcome)        |
+
+`Connect.DisconnectDialog` is what the card's Disconnect opens: it removes the records an apply
+receipt proves DomainKit created when the option stays checked, and asks whether the release covers
+this domain or every domain on the connection when it serves more than one.
 
 ## Where the customer comes back to
 

@@ -58,6 +58,8 @@ export interface Snapshot {
     "id" | "provider" | "method" | "capabilities" | "revocation"
   > | null;
   readonly lastReceiptId: string | null;
+  /** How many domains this domain's connection serves, including this one; `0` without one. */
+  readonly connectionDomains: number;
   /** Other connections of this owner that could serve this domain. */
   readonly reusable: ReadonlyArray<{
     readonly connection: Storage.Connection;
@@ -500,6 +502,8 @@ export const make: Effect.Effect<
         attachment === null
           ? Option.none()
           : yield* storage.attempts.latest(attachment.id, "provisioning");
+      // Letting a connection go takes every domain on it, so the UI has to be able to say how many.
+      const attached = connection === null ? [] : yield* storage.attachments.list(connection.id);
       const reusable: Array<Snapshot["reusable"][number]> = [];
       for (const candidate of yield* storage.connections.list()) {
         if (candidate.id === connection?.id) continue;
@@ -527,6 +531,7 @@ export const make: Effect.Effect<
                 revocation: authorization.revocation,
               },
         lastReceiptId: Option.isSome(latest) ? (latest.value.receipt?.id ?? null) : null,
+        connectionDomains: attached.length,
         reusable,
         providers: providers.list().map((definition) => ({
           id: definition.id,

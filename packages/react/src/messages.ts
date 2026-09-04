@@ -28,8 +28,17 @@ export interface Catalog {
   readonly moreOptions: string;
   /** Reveals the providers the dialog narrowed away. */
   readonly useAnotherProvider: string;
-  /** Reveals the token form where a provider also offers a method the customer clicks through. */
+  /** Opens the token form where a provider also offers a method the customer clicks through. */
   readonly useTokenInstead: string;
+  /** Returns from one method's form to the provider's methods. */
+  readonly back: string;
+  /** The connected card's own line, beside the provider's name. */
+  readonly connected: string;
+  readonly needsReconnect: string;
+  /** The disconnect dialog's scope question, when the connection serves other domains too. */
+  readonly disconnectScope: string;
+  readonly disconnectThisDomain: string;
+  readonly disconnectEveryDomain: (count: number) => string;
   readonly copy: string;
   readonly copied: string;
   readonly copyZone: string;
@@ -237,6 +246,12 @@ export const english: Catalog = {
   moreOptions: "Need an account id?",
   useAnotherProvider: "Use a different provider",
   useTokenInstead: "Use an API token instead",
+  back: "Back",
+  connected: "Connected",
+  needsReconnect: "Needs reconnecting",
+  disconnectScope: "This connection serves other domains.",
+  disconnectThisDomain: "Only this domain",
+  disconnectEveryDomain: (count) => `All ${count} domains`,
   copy: "Copy",
   copied: "Copied",
   copyZone: "Copy zone file",

@@ -24,7 +24,9 @@ const scenario = () => {
         value: "acme-verify=7f3a",
       }),
     ],
+    sibling: `mail.${zone}`,
     transport: Testing.transport({ provider: { nameserverSuffixes: [zone], zones: [zone] } }),
+    zone,
   };
 };
 
@@ -42,7 +44,7 @@ const connect = async () => {
   await click("Connect");
   await user.type(await screen.findByLabelText(/Token/), "tok");
   await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-  await screen.findByText("fake connected");
+  await screen.findByText("Connected");
 };
 
 describe("Domain.Flow", () => {
@@ -266,6 +268,64 @@ describe("Domain.Flow disconnect", () => {
     expect(methods(transport)).not.toContain("cleanup.plan");
   });
 
+  it("names the provider the customer knows and where the connection stands", async () => {
+    const { domain, requirements, transport } = scenario();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await connect();
+    const card = document.querySelector("[data-domainkit-part='connected-card']");
+    expect(card?.querySelector("[data-domainkit-part='host-name']")?.textContent).toBe("Fake fake");
+    expect(card?.querySelector("[data-domainkit-part='host-statement']")?.textContent).toBe(
+      "Connected",
+    );
+    // The provider id never reaches the customer, and detaching is a choice inside the dialog.
+    expect(card?.textContent).not.toContain("fake connected");
+    expect(screen.queryByRole("button", { name: "Detach domain" })).toBeNull();
+  });
+
+  it("asks which domains a disconnect covers only when the connection serves more than one", async () => {
+    const scenarioed = scenario();
+    const { domain, requirements, sibling, transport } = scenarioed;
+    const view = render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await connect();
+    // One domain on the connection: nothing to ask.
+    await click("Disconnect");
+    expect(within(await screen.findByRole("dialog")).queryByRole("radio")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    view.unmount();
+
+    // The sibling reuses the same connection, so it now serves two.
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={sibling} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await click("Connect a DNS provider");
+    // The connection discovery already found for the zone, rather than a second one for it.
+    await click(new RegExp(`^Use ${scenarioed.zone}$`));
+    await screen.findByText("Connected");
+    await click("Disconnect");
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("radio", { name: "Only this domain" })).toBeDefined();
+    expect(within(dialog).getByRole("radio", { name: "All 2 domains" })).toBeDefined();
+    // The least destructive answer is the one already chosen.
+    expect(
+      (within(dialog).getByRole("radio", { name: "Only this domain" }) as HTMLInputElement).checked,
+    ).toBe(true);
+    await user.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+    await waitFor(() =>
+      expect(transport.calls.map((call) => call.method)).toContain("connection.detach"),
+    );
+    expect(transport.calls.map((call) => call.method)).not.toContain("connection.disconnect");
+  });
+
   it("offers no option to remove records for a domain that never applied any", async () => {
     const { domain, requirements, transport } = scenario();
     render(
@@ -328,7 +388,7 @@ describe("Domain.Flow state", () => {
         <Domain.Flow connect="never" domain={domain} requirements={requirements} />
       </DomainKit.Root>,
     );
-    await screen.findByText("fake connected");
+    await screen.findByText("Connected");
     expect(screen.getByRole("button", { name: "Disconnect" })).toBeDefined();
   });
 });
@@ -356,7 +416,7 @@ describe("Domain.Flow read-only", () => {
       </DomainKit.Root>,
     );
     // The state a member may see.
-    await screen.findByText("fake connected");
+    await screen.findByText("Connected");
     expect(screen.getByRole("columnheader", { name: "Type" })).toBeDefined();
     expect(screen.getByRole("cell", { name: "CNAME" })).toBeDefined();
     // The writes they may not start.
@@ -406,7 +466,7 @@ describe("Domain.Flow read-only", () => {
         <Domain.Flow domain={domain} readOnly requirements={requirements} />
       </DomainKit.Root>,
     );
-    await screen.findByText("fake connected");
+    await screen.findByText("Connected");
     expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Detach domain" })).toBeNull();
   });
@@ -419,7 +479,7 @@ describe("Domain.Flow read-only", () => {
       </DomainKit.Root>,
     );
     expect(await screen.findByRole("button", { name: "Review changes" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Detach domain" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Disconnect" })).toBeDefined();
   });
 });
 

@@ -8,8 +8,8 @@ const shot = (name: string) => `test-results/screenshots/${name}.png`;
  * Every token path in this file opens it first, the way a customer who wants a token does.
  */
 const revealToken = async (dialog: import("@playwright/test").Locator) => {
-  const disclosure = dialog.getByText("Use an API token instead");
-  if ((await disclosure.count()) > 0) await disclosure.click();
+  const alternate = dialog.getByRole("button", { name: "Use an API token instead" });
+  if ((await alternate.count()) > 0) await alternate.click();
 };
 
 /** A zone per test keeps the fixture's fake provider from seeing another test's records. */
@@ -52,7 +52,7 @@ test("connects, reviews the plan, and approves it", async ({ page }) => {
   await revealToken(page.getByRole("dialog"));
   await page.getByRole("dialog").getByLabel("Token").fill("secret-token");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
-  await expect(page.getByText("fake connected")).toBeVisible();
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Review changes" }).click();
   await expect(page.getByRole("button", { name: "Approve" })).toBeEnabled();
@@ -80,7 +80,7 @@ test("opens the verification popover and reads per-requirement evidence", async 
   await revealToken(page.getByRole("dialog"));
   await page.getByRole("dialog").getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
-  await expect(page.getByText("fake connected")).toBeVisible();
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Review changes" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("DNS records added.")).toBeVisible();
@@ -146,10 +146,10 @@ test("renders a read-only domain as state with no controls", async ({ page }) =>
   await revealToken(page.getByRole("dialog"));
   await page.getByRole("dialog").getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
-  await expect(page.getByText("fake connected")).toBeVisible();
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
 
   await page.getByTestId("toggle-readonly").click();
-  await expect(page.getByText("fake connected")).toBeVisible();
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Type" })).toBeVisible();
   await Promise.all(
     ["Connect", "Detach domain", "Disconnect", "Review changes"].map((name) =>
@@ -283,33 +283,43 @@ test("narrows the dialog to the provider that serves the zone", async ({ page })
   await page.goto("/?zone=browser14.example&view=providers");
   await page.getByRole("button", { exact: true, name: "Connect" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.locator("[data-domainkit-part='dialog-title']")).toHaveText(
+  await expect(dialog.locator("[data-domainkit-part='dialog-title']")).toContainText(
     "Connect Fake cloudflare",
   );
   // The mark the prompt uses names the provider beside the heading.
   await expect(
     dialog.locator("[data-domainkit-part='dialog-media']").getByRole("img", { name: /cloudflare/ }),
   ).toBeVisible();
-  // One provider's methods: the click-through one leads and the token form waits behind it.
-  await expect(dialog.locator("[data-domainkit-part='token-connect']")).toHaveCount(1);
+  // One decision: the click-through method, with the token as a plain alternative under it.
   await expect(dialog.getByRole("button", { name: "Continue with Fake cloudflare" })).toBeVisible();
-  await expect(dialog.getByLabel("Token")).toBeHidden();
+  await expect(dialog.locator("[data-domainkit-part='token-connect']")).toHaveCount(0);
+  await expect(dialog).toHaveCSS("opacity", "1");
   await dialog.screenshot({ path: shot("connect-dialog-narrowed") });
-  await revealToken(dialog);
+
+  // The token form takes the body, with the way back at the top of it.
+  await dialog.getByRole("button", { name: "Use an API token instead" }).click();
   await expect(dialog.getByLabel("Token")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Connect with an API token" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Continue with Fake cloudflare" })).toHaveCount(
+    0,
+  );
   await expect(dialog.getByRole("link", { name: "Where do I find this?" })).toBeVisible();
   // The account id is a field the provider does not need, so it waits behind a disclosure.
   await expect(dialog.getByLabel("Account id")).toBeHidden();
   await dialog.screenshot({ path: shot("connect-dialog-token") });
   await dialog.getByText("Need an account id?").click();
   await expect(dialog.getByLabel("Account id")).toBeVisible();
+  await dialog.getByRole("button", { name: "Back" }).click();
+  await expect(dialog.getByRole("button", { name: "Continue with Fake cloudflare" })).toBeVisible();
 
-  // The provider that does not serve the zone is one disclosure away.
-  await dialog.getByText("Use a different provider").click();
-  await dialog.getByRole("button", { name: "Fake vercel" }).click();
-  await expect(dialog.locator("[data-domainkit-part='token-connect']")).toHaveCount(2);
-  await dialog.screenshot({ path: shot("connect-dialog-other-providers") });
+  // The provider that does not serve the zone is in the header menu.
+  await dialog.getByRole("button", { name: /Connect Fake cloudflare/ }).click();
+  await page.getByRole("menuitem", { name: /Fake vercel/ }).click();
+  await expect(dialog.locator("[data-domainkit-part='dialog-title']")).toContainText(
+    "Connect Fake vercel",
+  );
+  // Vercel offers a token and nothing else, so its form opens directly.
+  await expect(dialog.locator("[data-domainkit-part='token-connect']")).toHaveCount(1);
+  await dialog.screenshot({ path: shot("connect-dialog-provider-menu") });
 });
 
 test("offers every provider, one open at a time, when nothing serves the zone", async ({
@@ -327,11 +337,13 @@ test("offers every provider, one open at a time, when nothing serves the zone", 
   );
   await expect(dialog.locator("[data-domainkit-part='provider-authentication']")).toHaveCount(2);
   // The first is open and the second is not, until the customer says otherwise.
-  await expect(dialog.locator("[data-domainkit-part='token-connect']")).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "Continue with Fake cloudflare" })).toBeVisible();
   await dialog.getByRole("button", { name: "Fake vercel" }).click();
   await expect(
     dialog.locator("[data-domainkit-part='provider-authentication'][data-state='open']"),
   ).toHaveCount(1);
+  // Vercel offers a token and nothing else, so opening it opens the form.
+  await expect(dialog.locator("[data-domainkit-part='token-connect']")).toHaveCount(1);
   await dialog.screenshot({ path: shot("connect-dialog-all-providers") });
   // The heading closes what it opened, so the dialog can show no provider at all.
   await dialog.getByRole("button", { name: "Fake vercel" }).click();

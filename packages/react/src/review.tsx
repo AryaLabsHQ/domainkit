@@ -52,10 +52,9 @@ export function Status({ controller, kind, ...props }: StatusProps): ReactElemen
         return messages.rejecting;
       case "Rejected":
         return messages.declinedBy(state.attempt.rejection?.actorId ?? "");
+      // What an apply landed is an outcome, not a progress line: `Outcome` says it.
       case "Applied":
-        return kind === "provisioning"
-          ? messages.applied(state.receipt)
-          : messages.cleaned(state.receipt);
+        return "";
       case "Failure":
         return "";
     }
@@ -76,8 +75,9 @@ export function Status({ controller, kind, ...props }: StatusProps): ReactElemen
 export interface OutcomeProps extends OutcomeUi.RootProps, KindProps {}
 
 /**
- * The failure, or a receipt that only partly landed: media, title, description, and the retry the
- * flow allows. Children replace the composition and keep the binding.
+ * How the attempt ended: a failure, a receipt that only partly landed, or one that landed whole.
+ * Media, title, description, and the retry the flow allows. Children replace the composition and
+ * keep the binding.
  */
 export function Outcome({
   children,
@@ -88,20 +88,28 @@ export function Outcome({
   const { messages } = useDomainKit();
   const readOnly = useReadOnly();
   const state = controller.state;
-  const partial = state._tag === "Applied" && state.receipt.status === "partial";
   const retryPart = kind === "provisioning" ? "provisioning-retry" : "cleanup-retry";
-  if (state._tag !== "Failure" && !partial) return null;
+  if (state._tag !== "Failure" && state._tag !== "Applied") return null;
+  const partial = state._tag === "Applied" && state.receipt.status === "partial";
   const words =
     state._tag === "Failure"
       ? describeOutcome(state.error, messages)
-      : {
-          description:
-            kind === "provisioning" ? messages.partiallyApplied : messages.partiallyCleaned,
-          title:
-            kind === "provisioning"
-              ? messages.partiallyAppliedTitle
-              : messages.partiallyCleanedTitle,
-        };
+      : partial
+        ? {
+            description:
+              kind === "provisioning" ? messages.partiallyApplied : messages.partiallyCleaned,
+            title:
+              kind === "provisioning"
+                ? messages.partiallyAppliedTitle
+                : messages.partiallyCleanedTitle,
+          }
+        : {
+            description: "",
+            title:
+              kind === "provisioning"
+                ? messages.applied(state.receipt)
+                : messages.cleaned(state.receipt),
+          };
   return (
     <OutcomeUi.Provider
       value={{
@@ -110,7 +118,7 @@ export function Outcome({
         retry: readOnly || state._tag !== "Failure" ? null : controller.retry,
         retryPart,
         title: words.title,
-        tone: state._tag === "Failure" ? "danger" : "warning",
+        tone: state._tag === "Failure" ? "danger" : partial ? "warning" : "success",
       }}
     >
       <OutcomeUi.Root {...props}>{children ?? <OutcomeUi.Composition />}</OutcomeUi.Root>

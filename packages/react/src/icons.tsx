@@ -5,6 +5,8 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
  * an icon prop of its own, so a host swaps the whole set once on `DomainKit.Root`.
  */
 export interface Icons {
+  /** Points at what a control opens: the provider menu's own marker. */
+  readonly chevron: ReactNode;
   readonly close: ReactNode;
   readonly copied: ReactNode;
   readonly copy: ReactNode;
@@ -33,6 +35,11 @@ function Glyph({ children }: { readonly children: ReactNode }) {
 }
 
 export const defaultIcons = {
+  chevron: (
+    <Glyph>
+      <path d="m6 9 6 6 6-6" />
+    </Glyph>
+  ),
   close: (
     <Glyph>
       <path d="M18 6 6 18" />
