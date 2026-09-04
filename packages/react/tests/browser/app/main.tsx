@@ -3,9 +3,10 @@
  * Playwright run exercises the real stylesheet, portals, and focus behaviour with no host app.
  */
 import { DnsRecord, Plan, Verify } from "domainkit";
-import type { Transport } from "domainkit/client";
+import { Transport } from "domainkit/client";
 import * as DateTime from "effect/DateTime";
-import { StrictMode, useMemo, useState } from "react";
+import * as Effect from "effect/Effect";
+import { StrictMode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { Connect, Domain, DomainKit, Testing, Verify as VerifyUi } from "../../../src/index.ts";
@@ -110,6 +111,23 @@ if (container === null) throw new Error("The fixture has no #root");
 const view = parameters.get("view");
 
 /**
+ * The browser's own `fetch`, untouched: `Transport.fromFetch` with no `fetch` option against a
+ * route the Playwright spec answers. A method-bound call throws "Illegal invocation" in Chrome.
+ */
+function FetchProbe() {
+  const [result, setResult] = useState("pending");
+  useEffect(() => {
+    const connection = Transport.fromFetch("/api/domainkit").connection;
+    if (connection === undefined) return setResult("no connection group");
+    Effect.runPromise(connection.inspect(domain)).then(
+      (snapshot) => setResult(JSON.stringify({ status: snapshot.status, domain: snapshot.domain })),
+      (error: unknown) => setResult(`error: ${String(error)}`),
+    );
+  }, []);
+  return <pre data-testid="fetch-probe">{result}</pre>;
+}
+
+/**
  * The flag flips in place rather than on reload: the fake transport keeps its state in memory, so
  * a reload would forget the connection this view is meant to show.
  */
@@ -134,6 +152,8 @@ createRoot(container).render(
   <StrictMode>
     {view === "returnto" ? (
       <ReturnToProbe />
+    ) : view === "fetch" ? (
+      <FetchProbe />
     ) : (
       <DomainKit.Root colorScheme={colorScheme} theme={{ accent: "#4f46e5" }} transport={transport}>
         {view === "evidence" ? (
