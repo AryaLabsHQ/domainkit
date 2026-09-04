@@ -22,8 +22,15 @@ revocation need nothing from the host.
 and `/oauth2/revoke`, so a stage points consent at an emulator that mounts the same paths and runs
 the code path a customer does. It stays separate from `baseUrl` because in production these are
 different hosts: `dash.cloudflare.com` for OAuth, `api.cloudflare.com/client/v4` for the REST API.
-DomainKit requires HTTPS for every OAuth request except one to a loopback host, which carries the
-credential nowhere.
+
+Consent is the browser's request and the exchange is the server's, so a stage where those reach the
+same emulator by different names gives `oauth.serverOrigin` as well: the authorize URL keeps
+deriving from `issuer`, while `/oauth2/token` and `/oauth2/revoke` derive from `serverOrigin`. It
+defaults to `issuer`, so a stage where one name works for both names it once.
+
+DomainKit requires HTTPS for every OAuth request except one to this machine: a loopback host, or
+`host.docker.internal`, which a container resolves to its own host. Neither carries the credential
+off the machine.
 
 Cloudflare's token verification does not enumerate DNS permissions, so the capability claim records
 what the definition requires rather than what the token proves. A token without `dns_records:edit`

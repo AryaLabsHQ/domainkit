@@ -74,11 +74,11 @@ const clientAuth = (client: Client): oauth.ClientAuth => {
 
 /**
  * oauth4webapi refuses plaintext endpoints, which is right for every server that carries a
- * credential over a network. A loopback `http:` endpoint carries it nowhere: it is a stage pointing
- * consent at an emulator on the same machine, so that request is the one exception. A remote
- * `http:` endpoint stays refused however the host configured it.
+ * credential over a network. An `http:` endpoint on this machine carries it nowhere: loopback, or
+ * `host.docker.internal`, which a container resolves to its own host and which never leaves it.
+ * That is the one exception; any other `http:` endpoint stays refused however a host configured it.
  */
-const loopback = (endpoint: string | undefined): boolean => {
+const sameMachine = (endpoint: string | undefined): boolean => {
   const url = endpoint === undefined ? null : URL.parse(endpoint);
   if (url === null || url.protocol !== "http:") return false;
   const host = url.hostname.replace(/^\[|\]$/g, "");
@@ -86,6 +86,7 @@ const loopback = (endpoint: string | undefined): boolean => {
     host === "localhost" ||
     host.endsWith(".localhost") ||
     host === "::1" ||
+    host === "host.docker.internal" ||
     /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
   );
 };
@@ -96,7 +97,7 @@ const requestOptions = (
   signal: AbortSignal,
 ): oauth.TokenEndpointRequestOptions => ({
   signal,
-  ...(loopback(endpoint) ? { [oauth.allowInsecureRequests]: true } : {}),
+  ...(sameMachine(endpoint) ? { [oauth.allowInsecureRequests]: true } : {}),
   ...(fetch === undefined
     ? {}
     : { [oauth.customFetch]: (url, init) => fetch(url, { ...init, body: init.body }) }),

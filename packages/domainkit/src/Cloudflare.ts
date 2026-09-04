@@ -46,6 +46,12 @@ export interface Options {
      * `dash.cloudflare.com` for OAuth, `api.cloudflare.com/client/v4` for the REST API.
      */
     readonly issuer?: string;
+    /**
+     * Where the server reaches the OAuth endpoints when that differs from where the browser does,
+     * for example an API in a container reaching an emulator through `host.docker.internal`.
+     * Defaults to `issuer`.
+     */
+    readonly serverOrigin?: string;
   };
   readonly fetch?: Fetch;
   readonly baseUrl?: string;
@@ -53,18 +59,29 @@ export interface Options {
 
 const defaultIssuer = "https://dash.cloudflare.com";
 
-/** The three OAuth endpoints Cloudflare serves under one origin. */
-const endpointsOf = (origin: string): OAuth.Server => {
-  const base = origin.replace(/\/$/, "");
+/**
+ * The three OAuth endpoints Cloudflare serves under one origin. Consent is the browser's, exchange
+ * and revocation are the server's, so a stage whose server reaches the same emulator by another
+ * name gives two origins and keeps the paths.
+ */
+const endpointsOf = (origins: {
+  readonly browser: string;
+  readonly server: string;
+}): OAuth.Server => {
+  const browser = origins.browser.replace(/\/$/, "");
+  const server = origins.server.replace(/\/$/, "");
   return {
-    authorization_endpoint: `${base}/oauth2/auth`,
-    issuer: base,
-    revocation_endpoint: `${base}/oauth2/revoke`,
-    token_endpoint: `${base}/oauth2/token`,
+    authorization_endpoint: `${browser}/oauth2/auth`,
+    issuer: browser,
+    revocation_endpoint: `${server}/oauth2/revoke`,
+    token_endpoint: `${server}/oauth2/token`,
   };
 };
 
-export const server: OAuth.Server = endpointsOf(defaultIssuer);
+export const server: OAuth.Server = endpointsOf({
+  browser: defaultIssuer,
+  server: defaultIssuer,
+});
 
 const defaultScopes = ["zone:read", "dns_records:edit", "offline_access"];
 const capabilities = ["dns:read", "dns:write"] as const;
@@ -137,7 +154,8 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
 
   function oauthAuth(settings: NonNullable<Options["oauth"]>): Provider.OAuthAuth {
     const scopes = settings.scopes ?? defaultScopes;
-    const endpoints = settings.issuer === undefined ? server : endpointsOf(settings.issuer);
+    const browser = settings.issuer ?? defaultIssuer;
+    const endpoints = endpointsOf({ browser, server: settings.serverOrigin ?? browser });
     return {
       label: "Sign in with Cloudflare",
       scopes,
