@@ -1342,12 +1342,23 @@
     font-size: 0.6875rem;
   }
 
+  /* Glyph and word are one badge: a narrow status column breaks the line, not the badge. */
   :where([data-domainkit-part="record-status"]) {
+    align-items: center;
     border-radius: 999px;
+    display: inline-flex;
     font-size: 0.6875rem;
     font-weight: 600;
+    gap: 0.25rem;
     letter-spacing: 0.02em;
     padding: 0.15rem 0.45rem;
+    white-space: nowrap;
+  }
+
+  /* The glyph reads at the size of the word beside it rather than a size above it. */
+  :where([data-domainkit-part="record-status"] [data-icon] svg) {
+    height: 1em;
+    width: 1em;
   }
 
   :where([data-domainkit-part="record-status"][data-status="Found"]) {
