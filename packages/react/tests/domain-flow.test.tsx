@@ -375,6 +375,68 @@ describe("Domain.Flow disconnect", () => {
   });
 });
 
+describe("Domain.Flow with nothing to offer", () => {
+  /** No nameserver suffixes, so discovery names no host and no provider serves the zone. */
+  const unserved = () => {
+    const zone = `unserved${(cases += 1)}.example`;
+    const domain = `app.${zone}`;
+    return {
+      domain,
+      requirements: [
+        DnsRecord.cname({ name: domain, purpose: "Serve your site", target: "edge.example.com" }),
+      ],
+      transport: Testing.transport({ provider: { zones: [zone] } }),
+    };
+  };
+
+  it("renders nothing for the connection, not even the status line", async () => {
+    const { domain, requirements, transport } = unserved();
+    const seen: Array<Domain.FlowState> = [];
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow
+          domain={domain}
+          onState={(state) => seen.push(state)}
+          requirements={requirements}
+        />
+      </DomainKit.Root>,
+    );
+    // The rest of the flow still renders, so an empty connection slot is the whole statement.
+    await screen.findByRole("columnheader", { name: "Type" });
+    await waitFor(() => expect(seen.at(-1)?.connection).toBe("Disconnected"));
+    expect(seen.at(-1)).toMatchObject({ connected: false, offering: false, provider: null });
+    for (const part of ["connection-status", "connect-prompt", "connected-card", "outcome"]) {
+      expect(document.querySelector(`[data-domainkit-part='${part}']`)).toBeNull();
+    }
+    expect(screen.queryByText("No DNS provider is connected.")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Connect/ })).toBeNull();
+  });
+
+  it("still says it where a host asks for the line itself", async () => {
+    const { domain, transport } = unserved();
+    function Panel() {
+      const controller = Connect.useController({ domain });
+      return <Connect.Status controller={controller} />;
+    }
+    render(
+      <DomainKit.Root transport={transport}>
+        <Panel />
+      </DomainKit.Root>,
+    );
+    await screen.findByText("No DNS provider is connected.");
+  });
+
+  it("offers the dialog anyway when the host asks for it", async () => {
+    const { domain, requirements, transport } = unserved();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow connect="always" domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    expect(await screen.findByRole("button", { name: "Connect a DNS provider" })).toBeDefined();
+  });
+});
+
 describe("Domain.Flow state", () => {
   it("reports what DomainKit has to say about the domain, and again when it changes", async () => {
     const { domain, requirements, transport } = scenario();
@@ -479,7 +541,7 @@ describe("Domain.Flow read-only", () => {
     expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
   });
 
-  it("says a domain has no provider when nothing serves its zone", async () => {
+  it("says nothing about a domain no provider serves and nothing holds", async () => {
     const { domain, requirements } = scenario();
     // No nameserver suffixes: discovery finds no host, so there is nothing to name.
     const transport = Testing.transport({
@@ -490,7 +552,8 @@ describe("Domain.Flow read-only", () => {
         <Domain.Flow domain={domain} requirements={requirements} />
       </DomainKit.Root>,
     );
-    await screen.findByText("No DNS provider is connected.");
+    await screen.findByRole("columnheader", { name: "Type" });
+    expect(screen.queryByText("No DNS provider is connected.")).toBeNull();
     expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
   });
 

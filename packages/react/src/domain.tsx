@@ -99,14 +99,18 @@ function DefaultConnection({
   connect,
   controller,
   onCleaned,
-}: DefaultConnectionProps): ReactElement {
+}: DefaultConnectionProps): ReactElement | null {
+  const disconnected = controller.state._tag === "Disconnected";
+  const host = Connect.hostProvider(controller);
+  // No provider serves the zone, nothing is connected, and there is nothing to offer: DomainKit
+  // has nothing to say about this domain, so it says nothing. A line here would sit above the
+  // host's own offers and claim a place in an order it does not belong to. A host that wants the
+  // sentence anyway renders `Connect.Status` itself.
+  if (disconnected && host === null && !Connect.offering(controller, connect)) return null;
   // The prompt already names who serves the zone, so the status line is for everything else:
   // what the connection is doing, what a read-only customer sees where a trigger would be, and a
   // domain whose invitation the host turned off.
-  const stated =
-    controller.state._tag === "Disconnected" &&
-    Connect.hostProvider(controller) !== null &&
-    Connect.offering(controller, connect);
+  const stated = disconnected && host !== null && Connect.offering(controller, connect);
   return controller.state._tag === "Connected" ? (
     <Connect.Card controller={controller} {...(onCleaned === undefined ? {} : { onCleaned })} />
   ) : (

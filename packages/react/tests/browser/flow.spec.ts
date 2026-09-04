@@ -356,9 +356,11 @@ test("offers every provider, one open at a time, when nothing serves the zone", 
 
 test("offers nothing to connect when no provider serves the zone", async ({ page }) => {
   await page.goto("/?zone=browser16.example&host=none");
-  // The requirements still render; there is simply nothing DomainKit can connect.
+  // The requirements still render; DomainKit says nothing at all about the connection.
   await expect(page.getByRole("columnheader", { name: "Type" })).toBeVisible();
   await expect(page.locator("[data-domainkit-part='connect-prompt']")).toHaveCount(0);
+  await expect(page.locator("[data-domainkit-part='connection-status']")).toHaveCount(0);
+  await expect(page.getByText("No DNS provider is connected.")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Connect/ })).toHaveCount(0);
   await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("no-host") });
 
