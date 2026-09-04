@@ -28,6 +28,8 @@ export const principal: Principal.Interface = Principal.make({
 
 export interface FakeProviderOptions {
   readonly id?: string;
+  /** The name a customer reads. Default `Fake <id>`; a fixture that ships screenshots sets it. */
+  readonly name?: string;
   /** Zones the fake credential can reach. Default: `example.com`. */
   readonly zones?: ReadonlyArray<string>;
   /** Pre-existing records, to produce `Noop` and `Conflict` operations. */
@@ -144,7 +146,7 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
 
   const definition = Provider.make<FakeContext>({
     id,
-    name: `Fake ${id}`,
+    name: options.name ?? `Fake ${id}`,
     ...(options.nameserverSuffixes === undefined
       ? {}
       : { nameservers: options.nameserverSuffixes }),
@@ -238,15 +240,21 @@ export const fakeRecords = (name: string): ReadonlyArray<DnsRecord.Observed> =>
     .flatMap((zone) => zone.rows.map(({ record }) => record))
     .filter((record) => record.name === name);
 
+export interface FakeResolverOptions {
+  /** The name every answer carries. A UI reads it as the observer. Default `fake`. */
+  readonly id?: string;
+}
+
 /**
- * A resolver answering from the fake providers' zones, or from an explicit table. Every answer
- * is attributed to the resolver named `fake`.
+ * A resolver answering from the fake providers' zones, or from an explicit table. Every answer is
+ * attributed to `options.id`, which a fixture that ships screenshots names after a real resolver.
  */
 export const resolver = (
   answers?: ReadonlyArray<{
     readonly name: string;
     readonly records: ReadonlyArray<DnsRecord.Observed>;
   }>,
+  options: FakeResolverOptions = {},
 ): Layer.Layer<Resolver.Service> =>
   Layer.succeed(Resolver.Service)({
     resolve: (name, type) =>
@@ -262,7 +270,12 @@ export const resolver = (
         );
         return [
           Resolver.Outcome.Answered({
-            answer: { resolver: "fake", records, negative: records.length === 0, ttl: 60 },
+            answer: {
+              resolver: options.id ?? "fake",
+              records,
+              negative: records.length === 0,
+              ttl: 60,
+            },
           }),
         ];
       }),
@@ -272,6 +285,7 @@ export interface TransportOptions {
   /** Which groups the fake server exposes, so a UI can be tested against a partial host. */
   readonly capabilities?: ReadonlyArray<Transport.Capability>;
   readonly provider?: FakeProviderOptions;
+  readonly resolver?: FakeResolverOptions;
 }
 
 export interface RecordedCall {
@@ -298,7 +312,10 @@ export const transport = (options: TransportOptions = {}): RecordingTransport =>
   // The handler's layer holds memory Storage and a throwaway custody key, so there is nothing to
   // release; a test that wants the server disposed builds `Server.toWebHandler` itself.
   const { handler } = Server.toWebHandler(
-    DomainKit.layerMemory({ providers: [fake], resolver: resolver() }).pipe(
+    DomainKit.layerMemory({
+      providers: [fake],
+      resolver: resolver(undefined, options.resolver),
+    }).pipe(
       Layer.merge(Layer.succeed(Server.Identity)({ principal: () => Effect.succeed(principal) })),
     ),
   );

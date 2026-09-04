@@ -13,7 +13,7 @@ import * as Layer from "effect/Layer";
 test("the default fetch reaches the server from a browser page", async ({ page }) => {
   const { handler } = Server.toWebHandler(
     DomainKit.layerMemory({
-      providers: [Testing.provider({ zones: ["browser9.example"] })],
+      providers: [Testing.provider({ zones: ["northwind.dev"] })],
       resolver: Testing.resolver(),
     }).pipe(
       Layer.merge(
@@ -38,10 +38,10 @@ test("the default fetch reaches the server from a browser page", async ({ page }
       body: await response.text(),
     });
   });
-  await page.goto("/?view=fetch&zone=browser9.example");
+  await page.goto("/?view=fetch");
   const probe = page.getByTestId("fetch-probe");
   await expect(probe).not.toHaveText("pending");
   await expect(probe).toHaveText(
-    JSON.stringify({ status: "disconnected", domain: "app.browser9.example" }),
+    JSON.stringify({ status: "disconnected", domain: "mail.northwind.dev" }),
   );
 });
