@@ -1,6 +1,6 @@
 {
   "name": "domainkit",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Build reviewable DNS plans for custom domains in TypeScript",
   "keywords": [
     "custom-domains",
