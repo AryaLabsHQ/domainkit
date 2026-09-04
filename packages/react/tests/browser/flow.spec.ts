@@ -3,6 +3,15 @@ import { expect, test } from "@playwright/test";
 /** Screenshots land in the gitignored Playwright output directory, for PR review. */
 const shot = (name: string) => `test-results/screenshots/${name}.png`;
 
+/**
+ * Where a provider offers a click-through method too, the token form waits behind a disclosure.
+ * Every token path in this file opens it first, the way a customer who wants a token does.
+ */
+const revealToken = async (dialog: import("@playwright/test").Locator) => {
+  const disclosure = dialog.getByText("Use an API token instead");
+  if ((await disclosure.count()) > 0) await disclosure.click();
+};
+
 /** A zone per test keeps the fixture's fake provider from seeing another test's records. */
 const open = async (page: import("@playwright/test").Page, zone: string, scheme = "light") => {
   await page.goto(`/?zone=${zone}&scheme=${scheme}`);
@@ -25,10 +34,14 @@ test("opens the connect dialog and renders the provider's declared token field",
   await page.getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
+  // The provider's mark names it beside the heading, and the click-through method leads.
+  await expect(dialog.locator("[data-domainkit-part='dialog-media']")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Continue with Fake fake" })).toBeVisible();
+  await expect(dialog.getByLabel("Token")).toBeHidden();
+  await dialog.screenshot({ path: shot("connect-dialog") });
+  await revealToken(dialog);
   const field = dialog.getByLabel("Token");
   await expect(field).toHaveAttribute("type", "password");
-  await dialog.screenshot({ path: shot("connect-dialog") });
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { exact: true, name: "Connect" })).toBeFocused();
 });
@@ -36,6 +49,7 @@ test("opens the connect dialog and renders the provider's declared token field",
 test("connects, reviews the plan, and approves it", async ({ page }) => {
   await open(page, "browser3.example");
   await page.getByRole("button", { name: "Connect" }).click();
+  await revealToken(page.getByRole("dialog"));
   await page.getByRole("dialog").getByLabel("Token").fill("secret-token");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("fake connected")).toBeVisible();
@@ -54,6 +68,7 @@ test("connects, reviews the plan, and approves it", async ({ page }) => {
 test("opens the verification popover and reads per-requirement evidence", async ({ page }) => {
   await open(page, "browser5.example");
   await page.getByRole("button", { name: "Connect" }).click();
+  await revealToken(page.getByRole("dialog"));
   await page.getByRole("dialog").getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("fake connected")).toBeVisible();
@@ -119,6 +134,7 @@ test("renders a read-only domain as state with no controls", async ({ page }) =>
   // Connect while writable, then flip the flag: the state stays, the controls go.
   await open(page, "browser9.example");
   await page.getByRole("button", { name: "Connect" }).click();
+  await revealToken(page.getByRole("dialog"));
   await page.getByRole("dialog").getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("fake connected")).toBeVisible();
@@ -181,6 +197,21 @@ test("renders an outcome as a card, as an inline row, and in a host's own compos
 
   const inline = page.getByTestId("outcome-inline").locator("[data-domainkit-part='outcome']");
   await expect(inline).toHaveAttribute("data-layout", "inline");
+  // Three columns: the glyph, the words, the action. The glyph never wraps onto its own row.
+  const box = async (part: string) => {
+    const measured = await inline.locator(`[data-domainkit-part='${part}']`).boundingBox();
+    if (measured === null) throw new Error(`${part} has no box`);
+    return measured;
+  };
+  const media = await box("outcome-media");
+  const title = await box("outcome-title");
+  const description = await box("outcome-description");
+  const action = await box("outcome-content");
+  expect(media.x + media.width).toBeLessThanOrEqual(title.x);
+  expect(media.y).toBeLessThan(title.y + title.height);
+  expect(description.y).toBeGreaterThanOrEqual(title.y + title.height - 1);
+  expect(Math.abs(description.x - title.x)).toBeLessThan(2);
+  expect(action.x).toBeGreaterThanOrEqual(title.x + title.width - 1);
   await inline.screenshot({ path: shot("outcome-inline") });
 
   // A host brings its own media and drops the header; the words still come from the catalog.
@@ -199,6 +230,7 @@ test("keeps the domain, the provider list, and the typed token after a rejected 
   await page.goto("/?zone=browser12.example&view=reject");
   await page.getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog");
+  await revealToken(dialog);
   await dialog.getByLabel("Token").fill("cf_bad_token");
   await dialog.getByLabel("Signing key").fill("sk_live");
   await dialog.getByRole("button", { name: "Connect with an API token" }).click();
@@ -245,15 +277,22 @@ test("narrows the dialog to the provider that serves the zone", async ({ page })
   await expect(dialog.locator("[data-domainkit-part='dialog-title']")).toHaveText(
     "Connect Fake cloudflare",
   );
-  // One provider's methods, one field, and the verb on the button.
+  // The mark the prompt uses names the provider beside the heading.
+  await expect(
+    dialog.locator("[data-domainkit-part='dialog-media']").getByRole("img", { name: /cloudflare/ }),
+  ).toBeVisible();
+  // One provider's methods: the click-through one leads and the token form waits behind it.
   await expect(dialog.locator("[data-domainkit-part='token-connect']")).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "Continue with Fake cloudflare" })).toBeVisible();
+  await expect(dialog.getByLabel("Token")).toBeHidden();
+  await dialog.screenshot({ path: shot("connect-dialog-narrowed") });
+  await revealToken(dialog);
   await expect(dialog.getByLabel("Token")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Connect with an API token" })).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Continue with Fake cloudflare" })).toBeVisible();
   await expect(dialog.getByRole("link", { name: "Where do I find this?" })).toBeVisible();
   // The account id is a field the provider does not need, so it waits behind a disclosure.
   await expect(dialog.getByLabel("Account id")).toBeHidden();
-  await dialog.screenshot({ path: shot("connect-dialog-narrowed") });
+  await dialog.screenshot({ path: shot("connect-dialog-token") });
   await dialog.getByText("Need an account id?").click();
   await expect(dialog.getByLabel("Account id")).toBeVisible();
 

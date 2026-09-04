@@ -40,7 +40,7 @@ export type State = Data.TaggedEnum<{
   Disconnected: { readonly snapshot: Snapshot; readonly discovery: Discovery | null };
   Connected: { readonly snapshot: Snapshot };
   Reconnect: { readonly snapshot: Snapshot };
-  Submitting: { readonly snapshot: Snapshot | null };
+  Submitting: { readonly snapshot: Snapshot | null; readonly discovery: Discovery | null };
   Redirecting: { readonly url: string };
   SelectionRequired: {
     readonly snapshot: Snapshot | null;
@@ -251,7 +251,12 @@ export function useController({ domain, returnTo }: Options): Controller {
       if (held.current.domain !== domain) return;
       attempted.current = attempt;
       const command = () => {
-        setState(State.Submitting({ snapshot: held.current.snapshot }));
+        setState(
+          State.Submitting({
+            discovery: held.current.discovery,
+            snapshot: held.current.snapshot,
+          }),
+        );
         runner.run(effect, { onFailure, onSuccess: started });
       };
       lastCommand.current = { domain, run: command };
@@ -307,7 +312,12 @@ export function useController({ domain, returnTo }: Options): Controller {
       if (held.current.domain !== domain) return;
       attempted.current = null;
       const command = () => {
-        setState(State.Submitting({ snapshot: held.current.snapshot }));
+        setState(
+          State.Submitting({
+            discovery: held.current.discovery,
+            snapshot: held.current.snapshot,
+          }),
+        );
         runner.run(effect, {
           onFailure,
           onSuccess: () => {
@@ -345,7 +355,10 @@ export function useController({ domain, returnTo }: Options): Controller {
     connect,
     detach,
     disconnect,
-    discovery: state._tag === "Disconnected" || state._tag === "Failure" ? state.discovery : null,
+    discovery:
+      state._tag === "Disconnected" || state._tag === "Failure" || state._tag === "Submitting"
+        ? state.discovery
+        : null,
     providers: snapshotOf(state)?.providers ?? [],
     refresh: load,
     retry,
@@ -498,6 +511,9 @@ interface MethodProps {
   readonly controller: Controller;
   readonly method: MethodDescriptor;
   readonly provider: Descriptor;
+  /** Record one field's value with the form, which owns it across a rejection. */
+  readonly onEnter: (name: string, value: string) => void;
+  readonly values: Readonly<Record<string, string>>;
 }
 
 interface FieldProps {
@@ -505,13 +521,23 @@ interface FieldProps {
   readonly docsUrl: string | null;
   readonly field: Field;
   readonly invalid: boolean;
+  readonly onEnter: (value: string) => void;
+  readonly value: string;
 }
 
 /**
  * One declared field in shadcn's `Field` anatomy: the label, the control, the note under it, and
- * the error the provider answered with. The docs link rides the field it explains.
+ * the error the provider answered with. The docs link rides the field it explains. The value is
+ * the form's, not the input's, so a rejection answers beside what the customer typed.
  */
-function TokenField({ controller, docsUrl, field, invalid }: FieldProps): ReactElement {
+function TokenField({
+  controller,
+  docsUrl,
+  field,
+  invalid,
+  onEnter,
+  value,
+}: FieldProps): ReactElement {
   const { messages } = useDomainKit();
   const icons = useIcons();
   const id = useId();
@@ -533,8 +559,10 @@ function TokenField({ controller, docsUrl, field, invalid }: FieldProps): ReactE
         data-domainkit-part="field-input"
         id={id}
         name={field.name}
+        onChange={(event) => onEnter(event.target.value)}
         required={field.required}
         type={field.secret ? "password" : "text"}
+        value={value}
       />
       {docsUrl === null ? null : (
         <a data-domainkit-part="field-description" href={docsUrl} rel="noreferrer" target="_blank">
@@ -558,7 +586,7 @@ function TokenField({ controller, docsUrl, field, invalid }: FieldProps): ReactE
  * field, so a provider that needs an account id alongside a token needs no code here. The fields
  * a provider does not need sit behind a disclosure, so the common form is one field.
  */
-function Method({ controller, method, provider }: MethodProps): ReactElement {
+function Method({ controller, method, onEnter, provider, values }: MethodProps): ReactElement {
   const { messages } = useDomainKit();
   const state = controller.state;
   const busy = state._tag === "Submitting";
@@ -599,6 +627,8 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
       field={field}
       invalid={field.name === answered}
       key={field.name}
+      onEnter={(value) => onEnter(field.name, value)}
+      value={values[field.name] ?? ""}
     />
   );
   return (
@@ -607,15 +637,13 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
       data-provider={provider.id}
       onSubmit={(event) => {
         event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        const values: Record<string, string> = {};
+        // The form's own values, not the inputs': they are what survives a rejection.
+        const submitted: Record<string, string> = {};
         for (const field of fields) {
-          const value = data.get(field.name);
-          if (typeof value === "string" && (value !== "" || field.required)) {
-            values[field.name] = value;
-          }
+          const value = values[field.name] ?? "";
+          if (value !== "" || field.required) submitted[field.name] = value;
         }
-        controller.connect({ method: method.kind, provider: provider.id, values });
+        controller.connect({ method: method.kind, provider: provider.id, values: submitted });
       }}
     >
       {required.map(render)}
@@ -636,7 +664,7 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
   );
 }
 
-interface AuthenticationProps {
+interface AuthenticationProps extends Pick<MethodProps, "onEnter" | "values"> {
   readonly controller: Controller;
   readonly provider: Descriptor;
   /** Whether this provider's methods are showing. A narrowed dialog has one, always open. */
@@ -645,18 +673,54 @@ interface AuthenticationProps {
 }
 
 /**
- * One provider's methods. With a heading it is a disclosure the customer opens; the provider a
- * narrowed dialog is about carries no heading, because the dialog title already names it.
+ * One provider's methods, in the order the descriptor declares them: the interactive ones a
+ * customer clicks through, then the token. Where a provider offers both, the token form waits
+ * behind a disclosure, so the dialog asks for one decision rather than two. With a heading the
+ * whole provider is a disclosure the customer opens; the provider a narrowed dialog is about
+ * carries no heading, because the dialog title already names it.
  */
-function Authentication({ controller, onOpen, open, provider }: AuthenticationProps): ReactElement {
-  const methods = provider.methods.map((method) => (
+function Authentication({
+  controller,
+  onEnter,
+  onOpen,
+  open,
+  provider,
+  values,
+}: AuthenticationProps): ReactElement {
+  const { messages } = useDomainKit();
+  const state = controller.state;
+  const render = (method: MethodDescriptor) => (
     <Method
       controller={controller}
       key={`${provider.id}:${method.kind}`}
       method={method}
+      onEnter={onEnter}
       provider={provider}
+      values={values}
     />
-  ));
+  );
+  const interactive = provider.methods.filter((method) => method.fields === null);
+  const typed = provider.methods.filter((method) => method.fields !== null);
+  // A token the disclosure hides cannot answer its own rejection, so a refused token opens it.
+  const refused =
+    state._tag === "Failure" &&
+    state.attempt !== null &&
+    state.attempt.provider === provider.id &&
+    state.attempt.method === "token";
+  const methods =
+    interactive.length === 0 || typed.length === 0 ? (
+      provider.methods.map(render)
+    ) : (
+      <>
+        {interactive.map(render)}
+        <details data-domainkit-part="token-alternative" open={refused || undefined}>
+          <summary data-domainkit-part="token-alternative-trigger">
+            {messages.useTokenInstead}
+          </summary>
+          {typed.map(render)}
+        </details>
+      </>
+    );
   return (
     <section
       data-domainkit-part="provider-authentication"
@@ -692,7 +756,23 @@ export function Form({ controller, ...props }: FormProps): ReactElement {
   // One provider open at a time, so a dialog listing every provider is a list rather than a wall.
   // `null` is the customer choosing nothing yet; `""` is them closing what was open.
   const [opened, setOpened] = useState<string | null>(null);
+  // What the customer typed, for the one provider they typed it into. A rejection keeps it, so
+  // "try again" starts from the value rather than from nothing; another provider's form is its
+  // own, and a connection that lands is a form nobody needs again.
+  const [entered, setEntered] = useState<{
+    readonly provider: string;
+    readonly values: Readonly<Record<string, string>>;
+  } | null>(null);
   const state = controller.state;
+  if (state._tag === "Connected" && entered !== null) setEntered(null);
+  const enter = (provider: string, name: string, value: string) =>
+    setEntered((previous) => ({
+      provider,
+      values:
+        previous?.provider === provider ? { ...previous.values, [name]: value } : { [name]: value },
+    }));
+  const valuesFor = (provider: string): Readonly<Record<string, string>> =>
+    entered?.provider === provider ? entered.values : {};
   const snapshot = controller.snapshot;
   const discovery = controller.discovery;
   const candidates =
@@ -711,9 +791,11 @@ export function Form({ controller, ...props }: FormProps): ReactElement {
     <Authentication
       controller={controller}
       key={provider.id}
+      onEnter={(name, value) => enter(provider.id, name, value)}
       onOpen={() => setOpened(open ? "" : provider.id)}
       open={open}
       provider={provider}
+      values={valuesFor(provider.id)}
     />
   );
   return usePart(
@@ -795,7 +877,13 @@ export function Form({ controller, ...props }: FormProps): ReactElement {
             )
           ) : (
             <>
-              <Authentication controller={controller} open provider={host} />
+              <Authentication
+                controller={controller}
+                onEnter={(name, value) => enter(host.id, name, value)}
+                open
+                provider={host}
+                values={valuesFor(host.id)}
+              />
               {others.length === 0 ? null : (
                 <details data-domainkit-part="other-providers">
                   <summary data-domainkit-part="other-providers-trigger">
@@ -841,6 +929,10 @@ export function Dialog({
   // The provider the dialog is about: the one already attached, else the one that serves the zone.
   const attached = snapshot?.provider ?? null;
   const host = hostProvider(controller);
+  const narrowed =
+    attached === null
+      ? host
+      : (controller.providers.find((entry) => entry.id === attached) ?? null);
   const named = attached === null ? (host?.name ?? null) : displayName(controller, attached);
   const heading =
     title ?? (named === null ? messages.connectAnyTitle : messages.connectTitle(named));
@@ -896,6 +988,11 @@ export function Dialog({
           style={themeStyle}
         >
           <div data-domainkit-part="dialog-header">
+            {narrowed === null ? null : (
+              <div data-domainkit-part="dialog-media">
+                <Provider.Mark provider={narrowed} />
+              </div>
+            )}
             <div data-domainkit-part="dialog-heading">
               <BaseDialog.Title data-domainkit-part="dialog-title">{heading}</BaseDialog.Title>
               <BaseDialog.Description data-domainkit-part="dialog-description">

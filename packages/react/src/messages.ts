@@ -28,6 +28,8 @@ export interface Catalog {
   readonly moreOptions: string;
   /** Reveals the providers the dialog narrowed away. */
   readonly useAnotherProvider: string;
+  /** Reveals the token form where a provider also offers a method the customer clicks through. */
+  readonly useTokenInstead: string;
   readonly copy: string;
   readonly copied: string;
   readonly copyZone: string;
@@ -232,6 +234,7 @@ export const english: Catalog = {
   moreActions: "More actions",
   moreOptions: "Need an account id?",
   useAnotherProvider: "Use a different provider",
+  useTokenInstead: "Use an API token instead",
   copy: "Copy",
   copied: "Copied",
   copyZone: "Copy zone file",
@@ -428,7 +431,7 @@ export const english: Catalog = {
         : `Check the ${humanize(reason.field).toLowerCase()}`,
   }),
   unauthenticated: (_reason, context) => ({
-    description: "Check the token can read and edit DNS for this zone, then try again.",
+    description: "Check it can edit DNS for this zone.",
     title: `${named(context.provider)} didn't accept this token`,
   }),
   forbidden: (_reason, context) => ({
