@@ -66,6 +66,10 @@ test("connects, reviews the plan, and approves it", async ({ page }) => {
   // Removing the records DomainKit added is one decision inside the disconnect dialog.
   await page.getByRole("button", { name: "Disconnect" }).click();
   const disconnect = page.getByRole("dialog");
+  // The description says what disconnecting does, in the present, about this domain.
+  await expect(disconnect.locator("[data-domainkit-part='dialog-description']")).toHaveText(
+    "DomainKit stops managing DNS for app.browser3.example through Fake fake.",
+  );
   await expect(disconnect.getByRole("checkbox")).toBeChecked();
   await expect(
     disconnect.getByText("Also remove the records DomainKit added for this domain"),

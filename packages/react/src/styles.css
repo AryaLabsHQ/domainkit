@@ -836,13 +836,6 @@
     width: 100%;
   }
 
-  :where([data-domainkit-part="connected-identity"]) {
-    align-items: center;
-    display: flex;
-    gap: 0.75rem;
-    min-width: 0;
-  }
-
   :where([data-domainkit-part="connected-actions"]) {
     align-items: center;
     display: flex;
@@ -1646,12 +1639,15 @@
     width: 100%;
   }
 
+  /* The mark beside a name, with the line about it directly under: both cards read the same. */
   [data-domainkit-part="connected-identity"],
   [data-domainkit-part="host-identity"] {
     align-items: center;
     column-gap: 0.5rem;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
+    min-width: 0;
+    row-gap: 0;
   }
 
   [data-domainkit-part="host-name"] {

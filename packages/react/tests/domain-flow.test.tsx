@@ -247,6 +247,8 @@ describe("Domain.Flow disconnect", () => {
     const dialog = await screen.findByRole("dialog");
     // Removing what the receipt proves is the option, and it is on until the customer says no.
     expect((within(dialog).getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
+    // The plan is done, so nothing invites the customer to review it again.
+    expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
     await user.click(within(dialog).getByRole("button", { name: "Disconnect" }));
     await screen.findByText("Owns DNS for this domain.");
     expect(methods(transport)).toEqual(

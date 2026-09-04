@@ -160,19 +160,26 @@ function DefaultActions({ connection, provisioning }: ActionsSlotProps): ReactEl
   const { capabilities, messages } = useDomainKit();
   const readOnly = useReadOnly();
   const connected = connection.state._tag === "Connected";
+  const state = provisioning.state;
+  // A receipt that landed whole leaves nothing to plan. The attempt returns to `Idle` the moment
+  // the requirements change, which is the only thing that could give it something to do again, so
+  // the trigger comes back on its own rather than sitting there inviting the same empty plan.
+  const settled = state._tag === "Applied" && state.receipt.status === "complete";
   // Every control here starts a write; the state a read-only customer may see is rendered above.
   if (readOnly) return null;
   if (!capabilities.includes("provisioning") || !connected) return null;
   return (
     <>
-      <button
-        data-domainkit-part="plan-trigger"
-        disabled={provisioning.state._tag === "Planning"}
-        onClick={provisioning.plan}
-        type="button"
-      >
-        {messages.reviewChanges}
-      </button>
+      {settled ? null : (
+        <button
+          data-domainkit-part="plan-trigger"
+          disabled={state._tag === "Planning"}
+          onClick={provisioning.plan}
+          type="button"
+        >
+          {messages.reviewChanges}
+        </button>
+      )}
       <Provision.Status controller={provisioning} />
       <Provision.Actions controller={provisioning} />
       <Provision.Outcome controller={provisioning} />

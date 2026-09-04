@@ -1287,10 +1287,8 @@ export function DisconnectDialog({
 
   const busy = removing || releasing;
   const provider = snapshot?.provider ?? null;
-  const heading =
-    provider === null
-      ? messages.disconnect
-      : messages.disconnectTitle(displayName(controller, provider));
+  const named = provider === null ? "" : displayName(controller, provider);
+  const heading = provider === null ? messages.disconnect : messages.disconnectTitle(named);
   if (readOnly) return <></>;
   return (
     <BaseDialog.Root
@@ -1323,7 +1321,7 @@ export function DisconnectDialog({
             <div data-domainkit-part="dialog-heading">
               <BaseDialog.Title data-domainkit-part="dialog-title">{heading}</BaseDialog.Title>
               <BaseDialog.Description data-domainkit-part="dialog-description">
-                {messages.disconnectConsent}
+                {messages.disconnectConsent(snapshot?.domain ?? "", named)}
               </BaseDialog.Description>
             </div>
             {busy ? null : (

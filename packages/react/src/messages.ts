@@ -73,7 +73,11 @@ export interface Catalog {
   readonly notConnected: string;
   readonly reconnectRequired: (provider: string) => string;
   readonly disconnectTitle: (provider: string) => string;
-  readonly disconnectConsent: string;
+  /**
+   * What disconnecting means, in the present. The default names DomainKit as what stops managing
+   * the records; a host application overrides the key to name itself.
+   */
+  readonly disconnectConsent: (domain: string, provider: string) => string;
   /**
    * The option inside the disconnect dialog. Only this domain's apply receipt proves what
    * DomainKit created, so the words say which records go.
@@ -284,7 +288,8 @@ export const english: Catalog = {
   notConnected: "No DNS provider is connected.",
   reconnectRequired: (provider) => `${provider} needs to be reconnected`,
   disconnectTitle: (provider) => `Disconnect ${provider}?`,
-  disconnectConsent: "The provider connection is removed.",
+  disconnectConsent: (domain, provider) =>
+    `DomainKit stops managing DNS for ${domain} through ${provider}.`,
   disconnectWithCleanup: "Also remove the records DomainKit added for this domain",
   detachConsent: "This domain is detached from the provider. Existing DNS records are preserved.",
   detached: "Domain detached. DNS records were preserved.",
