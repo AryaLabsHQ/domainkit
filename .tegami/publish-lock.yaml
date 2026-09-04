@@ -1,6 +1,12 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Call the default fetch as a free function\n\n`Transport.fromFetch` and `Resolver` resolve the default `fetch` from `globalThis` at call time and invoke it as a free function, so browsers no longer throw `Illegal invocation` when a host relies on the default fetch and a fetch polyfilled after construction is picked up.\n"
-    filename: domainkit-transport-fetch-binding.md
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Discovery names the provider that hosts the zone\n\n`Provider.Definition.nameservers` declares the hostname suffixes a provider's nameservers end in (Cloudflare `ns.cloudflare.com`, Vercel `vercel-dns.com`), and `Connect.discover` answers `NotFound` with `host: { provider }` naming the one registered provider whose suffixes cover every authoritative nameserver, or `null`. The discovery route and `Transport` carry the field, and `Testing.provider` accepts `nameserverSuffixes`.\n"
+    filename: domainkit-discover-zone-host.md
+    v: 0.0.0
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## A rejected token reads as Unauthenticated\n\nCloudflare's HTTP 400 answers with code 6003 or 6111 (a malformed bearer token) and a 403 from its token verify endpoint fail `Reason.Unauthenticated` with Cloudflare's own message, as 401 does; Vercel's 403 `forbidden` on token verification does the same, while a 403 from zone listing stays `Forbidden`. The server answers 401, and `Testing.conformance.provider` gains a `rejected-token` case that authenticates empty secrets (or the `rejectedToken` values you pass) and expects `Unauthenticated`.\n"
+    filename: domainkit-rejected-token-reason.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## A first-party connect experience\n\n`Outcome` is a compound part: media, title, description, and the action, as a card or on one line.\nEvery flow's `X.Outcome` binds its controller to it, and a host recomposes it with its own parts\nwhile the words stay in the catalog. `Messages.Catalog` returns a `{ title, description }` pair per\n`DomainKit.Error` reason, and `Messages.outcome` reads it.\n\nA failed connect keeps its context. `Connect.State.Failure` carries the snapshot, the discovery, and\nthe provider and method that were in flight, so the dialog keeps its description, its provider\nforms, and the values already typed, and answers beside the method that failed.\n\nA rejected token answers under the field it is about: the input carries `aria-invalid`, the outcome\nrenders in `field-error`, and its title names the provider the customer acted on.\n\nThe disconnected state names the provider that serves the domain. `Connect.Prompt` renders the\nprovider's mark, its name, and \"Owns DNS for this domain.\" beside a `Connect` trigger, and the\ndialog behind it is titled after that provider and shows its methods alone, with the rest behind\n\"Use a different provider\". With no host the flow offers nothing unless it is given\n`connect=\"always\"`. Token fields take shadcn's `Field` anatomy, method buttons carry the verb, and\nthe fields a provider does not need sit behind \"Need an account id?\".\n"
+    filename: react-first-party-connect.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
@@ -10,10 +16,13 @@ core:packages:
   - id: npm:@domainkit/docs
     updated: false
   - changelogIds:
-      - domainkit-transport-fetch-binding.md
+      - domainkit-discover-zone-host.md
+      - domainkit-rejected-token-reason.md
     id: npm:domainkit
     updated: true
-  - id: npm:@domainkit/react
+  - changelogIds:
+      - react-first-party-connect.md
+    id: npm:@domainkit/react
     updated: true
   - id: npm:@domainkit/capsuledb
     updated: true
