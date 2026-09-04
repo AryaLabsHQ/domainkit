@@ -44,6 +44,17 @@
     --domainkit-switch-height: 1.25rem;
     --domainkit-switch-thumb: 1rem;
     --domainkit-switch-inset: 0.125rem;
+    /*
+     * A provider's identity is a name over one line about it, and the mark stands against both.
+     * The mark's size is the two lines added up, so it spans the block instead of guessing at it.
+     */
+    --domainkit-identity-name: 0.875rem;
+    --domainkit-identity-line: 0.8125rem;
+    --domainkit-identity-leading: 1.4;
+    --domainkit-mark-size: calc(
+      (var(--domainkit-identity-name) + var(--domainkit-identity-line)) *
+        var(--domainkit-identity-leading)
+    );
     /* Cards draw no border of their own. A host that wants one sets this on the part. */
     --domainkit-card-border: transparent;
     --domainkit-button-raised-glint: rgb(255 255 255 / 0.95);
@@ -623,8 +634,10 @@
     padding: 1rem 1rem 0.85rem;
   }
 
+  /* The mark stands against the title and the line under it, the way it does on the two cards. */
   :where([data-domainkit-part="dialog-media"]) {
     align-items: center;
+    align-self: center;
     display: inline-flex;
     flex: none;
   }
@@ -836,10 +849,10 @@
     flex: none;
     font-size: 0.8125rem;
     font-weight: 600;
-    height: 2.25rem;
+    height: var(--domainkit-mark-size);
     justify-content: center;
     overflow: hidden;
-    width: 2.25rem;
+    width: var(--domainkit-mark-size);
   }
 
   :where([data-domainkit-part="provider-mark"] img),
@@ -1734,27 +1747,39 @@
     width: 100%;
   }
 
-  /* The mark beside a name, with the line about it directly under: both cards read the same. */
+  /*
+   * The mark beside a name, with the line about it directly under: both cards read the same. Two
+   * explicit rows carry the name and the line, and the mark spans them, so it stands against the
+   * whole identity rather than hanging off the name.
+   */
   [data-domainkit-part="connected-identity"],
   [data-domainkit-part="host-identity"] {
-    align-items: center;
     column-gap: 0.5rem;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
     min-width: 0;
     row-gap: 0;
   }
 
+  [data-domainkit-part="connected-identity"] > [data-domainkit-part="provider-mark"],
+  [data-domainkit-part="host-identity"] > [data-domainkit-part="provider-mark"] {
+    align-self: center;
+    grid-row: 1 / -1;
+  }
+
   [data-domainkit-part="host-name"] {
-    font-size: 0.875rem;
+    font-size: var(--domainkit-identity-name);
     font-weight: 600;
     grid-column: 2;
+    line-height: var(--domainkit-identity-leading);
   }
 
   [data-domainkit-part="host-statement"] {
     color: var(--domainkit-muted);
-    font-size: 0.8125rem;
+    font-size: var(--domainkit-identity-line);
     grid-column: 2;
+    line-height: var(--domainkit-identity-leading);
   }
 
   button[data-domainkit-part="provider-heading"] {
