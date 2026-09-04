@@ -43,7 +43,8 @@ export const query = (input: {
           type: "query",
         }),
       );
-      const response = await input.fetch(input.url, {
+      const { fetch: send } = input; // a free call keeps `this` undefined for a native fetch
+      const response = await send(input.url, {
         body,
         headers: { accept: "application/dns-message", "content-type": "application/dns-message" },
         method: "POST",

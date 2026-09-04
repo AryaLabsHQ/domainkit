@@ -22,7 +22,8 @@ export const requestJson = (input: {
 }): Effect.Effect<Reply, Errors.DomainKitError> =>
   Effect.tryPromise({
     try: async (signal): Promise<Reply> => {
-      const response = await input.fetch(input.url, { ...input.init, signal });
+      const { fetch: send } = input; // a free call keeps `this` undefined for a native fetch
+      const response = await send(input.url, { ...input.init, signal });
       const text = await response.text();
       let body: unknown = null;
       if (text.length > 0) {

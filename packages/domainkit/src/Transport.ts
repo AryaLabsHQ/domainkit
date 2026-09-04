@@ -137,7 +137,9 @@ export interface FetchOptions {
 export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Interface => {
   const base = baseUrl.replace(/\/+$/, "");
   const source = safeOrigin(base);
-  const call = options.fetch ?? globalThis.fetch;
+  // Resolved at call time and invoked as a free function: a browser `fetch` throws "Illegal
+  // invocation" when called as a method of anything but `window`, and a host may polyfill later.
+  const call: Http.Fetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const declared = options.capabilities ?? allCapabilities;
 
   const request = <A>(input: {

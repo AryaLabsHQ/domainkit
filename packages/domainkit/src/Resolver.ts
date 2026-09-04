@@ -59,7 +59,8 @@ export const make = (options: Options = {}): Effect.Effect<Interface, Errors.Dom
   Effect.gen(function* () {
     const endpoints = options.endpoints ?? defaults.endpoints;
     const timeoutMs = options.timeoutMs ?? defaults.timeoutMs;
-    const fetch = options.fetch ?? globalThis.fetch;
+    // See Transport.fromFetch: resolved at call time, never invoked as a method.
+    const fetch: Fetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
     for (const endpoint of endpoints) {
       if (!URL.canParse(endpoint.url)) {
         return yield* Errors.fail(

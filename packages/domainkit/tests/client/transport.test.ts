@@ -55,6 +55,37 @@ const groups = (transport: Transport.Interface) => {
 };
 
 describe("Transport.fromFetch", () => {
+  it("calls the default fetch as a free function, the way a browser requires", async () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    const { handler } = Server.toWebHandler(
+      DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() }).pipe(
+        Layer.merge(
+          Layer.succeed(Server.Identity)({ principal: () => Effect.succeed(Testing.principal) }),
+        ),
+      ),
+    );
+    const original = globalThis.fetch;
+    const receivers: Array<unknown> = [];
+    const strict = function (this: unknown, input: RequestInfo | URL, init?: RequestInit) {
+      receivers.push(this);
+      if (this !== undefined && this !== globalThis) {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+      }
+      return handler(new Request(input, init));
+    };
+    globalThis.fetch = strict as typeof fetch;
+    try {
+      const transport = Transport.fromFetch("http://domainkit.test");
+      const connection = transport.connection;
+      if (connection === undefined) return assert.fail("connection group missing");
+      const snapshot = await Effect.runPromise(connection.inspect("app.example.com"));
+      assert.strictEqual(snapshot.status, "disconnected");
+      assert.ok(receivers.every((receiver) => receiver === undefined || receiver === globalThis));
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   it.effect("round-trips connect, plan, approve, apply, observe, and cleanup", () => {
     const { fake, transport, dispose } = inProcess();
     const { connection, provisioning, verification, cleanup } = groups(transport);
