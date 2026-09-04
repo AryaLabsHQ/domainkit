@@ -38,6 +38,8 @@ export interface FakeProviderOptions {
   readonly failWrite?: (index: number) => boolean;
   /** Nameservers per zone; default `ns1.<zone>`, `ns2.<zone>`. `resolver()` answers NS queries from them. */
   readonly nameservers?: Readonly<Record<string, ReadonlyArray<string>>>;
+  /** Suffixes the fake declares as `Definition.nameservers`, so `Connect.discover` can name it as a host. */
+  readonly nameserverSuffixes?: ReadonlyArray<string>;
 }
 
 export interface FakeProvider extends Provider.Definition<FakeContext> {
@@ -143,6 +145,9 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
   const definition = Provider.make<FakeContext>({
     id,
     name: `Fake ${id}`,
+    ...(options.nameserverSuffixes === undefined
+      ? {}
+      : { nameservers: options.nameserverSuffixes }),
     context: Context,
     contextVersion: "fake.v1",
     auth: {
@@ -331,6 +336,6 @@ export type { Case as StorageCase } from "./internal/conformance/storage.ts";
 export const conformance = {
   /** Runs every Storage invariant (tenant isolation, leases, exactly-once continuations, revocation recovery). */
   storage: storageCases,
-  /** Runs create/readback/cleanup, exact-noop, conflict, stale-plan, partial-apply against a real provider definition. */
+  /** Runs create/readback/cleanup, exact-noop, conflict, stale-plan, partial-apply, and rejected-token against a real provider definition. */
   provider: providerCases,
 };

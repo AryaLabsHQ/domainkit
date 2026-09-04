@@ -24,7 +24,7 @@ const scenario = () => {
         value: "acme-verify=7f3a",
       }),
     ],
-    transport: Testing.transport({ provider: { zones: [zone] } }),
+    transport: Testing.transport({ provider: { nameserverSuffixes: [zone], zones: [zone] } }),
   };
 };
 
@@ -41,7 +41,7 @@ const click = async (name: string | RegExp) => {
 const connect = async () => {
   await click("Connect");
   await user.type(await screen.findByLabelText(/Token/), "tok");
-  await user.click(screen.getByRole("button", { name: "Token (fake)" }));
+  await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
   await screen.findByText("fake connected");
 };
 
@@ -162,7 +162,10 @@ describe("Domain.Flow", () => {
     const { domain, requirements } = scenario();
     const transport = Testing.transport({
       capabilities: ["connection"],
-      provider: { zones: [domain.slice(domain.indexOf(".") + 1)] },
+      provider: {
+        nameserverSuffixes: [domain.slice(domain.indexOf(".") + 1)],
+        zones: [domain.slice(domain.indexOf(".") + 1)],
+      },
     });
     render(
       <DomainKit.Root transport={transport}>
@@ -251,8 +254,23 @@ describe("Domain.Flow read-only", () => {
     }
   });
 
-  it("says a domain has no provider rather than offering to connect one", async () => {
+  it("states who serves the zone without offering to connect it", async () => {
     const { domain, requirements, transport } = scenario();
+    render(
+      <DomainKit.Root readOnly transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await screen.findByText("Owns DNS for this domain.");
+    expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
+  });
+
+  it("says a domain has no provider when nothing serves its zone", async () => {
+    const { domain, requirements } = scenario();
+    // No nameserver suffixes: discovery finds no host, so there is nothing to name.
+    const transport = Testing.transport({
+      provider: { zones: [domain.slice(domain.indexOf(".") + 1)] },
+    });
     render(
       <DomainKit.Root readOnly transport={transport}>
         <Domain.Flow domain={domain} requirements={requirements} />

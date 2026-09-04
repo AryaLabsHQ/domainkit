@@ -1,4 +1,4 @@
-import { DateTime, Effect, Layer } from "effect";
+import { DateTime, Effect, Layer, Redacted } from "effect";
 
 import * as Cleanup from "../../Cleanup.ts";
 import * as Connect from "../../Connect.ts";
@@ -21,6 +21,7 @@ export const cases = [
   "conflict",
   "stale-plan",
   "partial-apply-cleanup",
+  "rejected-token",
 ] as const;
 export type Case = (typeof cases)[number];
 
@@ -87,14 +88,23 @@ const recordIds = (receipt: Receipt.Model) =>
   Receipt.applied(receipt).map(({ providerRecordId }) => providerRecordId);
 
 /**
- * Runs create/readback/cleanup, exact-noop, conflict, stale-plan, and partial-apply against a
- * real provider definition, through the same Provision and Cleanup services hosts use.
+ * Runs create/readback/cleanup, exact-noop, conflict, stale-plan, partial-apply, and
+ * rejected-token against a real provider definition, through the same Provision and Cleanup
+ * services hosts use.
  */
 export const provider = (
   definition: Provider.Definition,
   credential: Provider.Credential,
   zone: string,
-  options: { readonly prefix?: string } = {},
+  options: {
+    readonly prefix?: string;
+    /**
+     * Token values the provider rejects, for the `rejected-token` case. Default: every required
+     * field set to an empty secret, which needs a token method whose required fields are all
+     * secrets.
+     */
+    readonly rejectedToken?: Provider.TokenValues;
+  } = {},
 ): Effect.Effect<void, Errors.DomainKitError> => {
   const prefix = options.prefix ?? "domainkit-conformance";
   const run = <A>(
@@ -296,9 +306,38 @@ export const provider = (
     }).pipe(Effect.ensuring(cleanup(dns, () => created)));
   });
 
-  return Effect.all([createReadbackCleanup, exactNoop, conflict, stalePlan, partialApplyCleanup], {
-    discard: true,
+  /** A token the provider rejects must read as `Unauthenticated`, so a host tells the customer the provider refused it. */
+  const rejectedToken = Effect.gen(function* () {
+    const name: Case = "rejected-token";
+    const auth = definition.auth.token;
+    if (auth === undefined) return;
+    const required = Provider.tokenFields(auth).filter((field) => field.required);
+    if (options.rejectedToken === undefined && required.some((field) => !field.secret)) {
+      return yield* Effect.fail(
+        failure(
+          name,
+          `the token method requires ${required
+            .filter((field) => !field.secret)
+            .map((field) => field.name)
+            .join(", ")}; pass options.rejectedToken with values the provider rejects`,
+        ),
+      );
+    }
+    const values =
+      options.rejectedToken ??
+      Object.fromEntries(required.map((field) => [field.name, Redacted.make("")]));
+    const outcome = yield* auth.authenticate(values).pipe(Effect.result);
+    yield* expect(
+      name,
+      outcome._tag === "Failure" && outcome.failure.reason._tag === "Unauthenticated",
+      "authenticating a rejected token must fail Unauthenticated",
+    );
   });
+
+  return Effect.all(
+    [createReadbackCleanup, exactNoop, conflict, stalePlan, partialApplyCleanup, rejectedToken],
+    { discard: true },
+  );
 };
 
 /** Verification is out of scope for the provider contract; keep the pool quiet. */

@@ -26,7 +26,7 @@ export function BrandedSettings() {
 // #endregion theme
 
 // #region messages
-/** `Messages.Catalog` holds every user-visible string, including one sentence per failure reason. */
+/** `Messages.Catalog` holds every user-visible string, including a title and a description per failure reason. */
 export function LocalisedSettings() {
   return (
     <DomainKit.Root
@@ -34,7 +34,10 @@ export function LocalisedSettings() {
         approve: "Apply these DNS changes",
         decline: "Not right now",
         fieldLabel: (name) => (name === "accountId" ? "Cloudflare account ID" : name),
-        reconnect: (reason) => `Your ${reason.provider} connection expired. Connect it again.`,
+        reconnect: (reason) => ({
+          description: "Connect it again to keep changing DNS.",
+          title: `Your ${reason.provider} connection expired`,
+        }),
       }}
       transport={transport}
     >

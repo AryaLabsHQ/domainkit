@@ -66,7 +66,8 @@ export const reuseExisting = Effect.gen(function* () {
         label: target.label,
       }));
     case "NotFound":
-      return discovery.nameservers;
+      // `host` names the registered provider whose nameservers serve the domain, or is `null`.
+      return { host: discovery.host?.provider ?? null, nameservers: discovery.nameservers };
   }
 });
 // #endregion discover

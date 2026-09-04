@@ -47,7 +47,8 @@ callback. It is spent exactly once.
 the provider reports them, its nameservers.
 
 **Discovery** — which of a principal's existing connections already reaches a domain, decided from
-the domain's authoritative nameservers and each connection's zones.
+the domain's authoritative nameservers and each connection's zones. When none does, it names the
+registered provider whose declared nameserver suffixes cover the delegation as the domain's host.
 
 ## Observation
 

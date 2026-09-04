@@ -34,11 +34,13 @@ your values and you can also set them from CSS.
 <Snippet file="examples/react/presentation.tsx" region="messages" title="Replacing sentences" />
 
 `Messages.Catalog` holds every user-visible string in eight groups: actions, progress, connection,
-plan review, records, receipts, verification, and one function per `DomainKit.Error` reason. The
+plan review, records, receipts, verification, and one function per `DomainKit.Error` reason. A
+reason's function returns a title and a description, which is what an [outcome](/components/outcome)
+draws. The
 catalog is closed, so every key has a default in `Messages.english`; `messages` takes a
 `Partial<Catalog>` and merges over it, and a host replaces one key without restating the rest.
 
-Nothing renders a tag. A reason becomes a sentence through the catalog, an operation becomes a
+Nothing renders a tag. A reason becomes words through the catalog, an operation becomes a
 sentence through `operation`, and a token field name becomes a label through `fieldLabel`, which
 humanises `accountId` into "Account id" until a host names it properly.
 

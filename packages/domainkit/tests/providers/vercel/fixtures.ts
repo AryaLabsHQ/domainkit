@@ -53,6 +53,9 @@ export function conformanceFetch(): Fetch {
   return async (input, init) => {
     const url = new URL(String(input));
     const method = init?.method ?? "GET";
+    if (new Headers(init?.headers).get("authorization") !== "Bearer token") {
+      return json({ error: { code: "forbidden", message: "Not authorized" } }, { status: 403 });
+    }
     if (method === "GET" && url.pathname === "/v2/user") return json(user);
     if (method === "GET" && url.pathname === "/v2/teams") return json(teamPage([]));
     if (method === "GET" && url.pathname === "/v5/domains") {

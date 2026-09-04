@@ -5,6 +5,7 @@ import {
   Connect,
   Domain,
   DomainKit,
+  Outcome,
   Provider,
   Provision,
   Records,
@@ -38,6 +39,8 @@ const makeTransport = (settings: ProviderSettings) =>
   Testing.transport({
     provider: {
       id: settings.providerId,
+      // The zone's nameservers are this provider's own, so discovery names it as the host.
+      nameserverSuffixes: [previewZone],
       oauth: settings.oauth,
       zones: [previewZone],
       records: settings.seed.map((record) => ({ record, zone: previewZone })),
@@ -47,6 +50,57 @@ const makeTransport = (settings: ProviderSettings) =>
 function Verification({ domain }: { readonly domain: string }) {
   const controller = Verify.useController({ domain });
   return <Verify.Status controller={controller} />;
+}
+
+/**
+ * The outcome in the three shapes a host meets it: the default card, the inline row, and a
+ * composition of the host's own where only the words come from the catalog. The failure is real:
+ * the fake provider refuses an empty token.
+ */
+function Outcomes({
+  domain,
+  providerId,
+}: {
+  readonly domain: string;
+  readonly providerId: string;
+}) {
+  const controller = Connect.useController({ domain });
+  const connect = controller.connect;
+  useEffect(() => {
+    connect({ method: "token", provider: providerId, values: { token: "" } });
+  }, [connect, providerId]);
+  return (
+    <div data-preview-stack="">
+      <Connect.Outcome controller={controller} />
+      <Connect.Outcome controller={controller} layout="inline" />
+      <Connect.Outcome controller={controller} layout="inline">
+        <Outcome.Media variant="default">
+          <span aria-hidden="true">!</span>
+        </Outcome.Media>
+        <Outcome.Title />
+        <Outcome.Content />
+      </Connect.Outcome>
+    </div>
+  );
+}
+
+/**
+ * The disconnected offer in both states: the provider whose nameservers serve the zone, and a
+ * domain no registered provider serves, where the flow offers nothing by default.
+ */
+function Prompts({ domain, providerId }: { readonly domain: string; readonly providerId: string }) {
+  const unmanaged = useMemo(
+    () => Testing.transport({ provider: { id: providerId, zones: [previewZone] } }),
+    [providerId],
+  );
+  return (
+    <div data-preview-stack="">
+      <Connect.Flow domain={domain} />
+      <DomainKit.Root transport={unmanaged}>
+        <Connect.Flow connect="always" domain={domain} />
+      </DomainKit.Root>
+    </div>
+  );
 }
 
 function ProviderMark({ providerId }: { readonly providerId: string }) {
@@ -89,6 +143,10 @@ function Story({ state }: { readonly state: PreviewState }) {
       );
     case "verification":
       return <Verification domain={domain} />;
+    case "connect-prompt":
+      return <Prompts domain={domain} providerId={providerId} />;
+    case "outcome":
+      return <Outcomes domain={domain} providerId={providerId} />;
     case "provider-mark":
       return <ProviderMark providerId={providerId} />;
     case "slots":

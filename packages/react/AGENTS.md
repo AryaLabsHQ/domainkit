@@ -28,8 +28,13 @@ tenancy, or product verification policy.
   connect controller and both flows names another destination; `null` defers to the server.
 - `src/styles.css` ships wholly inside `@layer domainkit`, so a host's own rules win by default. An
   artifact test asserts the built stylesheet carries nothing outside that layer.
-- Every user-visible string comes from `Messages.Catalog`, including one sentence per
+- Every user-visible string comes from `Messages.Catalog`, including a title and a description per
   `DomainKit.Error` reason. No tag, status literal, or reason name reaches a customer.
+- The disconnected surface is `Connect.Prompt`: with a host it states who serves the zone and offers
+  the trigger; with none it renders nothing unless the flow is given `connect="always"`. The dialog
+  narrows to the host provider and keeps the rest behind a disclosure.
+- A failed step renders through `Outcome`: `Root`, `Header`, `Media`, `Title`, `Description`, and
+  `Content`, bound by each flow's `X.Outcome`. Children replace the composition, never the binding.
 - Icons come from the one context on `DomainKit.Root`; no part takes an icon prop. Provider artwork
   comes from `marks`, with the provider's initial as the fallback and no request at render time.
 - The package entry carries `"use client"`. A transport cannot cross an RSC boundary; hosts build

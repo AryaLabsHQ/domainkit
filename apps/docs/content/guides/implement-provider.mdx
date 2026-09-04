@@ -44,6 +44,11 @@ write it: the most specific zone wins, several matches at the same depth need a 
 Report the zone's nameservers on a `Target` when the provider exposes them. `Connect.discover` uses
 them to break a tie between two connections that both hold the zone.
 
+Declare the suffixes of the nameservers the provider operates as `nameservers` on the definition
+(`ns.cloudflare.com`, `vercel-dns.com`). `Connect.discover` names your provider as the `host` of a
+domain whose authoritative nameservers all end in one of them, so a connect screen can offer it
+first.
+
 `create` must return the provider's id for the new record. Cleanup deletes by that id, so an adapter
 that cannot return one produces receipts nothing can clean up.
 

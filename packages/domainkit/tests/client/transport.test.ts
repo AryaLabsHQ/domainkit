@@ -86,6 +86,24 @@ describe("Transport.fromFetch", () => {
     }
   });
 
+  it.effect("decodes the host discovery names for an unconnected domain", () => {
+    const { transport, dispose } = inProcess({
+      provider: {
+        zones: ["client.test"],
+        nameservers: { "client.test": ["a.ns.fake.test", "b.ns.fake.test"] },
+        nameserverSuffixes: ["ns.fake.test"],
+      },
+    });
+    const { connection } = groups(transport);
+    return Effect.gen(function* () {
+      const discovery = yield* connection.discover("app.client.test");
+      assert.strictEqual(discovery._tag, "NotFound");
+      if (discovery._tag !== "NotFound") return;
+      assert.deepStrictEqual(discovery.host, { provider: "fake" });
+      assert.deepStrictEqual(discovery.nameservers, ["a.ns.fake.test", "b.ns.fake.test"]);
+    }).pipe(Effect.ensuring(Effect.promise(dispose)));
+  });
+
   it.effect("round-trips connect, plan, approve, apply, observe, and cleanup", () => {
     const { fake, transport, dispose } = inProcess();
     const { connection, provisioning, verification, cleanup } = groups(transport);

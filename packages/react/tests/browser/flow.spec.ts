@@ -6,7 +6,7 @@ const shot = (name: string) => `test-results/screenshots/${name}.png`;
 /** A zone per test keeps the fixture's fake provider from seeing another test's records. */
 const open = async (page: import("@playwright/test").Page, zone: string, scheme = "light") => {
   await page.goto(`/?zone=${zone}&scheme=${scheme}`);
-  await expect(page.getByRole("button", { name: "Connect" })).toBeVisible();
+  await expect(page.getByRole("button", { exact: true, name: "Connect" })).toBeVisible();
 };
 
 test("renders the requirements table and the connect action", async ({ page }) => {
@@ -25,19 +25,19 @@ test("opens the connect dialog and renders the provider's declared token field",
   await page.getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Sign in (fake)" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Continue with Fake fake" })).toBeVisible();
   const field = dialog.getByLabel("Token");
   await expect(field).toHaveAttribute("type", "password");
   await dialog.screenshot({ path: shot("connect-dialog") });
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Connect" })).toBeFocused();
+  await expect(page.getByRole("button", { exact: true, name: "Connect" })).toBeFocused();
 });
 
 test("connects, reviews the plan, and approves it", async ({ page }) => {
   await open(page, "browser3.example");
   await page.getByRole("button", { name: "Connect" }).click();
   await page.getByRole("dialog").getByLabel("Token").fill("secret-token");
-  await page.getByRole("button", { name: "Token (fake)" }).click();
+  await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("fake connected")).toBeVisible();
 
   await page.getByRole("button", { name: "Review changes" }).click();
@@ -55,7 +55,7 @@ test("opens the verification popover and reads per-requirement evidence", async 
   await open(page, "browser5.example");
   await page.getByRole("button", { name: "Connect" }).click();
   await page.getByRole("dialog").getByLabel("Token").fill("tok");
-  await page.getByRole("button", { name: "Token (fake)" }).click();
+  await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("fake connected")).toBeVisible();
   await page.getByRole("button", { name: "Review changes" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
@@ -104,7 +104,7 @@ test("sends the page the customer started from as the interactive return destina
 }) => {
   await page.goto("/?zone=browser8.example&view=returnto");
   await page.getByRole("button", { name: "Connect" }).click();
-  await page.getByRole("button", { name: "Sign in (fake)" }).click();
+  await page.getByRole("button", { name: "Continue with Fake fake" }).click();
   const started = page.getByTestId("started");
   await expect(started).not.toBeEmpty();
   const method = JSON.parse((await started.textContent()) ?? "{}") as {
@@ -120,7 +120,7 @@ test("renders a read-only domain as state with no controls", async ({ page }) =>
   await open(page, "browser9.example");
   await page.getByRole("button", { name: "Connect" }).click();
   await page.getByRole("dialog").getByLabel("Token").fill("tok");
-  await page.getByRole("button", { name: "Token (fake)" }).click();
+  await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("fake connected")).toBeVisible();
 
   await page.getByTestId("toggle-readonly").click();
@@ -160,4 +160,161 @@ test("takes theme tokens and the color scheme from the root", async ({ page }) =
   await expect(root).toHaveAttribute("data-color-scheme", "dark");
   await expect(root).toHaveCSS("--domainkit-accent", "#4f46e5");
   await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("dark") });
+});
+
+test("renders an outcome as a card, as an inline row, and in a host's own composition", async ({
+  page,
+}) => {
+  await page.goto("/?zone=browser11.example&view=outcome");
+  const outcomes = page.getByTestId("outcomes");
+  await expect(outcomes.getByRole("alert")).toHaveCount(3);
+
+  const card = page.getByTestId("outcome-card").locator("[data-domainkit-part='outcome']");
+  await expect(card).toHaveAttribute("data-layout", "card");
+  await expect(card).toHaveAttribute("data-tone", "danger");
+  await expect(card.locator("[data-domainkit-part='outcome-media']")).toBeVisible();
+  await expect(card.locator("[data-domainkit-part='outcome-title']")).toContainText(
+    "didn't accept this token",
+  );
+  await expect(card.getByRole("button", { name: "Try again" })).toBeVisible();
+  await card.screenshot({ path: shot("outcome-card") });
+
+  const inline = page.getByTestId("outcome-inline").locator("[data-domainkit-part='outcome']");
+  await expect(inline).toHaveAttribute("data-layout", "inline");
+  await inline.screenshot({ path: shot("outcome-inline") });
+
+  // A host brings its own media and drops the header; the words still come from the catalog.
+  const host = page.getByTestId("outcome-host").locator("[data-domainkit-part='outcome']");
+  await expect(host.getByTestId("host-media")).toBeVisible();
+  await expect(host.locator("[data-domainkit-part='outcome-header']")).toHaveCount(0);
+  await expect(host.locator("[data-domainkit-part='outcome-title']")).toContainText(
+    "didn't accept this token",
+  );
+  await host.screenshot({ path: shot("outcome-host") });
+});
+
+test("keeps the domain, the provider list, and the typed token after a rejected connect", async ({
+  page,
+}) => {
+  await page.goto("/?zone=browser12.example&view=reject");
+  await page.getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Token").fill("cf_bad_token");
+  await dialog.getByLabel("Signing key").fill("sk_live");
+  await dialog.getByRole("button", { name: "Connect with an API token" }).click();
+
+  const outcome = dialog.locator("[data-domainkit-part='outcome']");
+  await expect(outcome).toBeVisible();
+  // The failure answers under the field it is about, on one line, and names the provider.
+  await expect(outcome).toHaveAttribute("data-layout", "inline");
+  await expect(dialog.locator("[data-domainkit-part='field-error']")).toContainText(
+    "Fake fake didn't accept this token",
+  );
+  await expect(dialog.getByLabel("Token")).toHaveAttribute("aria-invalid", "true");
+  // The provider named no field, so the first secret carries the answer and it announces once.
+  await expect(dialog.locator("[data-domainkit-part='field-error']")).toHaveCount(1);
+  await expect(dialog.getByLabel("Signing key")).not.toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  // The domain the dialog authorizes, and the value the customer typed, both survive.
+  await expect(dialog.locator("[data-domainkit-part='dialog-description']")).toHaveText(
+    "Authorize DNS changes for app.browser12.example.",
+  );
+  await expect(dialog.getByLabel("Token")).toHaveValue("cf_bad_token");
+  await expect(dialog.getByLabel("Signing key")).toHaveValue("sk_live");
+  await expect(dialog.getByText("No DNS providers are available.")).toHaveCount(0);
+  await dialog.screenshot({ path: shot("connect-rejected") });
+});
+
+test("names the provider that serves the zone and offers to connect it", async ({ page }) => {
+  await page.goto("/?zone=browser13.example");
+  const prompt = page.locator("[data-domainkit-part='connect-prompt']");
+  await expect(prompt).toHaveAttribute("data-host", "fake");
+  await expect(prompt.getByRole("img", { name: "Fake fake" })).toBeVisible();
+  await expect(prompt.locator("[data-domainkit-part='host-name']")).toHaveText("Fake fake");
+  await expect(prompt.locator("[data-domainkit-part='host-statement']")).toHaveText(
+    "Owns DNS for this domain.",
+  );
+  await expect(prompt.getByRole("button", { exact: true, name: "Connect" })).toBeVisible();
+  await prompt.screenshot({ path: shot("connect-prompt") });
+});
+
+test("narrows the dialog to the provider that serves the zone", async ({ page }) => {
+  await page.goto("/?zone=browser14.example&view=providers");
+  await page.getByRole("button", { exact: true, name: "Connect" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator("[data-domainkit-part='dialog-title']")).toHaveText(
+    "Connect Fake cloudflare",
+  );
+  // One provider's methods, one field, and the verb on the button.
+  await expect(dialog.locator("[data-domainkit-part='token-connect']")).toHaveCount(1);
+  await expect(dialog.getByLabel("Token")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Connect with an API token" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Continue with Fake cloudflare" })).toBeVisible();
+  await expect(dialog.getByRole("link", { name: "Where do I find this?" })).toBeVisible();
+  // The account id is a field the provider does not need, so it waits behind a disclosure.
+  await expect(dialog.getByLabel("Account id")).toBeHidden();
+  await dialog.screenshot({ path: shot("connect-dialog-narrowed") });
+  await dialog.getByText("Need an account id?").click();
+  await expect(dialog.getByLabel("Account id")).toBeVisible();
+
+  // The provider that does not serve the zone is one disclosure away.
+  await dialog.getByText("Use a different provider").click();
+  await dialog.getByRole("button", { name: "Fake vercel" }).click();
+  await expect(dialog.locator("[data-domainkit-part='token-connect']")).toHaveCount(2);
+  await dialog.screenshot({ path: shot("connect-dialog-other-providers") });
+});
+
+test("offers every provider, one open at a time, when nothing serves the zone", async ({
+  page,
+}) => {
+  await page.goto("/?zone=browser15.example&view=providers&host=none&connect=always");
+  const trigger = page.getByRole("button", { name: "Connect a DNS provider" });
+  await expect(trigger).toBeVisible();
+  // No host means no identity to state.
+  await expect(page.locator("[data-domainkit-part='host-identity']")).toHaveCount(0);
+  await trigger.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator("[data-domainkit-part='dialog-title']")).toHaveText(
+    "Connect a DNS provider",
+  );
+  await expect(dialog.locator("[data-domainkit-part='provider-authentication']")).toHaveCount(2);
+  // The first is open and the second is not, until the customer says otherwise.
+  await expect(dialog.locator("[data-domainkit-part='token-connect']")).toHaveCount(1);
+  await dialog.getByRole("button", { name: "Fake vercel" }).click();
+  await expect(
+    dialog.locator("[data-domainkit-part='provider-authentication'][data-state='open']"),
+  ).toHaveCount(1);
+  await dialog.screenshot({ path: shot("connect-dialog-all-providers") });
+  // The heading closes what it opened, so the dialog can show no provider at all.
+  await dialog.getByRole("button", { name: "Fake vercel" }).click();
+  await expect(
+    dialog.locator("[data-domainkit-part='provider-authentication'][data-state='open']"),
+  ).toHaveCount(0);
+});
+
+test("offers nothing to connect when no provider serves the zone", async ({ page }) => {
+  await page.goto("/?zone=browser16.example&host=none");
+  // The requirements still render; there is simply nothing DomainKit can connect.
+  await expect(page.getByRole("columnheader", { name: "Type" })).toBeVisible();
+  await expect(page.locator("[data-domainkit-part='connect-prompt']")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Connect/ })).toHaveCount(0);
+  await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("no-host") });
+
+  // The host application can ask for the dialog anyway.
+  await page.goto("/?zone=browser17.example&host=none&connect=always");
+  await expect(page.getByRole("button", { name: "Connect a DNS provider" })).toBeVisible();
+  await expect(page.locator("[data-domainkit-part='host-identity']")).toHaveCount(0);
+});
+
+test("keeps the host's identity and drops its trigger in read-only", async ({ page }) => {
+  await page.goto("/?zone=browser18.example");
+  await expect(page.getByRole("button", { exact: true, name: "Connect" })).toBeVisible();
+  await page.getByTestId("toggle-readonly").click();
+  await expect(page.locator("[data-domainkit-part='host-statement']")).toHaveText(
+    "Owns DNS for this domain.",
+  );
+  await expect(page.getByRole("button", { exact: true, name: "Connect" })).toHaveCount(0);
+  await page
+    .locator("[data-domainkit-part='connect-prompt']")
+    .screenshot({ path: shot("prompt-read-only") });
 });
