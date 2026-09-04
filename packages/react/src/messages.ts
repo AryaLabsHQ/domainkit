@@ -8,7 +8,10 @@ import type { DnsRecord, DomainKit, Plan, Reason, Receipt, Storage } from "domai
 export interface Catalog {
   // Actions
   readonly connect: string;
-  readonly connectWith: (method: string) => string;
+  /** The token method's button, which carries the verb rather than the method's own label. */
+  readonly methodToken: string;
+  readonly methodOAuth: (provider: string) => string;
+  readonly methodIntegration: (provider: string) => string;
   readonly disconnect: string;
   readonly detach: string;
   readonly cancel: string;
@@ -21,6 +24,10 @@ export interface Catalog {
   readonly checkDns: string;
   readonly checkAgain: string;
   readonly moreActions: string;
+  /** Reveals the fields a provider does not need, such as an account id. */
+  readonly moreOptions: string;
+  /** Reveals the providers the dialog narrowed away. */
+  readonly useAnotherProvider: string;
   readonly copy: string;
   readonly copied: string;
   readonly copyZone: string;
@@ -45,8 +52,10 @@ export interface Catalog {
 
   // Connection
   readonly connectTitle: (provider: string) => string;
-  /** The dialog heading before a provider is chosen. */
+  /** The dialog heading, and the trigger, when no provider is named yet. */
   readonly connectAnyTitle: string;
+  /** What the disconnected prompt says about the provider whose nameservers serve the domain. */
+  readonly hostOwnsZone: string;
   readonly connectDescription: (domain: string) => string;
   readonly connectedTo: (provider: string) => string;
   /** Shown where a connect control would be when the customer may not connect. */
@@ -206,7 +215,9 @@ const humanize = (name: string): string => {
 
 export const english: Catalog = {
   connect: "Connect",
-  connectWith: (method) => method,
+  methodToken: "Connect with an API token",
+  methodOAuth: (provider) => `Continue with ${provider}`,
+  methodIntegration: (provider) => `Install the ${provider} integration`,
   disconnect: "Disconnect",
   detach: "Detach domain",
   cancel: "Cancel",
@@ -219,6 +230,8 @@ export const english: Catalog = {
   checkDns: "Check DNS",
   checkAgain: "Check again",
   moreActions: "More actions",
+  moreOptions: "Need an account id?",
+  useAnotherProvider: "Use a different provider",
   copy: "Copy",
   copied: "Copied",
   copyZone: "Copy zone file",
@@ -241,7 +254,8 @@ export const english: Catalog = {
   observing: "Checking DNS…",
 
   connectTitle: (provider) => `Connect ${provider}`,
-  connectAnyTitle: "Connect your DNS provider",
+  connectAnyTitle: "Connect a DNS provider",
+  hostOwnsZone: "Owns DNS for this domain.",
   connectDescription: (domain) => `Authorize DNS changes for ${domain}.`,
   connectedTo: (provider) => `${provider} connected`,
   notConnected: "No DNS provider is connected.",

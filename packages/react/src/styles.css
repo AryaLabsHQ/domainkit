@@ -578,7 +578,7 @@
     padding: 0.75rem;
   }
 
-  :where([data-domainkit-part="token-connect"] label) {
+  :where([data-domainkit-part="token-connect"] [data-domainkit-part="field-label"]) {
     color: var(--domainkit-muted);
     display: grid;
     font-size: 0.8125rem;
@@ -1331,12 +1331,17 @@
     gap: 0.5rem;
   }
 
-  [data-domainkit-part="token-field"] {
+  [data-domainkit-part="field"] {
     display: grid;
     gap: 0.25rem;
   }
 
-  [data-domainkit-part="token-field-label"] {
+  [data-domainkit-part="field"][data-orientation="horizontal"] {
+    align-items: center;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  [data-domainkit-part="field-label"] {
     align-items: baseline;
     color: var(--domainkit-muted);
     display: flex;
@@ -1344,12 +1349,12 @@
     gap: 0.375rem;
   }
 
-  [data-domainkit-part="token-field-optional"] {
+  [data-domainkit-part="field-optional"] {
     font-size: 0.75rem;
     opacity: 0.8;
   }
 
-  [data-domainkit-part="token-field-input"] {
+  [data-domainkit-part="field-input"] {
     background-color: var(--domainkit-background);
     border: 1px solid var(--domainkit-border);
     border-radius: var(--domainkit-control-radius);
@@ -1360,12 +1365,12 @@
     width: 100%;
   }
 
-  [data-domainkit-part="token-field-input"]:focus-visible {
+  [data-domainkit-part="field-input"]:focus-visible {
     border-color: var(--domainkit-accent);
     outline: none;
   }
 
-  [data-domainkit-part="token-field-input"][aria-invalid="true"] {
+  [data-domainkit-part="field-input"][aria-invalid="true"] {
     border-color: var(--domainkit-danger);
   }
 
@@ -1374,7 +1379,7 @@
     gap: 0.25rem;
   }
 
-  [data-domainkit-part="token-docs"] {
+  [data-domainkit-part="field-description"] {
     align-items: center;
     color: var(--domainkit-muted);
     display: inline-flex;
@@ -1382,6 +1387,81 @@
     gap: 0.25rem;
     justify-self: start;
     text-decoration: none;
+  }
+
+  /* ---------------------------------------------------------------------------------------------
+   * The disconnected prompt, and the disclosures that keep the dialog to one decision
+   * ------------------------------------------------------------------------------------------- */
+
+  [data-domainkit-part="connect-prompt"] {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  [data-domainkit-part="host-identity"] {
+    align-items: center;
+    column-gap: 0.5rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  [data-domainkit-part="host-name"] {
+    font-size: 0.875rem;
+    font-weight: 600;
+    grid-column: 2;
+  }
+
+  [data-domainkit-part="host-statement"] {
+    color: var(--domainkit-muted);
+    font-size: 0.8125rem;
+    grid-column: 2;
+  }
+
+  [data-domainkit-part="other-providers"],
+  [data-domainkit-part="more-options"] {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  [data-domainkit-part="other-providers-trigger"],
+  [data-domainkit-part="more-options-trigger"] {
+    color: var(--domainkit-muted);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    list-style: none;
+    width: fit-content;
+  }
+
+  [data-domainkit-part="other-providers-trigger"]::before,
+  [data-domainkit-part="more-options-trigger"]::before {
+    content: "\25b8";
+    display: inline-block;
+    margin-inline-end: 0.35rem;
+  }
+
+  [data-domainkit-part="other-providers"][open]
+    > [data-domainkit-part="other-providers-trigger"]::before,
+  [data-domainkit-part="more-options"][open]
+    > [data-domainkit-part="more-options-trigger"]::before {
+    transform: rotate(90deg);
+  }
+
+  [data-domainkit-part="other-providers"] {
+    border-top: 1px solid var(--domainkit-border);
+    padding-top: 0.75rem;
+  }
+
+  button[data-domainkit-part="provider-heading"] {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 0;
+    text-align: start;
+    width: 100%;
   }
 
   [data-domainkit-part="discovery-resolved"],

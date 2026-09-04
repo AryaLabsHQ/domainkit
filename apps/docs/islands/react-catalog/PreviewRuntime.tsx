@@ -39,6 +39,8 @@ const makeTransport = (settings: ProviderSettings) =>
   Testing.transport({
     provider: {
       id: settings.providerId,
+      // The zone's nameservers are this provider's own, so discovery names it as the host.
+      nameserverSuffixes: [previewZone],
       oauth: settings.oauth,
       zones: [previewZone],
       records: settings.seed.map((record) => ({ record, zone: previewZone })),
@@ -78,6 +80,25 @@ function Outcomes({
         <Outcome.Title />
         <Outcome.Content />
       </Connect.Outcome>
+    </div>
+  );
+}
+
+/**
+ * The disconnected offer in both states: the provider whose nameservers serve the zone, and a
+ * domain no registered provider serves, where the flow offers nothing by default.
+ */
+function Prompts({ domain, providerId }: { readonly domain: string; readonly providerId: string }) {
+  const unmanaged = useMemo(
+    () => Testing.transport({ provider: { id: providerId, zones: [previewZone] } }),
+    [providerId],
+  );
+  return (
+    <div data-preview-stack="">
+      <Connect.Flow domain={domain} />
+      <DomainKit.Root transport={unmanaged}>
+        <Connect.Flow connect="always" domain={domain} />
+      </DomainKit.Root>
     </div>
   );
 }
@@ -122,6 +143,8 @@ function Story({ state }: { readonly state: PreviewState }) {
       );
     case "verification":
       return <Verification domain={domain} />;
+    case "connect-prompt":
+      return <Prompts domain={domain} providerId={providerId} />;
     case "outcome":
       return <Outcomes domain={domain} providerId={providerId} />;
     case "provider-mark":

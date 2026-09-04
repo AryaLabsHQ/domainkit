@@ -65,6 +65,14 @@ export function DnsStatus() {
 }
 // #endregion verification
 
+// #region connect-prompt
+/** The disconnected offer. With no provider serving the zone this renders nothing; `connect="always"` offers the dialog anyway. */
+export function ConnectPrompt() {
+  const controller = Connect.useController({ domain });
+  return <Connect.Prompt controller={controller} />;
+}
+// #endregion connect-prompt
+
 // #region outcome
 /** The default composition, then one the host writes itself. Both take their words from the catalog. */
 export function ConnectionOutcome() {

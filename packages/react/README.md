@@ -51,6 +51,19 @@ the UI did not make.
 An interactive provider returns the customer to the page they started from. Pass `returnTo` to name
 a different destination, or `null` to leave the server's `defaultReturnTo` in charge.
 
+## The disconnected offer
+
+Discovery names the provider whose nameservers serve the domain. `Connect.Prompt` states it beside a
+trigger, and the dialog behind that trigger is narrowed to that provider, with the rest behind a
+disclosure.
+
+When no registered provider serves the zone there is nothing DomainKit can connect, so the flow
+offers nothing. Pass `connect="always"` to offer the all-providers dialog anyway:
+
+```tsx
+<Domain.Flow domain="app.example.com" requirements={requirements} connect="always" />
+```
+
 ## Own one piece, keep the rest
 
 Every part of the flow is a slot with a default.
@@ -68,7 +81,7 @@ Every part of the flow is a slot with a default.
 
 | Slot           | Receives                                        | Default                                                    |
 | -------------- | ----------------------------------------------- | ---------------------------------------------------------- |
-| `connection`   | `{ controller, domain }`                        | `Connect.Card` once connected, `Connect.Dialog` until then |
+| `connection`   | `{ controller, domain, connect }`               | `Connect.Card` once connected, `Connect.Prompt` until then |
 | `records`      | `{ records, readiness, controller, domain }`    | `Records.Table`                                            |
 | `verification` | `{ controller, domain }`                        | `Verify.Status` with per-requirement evidence              |
 | `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline, Remove records           |

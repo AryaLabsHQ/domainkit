@@ -21,7 +21,8 @@ const scenario = (
     sibling: `mail.${zone}`,
     transport: Testing.transport({
       ...(options.capabilities === undefined ? {} : { capabilities: options.capabilities }),
-      provider: { zones: [zone] },
+      // The zone's nameservers are the fake's own, so discovery names it as the host.
+      provider: { nameserverSuffixes: [zone], zones: [zone] },
     }),
     zone,
   };
@@ -52,7 +53,7 @@ const connectDomain = async (transport: Transport.Interface, domain: string) => 
   await screen.findByRole("button", { name: "Connect" });
   await user.click(screen.getByRole("button", { name: "Connect" }));
   await user.type(await screen.findByLabelText(/Token/), "tok");
-  await user.click(screen.getByRole("button", { name: "Token (fake)" }));
+  await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
   await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
   view.unmount();
 };
@@ -128,7 +129,7 @@ describe("Connect.useController", () => {
     expect(field.getAttribute("type")).toBe("password");
     expect(field.getAttribute("name")).toBe("token");
     await user.type(field, "tok");
-    await user.click(screen.getByRole("button", { name: "Token (fake)" }));
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
     await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
     const start = transport.calls.find((call) => call.method === "connection.start");
     expect(start?.input).toMatchObject({
@@ -207,7 +208,8 @@ describe("Connect.useController", () => {
         <Connect.Flow domain={sibling} />
       </DomainKit.Root>,
     );
-    await click("Connect");
+    // Discovery resolved a connection rather than naming a host, so the trigger says what it opens.
+    await click("Connect a DNS provider");
     await screen.findByText(`${zone} already serves this domain`);
     await user.click(screen.getByRole("button", { name: `Use ${zone}` }));
     await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
@@ -369,7 +371,9 @@ describe("interactive return destination", () => {
     const zone = `oauth${(cases += 1)}.example`;
     return {
       domain: `app.${zone}`,
-      transport: Testing.transport({ provider: { oauth: true, zones: [zone] } }),
+      transport: Testing.transport({
+        provider: { nameserverSuffixes: [zone], oauth: true, zones: [zone] },
+      }),
     };
   };
 
@@ -381,7 +385,7 @@ describe("interactive return destination", () => {
       </DomainKit.Root>,
     );
     await click("Connect");
-    await click("Sign in (fake)");
+    await click("Continue with Fake fake");
     await waitFor(() => expect(startMethod(transport)).toBeDefined());
     expect(startMethod(transport)).toMatchObject({
       _tag: "OAuth",
@@ -397,7 +401,7 @@ describe("interactive return destination", () => {
       </DomainKit.Root>,
     );
     await click("Connect");
-    await click("Sign in (fake)");
+    await click("Continue with Fake fake");
     await waitFor(() => expect(startMethod(transport)).toBeDefined());
     expect(startMethod(transport)).toMatchObject({
       _tag: "OAuth",
@@ -413,7 +417,7 @@ describe("interactive return destination", () => {
       </DomainKit.Root>,
     );
     await click("Connect");
-    await click("Sign in (fake)");
+    await click("Continue with Fake fake");
     await waitFor(() => expect(startMethod(transport)).toBeDefined());
     expect(startMethod(transport)).toEqual({ _tag: "OAuth" });
   });

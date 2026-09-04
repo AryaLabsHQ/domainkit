@@ -3,7 +3,15 @@ import type { DomainKit, Storage } from "domainkit";
 import { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
@@ -369,6 +377,17 @@ export function Root({ controller, ...props }: RootProps): ReactElement {
   );
 }
 
+/**
+ * The provider whose nameservers serve this domain, as the snapshot describes it. Discovery names
+ * it by id; without a descriptor there is nothing to draw, so there is no host.
+ */
+export const hostProvider = (controller: Controller): Descriptor | null => {
+  const discovery = controller.discovery;
+  if (discovery === null || discovery._tag !== "NotFound" || discovery.host === null) return null;
+  const named = discovery.host.provider;
+  return controller.providers.find((entry) => entry.id === named) ?? null;
+};
+
 /** The provider as the customer knows it, falling back to the id when the snapshot has no name. */
 const displayName = (controller: Controller, provider: string): string =>
   controller.providers.find((entry) => entry.id === provider)?.name ?? provider;
@@ -467,13 +486,66 @@ interface MethodProps {
   readonly provider: Descriptor;
 }
 
+interface FieldProps {
+  readonly controller: Controller;
+  readonly docsUrl: string | null;
+  readonly field: Field;
+  readonly invalid: boolean;
+}
+
+/**
+ * One declared field in shadcn's `Field` anatomy: the label, the control, the note under it, and
+ * the error the provider answered with. The docs link rides the field it explains.
+ */
+function TokenField({ controller, docsUrl, field, invalid }: FieldProps): ReactElement {
+  const { messages } = useDomainKit();
+  const icons = useIcons();
+  const id = useId();
+  return (
+    <div
+      data-domainkit-part="field"
+      data-invalid={invalid ? "" : undefined}
+      data-orientation="vertical"
+    >
+      <label data-domainkit-part="field-label" htmlFor={id}>
+        {messages.fieldLabel(field.name)}
+        {field.required ? null : (
+          <span data-domainkit-part="field-optional">{messages.optionalField}</span>
+        )}
+      </label>
+      <input
+        aria-invalid={invalid ? true : undefined}
+        autoComplete="off"
+        data-domainkit-part="field-input"
+        id={id}
+        name={field.name}
+        required={field.required}
+        type={field.secret ? "password" : "text"}
+      />
+      {docsUrl === null ? null : (
+        <a data-domainkit-part="field-description" href={docsUrl} rel="noreferrer" target="_blank">
+          {messages.getToken}
+          <span aria-hidden="true" data-icon="inline-end">
+            {icons.external}
+          </span>
+        </a>
+      )}
+      {invalid ? (
+        <div data-domainkit-part="field-error">
+          <Outcome controller={controller} layout="inline" />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * One auth method, rendered from its descriptor. A token method draws an input per declared
- * field, so a provider that needs an account id alongside a token needs no code here.
+ * field, so a provider that needs an account id alongside a token needs no code here. The fields
+ * a provider does not need sit behind a disclosure, so the common form is one field.
  */
 function Method({ controller, method, provider }: MethodProps): ReactElement {
   const { messages } = useDomainKit();
-  const icons = useIcons();
   const state = controller.state;
   const busy = state._tag === "Submitting";
   // A failed command answers where it was raised, so the customer keeps the form they filled in.
@@ -492,7 +564,9 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
           onClick={() => controller.connect({ method: method.kind, provider: provider.id })}
           type="button"
         >
-          {messages.connectWith(method.label)}
+          {method.kind === "oauth"
+            ? messages.methodOAuth(provider.name)
+            : messages.methodIntegration(provider.name)}
         </button>
         {failed ? <Outcome controller={controller} layout="inline" /> : null}
       </>
@@ -501,6 +575,19 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
   const fields = method.fields;
   const rejected = failed && state._tag === "Failure" ? state.error.reason : null;
   const answered = fields.some((field) => rejects(rejected, field));
+  const required = fields.filter((field) => field.required);
+  const optional = fields.filter((field) => !field.required);
+  // The docs link explains the secret, so it rides that field rather than the form.
+  const explains = (required.find((field) => field.secret) ?? required[0] ?? optional[0])?.name;
+  const render = (field: Field) => (
+    <TokenField
+      controller={controller}
+      docsUrl={field.name === explains ? method.docsUrl : null}
+      field={field}
+      invalid={rejects(rejected, field)}
+      key={field.name}
+    />
+  );
   return (
     <form
       data-domainkit-part="token-connect"
@@ -518,49 +605,64 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
         controller.connect({ method: method.kind, provider: provider.id, values });
       }}
     >
-      {fields.map((field) => {
-        const invalid = rejects(rejected, field);
-        return (
-          <label
-            data-domainkit-part="token-field"
-            data-invalid={invalid ? "" : undefined}
-            key={field.name}
-          >
-            <span data-domainkit-part="token-field-label">
-              {messages.fieldLabel(field.name)}
-              {field.required ? null : (
-                <span data-domainkit-part="token-field-optional">{messages.optionalField}</span>
-              )}
-            </span>
-            <input
-              aria-invalid={invalid ? true : undefined}
-              autoComplete="off"
-              data-domainkit-part="token-field-input"
-              name={field.name}
-              required={field.required}
-              type={field.secret ? "password" : "text"}
-            />
-            {invalid ? (
-              <div data-domainkit-part="field-error">
-                <Outcome controller={controller} layout="inline" />
-              </div>
-            ) : null}
-          </label>
-        );
-      })}
-      {method.docsUrl === null ? null : (
-        <a data-domainkit-part="token-docs" href={method.docsUrl} rel="noreferrer" target="_blank">
-          {messages.getToken}
-          <span aria-hidden="true" data-icon="inline-end">
-            {icons.external}
-          </span>
-        </a>
+      {required.map(render)}
+      {optional.length === 0 ? null : (
+        <details
+          data-domainkit-part="more-options"
+          open={optional.some((field) => rejects(rejected, field)) || undefined}
+        >
+          <summary data-domainkit-part="more-options-trigger">{messages.moreOptions}</summary>
+          {optional.map(render)}
+        </details>
       )}
       {failed && !answered ? <Outcome controller={controller} layout="inline" /> : null}
       <button data-domainkit-part="token-submit" disabled={busy} type="submit">
-        {messages.connectWith(method.label)}
+        {messages.methodToken}
       </button>
     </form>
+  );
+}
+
+interface AuthenticationProps {
+  readonly controller: Controller;
+  readonly provider: Descriptor;
+  /** Whether this provider's methods are showing. A narrowed dialog has one, always open. */
+  readonly open: boolean;
+  readonly onOpen?: () => void;
+}
+
+/**
+ * One provider's methods. With a heading it is a disclosure the customer opens; the provider a
+ * narrowed dialog is about carries no heading, because the dialog title already names it.
+ */
+function Authentication({ controller, onOpen, open, provider }: AuthenticationProps): ReactElement {
+  const methods = provider.methods.map((method) => (
+    <Method
+      controller={controller}
+      key={`${provider.id}:${method.kind}`}
+      method={method}
+      provider={provider}
+    />
+  ));
+  return (
+    <section
+      data-domainkit-part="provider-authentication"
+      data-provider={provider.id}
+      data-state={open ? "open" : "closed"}
+    >
+      {onOpen === undefined ? null : (
+        <button
+          aria-expanded={open}
+          data-domainkit-part="provider-heading"
+          onClick={onOpen}
+          type="button"
+        >
+          <Provider.Mark provider={provider} />
+          <strong>{provider.name}</strong>
+        </button>
+      )}
+      {open ? methods : null}
+    </section>
   );
 }
 
@@ -574,6 +676,9 @@ export interface FormProps extends PartProps<"div", RootState> {
  */
 export function Form({ controller, ...props }: FormProps): ReactElement {
   const { messages } = useDomainKit();
+  // One provider open at a time, so a dialog listing every provider is a list rather than a wall.
+  // `null` is the customer choosing nothing yet; `""` is them closing what was open.
+  const [opened, setOpened] = useState<string | null>(null);
   const state = controller.state;
   const snapshot = controller.snapshot;
   const discovery = controller.discovery;
@@ -586,6 +691,18 @@ export function Form({ controller, ...props }: FormProps): ReactElement {
   const resolved = discovery !== null && discovery._tag === "Resolved" ? discovery : null;
   const reusable = snapshot?.reusable ?? [];
   const providers = controller.providers;
+  // A known host is the whole offer; the rest wait behind a disclosure.
+  const host = hostProvider(controller);
+  const others = providers.filter((provider) => provider.id !== host?.id);
+  const authentication = (provider: Descriptor, open: boolean) => (
+    <Authentication
+      controller={controller}
+      key={provider.id}
+      onOpen={() => setOpened(open ? "" : provider.id)}
+      open={open}
+      provider={provider}
+    />
+  );
   return usePart(
     "div",
     props,
@@ -656,23 +773,25 @@ export function Form({ controller, ...props }: FormProps): ReactElement {
           )}
           {providers.length === 0 ? (
             <p data-domainkit-part="target-unavailable">{messages.noProviders}</p>
+          ) : host === null ? (
+            others.map((provider) =>
+              authentication(
+                provider,
+                opened === null ? provider.id === others[0]?.id : opened === provider.id,
+              ),
+            )
           ) : (
-            providers.map((provider) => (
-              <section data-domainkit-part="provider-authentication" key={provider.id}>
-                <div data-domainkit-part="provider-heading">
-                  <Provider.Mark provider={provider} />
-                  <strong>{provider.name}</strong>
-                </div>
-                {provider.methods.map((method) => (
-                  <Method
-                    controller={controller}
-                    key={`${provider.id}:${method.kind}`}
-                    method={method}
-                    provider={provider}
-                  />
-                ))}
-              </section>
-            ))
+            <>
+              <Authentication controller={controller} open provider={host} />
+              {others.length === 0 ? null : (
+                <details data-domainkit-part="other-providers">
+                  <summary data-domainkit-part="other-providers-trigger">
+                    {messages.useAnotherProvider}
+                  </summary>
+                  {others.map((provider) => authentication(provider, opened === provider.id))}
+                </details>
+              )}
+            </>
           )}
         </>
       ),
@@ -706,12 +825,19 @@ export function Dialog({
   // A failure a method already answers is not repeated at the foot of the dialog.
   const unattributed = state._tag === "Failure" && state.attempt === null;
   const snapshot = controller.snapshot;
-  const provider = snapshot?.provider;
+  // The provider the dialog is about: the one already attached, else the one that serves the zone.
+  const attached = snapshot?.provider ?? null;
+  const host = hostProvider(controller);
+  const named = attached === null ? (host?.name ?? null) : displayName(controller, attached);
   const heading =
-    title ??
-    (provider === null || provider === undefined
-      ? messages.connectAnyTitle
-      : messages.connectTitle(provider));
+    title ?? (named === null ? messages.connectAnyTitle : messages.connectTitle(named));
+  const running =
+    state._tag === "Loading" ||
+    state._tag === "Submitting" ||
+    state._tag === "Redirecting" ||
+    state._tag === "SelectionRequired";
+  // A named provider makes the trigger a short "Connect"; without one it says what it opens.
+  const label = named === null ? messages.connectAnyTitle : messages.connect;
   const body = children ?? <Form controller={controller} />;
   // Connecting is a write, so the whole surface goes rather than a disabled trigger.
   if (readOnly) return <></>;
@@ -723,7 +849,7 @@ export function Dialog({
           onClick={() => setOpen(!open)}
           type="button"
         >
-          {trigger ?? messages.connect}
+          {trigger ?? label}
         </button>
         {render({ children: body, open })}
       </>
@@ -741,7 +867,7 @@ export function Dialog({
       open={open}
     >
       <BaseDialog.Trigger data-domainkit-part="connection-trigger">
-        {trigger ?? messages.connect}
+        {trigger ?? label}
       </BaseDialog.Trigger>
       <BaseDialog.Portal container={portalContainer}>
         <BaseDialog.Backdrop
@@ -770,7 +896,8 @@ export function Dialog({
             )}
           </div>
           <div data-domainkit-part="dialog-body">
-            <Status controller={controller} />
+            {/* The title and description already say what is connected; this line is progress. */}
+            {running ? <Status controller={controller} /> : null}
             {body}
             {unattributed ? <Outcome controller={controller} /> : null}
           </div>
@@ -785,6 +912,67 @@ export function Dialog({
       </BaseDialog.Portal>
     </BaseDialog.Root>
   );
+}
+
+/** Whether the flow offers a connect surface when discovery names no host. */
+export type Invitation = "always" | "detected";
+
+export interface PromptProps extends PartProps<"div", RootState> {
+  readonly controller: Controller;
+  /**
+   * `detected` offers nothing when discovery names no host, which is the honest answer for a
+   * domain DomainKit cannot write to. `always` offers the all-providers dialog anyway.
+   */
+  readonly connect?: Invitation;
+}
+
+/**
+ * The disconnected offer: the provider whose nameservers serve the domain, what that means, and
+ * the trigger that connects it. With no host detected there is nothing to offer, so nothing
+ * renders unless the host application asks for the dialog anyway.
+ */
+export function Prompt({
+  connect = "detected",
+  controller,
+  ...props
+}: PromptProps): ReactElement | null {
+  const { messages } = useDomainKit();
+  const readOnly = useReadOnly();
+  const state = controller.state;
+  const host = hostProvider(controller);
+  const discovery = controller.discovery;
+  // Something to offer: the provider that serves the zone, a connection discovery already found,
+  // or one this owner holds. With none of them there is no invitation, and none while it loads.
+  const offers =
+    host !== null ||
+    (discovery !== null && discovery._tag !== "NotFound") ||
+    (controller.snapshot?.reusable.length ?? 0) > 0;
+  const settling = state._tag === "Loading" || state._tag === "Disconnected";
+  const element = usePart(
+    "div",
+    props,
+    { status: state._tag },
+    {
+      children: (
+        <>
+          {host === null ? null : (
+            <div data-domainkit-part="host-identity">
+              <Provider.Mark provider={host} />
+              <span data-domainkit-part="host-name">{host.name}</span>
+              <span data-domainkit-part="host-statement">{messages.hostOwnsZone}</span>
+            </div>
+          )}
+          <Dialog controller={controller} />
+        </>
+      ),
+      "data-domainkit-part": "connect-prompt",
+      "data-host": host?.id,
+    },
+  );
+  if (settling && !offers && connect !== "always") return null;
+  // Read-only keeps the statement and drops the trigger, like every other write surface.
+  if (readOnly && host === null) return null;
+  return element;
 }
 
 export interface CardProps extends PartProps<"div", RootState> {
@@ -840,10 +1028,12 @@ export function Card({ controller, ...props }: CardProps): ReactElement {
 export interface FlowProps extends Omit<RootProps, "controller"> {
   readonly domain: string;
   readonly returnTo?: string | null;
+  /** Offer the connect dialog even when discovery names no host. Defaults to `detected`. */
+  readonly connect?: Invitation;
 }
 
-/** Connection on its own: the card once connected, the dialog until then. */
-export function Flow({ domain, returnTo, ...props }: FlowProps): ReactElement {
+/** Connection on its own: the card once connected, the prompt until then. */
+export function Flow({ connect, domain, returnTo, ...props }: FlowProps): ReactElement {
   const controller = useController({ domain, ...(returnTo === undefined ? {} : { returnTo }) });
   const state = controller.state;
   return (
@@ -852,7 +1042,7 @@ export function Flow({ domain, returnTo, ...props }: FlowProps): ReactElement {
         <Card controller={controller} />
       ) : (
         <>
-          <Dialog controller={controller} />
+          <Prompt controller={controller} {...(connect === undefined ? {} : { connect })} />
           <Outcome controller={controller} />
         </>
       )}

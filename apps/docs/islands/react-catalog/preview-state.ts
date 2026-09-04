@@ -21,6 +21,7 @@ export const defaultRequirements: ReadonlyArray<DnsRecord.Model> = [
 export const stories = [
   "cleanup",
   "connect",
+  "connect-prompt",
   "domain-flow",
   "outcome",
   "provider-mark",

@@ -33,7 +33,11 @@ const provider: Provider.Descriptor = {
   name: "Fake DNS",
 };
 
-const transport: Transport.Interface = Testing.transport({ capabilities: ["connection"] });
+const transport: Transport.Interface = Testing.transport({
+  capabilities: ["connection"],
+  // The zone's nameservers are the fake's own, so discovery names it as the host.
+  provider: { nameserverSuffixes: ["example.com"], zones: ["example.com"] },
+});
 
 const user = userEvent.setup({ delay: null });
 
@@ -113,13 +117,14 @@ describe("Messages", () => {
     }
   });
 
-  it("takes host overrides for any key", () => {
+  it("takes host overrides for any key", async () => {
     render(
       <DomainKit.Root messages={{ connect: "Link DNS" }} transport={transport}>
-        <Connect.Flow domain="app.messages.example" />
+        <Connect.Flow domain="app.example.com" />
       </DomainKit.Root>,
     );
-    expect(screen.getByRole("button", { name: "Link DNS" })).toBeDefined();
+    // The prompt waits for discovery rather than flashing a trigger it may not offer.
+    expect(await screen.findByRole("button", { name: "Link DNS" })).toBeDefined();
   });
 });
 
