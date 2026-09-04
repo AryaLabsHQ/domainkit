@@ -37,6 +37,41 @@ const tokenOnly = Provider.make({
   session,
 });
 
+/** Every method one provider can declare, so the descriptor order has something to order. */
+const everyMethod = Provider.make({
+  ...tokenOnly,
+  auth: {
+    ...tokenOnly.auth,
+    integration: {
+      label: "Install the app",
+      start: () => Effect.succeed({ authorizationUrl: "https://porkbun.test/install" }),
+      complete: () =>
+        Effect.succeed({
+          secret: Redacted.make("installed"),
+          context: { apiKey: "pk" },
+          expiresAt: null,
+        }),
+    },
+    oauth: {
+      label: "Sign in with Porkbun",
+      scopes: ["dns"],
+      start: () => Effect.succeed({ authorizationUrl: "https://porkbun.test/auth" }),
+      complete: () =>
+        Effect.succeed({
+          secret: Redacted.make("granted"),
+          context: { apiKey: "pk" },
+          expiresAt: null,
+        }),
+      refresh: () =>
+        Effect.succeed({
+          secret: Redacted.make("renewed"),
+          context: { apiKey: "pk" },
+          expiresAt: null,
+        }),
+    },
+  },
+});
+
 describe("Provider.make and Providers", () => {
   it("validates definitions and reports their methods", () => {
     assert.deepStrictEqual(Provider.methods(tokenOnly), ["token"]);
@@ -49,6 +84,14 @@ describe("Provider.make and Providers", () => {
     assert.ok(DomainKit.isError(caught));
     assert.strictEqual(caught.reason._tag, "InvalidInput");
     assert.throws(() => Provider.make({ ...tokenOnly, id: "Bad Id" }));
+  });
+
+  it("describes the interactive methods before the token a customer has to go and fetch", () => {
+    assert.deepStrictEqual(Provider.methods(everyMethod), ["oauth", "integration", "token"]);
+    assert.deepStrictEqual(
+      Provider.describeMethods(everyMethod).map((method) => method.kind),
+      ["oauth", "integration", "token"],
+    );
   });
 
   it.effect("resolves registered providers and rejects unknown or duplicate ids", () =>

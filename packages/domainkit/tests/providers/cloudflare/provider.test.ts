@@ -26,7 +26,7 @@ describe("Cloudflare.provider", () => {
       Provider.methods(
         Cloudflare.provider({ oauth: { clientId: "c", clientSecret: Redacted.make("s") } }),
       ),
-      ["token", "oauth"],
+      ["oauth", "token"],
     );
   });
 
@@ -365,6 +365,189 @@ describe("Cloudflare.provider", () => {
         new Headers(recording.requests[1]?.init?.headers).get("authorization"),
         "Bearer access-1",
       );
+    });
+  });
+
+  it.effect("derives consent, exchange, and revocation from the issuer the host configured", () => {
+    const recording = recordedFetch([
+      {
+        body: { access_token: "access-1", refresh_token: "refresh-1", token_type: "bearer" },
+        expect: { method: "POST", pathname: "/cloudflare/oauth2/token" },
+      },
+      { body: page([zone]), expect: { pathname: "/cloudflare/client/v4/zones" } },
+      { body: {}, expect: { method: "POST", pathname: "/cloudflare/oauth2/revoke" } },
+    ]);
+    const definition = Cloudflare.provider({
+      // The emulator serves both, but they are different hosts in production, so they stay apart.
+      baseUrl: "http://localhost:8788/cloudflare/client/v4",
+      fetch: recording.fetch,
+      oauth: {
+        clientId: "client-1",
+        clientSecret: Redacted.make("secret"),
+        issuer: "http://localhost:8788/cloudflare",
+      },
+    });
+    return Effect.gen(function* () {
+      const oauth = definition.auth.oauth ?? bail("oauth");
+      const started = yield* oauth.start({
+        state: "state-1",
+        callbackUrl: "https://app.example/cb",
+        codeChallenge: "chal",
+      });
+      const url = new URL(started.authorizationUrl);
+      assert.strictEqual(url.origin + url.pathname, "http://localhost:8788/cloudflare/oauth2/auth");
+      const issued = yield* oauth.complete({
+        code: "code-1",
+        callbackUrl: "https://app.example/cb",
+        codeVerifier: "verifier",
+        params: { state: "state-1", code: "code-1" },
+      });
+      assert.deepStrictEqual(JSON.parse(Redacted.value(issued.secret)), {
+        accessToken: "access-1",
+        refreshToken: "refresh-1",
+      });
+      assert.strictEqual(
+        recording.requests[0]?.url,
+        "http://localhost:8788/cloudflare/oauth2/token",
+      );
+      yield* (oauth.revoke ?? bail("revoke"))({ secret: issued.secret, context: issued.context });
+      assert.strictEqual(
+        recording.requests[2]?.url,
+        "http://localhost:8788/cloudflare/oauth2/revoke",
+      );
+    });
+  });
+
+  it.effect("sends the browser to the issuer and the server to the origin it can reach", () => {
+    const recording = recordedFetch([
+      {
+        body: { access_token: "access-1", refresh_token: "refresh-1", token_type: "bearer" },
+        expect: { method: "POST", pathname: "/cloudflare/oauth2/token" },
+      },
+      { body: page([zone]) },
+      { body: {}, expect: { method: "POST", pathname: "/cloudflare/oauth2/revoke" } },
+    ]);
+    const definition = Cloudflare.provider({
+      fetch: recording.fetch,
+      oauth: {
+        clientId: "client-1",
+        clientSecret: Redacted.make("secret"),
+        // The name the browser knows the emulator by; the API is in a container and cannot
+        // resolve it, so it reaches the same emulator through the host. That name is not loopback,
+        // so the plaintext request only goes through because the stage asked for it.
+        allowPlaintext: true,
+        issuer: "http://emulator.localhost:8788/cloudflare",
+        serverOrigin: "http://host.docker.internal:8788/cloudflare",
+      },
+    });
+    return Effect.gen(function* () {
+      const oauth = definition.auth.oauth ?? bail("oauth");
+      const started = yield* oauth.start({
+        state: "state-1",
+        callbackUrl: "https://app.example/cb",
+        codeChallenge: "chal",
+      });
+      assert.ok(
+        started.authorizationUrl.startsWith(
+          "http://emulator.localhost:8788/cloudflare/oauth2/auth",
+        ),
+      );
+      const issued = yield* oauth.complete({
+        code: "code-1",
+        callbackUrl: "https://app.example/cb",
+        codeVerifier: "verifier",
+        params: { state: "state-1", code: "code-1" },
+      });
+      assert.strictEqual(
+        recording.requests[0]?.url,
+        "http://host.docker.internal:8788/cloudflare/oauth2/token",
+      );
+      yield* (oauth.revoke ?? bail("revoke"))({ secret: issued.secret, context: issued.context });
+      assert.strictEqual(
+        recording.requests[2]?.url,
+        "http://host.docker.internal:8788/cloudflare/oauth2/revoke",
+      );
+    });
+  });
+
+  it.effect("refuses a plaintext OAuth issuer that is not on this machine", () => {
+    const recording = recordedFetch([{ body: {} }]);
+    const definition = Cloudflare.provider({
+      fetch: recording.fetch,
+      oauth: {
+        clientId: "client-1",
+        clientSecret: Redacted.make("secret"),
+        issuer: "http://oauth.example.com",
+      },
+    });
+    return Effect.gen(function* () {
+      const error = yield* (definition.auth.oauth ?? bail("oauth"))
+        .complete({
+          code: "code-1",
+          callbackUrl: "https://app.example/cb",
+          codeVerifier: "verifier",
+          params: { state: "state-1", code: "code-1" },
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(error.reason._tag, "ProviderUnavailable");
+      // The credential never left the process.
+      assert.deepStrictEqual(recording.requests, []);
+
+      // The same holds when only the server origin is remote and plaintext.
+      const split = Cloudflare.provider({
+        fetch: recording.fetch,
+        oauth: {
+          clientId: "client-1",
+          clientSecret: Redacted.make("secret"),
+          issuer: "http://localhost:8788/cloudflare",
+          serverOrigin: "http://oauth.example.com",
+        },
+      });
+      const refused = yield* (split.auth.oauth ?? bail("oauth"))
+        .complete({
+          code: "code-1",
+          callbackUrl: "https://app.example/cb",
+          codeVerifier: "verifier",
+          params: { state: "state-1", code: "code-1" },
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(refused.reason._tag, "ProviderUnavailable");
+      assert.deepStrictEqual(recording.requests, []);
+
+      // And a name that is not loopback stays refused until the stage asks for it: a hosts file
+      // can point `host.docker.internal` anywhere, so the name alone proves nothing.
+      const named = Cloudflare.provider({
+        fetch: recording.fetch,
+        oauth: {
+          clientId: "client-1",
+          clientSecret: Redacted.make("secret"),
+          issuer: "http://host.docker.internal:8788/cloudflare",
+        },
+      });
+      const unasked = yield* (named.auth.oauth ?? bail("oauth"))
+        .complete({
+          code: "code-1",
+          callbackUrl: "https://app.example/cb",
+          codeVerifier: "verifier",
+          params: { state: "state-1", code: "code-1" },
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(unasked.reason._tag, "ProviderUnavailable");
+      assert.deepStrictEqual(recording.requests, []);
+    });
+  });
+
+  it.effect("keeps Cloudflare's own OAuth server when the host configures none", () => {
+    const definition = Cloudflare.provider({
+      oauth: { clientId: "client-1", clientSecret: Redacted.make("secret") },
+    });
+    return Effect.gen(function* () {
+      const started = yield* (definition.auth.oauth ?? bail("oauth")).start({
+        state: "state-1",
+        callbackUrl: "https://app.example/cb",
+        codeChallenge: "chal",
+      });
+      assert.ok(started.authorizationUrl.startsWith(Cloudflare.server.authorization_endpoint));
     });
   });
 

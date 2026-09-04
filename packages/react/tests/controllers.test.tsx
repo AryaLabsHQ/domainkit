@@ -55,7 +55,7 @@ const connectDomain = async (transport: Transport.Interface, domain: string) => 
   await user.click(screen.getByRole("button", { name: "Connect" }));
   await user.type(await screen.findByLabelText(/Token/), "tok");
   await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-  await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
+  await waitFor(() => expect(screen.getByText("Connected")).toBeDefined());
   view.unmount();
 };
 
@@ -72,7 +72,7 @@ const applyDomain = async (
     </DomainKit.Root>,
   );
   await click("Review changes");
-  await click("Approve");
+  await click(/^Add \d+ records?$/);
   await screen.findByText("DNS records added.");
   view.unmount();
 };
@@ -131,7 +131,7 @@ describe("Connect.useController", () => {
     expect(field.getAttribute("name")).toBe("token");
     await user.type(field, "tok");
     await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-    await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Connected")).toBeDefined());
     const start = transport.calls.find((call) => call.method === "connection.start");
     expect(start?.input).toMatchObject({
       domain,
@@ -240,8 +240,203 @@ describe("Connect.useController", () => {
     await click("Connect a DNS provider");
     await screen.findByText(`${zone} already serves this domain`);
     await user.click(screen.getByRole("button", { name: `Use ${zone}` }));
-    await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Connected")).toBeDefined());
     expect(transport.calls.some((call) => call.method === "connection.discover")).toBe(true);
+  });
+});
+
+describe("Connect.Dialog", () => {
+  /** A zone the fake serves and offers OAuth for, so the dialog has two methods to order. */
+  const both = () => {
+    const zone = `dialog${(cases += 1)}.example`;
+    return {
+      domain: `app.${zone}`,
+      transport: Testing.transport({
+        provider: { nameserverSuffixes: [zone], oauth: true, zones: [zone] },
+      }),
+    };
+  };
+
+  const dialog = () => screen.getByRole("dialog");
+
+  it("names the narrowed provider with the mark the prompt uses", async () => {
+    const { domain, transport } = both();
+    render(
+      <DomainKit.Root navigate={() => {}} transport={transport}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    const media = dialog().querySelector("[data-domainkit-part='dialog-media']");
+    expect(media?.querySelector("[data-domainkit-part='provider-mark']")?.textContent).toBe("F");
+  });
+
+  it("offers the interactive method first and opens the token form in its place", async () => {
+    const { domain, transport } = both();
+    render(
+      <DomainKit.Root navigate={() => {}} transport={transport}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    const section = () => dialog().querySelector("[data-domainkit-part='provider-authentication']");
+    const oauth = section()?.querySelector("[data-domainkit-part='oauth-connect']");
+    const alternate = section()?.querySelector("[data-domainkit-part='method-alternate']");
+    expect(oauth).not.toBeNull();
+    // The click-through method is the offer; the token is the plain alternative under it.
+    expect(oauth?.compareDocumentPosition(alternate as Node)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(dialog().querySelector("[data-domainkit-part='token-connect']")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Use an API token instead" }));
+    expect(screen.getByLabelText(/Token/)).toBeDefined();
+    // The offer it replaced is gone, and the way back is a link rather than a disclosure.
+    expect(dialog().querySelector("[data-domainkit-part='oauth-connect']")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(dialog().querySelector("[data-domainkit-part='oauth-connect']")).not.toBeNull();
+    expect(dialog().querySelector("[data-domainkit-part='token-connect']")).toBeNull();
+  });
+
+  // The header's provider menu is a floating surface: opening it is a browser concern, and
+  // `tests/browser/flow.spec.ts` covers picking a provider and the dialog re-narrowing to it.
+
+  it("renders the form directly for a provider that offers a token and nothing else", async () => {
+    const { domain, transport } = scenario();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    expect(dialog().querySelector("[data-domainkit-part='token-alternative']")).toBeNull();
+    expect(screen.getByLabelText(/Token/)).toBeDefined();
+  });
+
+  it("stays narrowed to the provider it named while the command is in flight", async () => {
+    const { domain, transport } = both();
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    const pending: Transport.Interface = {
+      ...transport,
+      connection: { ...connection, start: () => Effect.never },
+    };
+    render(
+      <DomainKit.Root navigate={() => {}} transport={pending}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    expect(dialog().querySelector("[data-domainkit-part='dialog-media']")).not.toBeNull();
+    await user.click(screen.getByRole("button", { name: "Continue with Fake fake" }));
+    await screen.findByText("Connecting…");
+    // The discovery that narrowed the dialog outlives the command, so the surface does not
+    // widen to the whole provider list and back again while the customer waits.
+    expect(dialog().querySelector("[data-domainkit-part='dialog-media']")).not.toBeNull();
+  });
+
+  it("never carries a token to another domain", async () => {
+    const { domain, sibling, transport } = scenario();
+    // The form itself, kept mounted across the change: the dialog would close and take the field
+    // with it, but a host composing `Connect.Form` keeps it on screen.
+    function Harness({ target }: { readonly target: string }) {
+      const controller = Connect.useController({ domain: target });
+      return (
+        <DomainKit.Root transport={transport}>
+          <Connect.Form controller={controller} />
+        </DomainKit.Root>
+      );
+    }
+    const view = render(<Harness target={domain} />, { wrapper: wrap(transport) });
+    await user.type(await screen.findByLabelText(/Token/), "one-domains-token");
+    view.rerender(<Harness target={sibling} />);
+    const field = await screen.findByLabelText(/Token/);
+    expect((field as HTMLInputElement).value).toBe("");
+  });
+
+  it("asks for the fields a provider does not need with a control that reads as one", async () => {
+    const { domain, transport } = scenario();
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    // The fake declares one field; the optional one rides the descriptor, which is where the wire
+    // carries it.
+    const withOptional: Transport.Interface = {
+      ...transport,
+      connection: {
+        ...connection,
+        inspect: (target) =>
+          Effect.map(connection.inspect(target), (snapshot) => ({
+            ...snapshot,
+            providers: snapshot.providers.map((provider) => ({
+              ...provider,
+              methods: provider.methods.map((method) =>
+                method.fields === null
+                  ? method
+                  : {
+                      ...method,
+                      fields: [
+                        ...method.fields,
+                        { name: "accountId", required: false, secret: false },
+                      ],
+                    },
+              ),
+            })),
+          })),
+      },
+    };
+    render(
+      <DomainKit.Root transport={withOptional}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    const more = dialog().querySelector("[data-domainkit-part='more-options']");
+    expect(more?.getAttribute("data-state")).toBe("closed");
+    // A button, not a line of body text: it announces what it does and whether it is open.
+    const trigger = screen.getByRole("button", { name: "Add an account id" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByLabelText(/Account id/)).toBeNull();
+
+    await user.click(trigger);
+    expect(more?.getAttribute("data-state")).toBe("open");
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByLabelText(/Account id/)).toBeDefined();
+    expect(more?.querySelector("[data-domainkit-part='more-options-panel']")).not.toBeNull();
+  });
+
+  it("keeps the typed token after a rejection, so trying again needs no retyping", async () => {
+    const { domain, transport } = scenario();
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    const attempts: Array<unknown> = [];
+    // A provider that turns down every token, the way Cloudflare answers one it does not accept.
+    const refusing: Transport.Interface = {
+      ...transport,
+      connection: {
+        ...connection,
+        start: (input) => {
+          if (input.method._tag !== "Token") return connection.start(input);
+          attempts.push(input.method);
+          return Effect.fail(
+            new Kit.Error({ reason: new Reason.Unauthenticated({ message: "refused" }) }),
+          );
+        },
+      },
+    };
+    render(
+      <DomainKit.Root transport={refusing}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await user.type(await screen.findByLabelText(/Token/), "cf_bad_token");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
+    await screen.findByText("Token not accepted");
+    expect((screen.getByLabelText(/Token/) as HTMLInputElement).value).toBe("cf_bad_token");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
+    await waitFor(() => expect(attempts).toHaveLength(2));
+    expect(attempts[1]).toMatchObject({ _tag: "Token", values: { token: "cf_bad_token" } });
   });
 });
 
@@ -260,7 +455,7 @@ describe("Provision.useController", () => {
       </DomainKit.Root>,
     );
     await click("Review changes");
-    await click("Approve");
+    await click(/^Add \d+ records?$/);
     await waitFor(() => expect(applied).toEqual(["complete"]));
     expect(transport.calls.map((call) => call.method)).toContain("provisioning.approve");
     expect(transport.calls.map((call) => call.method)).toContain("provisioning.apply");
@@ -331,15 +526,17 @@ describe("controller inputs", () => {
     }
     const view = render(<Harness target={domain} />);
     await click("Review changes");
-    await screen.findByRole("button", { name: "Approve" });
+    await screen.findByRole("button", { name: /^Add \d+ records?$/ });
 
     // A fresh `requirements` array with the same records is the same attempt.
     view.rerender(<Harness target={domain} />);
-    expect(screen.getByRole("button", { name: "Approve" })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^Add \d+ records?$/ })).toBeDefined();
 
     // A different domain is a different attempt, so the old plan can no longer be approved.
     view.rerender(<Harness target={sibling} />);
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Approve" })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /^Add \d+ records?$/ })).toBeNull(),
+    );
   });
 
   it("drops readiness when the domain changes", async () => {

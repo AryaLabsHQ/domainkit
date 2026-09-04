@@ -28,6 +28,38 @@
     --domainkit-text: #18181b;
     --domainkit-warning: #b45309;
     --domainkit-control-radius: calc(var(--domainkit-radius) * 0.5);
+    /*
+     * The quiet controls in a dialog — a docs link, a disclosure trigger, a secondary action, the
+     * way back, the provider menu — share one rhythm: what sits above them, what sits below, and
+     * the room their hover and focus states need around the text.
+     */
+    --domainkit-quiet-lead: 0.5rem;
+    --domainkit-quiet-trail: 0.75rem;
+    --domainkit-quiet-inset: 0.5rem;
+    --domainkit-quiet-pad: 0.25rem;
+    /* The inner room a panel gives its contents: the dialog's form, and the two cards. */
+    --domainkit-panel-pad: 0.75rem;
+    /* A dialog that asks one question, and the width a dialog listing records takes instead. */
+    --domainkit-dialog-width: 24rem;
+    --domainkit-dialog-wide: 36rem;
+    /* The switch track, the thumb inside it, and the room it keeps at each end of the track. */
+    --domainkit-switch-width: 2.25rem;
+    --domainkit-switch-height: 1.25rem;
+    --domainkit-switch-thumb: 1rem;
+    --domainkit-switch-inset: 0.125rem;
+    /*
+     * A provider's identity is a name over one line about it, and the mark stands against both.
+     * The mark's size is the two lines added up, so it spans the block instead of guessing at it.
+     */
+    --domainkit-identity-name: 0.875rem;
+    --domainkit-identity-line: 0.8125rem;
+    --domainkit-identity-leading: 1.4;
+    --domainkit-mark-size: calc(
+      (var(--domainkit-identity-name) + var(--domainkit-identity-line)) *
+        var(--domainkit-identity-leading)
+    );
+    /* Cards draw no border of their own. A host that wants one sets this on the part. */
+    --domainkit-card-border: transparent;
     --domainkit-button-raised-glint: rgb(255 255 255 / 0.95);
     --domainkit-button-raised-shade: color-mix(in srgb, var(--domainkit-text) 10%, transparent);
     --domainkit-button-raised-shadow: 0 1px 2px
@@ -105,6 +137,11 @@
     [data-domainkit-part="cleanup-apply"],
     [data-domainkit-part="cleanup-retry"],
     [data-domainkit-part="disconnect-action"],
+    [data-domainkit-part="disconnect-confirm"],
+    [data-domainkit-part="method-alternate"],
+    [data-domainkit-part="dialog-back"],
+    [data-domainkit-part="dialog-provider-menu"],
+    [data-domainkit-part="more-options-trigger"],
     [data-domainkit-part="disconnect-trigger"],
     [data-domainkit-part="actions-trigger"],
     [data-domainkit-part="token-connect"] button,
@@ -237,7 +274,7 @@
     background: color-mix(in srgb, var(--domainkit-danger) 8%, transparent);
   }
 
-  :where([data-domainkit-part="cleanup-apply"]) {
+  :where([data-domainkit-part="cleanup-apply"], [data-domainkit-part="disconnect-confirm"]) {
     --domainkit-button-face: color-mix(in oklch, var(--domainkit-danger), white 22%);
     --domainkit-button-glint: color-mix(in oklch, var(--domainkit-danger), white 42%);
     --domainkit-button-edge: color-mix(in oklch, var(--domainkit-danger), black 18%);
@@ -254,17 +291,175 @@
     color: var(--domainkit-danger-contrast);
   }
 
-  :where([data-domainkit-part="cleanup-apply"]:hover:not(:disabled)) {
+  :where(
+    [data-domainkit-part="cleanup-apply"]:hover:not(:disabled),
+    [data-domainkit-part="disconnect-confirm"]:hover:not(:disabled)
+  ) {
     --domainkit-button-face: color-mix(in oklch, var(--domainkit-danger), white 28%);
   }
 
-  :where([data-domainkit-part="cleanup-apply"]:active:not(:disabled)) {
+  :where(
+    [data-domainkit-part="cleanup-apply"]:active:not(:disabled),
+    [data-domainkit-part="disconnect-confirm"]:active:not(:disabled)
+  ) {
     background-image: linear-gradient(
       to bottom,
       var(--domainkit-danger),
       color-mix(in oklch, var(--domainkit-danger), black 10%)
     );
     box-shadow: inset 0 1px 2px color-mix(in srgb, var(--domainkit-text) 28%, transparent);
+  }
+
+  /* Every quiet control in the dialog keeps the same rhythm above and below it. */
+  :where(
+    [data-domainkit-part="method-alternate"],
+    [data-domainkit-part="dialog-back"],
+    [data-domainkit-part="more-options-trigger"]
+  ) {
+    margin-block: var(--domainkit-quiet-lead) var(--domainkit-quiet-trail);
+  }
+
+  :where([data-domainkit-part="method-alternate"]) {
+    background: transparent;
+    border-color: var(--domainkit-border);
+    box-shadow: none;
+    color: var(--domainkit-text);
+    width: 100%;
+  }
+
+  :where(
+    [data-domainkit-part="method-alternate"]:hover:not(:disabled),
+    [data-domainkit-part="more-options-trigger"]:hover:not(:disabled)
+  ) {
+    background: var(--domainkit-fill);
+  }
+
+  :where([data-domainkit-part="more-options-trigger"]) {
+    background: transparent;
+    border-color: var(--domainkit-border);
+    box-shadow: none;
+    color: var(--domainkit-muted);
+    font-size: 0.8125rem;
+    gap: var(--domainkit-quiet-pad);
+    justify-self: start;
+  }
+
+  :where([data-domainkit-part="more-options-trigger"] svg),
+  :where([data-domainkit-part="dialog-provider-menu"] svg) {
+    height: 1rem;
+    transition: transform 150ms ease;
+    width: 1rem;
+  }
+
+  :where([data-domainkit-part="more-options"][data-state="open"])
+    :where([data-domainkit-part="more-options-trigger"] svg) {
+    transform: rotate(180deg);
+  }
+
+  :where([data-domainkit-part="more-options-panel"]) {
+    display: grid;
+    gap: var(--domainkit-quiet-lead);
+    padding-block-end: var(--domainkit-quiet-lead);
+  }
+
+  :where([data-domainkit-part="dialog-back"]) {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--domainkit-muted);
+    justify-self: start;
+    margin-inline-start: calc(-1 * var(--domainkit-quiet-inset));
+    padding-inline: var(--domainkit-quiet-inset);
+  }
+
+  :where([data-domainkit-part="dialog-back"]:hover:not(:disabled)) {
+    background: var(--domainkit-fill);
+    color: var(--domainkit-text);
+  }
+
+  :where([data-domainkit-part="dialog-back"])::before {
+    content: "\2190";
+    margin-inline-end: 0.35rem;
+  }
+
+  :where([data-domainkit-part="dialog-provider-menu"]) {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+    gap: var(--domainkit-quiet-pad);
+    margin-inline-start: calc(-1 * var(--domainkit-quiet-inset));
+    padding: var(--domainkit-quiet-pad) var(--domainkit-quiet-inset);
+  }
+
+  :where([data-domainkit-part="dialog-provider-menu"]:hover:not(:disabled)) {
+    background: var(--domainkit-fill);
+    color: var(--domainkit-accent);
+  }
+
+  :where([data-domainkit-part="dialog-provider-menu"][data-popup-open] svg) {
+    transform: rotate(180deg);
+  }
+
+  /* Above the dialog that opened it: the trigger sits inside the dialog's own stacking context. */
+  :where([data-domainkit-part="provider-menu-positioner"]) {
+    z-index: 1002;
+  }
+
+  :where([data-domainkit-part="provider-menu"]) {
+    background: var(--domainkit-background);
+    border: 1px solid var(--domainkit-border);
+    border-radius: var(--domainkit-radius);
+    box-shadow: var(--domainkit-shadow);
+    display: grid;
+    gap: 0.15rem;
+    min-width: 12rem;
+    padding: 0.3rem;
+  }
+
+  :where([data-domainkit-part="provider-menu-item"]) {
+    align-items: center;
+    border-radius: var(--domainkit-control-radius);
+    color: var(--domainkit-text);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.875rem;
+    gap: 0.5rem;
+    padding: 0.35rem 0.5rem;
+  }
+
+  :where([data-domainkit-part="provider-menu-item"][data-highlighted]) {
+    background: var(--domainkit-fill);
+  }
+
+  :where([data-domainkit-part="disconnect-scope"]) {
+    border: 1px solid var(--domainkit-border);
+    border-radius: var(--domainkit-control-radius);
+    display: grid;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0.6rem 0.75rem;
+  }
+
+  :where([data-domainkit-part="disconnect-scope"] legend) {
+    color: var(--domainkit-muted);
+    font-size: 0.8125rem;
+    padding-inline: 0.25rem;
+  }
+
+  :where([data-domainkit-part="disconnect-scope"] label) {
+    align-items: center;
+    color: var(--domainkit-text);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.875rem;
+    gap: 0.5rem;
+  }
+
+  :where([data-domainkit-part="disconnect-scope"] input) {
+    accent-color: var(--domainkit-accent);
+    margin: 0;
   }
 
   :where([data-domainkit-part="dialog-cancel"], [data-domainkit-part="dialog-close"]) {
@@ -359,6 +554,7 @@
   :where([data-domainkit-part="dialog-backdrop"]) {
     background: var(--domainkit-backdrop);
     inset: 0;
+    opacity: 1;
     position: fixed;
     transition: opacity 150ms ease;
     z-index: 1000;
@@ -389,12 +585,42 @@
     transition:
       opacity 150ms ease,
       transform 150ms ease;
-    width: 24rem;
+    width: var(--domainkit-dialog-width);
     z-index: 1001;
   }
 
-  :where([data-domainkit-part="plan-dialog"], [data-domainkit-part="cleanup-dialog"]) {
-    width: 36rem;
+  /*
+   * A dialog that lists records takes the wider width: the plan and the cleanup always do, and the
+   * disconnect dialog does whenever it carries removals to decide over.
+   */
+  :where(
+    [data-domainkit-part="plan-dialog"],
+    [data-domainkit-part="cleanup-dialog"],
+    [data-domainkit-part="disconnect-dialog"][data-cleanup="offered"]
+  ) {
+    --domainkit-dialog-width: var(--domainkit-dialog-wide);
+  }
+
+  /* The backdrop fades with the dialog it belongs to rather than appearing whole. */
+  :where(
+    [data-domainkit-part="dialog-backdrop"][data-starting-style],
+    [data-domainkit-part="dialog-backdrop"][data-ending-style]
+  ) {
+    opacity: 0;
+  }
+
+  /*
+   * A closed dialog is out of the customer's way even while it is still in the tree: it may linger
+   * for its exit, and a transparent sheet that still takes a press would swallow the next click.
+   */
+  :where(
+    [data-domainkit-part="dialog-backdrop"][data-closed],
+    [data-domainkit-part="connection-dialog"][data-closed],
+    [data-domainkit-part="plan-dialog"][data-closed],
+    [data-domainkit-part="cleanup-dialog"][data-closed],
+    [data-domainkit-part="disconnect-dialog"][data-closed]
+  ) {
+    pointer-events: none;
   }
 
   :where(
@@ -417,6 +643,14 @@
     display: flex;
     gap: 0.75rem;
     padding: 1rem 1rem 0.85rem;
+  }
+
+  /* The mark stands against the title and the line under it, the way it does on the two cards. */
+  :where([data-domainkit-part="dialog-media"]) {
+    align-items: center;
+    align-self: center;
+    display: inline-flex;
+    flex: none;
   }
 
   :where([data-domainkit-part="dialog-heading"]) {
@@ -521,6 +755,91 @@
     margin: 0;
   }
 
+  :where([data-domainkit-part="disconnect-cleanup"]) {
+    display: grid;
+    gap: var(--domainkit-quiet-lead);
+  }
+
+  :where([data-domainkit-part="disconnect-cleanup-label"]) {
+    align-items: center;
+    color: var(--domainkit-text);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.875rem;
+    gap: 0.6rem;
+  }
+
+  /*
+   * Base UI's own Switch anatomy: the root is the track and the thumb is a box laid out inside it.
+   * `border-box` and `inline-flex` make the declared width and height the track a customer sees,
+   * whatever the host's reset does with padding, and centre the thumb between the track's edges.
+   */
+  :where([data-domainkit-part="disconnect-cleanup-switch"]) {
+    align-items: center;
+    background: var(--domainkit-border);
+    border: 0;
+    border-radius: 999px;
+    box-sizing: border-box;
+    cursor: pointer;
+    display: inline-flex;
+    flex: none;
+    height: var(--domainkit-switch-height);
+    padding: var(--domainkit-switch-inset);
+    transition: background-color 150ms ease;
+    width: var(--domainkit-switch-width);
+  }
+
+  :where([data-domainkit-part="disconnect-cleanup-switch"][data-checked]) {
+    background: var(--domainkit-accent);
+  }
+
+  :where([data-domainkit-part="disconnect-cleanup-switch"]:disabled) {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  :where([data-domainkit-part="disconnect-cleanup-thumb"]) {
+    background: var(--domainkit-background);
+    border-radius: 999px;
+    display: block;
+    flex: none;
+    height: var(--domainkit-switch-thumb);
+    transition: translate 150ms ease;
+    width: var(--domainkit-switch-thumb);
+  }
+
+  /* The travel is the track less the thumb and the room the track keeps at both ends. */
+  :where([data-domainkit-part="disconnect-cleanup-thumb"][data-checked]) {
+    translate: calc(
+      var(--domainkit-switch-width) - var(--domainkit-switch-thumb) -
+        var(--domainkit-switch-inset) * 2
+    );
+  }
+
+  :where([data-domainkit-part="disconnect-cleanup-panel"]) {
+    display: grid;
+    gap: 0.35rem;
+    transition: opacity 150ms ease;
+  }
+
+  /* Off, the records are still what the decision is about, so they stay legible and step back. */
+  :where([data-domainkit-part="disconnect-cleanup"][data-state="off"])
+    :where([data-domainkit-part="disconnect-cleanup-panel"]) {
+    opacity: 0.55;
+  }
+
+  :where([data-domainkit-part="disconnect-cleanup-note"]) {
+    color: var(--domainkit-muted);
+    font-size: 0.8125rem;
+    margin: 0;
+  }
+
+  :where([data-domainkit-part="disconnect-status"]) {
+    color: var(--domainkit-muted);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
   :where([data-domainkit-part="dialog-footer"]) {
     border-top: 1px solid var(--domainkit-border);
     display: flex;
@@ -529,6 +848,8 @@
     padding: 0.75rem 1rem;
   }
 
+  /* A squircle: a rounded square on the radius token, filled edge to edge. Nothing here rounds it
+   * into a circle, so a mark that reads as one is a circular asset the host passed in. */
   :where([data-domainkit-part="provider-mark"]) {
     align-items: center;
     background: var(--domainkit-fill);
@@ -537,12 +858,12 @@
     box-sizing: border-box;
     display: inline-flex;
     flex: none;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 600;
-    height: 2rem;
+    height: var(--domainkit-mark-size);
     justify-content: center;
     overflow: hidden;
-    width: 2rem;
+    width: var(--domainkit-mark-size);
   }
 
   :where([data-domainkit-part="provider-mark"] img),
@@ -551,18 +872,6 @@
     height: 100%;
     object-fit: cover;
     width: 100%;
-  }
-
-  :where([data-domainkit-recipe="connect"]) {
-    gap: 0.45rem;
-  }
-
-  :where([data-domainkit-recipe="connect"] [data-domainkit-part="provider-mark"]) {
-    background: var(--domainkit-accent-contrast);
-    border-color: color-mix(in oklch, var(--domainkit-accent) 18%, transparent);
-    font-size: 0.625rem;
-    height: 1.25rem;
-    width: 1.25rem;
   }
 
   :where([data-domainkit-part="provider-mark"][data-domainkit-provider="vercel"]) {
@@ -575,7 +884,7 @@
     border-radius: var(--domainkit-control-radius);
     display: grid;
     gap: 0.65rem;
-    padding: 0.75rem;
+    padding: var(--domainkit-panel-pad);
   }
 
   :where([data-domainkit-part="token-connect"] [data-domainkit-part="field-label"]) {
@@ -610,25 +919,25 @@
     width: 100%;
   }
 
-  :where([data-domainkit-part="connected-card"]) {
-    align-items: center;
-    background: var(--domainkit-background);
-    border: 1px solid var(--domainkit-border);
+  /*
+   * Both cards sit on the host's inset surface rather than floating on the page ground, so a
+   * domain page reads as one section. The border is off unless a host sets `--domainkit-card-border`
+   * on the part.
+   */
+  :where([data-domainkit-part="connected-card"], [data-domainkit-part="connect-prompt"]) {
+    background: var(--domainkit-fill);
+    border: 1px solid var(--domainkit-card-border);
     border-radius: var(--domainkit-radius);
-    display: grid;
-    gap: 0.75rem 1rem;
-    grid-template-columns: minmax(0, 1fr) auto;
-    justify-content: space-between;
-    min-height: 4.25rem;
-    padding: 1rem;
-    width: 100%;
+    padding: var(--domainkit-panel-pad);
   }
 
-  :where([data-domainkit-part="connected-identity"]) {
+  :where([data-domainkit-part="connected-card"]) {
     align-items: center;
-    display: flex;
-    gap: 0.75rem;
-    min-width: 0;
+    column-gap: 1rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    justify-content: space-between;
+    width: 100%;
   }
 
   :where([data-domainkit-part="connected-actions"]) {
@@ -905,10 +1214,13 @@
     min-height: 1.5rem;
   }
 
+  /* A record name longer than the popover wraps inside its own cell; the status keeps the row. */
   :where([data-domainkit-part="observation-record"]) {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.75rem;
     font-weight: 600;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   :where([data-domainkit-part="observation-note"]) {
@@ -1057,12 +1369,23 @@
     font-size: 0.6875rem;
   }
 
+  /* Glyph and word are one badge: a narrow status column breaks the line, not the badge. */
   :where([data-domainkit-part="record-status"]) {
+    align-items: center;
     border-radius: 999px;
+    display: inline-flex;
     font-size: 0.6875rem;
     font-weight: 600;
+    gap: 0.25rem;
     letter-spacing: 0.02em;
     padding: 0.15rem 0.45rem;
+    white-space: nowrap;
+  }
+
+  /* The glyph reads at the size of the word beside it rather than a size above it. */
+  :where([data-domainkit-part="record-status"] [data-icon] svg) {
+    height: 1em;
+    width: 1em;
   }
 
   :where([data-domainkit-part="record-status"][data-status="Found"]) {
@@ -1144,6 +1467,7 @@
     color: var(--domainkit-muted);
   }
 
+  /* A record name is longer than a dialog is wide; it wraps rather than running off the row. */
   :where([data-domainkit-part="operation-record"]) {
     color: var(--domainkit-muted);
     display: grid;
@@ -1151,6 +1475,7 @@
     font-size: 0.75rem;
     gap: 0.2rem;
     min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   :where([data-domainkit-part="operation-value"]) {
@@ -1207,12 +1532,50 @@
     text-align: center;
   }
 
+  /* Glyph and title on one row, the description under the title, the action beside both. */
   :where([data-domainkit-part="outcome"][data-layout="inline"]) {
-    align-items: center;
+    align-items: start;
     column-gap: 0.5rem;
-    display: flex;
-    flex-wrap: wrap;
-    row-gap: 0.35rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    row-gap: 0.15rem;
+  }
+
+  /* The header groups the words for a card; inline puts its parts on the outcome's own grid. */
+  :where(
+    [data-domainkit-part="outcome"][data-layout="inline"] [data-domainkit-part="outcome-header"]
+  ) {
+    display: contents;
+  }
+
+  :where(
+    [data-domainkit-part="outcome"][data-layout="inline"] [data-domainkit-part="outcome-media"]
+  ) {
+    grid-area: 1 / 1;
+  }
+
+  :where(
+    [data-domainkit-part="outcome"][data-layout="inline"] [data-domainkit-part="outcome-title"]
+  ) {
+    grid-area: 1 / 2;
+  }
+
+  :where(
+    [data-domainkit-part="outcome"][data-layout="inline"]
+      [data-domainkit-part="outcome-description"]
+  ) {
+    grid-area: 2 / 2;
+  }
+
+  /*
+   * The action sits on the title's row. Spanning the description's row too would hold that row
+   * open where an outcome has no description, and leave the row's gap under a single line.
+   */
+  :where(
+    [data-domainkit-part="outcome"][data-layout="inline"] [data-domainkit-part="outcome-content"]
+  ) {
+    align-self: start;
+    grid-area: 1 / 3;
   }
 
   :where([data-domainkit-part="outcome-header"]) {
@@ -1272,17 +1635,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
-  }
-
-  :where(
-    [data-domainkit-part="outcome"][data-layout="inline"] [data-domainkit-part="outcome-header"]
-  ) {
-    align-items: center;
-    column-gap: 0.5rem;
-    display: flex;
-    flex: 1 1 12rem;
-    flex-wrap: wrap;
-    row-gap: 0.15rem;
   }
 
   :where([data-domainkit-part]:focus-visible) {
@@ -1381,12 +1733,21 @@
 
   [data-domainkit-part="field-description"] {
     align-items: center;
+    border-radius: var(--domainkit-control-radius);
     color: var(--domainkit-muted);
     display: inline-flex;
     font-size: 0.8125rem;
     gap: 0.25rem;
     justify-self: start;
+    margin-block: var(--domainkit-quiet-lead) var(--domainkit-quiet-trail);
+    margin-inline-start: calc(-1 * var(--domainkit-quiet-inset));
+    padding: var(--domainkit-quiet-pad) var(--domainkit-quiet-inset);
     text-decoration: none;
+  }
+
+  [data-domainkit-part="field-description"]:hover {
+    background: var(--domainkit-fill);
+    color: var(--domainkit-text);
   }
 
   /* ---------------------------------------------------------------------------------------------
@@ -1402,57 +1763,39 @@
     width: 100%;
   }
 
+  /*
+   * The mark beside a name, with the line about it directly under: both cards read the same. Two
+   * explicit rows carry the name and the line, and the mark spans them, so it stands against the
+   * whole identity rather than hanging off the name.
+   */
+  [data-domainkit-part="connected-identity"],
   [data-domainkit-part="host-identity"] {
-    align-items: center;
     column-gap: 0.5rem;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    min-width: 0;
+    row-gap: 0;
+  }
+
+  [data-domainkit-part="connected-identity"] > [data-domainkit-part="provider-mark"],
+  [data-domainkit-part="host-identity"] > [data-domainkit-part="provider-mark"] {
+    align-self: center;
+    grid-row: 1 / -1;
   }
 
   [data-domainkit-part="host-name"] {
-    font-size: 0.875rem;
+    font-size: var(--domainkit-identity-name);
     font-weight: 600;
     grid-column: 2;
+    line-height: var(--domainkit-identity-leading);
   }
 
   [data-domainkit-part="host-statement"] {
     color: var(--domainkit-muted);
-    font-size: 0.8125rem;
+    font-size: var(--domainkit-identity-line);
     grid-column: 2;
-  }
-
-  [data-domainkit-part="other-providers"],
-  [data-domainkit-part="more-options"] {
-    display: grid;
-    gap: 0.5rem;
-  }
-
-  [data-domainkit-part="other-providers-trigger"],
-  [data-domainkit-part="more-options-trigger"] {
-    color: var(--domainkit-muted);
-    cursor: pointer;
-    font-size: 0.8125rem;
-    list-style: none;
-    width: fit-content;
-  }
-
-  [data-domainkit-part="other-providers-trigger"]::before,
-  [data-domainkit-part="more-options-trigger"]::before {
-    content: "\25b8";
-    display: inline-block;
-    margin-inline-end: 0.35rem;
-  }
-
-  [data-domainkit-part="other-providers"][open]
-    > [data-domainkit-part="other-providers-trigger"]::before,
-  [data-domainkit-part="more-options"][open]
-    > [data-domainkit-part="more-options-trigger"]::before {
-    transform: rotate(90deg);
-  }
-
-  [data-domainkit-part="other-providers"] {
-    border-top: 1px solid var(--domainkit-border);
-    padding-top: 0.75rem;
+    line-height: var(--domainkit-identity-leading);
   }
 
   button[data-domainkit-part="provider-heading"] {
@@ -1504,10 +1847,12 @@
     gap: 0.375rem;
   }
 
+  /* A DKIM key is one word wider than the popover; it breaks rather than widening the whole list. */
   [data-domainkit-part="observation-expected"] {
     color: var(--domainkit-muted);
     font-size: 0.8125rem;
     margin: 0;
+    overflow-wrap: anywhere;
   }
 
   /* The source line above these is a small uppercase label; the values under it are data. */

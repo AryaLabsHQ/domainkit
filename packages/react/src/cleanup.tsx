@@ -1,6 +1,6 @@
 import { DomainKit, Reason, Receipt } from "domainkit";
 import * as Effect from "effect/Effect";
-import { useCallback, type ReactElement, type ReactNode } from "react";
+import { useCallback, useState, type ReactElement, type ReactNode } from "react";
 
 import { State, useAttempt, type Controller } from "./attempt.ts";
 import type { PartProps } from "./composition.tsx";
@@ -105,10 +105,17 @@ export function Flow({ domain, onCleaned, receiptId, trigger, ...props }: FlowPr
     ...(onCleaned === undefined ? {} : { onCleaned }),
     ...(receiptId === undefined ? {} : { receiptId }),
   });
+  // The dialog carries its own outcome, so the one on the page is for after it closes.
+  const [open, setOpen] = useState(false);
   return (
     <Root controller={controller} {...props}>
-      <Dialog controller={controller} {...(trigger === undefined ? {} : { trigger })} />
-      <Outcome controller={controller} />
+      <Dialog
+        controller={controller}
+        onOpenChange={setOpen}
+        open={open}
+        {...(trigger === undefined ? {} : { trigger })}
+      />
+      {open ? null : <Outcome controller={controller} />}
     </Root>
   );
 }

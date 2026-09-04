@@ -29,10 +29,12 @@ carries its auth methods, and each method its docs URL and token fields, so a ne
 in the dialog without a UI change.
 
 When discovery names a host, the dialog is titled after that provider and shows its methods alone;
-the rest wait behind a `Use a different provider` disclosure. With no host every provider is listed,
-one open at a time. Token fields take shadcn's `Field` anatomy (`field`, `field-label`,
-`field-description`, `field-error`), and the fields a provider does not need, such as an account id,
-sit behind a `Need an account id?` disclosure so the common form is one field.
+the heading is a menu that lists the rest and re-narrows the dialog to the one picked. With no host
+every provider is listed, one open at a time. A provider that offers a method the customer clicks
+through leads with it, and `Use an API token instead` puts the token form in the dialog's body with
+a way back. Token fields take shadcn's `Field` anatomy (`field`, `field-label`, `field-description`,
+`field-error`), and the fields a provider does not need, such as an account id, wait behind an
+`Add an account id` collapsible so the common form is one field.
 
 When the transport declares `connection.discover`, the flow asks on mount which of the customer's
 existing connections already reaches the domain and offers that first. A discovery failure is
@@ -44,20 +46,28 @@ description, its provider forms, and the values already typed, and answers with 
 [outcome](/components/outcome) beside the method that failed.
 
 A provider that turns down credentials is answering the secret it was given, so that input carries
-`aria-invalid` and the outcome renders in `field-error` under it. The outcome names the provider the
-customer acted on, which the reason itself cannot: "Cloudflare didn't accept this token", never a
-status code.
+`aria-invalid` and the outcome renders in `field-error` under it. The outcome answers about the
+credential and nothing else — "Token not accepted", never a status code — because the dialog's
+heading already names the provider.
 
 ## Parts
 
 | Part              | Renders                                                       |
 | ----------------- | ------------------------------------------------------------- |
 | `Connect.Prompt`  | The disconnected offer: who serves the zone, and the trigger  |
-| `Connect.Card`    | The connected provider, with detach and disconnect            |
+| `Connect.Card`    | The connected provider, where it stands, and the disconnect   |
 | `Connect.Dialog`  | The connect surface, with a `render` prop for your own dialog |
 | `Connect.Form`    | The method picker and token fields, without the dialog        |
 | `Connect.Status`  | One line of what the connection is doing                      |
 | `Connect.Outcome` | The last failure, as an [outcome](/components/outcome)        |
+
+A provider's mark is a squircle: the part is a rounded square on the radius token, and whatever
+`marks` supplies fills it edge to edge (`object-fit: cover`). Nothing rounds it into a circle, so a
+mark that reads as one is circular artwork; pass a square, full-bleed asset.
+
+`Connect.DisconnectDialog` is what the card's Disconnect opens: it removes the records an apply
+receipt proves DomainKit created when the option stays checked, and asks whether the release covers
+this domain or every domain on the connection when it serves more than one.
 
 ## Where the customer comes back to
 

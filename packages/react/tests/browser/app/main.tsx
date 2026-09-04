@@ -17,6 +17,7 @@ import {
   Domain,
   DomainKit,
   Outcome,
+  Provision,
   Testing,
   Verify as VerifyUi,
 } from "../../../src/index.ts";
@@ -24,18 +25,46 @@ import {
 import "../../../src/styles.css";
 
 const parameters = new URLSearchParams(window.location.search);
-const zone = parameters.get("zone") ?? "example.com";
-const domain = `app.${zone}`;
+// Every page load builds its own in-memory server, so one zone serves every view. The names here
+// are what the PR's screenshots show a reviewer, so they read the way a customer's screen reads.
+const zone = parameters.get("zone") ?? "northwind.dev";
+const domain = `mail.${zone}`;
 const colorScheme = parameters.get("scheme") === "dark" ? "dark" : "light";
+
+/** Square artwork a host passes in, the way `marks` is meant to be used. */
+const marks = {
+  beacon: (
+    <svg aria-hidden="true" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect fill="#0f766e" height="32" width="32" />
+      <path d="M16 8 22 24H10Z" fill="#ecfdf5" />
+      <path d="M11 19h10" stroke="#0f766e" strokeWidth="2" />
+      <circle cx="16" cy="8" fill="#5eead4" r="2.6" />
+    </svg>
+  ),
+  meridian: (
+    <svg aria-hidden="true" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect fill="#312e81" height="32" width="32" />
+      <g fill="none" stroke="#c7d2fe" strokeWidth="1.8">
+        <circle cx="16" cy="16" r="8.5" />
+        <ellipse cx="16" cy="16" rx="3.6" ry="8.5" />
+        <path d="M7.5 16h17" />
+      </g>
+    </svg>
+  ),
+};
 
 // `host=none` drops the nameserver suffixes, so discovery finds no provider for the zone.
 const hosted = parameters.get("host") !== "none";
 const transport = Testing.transport({
   provider: {
+    id: "meridian",
+    name: "Meridian DNS",
     ...(hosted ? { nameserverSuffixes: [zone] } : {}),
     oauth: true,
     zones: [zone],
   },
+  // Public DNS is read through a real resolver, and the observer's name reaches the evidence list.
+  resolver: { id: "cloudflare" },
 });
 
 /**
@@ -44,14 +73,18 @@ const transport = Testing.transport({
  */
 const twoProviders = (): Transport.Interface => {
   const serves = CoreTesting.provider({
-    id: "cloudflare",
+    id: "meridian",
+    name: "Meridian DNS",
     ...(hosted ? { nameserverSuffixes: [zone] } : {}),
     oauth: true,
     zones: [zone],
   });
-  const other = CoreTesting.provider({ id: "vercel", zones: [] });
+  const other = CoreTesting.provider({ id: "beacon", name: "Beacon Host", zones: [] });
   const { handler } = Server.toWebHandler(
-    Kit.layerMemory({ providers: [serves, other], resolver: CoreTesting.resolver() }).pipe(
+    Kit.layerMemory({
+      providers: [serves, other],
+      resolver: CoreTesting.resolver(undefined, { id: "cloudflare" }),
+    }).pipe(
       Layer.merge(
         Layer.succeed(Server.Identity)({
           principal: () => Effect.succeed(CoreTesting.principal),
@@ -80,7 +113,7 @@ const twoProviders = (): Transport.Interface => {
                 ? method
                 : {
                     ...method,
-                    docsUrl: "https://example.com/tokens",
+                    docsUrl: "https://meridiandns.example/docs/api-tokens",
                     fields: [
                       ...method.fields,
                       { name: "accountId", required: false, secret: false },
@@ -114,19 +147,30 @@ function ReturnToProbe() {
     };
   }, []);
   return (
-    <DomainKit.Root navigate={() => {}} transport={recording}>
+    <DomainKit.Root marks={marks} navigate={() => {}} transport={recording}>
       <Connect.Flow domain={domain} />
       <pre data-testid="started">{started}</pre>
     </DomainKit.Root>
   );
 }
 
+/** What a mail product actually asks a customer to add before it will send for their domain. */
 const requirements = [
-  DnsRecord.cname({ name: domain, purpose: "Serve your site", target: "edge.example.com" }),
+  DnsRecord.cname({
+    name: `track.${domain}`,
+    purpose: "Track link clicks",
+    target: "links.sendgate.app",
+  }),
+  DnsRecord.mx({
+    exchange: "mx1.sendgate.app",
+    name: domain,
+    priority: 10,
+    purpose: "Deliver inbound mail",
+  }),
   DnsRecord.txt({
-    name: `_acme.${domain}`,
-    purpose: "Prove ownership",
-    value: "acme-verify=7f3a",
+    name: `sendgate._domainkey.${domain}`,
+    purpose: "Sign outgoing mail",
+    value: "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC7Vd8Kx2mQ1nJ9pQxUeH",
   }),
 ];
 
@@ -145,16 +189,16 @@ const mismatched: Transport.Readiness = {
         new Verify.ProviderEvidence({
           detail: null,
           observedAt,
-          provider: "fake",
+          provider: "meridian",
           status: "mismatch",
-          values: ["old.example.com"],
+          values: ["links.legacy-sendgate.app"],
         }),
         new Verify.PublicDnsEvidence({
           detail: "The name resolves somewhere else.",
           observedAt,
           resolver: "cloudflare",
           status: "mismatch",
-          values: ["old.example.com", "older.example.com"],
+          values: ["links.legacy-sendgate.app", "links.old-sendgate.app"],
         }),
         new Verify.PublicDnsEvidence({
           detail: null,
@@ -179,7 +223,7 @@ const mismatched: Transport.Readiness = {
 };
 
 /**
- * A provider that turns down every token, the way Cloudflare answers one it does not accept. The
+ * A provider that turns down every token, the way a real one answers one it does not accept. The
  * fake provider only refuses an empty token, and a required field never submits empty.
  */
 const refusesTokens = () => {
@@ -221,15 +265,39 @@ const refusesTokens = () => {
 };
 
 /**
+ * A connect that cannot be written down, so the outcome carries a title and the line under it:
+ * the anatomy the three shapes below are here to show.
+ */
+const storageDown = (): Transport.Interface => {
+  const connection = transport.connection;
+  if (connection === undefined) throw new Error("The fixture transport has no connection group");
+  return {
+    ...transport,
+    connection: {
+      ...connection,
+      start: () =>
+        Effect.fail(
+          new Kit.Error({
+            reason: new Reason.StorageFailed({
+              message: "the write did not land",
+              operation: "connections.put",
+            }),
+          }),
+        ),
+    },
+  };
+};
+
+/**
  * The outcome in the three shapes a host meets it: the default card, the inline row, and a
  * composition of the host's own where only the words come from the catalog.
  */
 function Outcomes() {
   const controller = Connect.useController({ domain });
   const connect = controller.connect;
-  // The fake provider refuses an empty token, so the failure comes off the real lifecycle.
+  // The failure comes off the real lifecycle rather than a state the view sets by hand.
   useEffect(() => {
-    connect({ method: "token", provider: "fake", values: { token: "" } });
+    connect({ method: "token", provider: "meridian", values: { token: "tok" } });
   }, [connect]);
   return (
     <div data-testid="outcomes">
@@ -253,6 +321,37 @@ function Outcomes() {
   );
 }
 
+/**
+ * One transport verb that never answers, so a dialog can be caught with a command in flight. The
+ * fake transport is in-process, so there is no request to delay from the test side.
+ */
+function Hanging({ verb }: { readonly verb: string }) {
+  const held = useMemo(() => {
+    const connection = transport.connection;
+    const provisioning = transport.provisioning;
+    if (connection === undefined || provisioning === undefined) {
+      throw new Error("The fixture transport is missing a group");
+    }
+    return {
+      ...transport,
+      connection: {
+        ...connection,
+        ...(verb === "start" ? { start: () => Effect.never } : {}),
+        ...(verb === "disconnect" ? { disconnect: () => Effect.never } : {}),
+      },
+      provisioning: {
+        ...provisioning,
+        ...(verb === "plan" ? { plan: () => Effect.never } : {}),
+      },
+    };
+  }, [verb]);
+  return (
+    <DomainKit.Root marks={marks} navigate={() => {}} transport={held}>
+      <Domain.Flow domain={domain} requirements={requirements} />
+    </DomainKit.Root>
+  );
+}
+
 const container = document.querySelector("#root");
 if (container === null) throw new Error("The fixture has no #root");
 
@@ -260,6 +359,9 @@ const view = parameters.get("view");
 
 /** Built once: a new server is a new world, and the dialog must survive a re-render. */
 const providers = view === "providers" ? twoProviders() : transport;
+
+/** Built once too: a new transport on every render would restart the connect the view runs. */
+const down = view === "outcome" ? storageDown() : transport;
 
 /**
  * The browser's own `fetch`, untouched: `Transport.fromFetch` with no `fetch` option against a
@@ -304,14 +406,23 @@ createRoot(container).render(
   <StrictMode>
     {view === "returnto" ? (
       <ReturnToProbe />
+    ) : view === "hang" ? (
+      <Hanging verb={parameters.get("hang") ?? "start"} />
     ) : view === "fetch" ? (
       <FetchProbe />
     ) : (
       <DomainKit.Root
         colorScheme={colorScheme}
+        marks={marks}
         theme={{ accent: "#4f46e5" }}
         transport={
-          view === "reject" ? refusesTokens() : view === "providers" ? providers : transport
+          view === "reject"
+            ? refusesTokens()
+            : view === "providers"
+              ? providers
+              : view === "outcome"
+                ? down
+                : transport
         }
       >
         {view === "providers" ? (
@@ -321,6 +432,12 @@ createRoot(container).render(
           />
         ) : view === "reject" ? (
           <Connect.Flow domain={domain} />
+        ) : view === "review" ? (
+          // `Provision.Flow` is the review dialog on its own; `Domain.Flow` reviews inline.
+          <>
+            <Connect.Flow domain={domain} />
+            <Provision.Flow domain={domain} requirements={requirements} />
+          </>
         ) : view === "outcome" ? (
           <Outcomes />
         ) : view === "evidence" ? (

@@ -89,6 +89,8 @@ export const Snapshot = Schema.Struct({
   method: Schema.NullOr(Storage.AuthMethod),
   status: ConnectionStatus,
   lastReceiptId: Schema.NullOr(Schema.String),
+  /** How many domains the connection serves, including this one; `0` without a connection. */
+  connectionDomains: Schema.Number,
   reusable: Schema.Array(
     Schema.Struct({
       connectionId: Schema.String,
@@ -496,6 +498,7 @@ const snapshotOf = (snapshot: Connect.Snapshot): Snapshot => ({
         ? "connected"
         : "reconnect",
   lastReceiptId: snapshot.lastReceiptId,
+  connectionDomains: snapshot.connectionDomains,
   reusable: snapshot.reusable.map(({ connection, provider, method }) => ({
     connectionId: connection.id,
     provider,

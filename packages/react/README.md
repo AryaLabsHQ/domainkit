@@ -58,11 +58,32 @@ trigger, and the dialog behind that trigger is narrowed to that provider, with t
 disclosure.
 
 When no registered provider serves the zone there is nothing DomainKit can connect, so the flow
-offers nothing. Pass `connect="always"` to offer the all-providers dialog anyway:
+offers nothing. Pass `connect="always"` to offer the all-providers dialog anyway, or `connect="never"`
+for a domain your application has already settled another way. A domain DomainKit holds keeps its
+status and its disconnect whatever the invitation says.
 
 ```tsx
 <Domain.Flow domain="app.example.com" requirements={requirements} connect="always" />
 ```
+
+Connecting is the customer saying yes to the records, so the plan opens itself the moment a
+connection lands — after a token connect, and after the customer returns from a provider — and one
+action adds them. `review="manual"` waits for the trigger instead.
+
+`onState` reports what DomainKit has to say about the domain, so your own offers can be ordered
+beside it rather than competing with it:
+
+```tsx
+<Domain.Flow
+  domain="app.example.com"
+  requirements={requirements}
+  onState={({ connected, offering, provider }) => setDomainKitOffers(connected || offering)}
+/>
+```
+
+Letting a provider go is one dialog: `Disconnect` asks whether to remove the records an apply
+receipt proves DomainKit created, removes them when the option stays checked, then releases the
+connection. `Cleanup.Flow` is still exported for a host that wants removal on its own.
 
 ## Own one piece, keep the rest
 
@@ -84,7 +105,7 @@ Every part of the flow is a slot with a default.
 | `connection`   | `{ controller, domain, connect }`               | `Connect.Card` once connected, `Connect.Prompt` until then |
 | `records`      | `{ records, readiness, controller, domain }`    | `Records.Table`                                            |
 | `verification` | `{ controller, domain }`                        | `Verify.Status` with per-requirement evidence              |
-| `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline, Remove records           |
+| `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline                           |
 
 `Domain.Flow` adds no layout container around a slot: its output is a direct child of the flow root,
 so your own grid can place it without `display: contents`.

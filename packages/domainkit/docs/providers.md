@@ -18,6 +18,22 @@ host's registered OAuth client; the default set is `zone:read`, `dns_records:edi
 `offline_access`. The credential packs the access and refresh tokens together, so refresh and
 revocation need nothing from the host.
 
+`oauth.issuer` names the origin those three endpoints hang off, `/oauth2/auth`, `/oauth2/token`,
+and `/oauth2/revoke`, so a stage points consent at an emulator that mounts the same paths and runs
+the code path a customer does. It stays separate from `baseUrl` because in production these are
+different hosts: `dash.cloudflare.com` for OAuth, `api.cloudflare.com/client/v4` for the REST API.
+
+Consent is the browser's request and the exchange is the server's, so a stage where those reach the
+same emulator by different names gives `oauth.serverOrigin` as well: the authorize URL keeps
+deriving from `issuer`, while `/oauth2/token` and `/oauth2/revoke` derive from `serverOrigin`. It
+defaults to `issuer`, so a stage where one name works for both names it once.
+
+DomainKit requires HTTPS for every OAuth request. Loopback is the one automatic exception: it goes
+nowhere and nothing can repoint it. A plaintext endpoint reached by any other name, such as an
+emulator at `host.docker.internal`, takes `oauth.allowPlaintext`, because a hosts file can point a
+name anywhere and the name alone proves nothing. That flag is for a development stage: with it the
+client secret, the code, and the tokens cross the network in the clear.
+
 Cloudflare's token verification does not enumerate DNS permissions, so the capability claim records
 what the definition requires rather than what the token proves. A token without `dns_records:edit`
 verifies and fails at the first write with `Forbidden`.

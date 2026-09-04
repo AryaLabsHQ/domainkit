@@ -18,7 +18,11 @@ export interface Catalog {
   readonly close: string;
   readonly retry: string;
   readonly approve: string;
+  /** The provisioning dialog's primary action: what it adds, and how many. */
+  readonly addRecords: (count: number) => string;
   readonly decline: string;
+  /** Why the primary action is unavailable: every operation the plan holds is blocked. */
+  readonly everyRecordConflicts: string;
   readonly reviewChanges: string;
   readonly cleanUp: string;
   readonly checkDns: string;
@@ -28,6 +32,17 @@ export interface Catalog {
   readonly moreOptions: string;
   /** Reveals the providers the dialog narrowed away. */
   readonly useAnotherProvider: string;
+  /** Opens the token form where a provider also offers a method the customer clicks through. */
+  readonly useTokenInstead: string;
+  /** Returns from one method's form to the provider's methods. */
+  readonly back: string;
+  /** The connected card's own line, beside the provider's name. */
+  readonly connected: string;
+  readonly needsReconnect: string;
+  /** The disconnect dialog's scope question, when the connection serves other domains too. */
+  readonly disconnectScope: string;
+  readonly disconnectThisDomain: string;
+  readonly disconnectEveryDomain: (count: number) => string;
   readonly copy: string;
   readonly copied: string;
   readonly copyZone: string;
@@ -62,7 +77,18 @@ export interface Catalog {
   readonly notConnected: string;
   readonly reconnectRequired: (provider: string) => string;
   readonly disconnectTitle: (provider: string) => string;
-  readonly disconnectConsent: string;
+  /**
+   * What disconnecting means, in the present. The default names DomainKit as what stops managing
+   * the records; a host application overrides the key to name itself.
+   */
+  readonly disconnectConsent: (domain: string, provider: string) => string;
+  /**
+   * The option inside the disconnect dialog, over the records it would remove. Only this domain's
+   * apply receipt proves what DomainKit created, so the words say which records go.
+   */
+  readonly disconnectWithCleanup: (count: number) => string;
+  /** What the listed records do when that option is off. */
+  readonly disconnectKeepsRecords: (provider: string) => string;
   readonly detachConsent: string;
   readonly detached: string;
   readonly reusableConnections: string;
@@ -148,7 +174,8 @@ export interface Catalog {
 /** What an outcome says: a heading the customer reads first, then what to do about it. */
 export interface Outcome {
   readonly title: string;
-  readonly description: string;
+  /** What to do about it. Absent where the title has already said the whole of it. */
+  readonly description?: string;
 }
 
 /**
@@ -224,14 +251,23 @@ export const english: Catalog = {
   close: "Close",
   retry: "Try again",
   approve: "Approve",
+  addRecords: (count) => (count === 1 ? "Add 1 record" : `Add ${count} records`),
   decline: "Decline",
+  everyRecordConflicts: "Resolve the records above at your provider, then review again.",
   reviewChanges: "Review changes",
   cleanUp: "Remove records",
   checkDns: "Check DNS",
   checkAgain: "Check again",
   moreActions: "More actions",
-  moreOptions: "Need an account id?",
+  moreOptions: "Add an account id",
   useAnotherProvider: "Use a different provider",
+  useTokenInstead: "Use an API token instead",
+  back: "Back",
+  connected: "Connected",
+  needsReconnect: "Needs reconnecting",
+  disconnectScope: "This connection serves other domains.",
+  disconnectThisDomain: "Only this domain",
+  disconnectEveryDomain: (count) => `All ${count} domains`,
   copy: "Copy",
   copied: "Copied",
   copyZone: "Copy zone file",
@@ -261,7 +297,13 @@ export const english: Catalog = {
   notConnected: "No DNS provider is connected.",
   reconnectRequired: (provider) => `${provider} needs to be reconnected`,
   disconnectTitle: (provider) => `Disconnect ${provider}?`,
-  disconnectConsent: "The provider connection is removed. Existing DNS records are preserved.",
+  disconnectConsent: (domain, provider) =>
+    `DomainKit stops managing DNS for ${domain} through ${provider}.`,
+  disconnectWithCleanup: (count) =>
+    count === 1
+      ? "Remove the 1 record DomainKit added"
+      : `Remove the ${count} records DomainKit added`,
+  disconnectKeepsRecords: (provider) => `Records stay in ${provider}.`,
   detachConsent: "This domain is detached from the provider. Existing DNS records are preserved.",
   detached: "Domain detached. DNS records were preserved.",
   reusableConnections: "Connections you already have",
@@ -427,9 +469,11 @@ export const english: Catalog = {
         ? "Check what you entered"
         : `Check the ${humanize(reason.field).toLowerCase()}`,
   }),
-  unauthenticated: (_reason, context) => ({
-    description: "Check the token can read and edit DNS for this zone, then try again.",
-    title: `${named(context.provider)} didn't accept this token`,
+  // The dialog's heading already names the provider, so the outcome answers about the credential
+  // and nothing else. A longer title wraps in the column beside the retry, and a second line under
+  // it repeats what the title said.
+  unauthenticated: () => ({
+    title: "Token not accepted",
   }),
   forbidden: (_reason, context) => ({
     description: `The connection needs permission to edit DNS for ${where(context.domain)}.`,
@@ -544,5 +588,5 @@ export const failure = (
   context: OutcomeContext = {},
 ): string => {
   const { description, title } = outcome(error, catalog, context);
-  return `${title}. ${description}`;
+  return description === undefined ? `${title}.` : `${title}. ${description}`;
 };

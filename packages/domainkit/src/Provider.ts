@@ -147,16 +147,12 @@ interface FieldAst {
   readonly context?: { readonly isOptional?: boolean } | undefined;
 }
 
+/**
+ * Every method a provider offers, in the order a UI should present them: the interactive ones a
+ * customer clicks through first, then the token they have to go and fetch themselves.
+ */
 export const describeMethods = (definition: Definition): ReadonlyArray<MethodDescriptor> => {
   const found: Array<MethodDescriptor> = [];
-  if (definition.auth.token !== undefined) {
-    found.push({
-      kind: "token",
-      label: definition.auth.token.label,
-      docsUrl: definition.auth.token.docsUrl ?? null,
-      fields: tokenFields(definition.auth.token),
-    });
-  }
   if (definition.auth.oauth !== undefined) {
     found.push({ kind: "oauth", label: definition.auth.oauth.label, docsUrl: null, fields: null });
   }
@@ -166,6 +162,14 @@ export const describeMethods = (definition: Definition): ReadonlyArray<MethodDes
       label: definition.auth.integration.label,
       docsUrl: null,
       fields: null,
+    });
+  }
+  if (definition.auth.token !== undefined) {
+    found.push({
+      kind: "token",
+      label: definition.auth.token.label,
+      docsUrl: definition.auth.token.docsUrl ?? null,
+      fields: tokenFields(definition.auth.token),
     });
   }
   return found;
@@ -271,13 +275,9 @@ export const make = <Context>(definition: Definition<Context>): Definition<Conte
   return definition;
 };
 
-export const methods = (definition: Definition): ReadonlyArray<AuthMethod> => {
-  const found: Array<AuthMethod> = [];
-  if (definition.auth.token !== undefined) found.push("token");
-  if (definition.auth.oauth !== undefined) found.push("oauth");
-  if (definition.auth.integration !== undefined) found.push("integration");
-  return found;
-};
+/** The kinds alone, in the same order `describeMethods` puts them: interactive first, token last. */
+export const methods = (definition: Definition): ReadonlyArray<AuthMethod> =>
+  describeMethods(definition).map((method) => method.kind);
 
 /**
  * Pick the most specific zone among `targets` for `domain`: exactly one match resolves, several

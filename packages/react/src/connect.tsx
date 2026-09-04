@@ -1,5 +1,8 @@
+import { Collapsible as BaseCollapsible } from "@base-ui/react/collapsible";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import type { DomainKit, Storage } from "domainkit";
+import { Switch as BaseSwitch } from "@base-ui/react/switch";
+import { Menu as BaseMenu } from "@base-ui/react/menu";
+import { Receipt, type DomainKit, type Plan, type Storage } from "domainkit";
 import { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -13,6 +16,7 @@ import {
   type ReactNode,
 } from "react";
 
+import * as Cleanup from "./cleanup.tsx";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
@@ -20,6 +24,7 @@ import { Event } from "./events.ts";
 import { useIcons } from "./icons.tsx";
 import { outcome as describeOutcome } from "./messages.ts";
 import * as OutcomeUi from "./outcome.tsx";
+import * as Operations from "./operations.tsx";
 import * as Provider from "./provider.tsx";
 import { useRunner } from "./task.ts";
 
@@ -40,7 +45,7 @@ export type State = Data.TaggedEnum<{
   Disconnected: { readonly snapshot: Snapshot; readonly discovery: Discovery | null };
   Connected: { readonly snapshot: Snapshot };
   Reconnect: { readonly snapshot: Snapshot };
-  Submitting: { readonly snapshot: Snapshot | null };
+  Submitting: { readonly snapshot: Snapshot | null; readonly discovery: Discovery | null };
   Redirecting: { readonly url: string };
   SelectionRequired: {
     readonly snapshot: Snapshot | null;
@@ -73,6 +78,13 @@ export interface ConnectInput {
 }
 
 export interface Controller {
+  readonly domain: string;
+  /**
+   * How many times a connection has been established for this domain on this surface: a token
+   * connect that landed, or a load that followed this library's own redirect back. It only ever
+   * grows, so a flow acts on a change rather than on a state that would fire again every render.
+   */
+  readonly established: number;
   readonly state: State;
   readonly snapshot: Snapshot | null;
   readonly discovery: Discovery | null;
@@ -98,6 +110,31 @@ export interface Options {
    */
   readonly returnTo?: string | null;
 }
+
+/**
+ * An interactive method leaves the page and comes back, so what the library knew is gone with it.
+ * It writes down the domain it sent the customer away for, and the load that follows reads it once:
+ * that, not a query parameter a host would have to keep, is how a return is told from a reload.
+ */
+const RETURNING = "domainkit.returning";
+
+const markReturn = (domain: string): void => {
+  try {
+    sessionStorage.setItem(RETURNING, domain);
+  } catch {
+    // A browser with storage turned off simply loses the one-click return.
+  }
+};
+
+const tookReturn = (domain: string): boolean => {
+  try {
+    if (sessionStorage.getItem(RETURNING) !== domain) return false;
+    sessionStorage.removeItem(RETURNING);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /** Read at connect time, not at render, so it is the page the customer is actually on. */
 const currentUrl = (): string | null =>
@@ -156,6 +193,7 @@ export function useController({ domain, returnTo }: Options): Controller {
   // What the customer was doing when it failed, so the dialog can answer beside that method.
   const attempted = useRef<Attempt | null>(null);
 
+  const [established, setEstablished] = useState(0);
   const [inspected, setInspected] = useState(domain);
   if (inspected !== domain) {
     setInspected(domain);
@@ -203,6 +241,13 @@ export function useController({ domain, returnTo }: Options): Controller {
         onSuccess: ({ discovery, snapshot }) => {
           if (held.current.domain !== domain) return;
           held.current = { discovery, domain, snapshot };
+          // The marker answers exactly one load: the one that came back. It is spent whatever
+          // that load found, so an authorization the customer abandoned cannot leave it lying
+          // there for an ordinary page view to read as a return weeks later.
+          const returned = tookReturn(domain);
+          if (returned && snapshot.status === "connected") {
+            setEstablished((count) => count + 1);
+          }
           setState(settled(snapshot, discovery));
         },
       },
@@ -217,6 +262,7 @@ export function useController({ domain, returnTo }: Options): Controller {
       switch (result._tag) {
         case "Connected":
           held.current = { discovery: null, domain, snapshot: result.snapshot };
+          setEstablished((count) => count + 1);
           setState(settled(result.snapshot, null));
           if (result.snapshot.connectionId !== null) {
             emit(
@@ -229,6 +275,7 @@ export function useController({ domain, returnTo }: Options): Controller {
           }
           return;
         case "Redirect":
+          markReturn(domain);
           setState(State.Redirecting({ url: result.authorizationUrl }));
           navigate(result.authorizationUrl);
           return;
@@ -251,7 +298,12 @@ export function useController({ domain, returnTo }: Options): Controller {
       if (held.current.domain !== domain) return;
       attempted.current = attempt;
       const command = () => {
-        setState(State.Submitting({ snapshot: held.current.snapshot }));
+        setState(
+          State.Submitting({
+            discovery: held.current.discovery,
+            snapshot: held.current.snapshot,
+          }),
+        );
         runner.run(effect, { onFailure, onSuccess: started });
       };
       lastCommand.current = { domain, run: command };
@@ -307,7 +359,12 @@ export function useController({ domain, returnTo }: Options): Controller {
       if (held.current.domain !== domain) return;
       attempted.current = null;
       const command = () => {
-        setState(State.Submitting({ snapshot: held.current.snapshot }));
+        setState(
+          State.Submitting({
+            discovery: held.current.discovery,
+            snapshot: held.current.snapshot,
+          }),
+        );
         runner.run(effect, {
           onFailure,
           onSuccess: () => {
@@ -345,7 +402,12 @@ export function useController({ domain, returnTo }: Options): Controller {
     connect,
     detach,
     disconnect,
-    discovery: state._tag === "Disconnected" || state._tag === "Failure" ? state.discovery : null,
+    domain,
+    established,
+    discovery:
+      state._tag === "Disconnected" || state._tag === "Failure" || state._tag === "Submitting"
+        ? state.discovery
+        : null,
     providers: snapshotOf(state)?.providers ?? [],
     refresh: load,
     retry,
@@ -385,6 +447,15 @@ export const answeredInPlace = (controller: Controller): boolean =>
   controller.state._tag === "Failure" && controller.state.attempt !== null;
 
 /**
+ * Whether the surface should read as connected: it is, or a command it started is in flight over a
+ * connection that was. The card and the dialog it opened stay on screen for the length of the
+ * command rather than vanishing under the customer half way through it.
+ */
+export const holdsConnection = (controller: Controller): boolean =>
+  controller.state._tag === "Connected" ||
+  (controller.state._tag === "Submitting" && controller.snapshot?.status === "connected");
+
+/**
  * The provider whose nameservers serve this domain, as the snapshot describes it. Discovery names
  * it by id; without a descriptor there is nothing to draw, so there is no host.
  */
@@ -412,8 +483,8 @@ export function Outcome({ children, controller, ...props }: OutcomeProps): React
   const readOnly = useReadOnly();
   const state = controller.state;
   if (state._tag !== "Failure") return null;
-  // The reason names an id at best, and `Unauthenticated` names nothing: the flow knows which
-  // provider the customer typed a token for, so it is the flow that supplies the name.
+  // A reason names an id at best, and a customer knows a provider by the name the descriptor
+  // carries, so it is the flow that supplies the name the catalog's titles read.
   const acted =
     state.attempt === null ? undefined : displayName(controller, state.attempt.provider);
   const words = describeOutcome(state.error, messages, {
@@ -423,7 +494,7 @@ export function Outcome({ children, controller, ...props }: OutcomeProps): React
   return (
     <OutcomeUi.Provider
       value={{
-        description: words.description,
+        description: words.description ?? "",
         layout: props.layout ?? "card",
         retry: readOnly ? null : controller.retry,
         retryPart: "connection-retry",
@@ -443,7 +514,8 @@ export interface StatusProps extends PartProps<"p", RootState> {
 export function Status({ controller, ...props }: StatusProps): ReactElement {
   const { messages } = useDomainKit();
   const state = controller.state;
-  const provider = controller.snapshot?.provider ?? "";
+  const attached = controller.snapshot?.provider ?? null;
+  const provider = attached === null ? "" : displayName(controller, attached);
   const text = (): string => {
     switch (state._tag) {
       case "Loading":
@@ -498,6 +570,9 @@ interface MethodProps {
   readonly controller: Controller;
   readonly method: MethodDescriptor;
   readonly provider: Descriptor;
+  /** Record one field's value with the form, which owns it across a rejection. */
+  readonly onEnter: (name: string, value: string) => void;
+  readonly values: Readonly<Record<string, string>>;
 }
 
 interface FieldProps {
@@ -505,13 +580,23 @@ interface FieldProps {
   readonly docsUrl: string | null;
   readonly field: Field;
   readonly invalid: boolean;
+  readonly onEnter: (value: string) => void;
+  readonly value: string;
 }
 
 /**
  * One declared field in shadcn's `Field` anatomy: the label, the control, the note under it, and
- * the error the provider answered with. The docs link rides the field it explains.
+ * the error the provider answered with. The docs link rides the field it explains. The value is
+ * the form's, not the input's, so a rejection answers beside what the customer typed.
  */
-function TokenField({ controller, docsUrl, field, invalid }: FieldProps): ReactElement {
+function TokenField({
+  controller,
+  docsUrl,
+  field,
+  invalid,
+  onEnter,
+  value,
+}: FieldProps): ReactElement {
   const { messages } = useDomainKit();
   const icons = useIcons();
   const id = useId();
@@ -533,8 +618,10 @@ function TokenField({ controller, docsUrl, field, invalid }: FieldProps): ReactE
         data-domainkit-part="field-input"
         id={id}
         name={field.name}
+        onChange={(event) => onEnter(event.target.value)}
         required={field.required}
         type={field.secret ? "password" : "text"}
+        value={value}
       />
       {docsUrl === null ? null : (
         <a data-domainkit-part="field-description" href={docsUrl} rel="noreferrer" target="_blank">
@@ -558,8 +645,11 @@ function TokenField({ controller, docsUrl, field, invalid }: FieldProps): ReactE
  * field, so a provider that needs an account id alongside a token needs no code here. The fields
  * a provider does not need sit behind a disclosure, so the common form is one field.
  */
-function Method({ controller, method, provider }: MethodProps): ReactElement {
+function Method({ controller, method, onEnter, provider, values }: MethodProps): ReactElement {
   const { messages } = useDomainKit();
+  const icons = useIcons();
+  // The fields a provider does not need, and whether the customer asked for them.
+  const [more, setMore] = useState(false);
   const state = controller.state;
   const busy = state._tag === "Submitting";
   // A failed command answers where it was raised, so the customer keeps the form they filled in.
@@ -590,6 +680,8 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
   const answered = rejected(failed && state._tag === "Failure" ? state.error.reason : null, fields);
   const required = fields.filter((field) => field.required);
   const optional = fields.filter((field) => !field.required);
+  // A rejection about one of them opens the panel, so the answer is never behind a closed control.
+  const showMore = more || optional.some((field) => field.name === answered);
   // The docs link explains the secret, so it rides that field rather than the form.
   const explains = (required.find((field) => field.secret) ?? required[0] ?? optional[0])?.name;
   const render = (field: Field) => (
@@ -599,6 +691,8 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
       field={field}
       invalid={field.name === answered}
       key={field.name}
+      onEnter={(value) => onEnter(field.name, value)}
+      value={values[field.name] ?? ""}
     />
   );
   return (
@@ -607,26 +701,33 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
       data-provider={provider.id}
       onSubmit={(event) => {
         event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        const values: Record<string, string> = {};
+        // The form's own values, not the inputs': they are what survives a rejection.
+        const submitted: Record<string, string> = {};
         for (const field of fields) {
-          const value = data.get(field.name);
-          if (typeof value === "string" && (value !== "" || field.required)) {
-            values[field.name] = value;
-          }
+          const value = values[field.name] ?? "";
+          if (value !== "" || field.required) submitted[field.name] = value;
         }
-        controller.connect({ method: method.kind, provider: provider.id, values });
+        controller.connect({ method: method.kind, provider: provider.id, values: submitted });
       }}
     >
       {required.map(render)}
       {optional.length === 0 ? null : (
-        <details
+        <BaseCollapsible.Root
           data-domainkit-part="more-options"
-          open={optional.some((field) => field.name === answered) || undefined}
+          data-state={showMore ? "open" : "closed"}
+          onOpenChange={setMore}
+          open={showMore}
         >
-          <summary data-domainkit-part="more-options-trigger">{messages.moreOptions}</summary>
-          {optional.map(render)}
-        </details>
+          <BaseCollapsible.Trigger data-domainkit-part="more-options-trigger">
+            {messages.moreOptions}
+            <span aria-hidden="true" data-icon="inline-end">
+              {icons.chevron}
+            </span>
+          </BaseCollapsible.Trigger>
+          <BaseCollapsible.Panel data-domainkit-part="more-options-panel">
+            {optional.map(render)}
+          </BaseCollapsible.Panel>
+        </BaseCollapsible.Root>
       )}
       {failed && answered === null ? <Outcome controller={controller} layout="inline" /> : null}
       <button data-domainkit-part="token-submit" disabled={busy} type="submit">
@@ -636,27 +737,69 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
   );
 }
 
-interface AuthenticationProps {
+interface AuthenticationProps extends Pick<MethodProps, "onEnter" | "values"> {
   readonly controller: Controller;
   readonly provider: Descriptor;
   /** Whether this provider's methods are showing. A narrowed dialog has one, always open. */
   readonly open: boolean;
   readonly onOpen?: () => void;
+  /** Show the token form alone: the customer asked for it and the surface navigated there. */
+  readonly typing: boolean;
+  /** Ask for the token form. Absent when this surface cannot navigate to one. */
+  readonly onType?: () => void;
 }
 
 /**
- * One provider's methods. With a heading it is a disclosure the customer opens; the provider a
- * narrowed dialog is about carries no heading, because the dialog title already names it.
+ * One provider's methods, in the order the descriptor declares them: the interactive ones a
+ * customer clicks through, then the token. Where a provider offers both, the interactive method is
+ * the offer and a plain button opens the token form in its place, so the dialog asks for one
+ * decision at a time. With a heading the whole provider is a disclosure the customer opens; the
+ * provider a narrowed dialog is about carries no heading, because the dialog title already names
+ * it.
  */
-function Authentication({ controller, onOpen, open, provider }: AuthenticationProps): ReactElement {
-  const methods = provider.methods.map((method) => (
+function Authentication({
+  controller,
+  onEnter,
+  onOpen,
+  onType,
+  open,
+  provider,
+  typing,
+  values,
+}: AuthenticationProps): ReactElement {
+  const { messages } = useDomainKit();
+  const state = controller.state;
+  const render = (method: MethodDescriptor) => (
     <Method
       controller={controller}
       key={`${provider.id}:${method.kind}`}
       method={method}
+      onEnter={onEnter}
       provider={provider}
+      values={values}
     />
-  ));
+  );
+  const interactive = provider.methods.filter((method) => method.fields === null);
+  const typed = provider.methods.filter((method) => method.fields !== null);
+  const alternate = interactive.length > 0 && typed.length > 0;
+  const methods = !alternate ? (
+    provider.methods.map(render)
+  ) : typing ? (
+    typed.map(render)
+  ) : (
+    <>
+      {interactive.map(render)}
+      <button
+        data-domainkit-part="method-alternate"
+        data-provider={provider.id}
+        disabled={state._tag === "Submitting"}
+        onClick={onType}
+        type="button"
+      >
+        {messages.useTokenInstead}
+      </button>
+    </>
+  );
   return (
     <section
       data-domainkit-part="provider-authentication"
@@ -681,18 +824,50 @@ function Authentication({ controller, onOpen, open, provider }: AuthenticationPr
 
 export interface FormProps extends PartProps<"div", RootState> {
   readonly controller: Controller;
+  /**
+   * Narrow to this provider whatever discovery found. The dialog's header menu sets it, so a
+   * customer who picks another provider gets the same one-decision surface for it.
+   */
+  readonly provider?: string;
 }
 
 /**
  * Everything a disconnected domain can do: a connection discovery already found, the connections
  * this owner already has, then each provider's declared methods.
  */
-export function Form({ controller, ...props }: FormProps): ReactElement {
+export function Form({ controller, provider: narrowed, ...props }: FormProps): ReactElement {
   const { messages } = useDomainKit();
   // One provider open at a time, so a dialog listing every provider is a list rather than a wall.
   // `null` is the customer choosing nothing yet; `""` is them closing what was open.
   const [opened, setOpened] = useState<string | null>(null);
+  // What the customer typed, for the one domain and provider they typed it into. A rejection keeps
+  // it, so "try again" starts from the value rather than from nothing. Another provider's form is
+  // its own, a connection that lands is a form nobody needs again, and a credential never follows
+  // the flow to another domain.
+  const [entered, setEntered] = useState<{
+    readonly domain: string;
+    readonly provider: string;
+    readonly values: Readonly<Record<string, string>>;
+  } | null>(null);
   const state = controller.state;
+  const owner = controller.domain;
+  // Dropped while rendering, not one effect later, so no frame ever shows one domain's token in
+  // another's form.
+  if (entered !== null && (entered.domain !== owner || state._tag === "Connected")) {
+    setEntered(null);
+  }
+  const kept = entered?.domain === owner ? entered : null;
+  const enter = (provider: string, name: string, value: string) =>
+    setEntered((previous) => {
+      const held = previous?.domain === owner && previous.provider === provider ? previous : null;
+      return {
+        domain: owner,
+        provider,
+        values: held === null ? { [name]: value } : { ...held.values, [name]: value },
+      };
+    });
+  const valuesFor = (provider: string): Readonly<Record<string, string>> =>
+    kept?.provider === provider ? kept.values : {};
   const snapshot = controller.snapshot;
   const discovery = controller.discovery;
   const candidates =
@@ -704,16 +879,22 @@ export function Form({ controller, ...props }: FormProps): ReactElement {
   const resolved = discovery !== null && discovery._tag === "Resolved" ? discovery : null;
   const reusable = snapshot?.reusable ?? [];
   const providers = controller.providers;
-  // A known host is the whole offer; the rest wait behind a disclosure.
-  const host = hostProvider(controller);
-  const others = providers.filter((provider) => provider.id !== host?.id);
+  // The provider the surface is about: the one a header menu chose, else the one that serves the
+  // zone. A known host is the whole offer; without one every provider is listed.
+  const host = providers.find((entry) => entry.id === narrowed) ?? hostProvider(controller);
+  // Which provider's token form the customer navigated to, so the body is one decision at a time.
+  const [typing, setTyping] = useState<string | null>(null);
   const authentication = (provider: Descriptor, open: boolean) => (
     <Authentication
       controller={controller}
       key={provider.id}
+      onEnter={(name, value) => enter(provider.id, name, value)}
       onOpen={() => setOpened(open ? "" : provider.id)}
+      onType={() => setTyping(provider.id)}
       open={open}
       provider={provider}
+      typing={typing === provider.id}
+      values={valuesFor(provider.id)}
     />
   );
   return usePart(
@@ -787,23 +968,32 @@ export function Form({ controller, ...props }: FormProps): ReactElement {
           {providers.length === 0 ? (
             <p data-domainkit-part="target-unavailable">{messages.noProviders}</p>
           ) : host === null ? (
-            others.map((provider) =>
+            providers.map((provider) =>
               authentication(
                 provider,
-                opened === null ? provider.id === others[0]?.id : opened === provider.id,
+                opened === null ? provider.id === providers[0]?.id : opened === provider.id,
               ),
             )
           ) : (
             <>
-              <Authentication controller={controller} open provider={host} />
-              {others.length === 0 ? null : (
-                <details data-domainkit-part="other-providers">
-                  <summary data-domainkit-part="other-providers-trigger">
-                    {messages.useAnotherProvider}
-                  </summary>
-                  {others.map((provider) => authentication(provider, opened === provider.id))}
-                </details>
-              )}
+              {typing === host.id ? (
+                <button
+                  data-domainkit-part="dialog-back"
+                  onClick={() => setTyping(null)}
+                  type="button"
+                >
+                  {messages.back}
+                </button>
+              ) : null}
+              <Authentication
+                controller={controller}
+                onEnter={(name, value) => enter(host.id, name, value)}
+                onType={() => setTyping(host.id)}
+                open
+                provider={host}
+                typing={typing === host.id}
+                values={valuesFor(host.id)}
+              />
             </>
           )}
         </>
@@ -831,6 +1021,7 @@ export function Dialog({
   trigger,
 }: DialogProps): ReactElement {
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
+  const icons = useIcons();
   const readOnly = useReadOnly();
   const [open, setOpen] = useState(false);
   const state = controller.state;
@@ -838,12 +1029,18 @@ export function Dialog({
   // A failure a method already answers is not repeated at the foot of the dialog.
   const unattributed = state._tag === "Failure" && !answeredInPlace(controller);
   const snapshot = controller.snapshot;
-  // The provider the dialog is about: the one already attached, else the one that serves the zone.
+  // The provider the dialog is about: one the customer picked from the header, else the one
+  // already attached, else the one that serves the zone.
+  const [chosen, setChosen] = useState<string | null>(null);
   const attached = snapshot?.provider ?? null;
   const host = hostProvider(controller);
-  const named = attached === null ? (host?.name ?? null) : displayName(controller, attached);
+  const narrowed = controller.providers.find((entry) => entry.id === (chosen ?? attached)) ?? host;
+  const named = narrowed?.name ?? null;
   const heading =
     title ?? (named === null ? messages.connectAnyTitle : messages.connectTitle(named));
+  // Every other provider the owner could use instead. With none there is nothing to choose from.
+  const alternatives =
+    narrowed === null ? [] : controller.providers.filter((entry) => entry.id !== narrowed.id);
   const running =
     state._tag === "Loading" ||
     state._tag === "Submitting" ||
@@ -851,7 +1048,9 @@ export function Dialog({
     state._tag === "SelectionRequired";
   // A named provider makes the trigger a short "Connect"; without one it says what it opens.
   const label = named === null ? messages.connectAnyTitle : messages.connect;
-  const body = children ?? <Form controller={controller} />;
+  const body = children ?? (
+    <Form controller={controller} {...(chosen === null ? {} : { provider: chosen })} />
+  );
   // Connecting is a write, so the whole surface goes rather than a disabled trigger.
   if (readOnly) return <></>;
   if (render !== undefined) {
@@ -896,8 +1095,53 @@ export function Dialog({
           style={themeStyle}
         >
           <div data-domainkit-part="dialog-header">
+            {narrowed === null ? null : (
+              <div data-domainkit-part="dialog-media">
+                <Provider.Mark provider={narrowed} />
+              </div>
+            )}
             <div data-domainkit-part="dialog-heading">
-              <BaseDialog.Title data-domainkit-part="dialog-title">{heading}</BaseDialog.Title>
+              <BaseDialog.Title data-domainkit-part="dialog-title">
+                {alternatives.length === 0 || title !== undefined ? (
+                  heading
+                ) : (
+                  <BaseMenu.Root>
+                    <BaseMenu.Trigger data-domainkit-part="dialog-provider-menu" disabled={busy}>
+                      {heading}
+                      <span aria-hidden="true" data-icon="inline-end">
+                        {icons.chevron}
+                      </span>
+                    </BaseMenu.Trigger>
+                    <BaseMenu.Portal container={portalContainer}>
+                      <BaseMenu.Positioner
+                        align="start"
+                        data-domainkit-part="provider-menu-positioner"
+                        sideOffset={6}
+                      >
+                        <BaseMenu.Popup
+                          aria-label={messages.useAnotherProvider}
+                          data-color-scheme={colorScheme}
+                          data-domainkit-part="provider-menu"
+                          data-domainkit-root=""
+                          style={themeStyle}
+                        >
+                          {alternatives.map((entry) => (
+                            <BaseMenu.Item
+                              data-domainkit-part="provider-menu-item"
+                              data-provider={entry.id}
+                              key={entry.id}
+                              onClick={() => setChosen(entry.id)}
+                            >
+                              <Provider.Mark provider={entry} />
+                              {entry.name}
+                            </BaseMenu.Item>
+                          ))}
+                        </BaseMenu.Popup>
+                      </BaseMenu.Positioner>
+                    </BaseMenu.Portal>
+                  </BaseMenu.Root>
+                )}
+              </BaseDialog.Title>
               <BaseDialog.Description data-domainkit-part="dialog-description">
                 {messages.connectDescription(snapshot?.domain ?? "")}
               </BaseDialog.Description>
@@ -927,14 +1171,50 @@ export function Dialog({
   );
 }
 
-/** Whether the flow offers a connect surface when discovery names no host. */
-export type Invitation = "always" | "detected";
+/**
+ * Whether the flow offers a connect surface: only when discovery names a host, always, or never.
+ * `never` is a host that decides for itself, such as a domain already ready without DomainKit; a
+ * connected domain keeps its status and its disconnect either way.
+ */
+export type Invitation = "always" | "detected" | "never";
+
+/**
+ * Whether the connect surface has anything to offer for this domain: a provider that serves the
+ * zone, a connection discovery already found, one the owner already holds, or a command already
+ * running. Never while a connection is held, which is what `holdsConnection` answers. `Prompt`
+ * renders on this, and `Domain.Flow` reports it so a host can order its own offers beside
+ * DomainKit's rather than competing with them.
+ */
+export const offering = (controller: Controller, connect: Invitation = "detected"): boolean => {
+  // A surface that holds a connection is not offering one: the card is what renders, and a host
+  // reading both must never see them claim different things about the same domain.
+  if (holdsConnection(controller)) return false;
+  const state = controller.state;
+  // A command in flight owns the surface whatever discovery found: it is how the customer answers
+  // a zone choice, a reconnect, or a redirect that came back.
+  if (
+    state._tag === "Submitting" ||
+    state._tag === "Redirecting" ||
+    state._tag === "SelectionRequired" ||
+    state._tag === "Reconnect"
+  ) {
+    return true;
+  }
+  if (connect !== "detected") return connect === "always";
+  const discovery = controller.discovery;
+  return (
+    hostProvider(controller) !== null ||
+    (discovery !== null && discovery._tag !== "NotFound") ||
+    (controller.snapshot?.reusable.length ?? 0) > 0
+  );
+};
 
 export interface PromptProps extends PartProps<"div", RootState> {
   readonly controller: Controller;
   /**
    * `detected` offers nothing when discovery names no host, which is the honest answer for a
-   * domain DomainKit cannot write to. `always` offers the all-providers dialog anyway.
+   * domain DomainKit cannot write to. `always` offers the all-providers dialog anyway, and
+   * `never` offers none.
    */
   readonly connect?: Invitation;
 }
@@ -953,20 +1233,6 @@ export function Prompt({
   const readOnly = useReadOnly();
   const state = controller.state;
   const host = hostProvider(controller);
-  const discovery = controller.discovery;
-  // Something to offer: the provider that serves the zone, a connection discovery already found,
-  // or one this owner holds. With none of them there is no invitation, and none while it loads.
-  const offers =
-    host !== null ||
-    (discovery !== null && discovery._tag !== "NotFound") ||
-    (controller.snapshot?.reusable.length ?? 0) > 0;
-  // A command in flight owns the surface whatever discovery found: it is how the customer answers
-  // a zone choice, a reconnect, or a redirect that came back.
-  const inFlight =
-    state._tag === "Submitting" ||
-    state._tag === "Redirecting" ||
-    state._tag === "SelectionRequired" ||
-    state._tag === "Reconnect";
   const element = usePart(
     "div",
     props,
@@ -988,23 +1254,255 @@ export function Prompt({
       "data-host": host?.id,
     },
   );
-  if (!inFlight && !offers && connect !== "always") return null;
+  if (!offering(controller, connect)) return null;
   // Read-only keeps the statement and drops the trigger, like every other write surface.
   if (readOnly && host === null) return null;
   return element;
 }
 
-export interface CardProps extends PartProps<"div", RootState> {
+/** The plan an attempt holds, whatever step it is on; `null` before there is one. */
+const planOf = (state: Cleanup.State): Plan.Model | null => {
+  switch (state._tag) {
+    case "Planned":
+    case "Approving":
+    case "Applying":
+    case "Rejecting":
+    case "Rejected":
+      return state.plan;
+    case "Applied":
+      return state.plan;
+    case "Idle":
+    case "Planning":
+    case "Failure":
+      return null;
+  }
+};
+
+export interface DisconnectDialogProps {
   readonly controller: Controller;
+  /** The receipt the cleanup this dialog ran produced, for a host that tracks its own state. */
+  readonly onCleaned?: (receipt: Receipt.Model) => void;
+  readonly trigger?: ReactNode;
 }
 
-/** A connected domain: which provider holds it, and how to let it go. */
-export function Card({ controller, ...props }: CardProps): ReactElement {
+/**
+ * Letting a provider go, with the records DomainKit added as one decision rather than two.
+ * Confirming removes what the domain's apply receipt proves DomainKit created, then releases the
+ * connection; a plan with nothing in it is not a failure, so it goes straight to the release.
+ *
+ * The cleanup is this dialog's own, so nothing re-reads the snapshot in between: the disconnect
+ * needs the connection the cleanup just used.
+ */
+export function DisconnectDialog({
+  controller,
+  onCleaned,
+  trigger,
+}: DisconnectDialogProps): ReactElement {
+  const { capabilities, colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
+  const readOnly = useReadOnly();
+  const [open, setOpen] = useState(false);
+  const [alsoRemove, setAlsoRemove] = useState(true);
+  // The first of the two commands the confirm runs. The second is the controller's own.
+  const [removing, setRemoving] = useState(false);
+  const snapshot = controller.snapshot;
+  const receiptId = snapshot?.lastReceiptId ?? null;
+  // Only an apply receipt proves DomainKit created anything, so only then is there a choice. The
+  // receipt is this domain's, so releasing a shared connection leaves the other domains' records
+  // where they are; the option says so rather than promising more than it can do.
+  const removable = capabilities.includes("cleanup") && receiptId !== null;
+  // Releasing a connection takes every domain on it, so a shared one asks which the customer meant.
+  const shared = (snapshot?.connectionDomains ?? 0) > 1;
+  const [everyDomain, setEveryDomain] = useState(false);
+  const cleanup = Cleanup.useController({
+    domain: controller.domain,
+    ...(onCleaned === undefined ? {} : { onCleaned }),
+    ...(receiptId === null ? {} : { receiptId: Receipt.ReceiptId.make(receiptId) }),
+  });
+  const { approve, plan, state: cleaning } = cleanup;
+  // The plan is built when the dialog opens, not when the customer confirms, so what would be
+  // removed is on screen while they decide rather than after.
+  const removals = planOf(cleaning);
+  useEffect(() => {
+    if (open && removable && cleaning._tag === "Idle") plan();
+  }, [cleaning, open, plan, removable]);
+  const detach = controller.detach;
+  const release = controller.disconnect;
+  // A shared connection detaches this domain by default; only "all domains" ends the connection.
+  const disconnect = useCallback(
+    () => (shared && !everyDomain ? detach() : release()),
+    [detach, everyDomain, release, shared],
+  );
+  // The release is the controller's own command, so its state says whether one is in flight; a
+  // failure ends it and hands the button back with no bookkeeping here.
+  const releasing = controller.state._tag === "Submitting";
+
+  useEffect(() => {
+    if (!removing) return;
+    if (cleaning._tag === "Applied") {
+      setRemoving(false);
+      disconnect();
+      return;
+    }
+    if (cleaning._tag === "Failure" || cleaning._tag === "Rejected") setRemoving(false);
+  }, [cleaning, disconnect, removing]);
+
+  const busy = removing || releasing;
+  // No plan, no promise: while one is being built, and after one failed to build, the option this
+  // dialog defaults to cannot be honoured, so confirming would release the connection and leave
+  // the records behind. The cleanup outcome carries the retry, and cancelling is always there.
+  const settling = removable && removals === null;
+  const provider = snapshot?.provider ?? null;
+  const named = provider === null ? "" : displayName(controller, provider);
+  const heading = provider === null ? messages.disconnect : messages.disconnectTitle(named);
+  // Nothing to remove is not a choice: the switch appears over records, or not at all.
+  const count = removals?.operations.length ?? 0;
+  const choosable = removable && count > 0;
+  if (readOnly) return <></>;
+  return (
+    <BaseDialog.Root
+      onOpenChange={(next, details) => {
+        if (!next && busy) {
+          details.cancel();
+          return;
+        }
+        setOpen(next);
+      }}
+      open={open}
+    >
+      <BaseDialog.Trigger data-domainkit-part="disconnect-action">
+        {trigger ?? messages.disconnect}
+      </BaseDialog.Trigger>
+      <BaseDialog.Portal container={portalContainer}>
+        <BaseDialog.Backdrop
+          data-color-scheme={colorScheme}
+          data-domainkit-part="dialog-backdrop"
+          data-domainkit-root=""
+          style={themeStyle}
+        />
+        <BaseDialog.Popup
+          data-color-scheme={colorScheme}
+          // The records it would remove are what needs the room, so the width follows the list.
+          data-cleanup={choosable ? "offered" : "none"}
+          data-domainkit-part="disconnect-dialog"
+          data-domainkit-root=""
+          style={themeStyle}
+        >
+          <div data-domainkit-part="dialog-header">
+            <div data-domainkit-part="dialog-heading">
+              <BaseDialog.Title data-domainkit-part="dialog-title">{heading}</BaseDialog.Title>
+              <BaseDialog.Description data-domainkit-part="dialog-description">
+                {messages.disconnectConsent(snapshot?.domain ?? "", named)}
+              </BaseDialog.Description>
+            </div>
+            {busy ? null : (
+              <BaseDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
+                ×
+              </BaseDialog.Close>
+            )}
+          </div>
+          <div data-domainkit-part="dialog-body">
+            {shared ? (
+              <fieldset data-domainkit-part="disconnect-scope">
+                <legend>{messages.disconnectScope}</legend>
+                <label>
+                  <input
+                    checked={!everyDomain}
+                    disabled={busy}
+                    name="disconnect-scope"
+                    onChange={() => setEveryDomain(false)}
+                    type="radio"
+                  />
+                  {messages.disconnectThisDomain}
+                </label>
+                <label>
+                  <input
+                    checked={everyDomain}
+                    disabled={busy}
+                    name="disconnect-scope"
+                    onChange={() => setEveryDomain(true)}
+                    type="radio"
+                  />
+                  {messages.disconnectEveryDomain(snapshot?.connectionDomains ?? 0)}
+                </label>
+              </fieldset>
+            ) : null}
+            {choosable ? (
+              <div data-domainkit-part="disconnect-cleanup" data-state={alsoRemove ? "on" : "off"}>
+                <label data-domainkit-part="disconnect-cleanup-label">
+                  <BaseSwitch.Root
+                    checked={alsoRemove}
+                    data-domainkit-part="disconnect-cleanup-switch"
+                    disabled={busy}
+                    onCheckedChange={setAlsoRemove}
+                  >
+                    <BaseSwitch.Thumb data-domainkit-part="disconnect-cleanup-thumb" />
+                  </BaseSwitch.Root>
+                  {messages.disconnectWithCleanup(count)}
+                </label>
+                <div data-domainkit-part="disconnect-cleanup-panel">
+                  {removals === null ? null : <Operations.List plan={removals} />}
+                  {alsoRemove ? null : (
+                    <p data-domainkit-part="disconnect-cleanup-note">
+                      {messages.disconnectKeepsRecords(named)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+            <Cleanup.Status controller={cleanup} />
+            {releasing ? (
+              <p data-domainkit-part="disconnect-status" role="status">
+                {messages.disconnecting}
+              </p>
+            ) : null}
+            <Cleanup.Outcome controller={cleanup} />
+            <Outcome controller={controller} />
+          </div>
+          <div data-domainkit-part="dialog-footer">
+            <button
+              data-domainkit-part="disconnect-confirm"
+              disabled={busy || settling}
+              onClick={() => {
+                if (choosable && alsoRemove) {
+                  setRemoving(true);
+                  approve();
+                  return;
+                }
+                disconnect();
+              }}
+              type="button"
+            >
+              {messages.disconnect}
+            </button>
+            {busy ? null : (
+              <BaseDialog.Close data-domainkit-part="dialog-cancel">
+                {messages.cancel}
+              </BaseDialog.Close>
+            )}
+          </div>
+        </BaseDialog.Popup>
+      </BaseDialog.Portal>
+    </BaseDialog.Root>
+  );
+}
+
+export interface CardProps extends PartProps<"div", RootState> {
+  readonly controller: Controller;
+  /** The receipt a cleanup run from the disconnect dialog produced. */
+  readonly onCleaned?: (receipt: Receipt.Model) => void;
+}
+
+/**
+ * A connected domain, with the prompt card's anatomy: the provider's mark, the name the customer
+ * knows it by, where the connection stands, and the one action that ends it.
+ */
+export function Card({ controller, onCleaned, ...props }: CardProps): ReactElement {
   const { messages } = useDomainKit();
   const readOnly = useReadOnly();
   const state = controller.state;
   const snapshot = controller.snapshot;
   const provider = controller.providers.find((entry) => entry.id === snapshot?.provider);
+  const standing = state._tag === "Reconnect" ? messages.needsReconnect : messages.connected;
   return usePart(
     "div",
     props,
@@ -1014,26 +1512,17 @@ export function Card({ controller, ...props }: CardProps): ReactElement {
         <>
           <div data-domainkit-part="connected-identity">
             {provider === undefined ? null : <Provider.Mark provider={provider} />}
-            <Status controller={controller} />
+            <span data-domainkit-part="host-name">
+              {provider?.name ?? snapshot?.provider ?? ""}
+            </span>
+            <span data-domainkit-part="host-statement">{standing}</span>
           </div>
           {readOnly ? null : (
             <div data-domainkit-part="connected-actions">
-              <button
-                data-domainkit-part="disconnect-trigger"
-                disabled={state._tag === "Submitting"}
-                onClick={controller.detach}
-                type="button"
-              >
-                {messages.detach}
-              </button>
-              <button
-                data-domainkit-part="disconnect-action"
-                disabled={state._tag === "Submitting"}
-                onClick={controller.disconnect}
-                type="button"
-              >
-                {messages.disconnect}
-              </button>
+              <DisconnectDialog
+                controller={controller}
+                {...(onCleaned === undefined ? {} : { onCleaned })}
+              />
             </div>
           )}
           <Outcome controller={controller} />
@@ -1049,16 +1538,17 @@ export interface FlowProps extends Omit<RootProps, "controller"> {
   readonly returnTo?: string | null;
   /** Offer the connect dialog even when discovery names no host. Defaults to `detected`. */
   readonly connect?: Invitation;
+  /** The receipt a cleanup run from the disconnect dialog produced. */
+  readonly onCleaned?: (receipt: Receipt.Model) => void;
 }
 
 /** Connection on its own: the card once connected, the prompt until then. */
-export function Flow({ connect, domain, returnTo, ...props }: FlowProps): ReactElement {
+export function Flow({ connect, domain, onCleaned, returnTo, ...props }: FlowProps): ReactElement {
   const controller = useController({ domain, ...(returnTo === undefined ? {} : { returnTo }) });
-  const state = controller.state;
   return (
     <Root controller={controller} {...props}>
-      {state._tag === "Connected" ? (
-        <Card controller={controller} />
+      {holdsConnection(controller) ? (
+        <Card controller={controller} {...(onCleaned === undefined ? {} : { onCleaned })} />
       ) : (
         <>
           <Prompt controller={controller} {...(connect === undefined ? {} : { connect })} />

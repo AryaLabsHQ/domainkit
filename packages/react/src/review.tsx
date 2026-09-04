@@ -5,7 +5,7 @@
  */
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import type { Plan } from "domainkit";
-import { useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 
 import type { Controller } from "./attempt.ts";
 import type { PartProps } from "./composition.tsx";
@@ -42,8 +42,10 @@ export function Status({ controller, kind, ...props }: StatusProps): ReactElemen
         return "";
       case "Planning":
         return kind === "provisioning" ? messages.planning : messages.planningCleanup;
+      // What a plan is for is the dialog's own description; the status line is for progress, and
+      // saying it twice under it is how the review read before the operations moved in.
       case "Planned":
-        return kind === "provisioning" ? messages.planConsent : messages.cleanupConsent;
+        return "";
       case "Approving":
         return messages.approving;
       case "Applying":
@@ -52,10 +54,9 @@ export function Status({ controller, kind, ...props }: StatusProps): ReactElemen
         return messages.rejecting;
       case "Rejected":
         return messages.declinedBy(state.attempt.rejection?.actorId ?? "");
+      // What an apply landed is an outcome, not a progress line: `Outcome` says it.
       case "Applied":
-        return kind === "provisioning"
-          ? messages.applied(state.receipt)
-          : messages.cleaned(state.receipt);
+        return "";
       case "Failure":
         return "";
     }
@@ -76,8 +77,9 @@ export function Status({ controller, kind, ...props }: StatusProps): ReactElemen
 export interface OutcomeProps extends OutcomeUi.RootProps, KindProps {}
 
 /**
- * The failure, or a receipt that only partly landed: media, title, description, and the retry the
- * flow allows. Children replace the composition and keep the binding.
+ * How the attempt ended: a failure, a receipt that only partly landed, or one that landed whole.
+ * Media, title, description, and the retry the flow allows. Children replace the composition and
+ * keep the binding.
  */
 export function Outcome({
   children,
@@ -88,29 +90,37 @@ export function Outcome({
   const { messages } = useDomainKit();
   const readOnly = useReadOnly();
   const state = controller.state;
-  const partial = state._tag === "Applied" && state.receipt.status === "partial";
   const retryPart = kind === "provisioning" ? "provisioning-retry" : "cleanup-retry";
-  if (state._tag !== "Failure" && !partial) return null;
+  if (state._tag !== "Failure" && state._tag !== "Applied") return null;
+  const partial = state._tag === "Applied" && state.receipt.status === "partial";
   const words =
     state._tag === "Failure"
       ? describeOutcome(state.error, messages)
-      : {
-          description:
-            kind === "provisioning" ? messages.partiallyApplied : messages.partiallyCleaned,
-          title:
-            kind === "provisioning"
-              ? messages.partiallyAppliedTitle
-              : messages.partiallyCleanedTitle,
-        };
+      : partial
+        ? {
+            description:
+              kind === "provisioning" ? messages.partiallyApplied : messages.partiallyCleaned,
+            title:
+              kind === "provisioning"
+                ? messages.partiallyAppliedTitle
+                : messages.partiallyCleanedTitle,
+          }
+        : {
+            description: "",
+            title:
+              kind === "provisioning"
+                ? messages.applied(state.receipt)
+                : messages.cleaned(state.receipt),
+          };
   return (
     <OutcomeUi.Provider
       value={{
-        description: words.description,
+        description: words.description ?? "",
         layout: props.layout ?? "card",
         retry: readOnly || state._tag !== "Failure" ? null : controller.retry,
         retryPart,
         title: words.title,
-        tone: state._tag === "Failure" ? "danger" : "warning",
+        tone: state._tag === "Failure" ? "danger" : partial ? "warning" : "success",
       }}
     >
       <OutcomeUi.Root {...props}>{children ?? <OutcomeUi.Composition />}</OutcomeUi.Root>
@@ -120,9 +130,15 @@ export function Outcome({
 
 export interface ActionsProps extends PartProps<"div", ReviewState>, KindProps {}
 
+/** What a plan would actually write: an operation blocked by a conflict is not one of them. */
+const addable = (plan: Plan.Model | null): ReadonlyArray<Plan.Operation> =>
+  plan === null ? [] : plan.operations.filter((operation) => operation._tag !== "Conflict");
+
 /**
- * Approve and Decline. Approve authorizes the digest and applies it; Decline records the refusal
- * and ends the attempt. Neither renders until there is a plan to act on.
+ * The primary action, and Decline. The primary authorizes the digest and applies it in one step,
+ * so it says what it will do; where a conflict blocks part of a plan it approves the rest by id,
+ * and where every operation is blocked it says what to fix instead. Neither renders until there is
+ * a plan to act on.
  */
 export function Actions({ controller, kind, ...props }: ActionsProps): ReactElement | null {
   const { messages } = useDomainKit();
@@ -130,6 +146,8 @@ export function Actions({ controller, kind, ...props }: ActionsProps): ReactElem
   const state = controller.state;
   const plan = state._tag === "Planned" ? state.plan : null;
   const running = busy(state._tag);
+  const writes = addable(plan);
+  const blocked = plan !== null && writes.length === 0;
   const element = usePart(
     "div",
     props,
@@ -139,12 +157,22 @@ export function Actions({ controller, kind, ...props }: ActionsProps): ReactElem
         <>
           <button
             data-domainkit-part={kind === "provisioning" ? "plan-apply" : "cleanup-apply"}
-            disabled={running || plan === null || plan.operations.length === 0}
-            onClick={() => controller.approve()}
+            disabled={running || plan === null || writes.length === 0}
+            onClick={() =>
+              // Naming the ids is what leaves a conflict out; approving the whole plan would not.
+              controller.approve(
+                writes.length === plan?.operations.length
+                  ? undefined
+                  : writes.map((operation) => operation.id),
+              )
+            }
             type="button"
           >
-            {messages.approve}
+            {kind === "provisioning" ? messages.addRecords(writes.length) : messages.approve}
           </button>
+          {blocked ? (
+            <p data-domainkit-part="plan-blocked">{messages.everyRecordConflicts}</p>
+          ) : null}
           <button
             data-domainkit-part="plan-decline"
             disabled={running || plan === null}
@@ -159,7 +187,9 @@ export function Actions({ controller, kind, ...props }: ActionsProps): ReactElem
     },
   );
   if (readOnly) return null;
-  return plan === null && !running ? null : element;
+  // Nothing to act on yet, or nothing left to act on: while a command runs the body carries the
+  // progress, and an action that names a count it does not have yet would be lying about it.
+  return plan === null ? null : element;
 }
 
 export interface BodyProps extends KindProps {}
@@ -219,10 +249,19 @@ export function Dialog({
   const readOnly = useReadOnly();
   const [uncontrolled, setUncontrolled] = useState(false);
   const isOpen = open ?? uncontrolled;
-  const setOpen = (next: boolean) => {
+  const close = useRef<(next: boolean) => void>(() => {});
+  close.current = (next: boolean) => {
     if (open === undefined) setUncontrolled(next);
     onOpenChange?.(next);
   };
+  const setOpen = (next: boolean) => close.current(next);
+  const state = controller.state;
+  // An apply that landed whole is done being reviewed: the receipt reads on the page. A partial
+  // one and a failure keep the surface, because there is still something to answer there.
+  const landed = state._tag === "Applied" && state.receipt.status === "complete";
+  useEffect(() => {
+    if (landed) close.current(false);
+  }, [landed]);
   const running = busy(controller.state._tag);
   const body = children ?? <Body controller={controller} kind={kind} />;
   const title = kind === "provisioning" ? messages.planTitle : messages.cleanupTitle;
@@ -292,7 +331,11 @@ export function Dialog({
           {body}
           <div data-domainkit-part="dialog-footer">
             <Actions controller={controller} kind={kind} />
-            {running ? null : (
+            {/*
+             * The close in the header and a press outside already set a plan aside, so the footer
+             * of a provisioning plan carries only the two decisions about the plan itself.
+             */}
+            {running || kind === "provisioning" ? null : (
               <BaseDialog.Close data-domainkit-part="dialog-cancel">
                 {messages.cancel}
               </BaseDialog.Close>

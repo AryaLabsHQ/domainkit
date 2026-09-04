@@ -68,6 +68,7 @@ describe("Server.group over the lifecycle", () => {
       assert.strictEqual(started.snapshot.status, "connected");
       assert.strictEqual(started.snapshot.provider, fake.id);
       assert.strictEqual(started.snapshot.method, "token");
+      assert.strictEqual(started.snapshot.connectionDomains, 1);
       const attachmentId = started.snapshot.attachmentId;
       assert.isNotNull(attachmentId);
 
@@ -229,8 +230,9 @@ describe("Server.group over the lifecycle", () => {
       assert.isDefined(provider);
       assert.deepStrictEqual(
         provider?.methods.map(({ kind }) => kind),
-        ["token", "oauth"],
+        ["oauth", "token"],
       );
+      assert.strictEqual(snapshot.connectionDomains, 0);
       const token = provider?.methods.find(({ kind }) => kind === "token");
       assert.deepStrictEqual(token?.fields, [{ name: "token", required: true, secret: true }]);
       assert.strictEqual(provider?.methods.find(({ kind }) => kind === "oauth")?.fields, null);

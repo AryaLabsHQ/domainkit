@@ -41,10 +41,11 @@ draws its own glyph from `icons` on `DomainKit.Root` and colours itself from
 
 ## Words
 
-`Messages.outcome(error, catalog, context)` returns the `{ title, description }` pair for a reason.
-The context names the provider the customer acted on, which is what lets a rejected token read
-"Cloudflare didn't accept this token" rather than naming an HTTP status. `Messages.failure` returns
-the same pair as one sentence, for a host that renders text rather than a card.
+`Messages.outcome(error, catalog, context)` returns the `{ title, description }` pair for a reason,
+and `description` is absent where the title has said the whole of it. The context names the provider
+the customer acted on, which is what lets a provider that stops answering read "Cloudflare isn't
+responding" rather than naming an HTTP status. `Messages.failure` returns the same pair as one
+sentence, for a host that renders text rather than a card.
 
 Override one reason on `DomainKit.Root`:
 

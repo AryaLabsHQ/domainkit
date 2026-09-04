@@ -72,13 +72,50 @@ const clientAuth = (client: Client): oauth.ClientAuth => {
     : oauth.ClientSecretPost(secret);
 };
 
+const plaintext = (endpoint: string | undefined): boolean =>
+  endpoint !== undefined && URL.parse(endpoint)?.protocol === "http:";
+
+/**
+ * A destination nothing can move: a loopback literal, or a name RFC 6761 reserves for one. Every
+ * other name resolves wherever DNS or a hosts file says, so it is not evidence of anything.
+ */
+const loopback = (endpoint: string | undefined): boolean => {
+  const url = endpoint === undefined ? null : URL.parse(endpoint);
+  if (url === null || !plaintext(endpoint)) return false;
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "::1" ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+  );
+};
+
+/**
+ * oauth4webapi refuses plaintext endpoints, which is right for every request that carries a client
+ * secret, a code, or a token. Loopback is the one automatic exception: it goes nowhere and nothing
+ * can repoint it. Any other plaintext endpoint takes a caller that said so out loud, because a name
+ * like `host.docker.internal` resolves wherever the machine has been told to resolve it.
+ */
+const insecureAllowed = (endpoint: string | undefined, allowPlaintext: boolean | undefined) =>
+  loopback(endpoint) || (allowPlaintext === true && plaintext(endpoint));
+
 const requestOptions = (
+  input: {
+    readonly endpoint: string | undefined;
+    readonly allowPlaintext: boolean | undefined;
+  },
   fetch: Fetch | undefined,
   signal: AbortSignal,
-): oauth.TokenEndpointRequestOptions =>
-  fetch === undefined
-    ? { signal }
-    : { signal, [oauth.customFetch]: (url, init) => fetch(url, { ...init, body: init.body }) };
+): oauth.TokenEndpointRequestOptions => ({
+  signal,
+  ...(insecureAllowed(input.endpoint, input.allowPlaintext)
+    ? { [oauth.allowInsecureRequests]: true }
+    : {}),
+  ...(fetch === undefined
+    ? {}
+    : { [oauth.customFetch]: (url, init) => fetch(url, { ...init, body: init.body }) }),
+});
 
 const tokens = (response: oauth.TokenEndpointResponse, now: DateTime.Utc): Tokens => ({
   accessToken: response.access_token,
@@ -131,6 +168,8 @@ export const exchangeCode = (input: {
   readonly callbackUrl: string;
   readonly codeVerifier: string;
   readonly fetch?: Fetch;
+  /** Permit an `http:` endpoint that is not loopback. Development only; see `insecureAllowed`. */
+  readonly allowPlaintext?: boolean;
 }): Effect.Effect<Tokens, Errors.DomainKitError> =>
   Effect.gen(function* () {
     const now = yield* DateTime.now;
@@ -151,7 +190,11 @@ export const exchangeCode = (input: {
           params,
           input.callbackUrl,
           input.codeVerifier,
-          requestOptions(input.fetch, signal),
+          requestOptions(
+            { allowPlaintext: input.allowPlaintext, endpoint: input.server.token_endpoint },
+            input.fetch,
+            signal,
+          ),
         );
         return oauth.processAuthorizationCodeResponse(server, client, reply);
       },
@@ -166,6 +209,7 @@ export const refresh = (input: {
   readonly client: Client;
   readonly refreshToken: string;
   readonly fetch?: Fetch;
+  readonly allowPlaintext?: boolean;
 }): Effect.Effect<Tokens, Errors.DomainKitError> =>
   Effect.gen(function* () {
     const now = yield* DateTime.now;
@@ -178,7 +222,11 @@ export const refresh = (input: {
           client,
           clientAuth(input.client),
           input.refreshToken,
-          requestOptions(input.fetch, signal),
+          requestOptions(
+            { allowPlaintext: input.allowPlaintext, endpoint: input.server.token_endpoint },
+            input.fetch,
+            signal,
+          ),
         );
         return oauth.processRefreshTokenResponse(server, client, reply);
       },
@@ -194,6 +242,7 @@ export const revoke = (input: {
   readonly client: Client;
   readonly token: string;
   readonly fetch?: Fetch;
+  readonly allowPlaintext?: boolean;
 }): Effect.Effect<void, Errors.DomainKitError> =>
   Effect.tryPromise({
     try: async (signal) => {
@@ -204,7 +253,11 @@ export const revoke = (input: {
         client,
         clientAuth(input.client),
         input.token,
-        requestOptions(input.fetch, signal),
+        requestOptions(
+          { allowPlaintext: input.allowPlaintext, endpoint: input.server.revocation_endpoint },
+          input.fetch,
+          signal,
+        ),
       );
       await oauth.processRevocationResponse(reply);
     },

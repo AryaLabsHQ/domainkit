@@ -145,15 +145,16 @@ export function Title(props: TitleProps): ReactElement {
 
 export interface DescriptionProps extends PartProps<"p", State> {}
 
-/** What to do about it, from the catalog. */
-export function Description(props: DescriptionProps): ReactElement {
+/** What to do about it, from the catalog. An outcome whose title says everything renders none. */
+export function Description(props: DescriptionProps): ReactElement | null {
   const { description, layout, tone } = useOutcome();
-  return usePart(
+  const element = usePart(
     "p",
     props,
     { layout, tone },
     { children: description, "data-domainkit-part": "outcome-description" },
   );
+  return description === "" && props.children === undefined ? null : element;
 }
 
 export interface ContentProps extends PartProps<"div", State> {}
