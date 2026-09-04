@@ -1,6 +1,8 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DnsRecord, type Receipt } from "domainkit";
+import type { Transport } from "domainkit/client";
+import * as Effect from "effect/Effect";
 
 import { useEffect, useState } from "react";
 
@@ -472,6 +474,40 @@ describe("Domain.Flow state", () => {
     await click("Approve");
     await waitFor(() => expect(seen.at(-1)?.applied).toBe(true));
     expect(typeof seen.at(-1)?.receiptId).toBe("string");
+  });
+
+  it("keeps saying it holds the connection while a disconnect is in flight", async () => {
+    const { domain, requirements, transport } = scenario();
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    const seen: Array<Domain.FlowState> = [];
+    // A disconnect that never answers, so the state can be read while the command is running.
+    const pending: Transport.Interface = {
+      ...transport,
+      connection: { ...connection, disconnect: () => Effect.never },
+    };
+    render(
+      <DomainKit.Root transport={pending}>
+        <Domain.Flow
+          domain={domain}
+          onState={(state) => seen.push(state)}
+          requirements={requirements}
+        />
+      </DomainKit.Root>,
+    );
+    await connect();
+    await click("Disconnect");
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Disconnect" }),
+    );
+    await screen.findByText("Disconnecting…");
+    // The card is still on screen, so the state a host reads must not say otherwise.
+    expect(document.querySelector("[data-domainkit-part='connected-card']")).not.toBeNull();
+    expect(seen.at(-1)).toMatchObject({
+      connected: true,
+      connection: "Submitting",
+      offering: false,
+    });
   });
 
   it("offers nothing with connect=never and still states a connection it holds", async () => {

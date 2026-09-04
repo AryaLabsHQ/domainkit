@@ -60,7 +60,10 @@ export interface Slots {
 export interface FlowState extends Record<string, unknown> {
   readonly connection: Connect.State["_tag"];
   readonly provisioning: Provision.State["_tag"];
-  /** DomainKit holds a connection for this domain. */
+  /**
+   * DomainKit holds a connection for this domain, including while a command it started over that
+   * connection is still running. `offering` is never true at the same time.
+   */
   readonly connected: boolean;
   /** The connect surface has something to offer, so a host's own offer would compete with it. */
   readonly offering: boolean;
@@ -230,7 +233,9 @@ export function Flow({
   const readiness = verification.readiness;
   const status = connection.state._tag;
   const planning = provisioning.state._tag;
-  const connected = status === "Connected";
+  // The same predicate the surface renders on, so the state a host reads and the surface a
+  // customer sees never disagree, including while a disconnect is in flight.
+  const connected = Connect.holdsConnection(connection);
   const offering = Connect.offering(connection, connect);
   const provider = connection.snapshot?.provider ?? Connect.hostProvider(connection)?.id ?? null;
   const receipt = connection.snapshot?.lastReceiptId ?? null;

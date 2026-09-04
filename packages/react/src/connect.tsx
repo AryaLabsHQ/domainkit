@@ -1137,10 +1137,14 @@ export type Invitation = "always" | "detected" | "never";
 /**
  * Whether the connect surface has anything to offer for this domain: a provider that serves the
  * zone, a connection discovery already found, one the owner already holds, or a command already
- * running. `Prompt` renders on this, and `Domain.Flow` reports it so a host can order its own
- * offers beside DomainKit's rather than competing with them.
+ * running. Never while a connection is held, which is what `holdsConnection` answers. `Prompt`
+ * renders on this, and `Domain.Flow` reports it so a host can order its own offers beside
+ * DomainKit's rather than competing with them.
  */
 export const offering = (controller: Controller, connect: Invitation = "detected"): boolean => {
+  // A surface that holds a connection is not offering one: the card is what renders, and a host
+  // reading both must never see them claim different things about the same domain.
+  if (holdsConnection(controller)) return false;
   const state = controller.state;
   // A command in flight owns the surface whatever discovery found: it is how the customer answers
   // a zone choice, a reconnect, or a redirect that came back.
