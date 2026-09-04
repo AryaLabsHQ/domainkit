@@ -50,6 +50,9 @@ export function conformanceFetch(): Fetch {
   return async (input, init) => {
     const url = new URL(String(input));
     const method = init?.method ?? "GET";
+    if (new Headers(init?.headers).get("authorization") !== "Bearer token") {
+      return json(failure(6003, "Invalid request headers"), { status: 400 });
+    }
     if (method === "GET" && url.pathname === "/client/v4/zones") return json(page([zone]));
     if (method === "GET" && url.pathname === "/client/v4/user/tokens/verify")
       return json(activeToken);

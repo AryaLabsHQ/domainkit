@@ -165,9 +165,13 @@ export class DiscoverySelectionRequired extends Schema.TaggedClass<DiscoverySele
     Schema.Struct({ connectionId: Schema.String, zone: Schema.String, label: Schema.String }),
   ),
 }) {}
+/** `host` names the registered provider whose nameservers serve the domain, by definition id. */
 export class DiscoveryNotFound extends Schema.TaggedClass<DiscoveryNotFound>(
   "@domainkit/server/Discovery/NotFound",
-)("NotFound", { nameservers: Schema.Array(Schema.String) }) {}
+)("NotFound", {
+  nameservers: Schema.Array(Schema.String),
+  host: Schema.NullOr(Schema.Struct({ provider: Schema.String })),
+}) {}
 export const Discovery = Schema.Union([
   DiscoveryResolved,
   DiscoverySelectionRequired,
@@ -573,7 +577,10 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
               })),
             });
           case "NotFound":
-            return new DiscoveryNotFound({ nameservers: discovery.nameservers });
+            return new DiscoveryNotFound({
+              nameservers: discovery.nameservers,
+              host: discovery.host,
+            });
         }
       };
 

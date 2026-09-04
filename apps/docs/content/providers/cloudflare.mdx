@@ -65,11 +65,19 @@ DomainKit needs `dns:read` and `dns:write`. Cloudflare's token verification does
 permissions, so a token missing `dns_records:edit` verifies here and fails at the first write with
 `Forbidden`.
 
+A token Cloudflare rejects while connecting fails `Unauthenticated` with Cloudflare's own message,
+whether Cloudflare answers HTTP 400 with code 6003 or 6111 (malformed token), 401, or 403 from the
+verify endpoint. The server answers 401, so a connect form offers a retry on the same field. A 403
+while listing zones is a missing `zone:read` permission and stays `Forbidden`.
+
 ## Zones and targets
 
 `listTargets` lists the zones the credential reaches, each with its Cloudflare zone id and the
 nameservers Cloudflare reports. Those nameservers are what `Connect.discover` matches against a
 domain's authoritative delegation.
+
+The definition declares the `ns.cloudflare.com` nameserver suffix, so `Connect.discover` names
+Cloudflare as the `host` of a domain delegated there before the customer connects it.
 
 A target without a zone id cannot hold records, and DomainKit fails `Unsupported` rather than
 guessing.

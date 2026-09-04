@@ -127,7 +127,10 @@ describe("Connect.discover", () => {
       yield* connect("fake");
       const missing = yield* Connect.discover("app.example.com");
       assert.strictEqual(missing._tag, "NotFound");
-      if (missing._tag === "NotFound") assert.deepStrictEqual(missing.nameservers, []);
+      if (missing._tag === "NotFound") {
+        assert.deepStrictEqual(missing.nameservers, []);
+        assert.strictEqual(missing.host, null);
+      }
       const foreign = yield* Connect.discover("app.other.test").pipe(
         Effect.provideService(
           Principal.Service,
@@ -144,6 +147,91 @@ describe("Connect.discover", () => {
         DomainKit.layerMemory({
           providers: [fake],
           resolver: nsAnswers("other.test", ["ns2.other.test", "ns1.other.test"]),
+        }),
+      ),
+    );
+  });
+
+  it.effect("names the provider whose suffixes cover every authoritative nameserver", () => {
+    const alpha = Testing.provider({
+      id: "alpha",
+      zones: ["other.test"],
+      nameserverSuffixes: ["ns.alpha.test"],
+    });
+    const beta = Testing.provider({ id: "beta", zones: ["other.test"] });
+    return Effect.gen(function* () {
+      const discovery = yield* Connect.discover("app.example.com");
+      assert.strictEqual(discovery._tag, "NotFound");
+      if (discovery._tag !== "NotFound") return;
+      assert.deepStrictEqual(discovery.host, { provider: "alpha" });
+      assert.deepStrictEqual(discovery.nameservers, ["ada.ns.alpha.test", "bob.ns.alpha.test"]);
+    }).pipe(
+      withPrincipal,
+      Effect.provide(
+        DomainKit.layerMemory({
+          providers: [alpha, beta],
+          resolver: nsAnswers("example.com", ["ADA.NS.ALPHA.TEST.", "bob.ns.alpha.test"]),
+        }),
+      ),
+    );
+  });
+
+  it.effect("names no host when a nameserver falls outside every declared suffix", () => {
+    const alpha = Testing.provider({
+      id: "alpha",
+      zones: ["other.test"],
+      nameserverSuffixes: ["ns.alpha.test"],
+    });
+    return Effect.gen(function* () {
+      const partial = yield* Connect.discover("app.example.com");
+      assert.strictEqual(partial._tag, "NotFound");
+      if (partial._tag === "NotFound") assert.strictEqual(partial.host, null);
+      const lookalike = yield* Connect.discover("app.example.net");
+      assert.strictEqual(lookalike._tag, "NotFound");
+      if (lookalike._tag === "NotFound") assert.strictEqual(lookalike.host, null);
+    }).pipe(
+      withPrincipal,
+      Effect.provide(
+        DomainKit.layerMemory({
+          providers: [alpha],
+          resolver: Testing.resolver([
+            {
+              name: "example.com",
+              records: ["ada.ns.alpha.test", "ns1.elsewhere.test"].map((nameserver) =>
+                DnsRecord.ns({ name: "example.com", nameserver }),
+              ),
+            },
+            {
+              name: "example.net",
+              records: [DnsRecord.ns({ name: "example.net", nameserver: "fakens.alpha.test" })],
+            },
+          ]),
+        }),
+      ),
+    );
+  });
+
+  it.effect("names no host when two providers declare a matching suffix", () => {
+    const alpha = Testing.provider({
+      id: "alpha",
+      zones: ["other.test"],
+      nameserverSuffixes: ["ns.alpha.test"],
+    });
+    const reseller = Testing.provider({
+      id: "reseller",
+      zones: ["other.test"],
+      nameserverSuffixes: ["alpha.test"],
+    });
+    return Effect.gen(function* () {
+      const discovery = yield* Connect.discover("app.example.com");
+      assert.strictEqual(discovery._tag, "NotFound");
+      if (discovery._tag === "NotFound") assert.strictEqual(discovery.host, null);
+    }).pipe(
+      withPrincipal,
+      Effect.provide(
+        DomainKit.layerMemory({
+          providers: [alpha, reseller],
+          resolver: nsAnswers("example.com", ["ada.ns.alpha.test"]),
         }),
       ),
     );

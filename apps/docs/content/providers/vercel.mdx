@@ -55,6 +55,9 @@ the nameservers Vercel reports, current or intended. Those nameservers are provi
 they never stand in for an independent public DNS observation: a domain whose delegation has not
 moved yet reads correctly here and is still missing everywhere else.
 
+The definition declares the `vercel-dns.com` nameserver suffix, so `Connect.discover` names Vercel
+as the `host` of a domain delegated there before the customer connects it.
+
 ## Records
 
 `A`, `AAAA`, `CAA`, `CNAME`, `MX`, `NS`, `SRV`, and `TXT`, through Vercel's domain records API. A

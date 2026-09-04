@@ -27,6 +27,7 @@ const target: Provider.Target = {
 describe("Vercel.provider", () => {
   it("offers tokens only unless an integration is configured", () => {
     assert.deepStrictEqual(Provider.methods(Vercel.provider()), ["token"]);
+    assert.deepStrictEqual(Vercel.provider().nameservers, ["vercel-dns.com"]);
     assert.deepStrictEqual(
       Provider.methods(
         Vercel.provider({
@@ -50,7 +51,8 @@ describe("Vercel.provider", () => {
       const denied = yield* (definition.auth.token ?? bail("token"))
         .authenticate({ token })
         .pipe(Effect.flip);
-      assert.strictEqual(denied.reason._tag, "Forbidden");
+      assert.strictEqual(denied.reason._tag, "Unauthenticated");
+      assert.strictEqual(denied.reason.message, "nope");
     });
   });
 

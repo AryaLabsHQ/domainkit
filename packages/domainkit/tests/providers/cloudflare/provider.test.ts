@@ -21,6 +21,7 @@ const target: Provider.Target = {
 describe("Cloudflare.provider", () => {
   it("offers tokens only unless OAuth is configured", () => {
     assert.deepStrictEqual(Provider.methods(Cloudflare.provider()), ["token"]);
+    assert.deepStrictEqual(Cloudflare.provider().nameservers, ["ns.cloudflare.com"]);
     assert.deepStrictEqual(
       Provider.methods(
         Cloudflare.provider({ oauth: { clientId: "c", clientSecret: Redacted.make("s") } }),
@@ -95,6 +96,35 @@ describe("Cloudflare.provider", () => {
       assert.strictEqual(error.reason._tag, "Unauthenticated");
     });
   });
+
+  it.effect(
+    "reads a malformed or forbidden token as Unauthenticated with Cloudflare's text",
+    () => {
+      const recording = recordedFetch([
+        { body: failure(6003, "Invalid request headers"), init: { status: 400 } },
+        { body: failure(6111, "Invalid format for Authorization header"), init: { status: 400 } },
+        { body: failure(9109, "Invalid access token"), init: { status: 403 } },
+        { body: failure(9109, "Unauthorized to access requested resource"), init: { status: 403 } },
+      ]);
+      const definition = Cloudflare.provider({ fetch: recording.fetch });
+      const auth = definition.auth.token ?? bail("token");
+      return Effect.gen(function* () {
+        const malformed = yield* auth.authenticate({ token }).pipe(Effect.flip);
+        assert.strictEqual(malformed.reason._tag, "Unauthenticated");
+        assert.strictEqual(malformed.reason.message, "Invalid request headers");
+        const badFormat = yield* auth.authenticate({ token }).pipe(Effect.flip);
+        assert.strictEqual(badFormat.reason._tag, "Unauthenticated");
+        const forbidden = yield* auth
+          .authenticate({ token, accountId: Redacted.make("account-9") })
+          .pipe(Effect.flip);
+        assert.strictEqual(forbidden.reason._tag, "Unauthenticated");
+        assert.strictEqual(forbidden.reason.message, "Invalid access token");
+        // A 403 while listing zones is a missing permission, which stays Forbidden.
+        const noZoneRead = yield* auth.authenticate({ token }).pipe(Effect.flip);
+        assert.strictEqual(noZoneRead.reason._tag, "Forbidden");
+      });
+    },
+  );
 
   it.effect("lists targets across accounts and resolves domains to the most specific zone", () => {
     const other = { ...zone, id: "zone-2", account: { id: "account-2", name: "Other" } };
