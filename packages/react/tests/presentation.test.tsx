@@ -65,15 +65,15 @@ describe("Messages", () => {
 
   it("reads a reason with no description as one sentence", () => {
     const error = new Kit.Error({ reason: new Reason.Unauthenticated({ message: "bad token" }) });
-    expect(Messages.failure(error, Messages.english, { provider: "Cloudflare" })).toBe(
-      "Cloudflare didn't accept this token.",
-    );
+    expect(Messages.failure(error, Messages.english)).toBe("Token not accepted.");
   });
 
-  it("names the provider the customer acted on when the reason cannot", () => {
-    const error = new Kit.Error({ reason: new Reason.Unauthenticated({ message: "bad token" }) });
+  it("names the provider the customer acted on rather than the id the reason carries", () => {
+    const error = new Kit.Error({
+      reason: new Reason.ProviderUnavailable({ message: "down", provider: "cloudflare" }),
+    });
     expect(Messages.outcome(error, Messages.english, { provider: "Cloudflare" }).title).toBe(
-      "Cloudflare didn't accept this token",
+      "Cloudflare isn't responding",
     );
   });
 

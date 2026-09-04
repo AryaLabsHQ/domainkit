@@ -469,10 +469,11 @@ export const english: Catalog = {
         ? "Check what you entered"
         : `Check the ${humanize(reason.field).toLowerCase()}`,
   }),
-  // The title names the provider and the credential it turned down, and the retry sits beside it.
-  // A second line under that repeats the title and pushes the retry onto a line of its own.
-  unauthenticated: (_reason, context) => ({
-    title: `${named(context.provider)} didn't accept this token`,
+  // The dialog's heading already names the provider, so the outcome answers about the credential
+  // and nothing else. A longer title wraps in the column beside the retry, and a second line under
+  // it repeats what the title said.
+  unauthenticated: () => ({
+    title: "Token not accepted",
   }),
   forbidden: (_reason, context) => ({
     description: `The connection needs permission to edit DNS for ${where(context.domain)}.`,

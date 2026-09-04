@@ -279,7 +279,7 @@ test("keeps the domain, the provider list, and the typed token after a rejected 
   // The failure answers under the field it is about, on one line, and names the provider.
   await expect(outcome).toHaveAttribute("data-layout", "inline");
   await expect(dialog.locator("[data-domainkit-part='field-error']")).toContainText(
-    "Meridian DNS didn't accept this token",
+    "Token not accepted",
   );
   await expect(dialog.getByLabel("Token")).toHaveAttribute("aria-invalid", "true");
   // The provider named no field, so the first secret carries the answer and it announces once.

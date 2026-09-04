@@ -432,7 +432,7 @@ describe("Connect.Dialog", () => {
     await click("Connect");
     await user.type(await screen.findByLabelText(/Token/), "cf_bad_token");
     await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-    await screen.findByText("Fake fake didn't accept this token");
+    await screen.findByText("Token not accepted");
     expect((screen.getByLabelText(/Token/) as HTMLInputElement).value).toBe("cf_bad_token");
     await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
     await waitFor(() => expect(attempts).toHaveLength(2));

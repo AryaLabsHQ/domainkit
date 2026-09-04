@@ -483,8 +483,8 @@ export function Outcome({ children, controller, ...props }: OutcomeProps): React
   const readOnly = useReadOnly();
   const state = controller.state;
   if (state._tag !== "Failure") return null;
-  // The reason names an id at best, and `Unauthenticated` names nothing: the flow knows which
-  // provider the customer typed a token for, so it is the flow that supplies the name.
+  // A reason names an id at best, and a customer knows a provider by the name the descriptor
+  // carries, so it is the flow that supplies the name the catalog's titles read.
   const acted =
     state.attempt === null ? undefined : displayName(controller, state.attempt.provider);
   const words = describeOutcome(state.error, messages, {

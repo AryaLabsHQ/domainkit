@@ -46,9 +46,9 @@ description, its provider forms, and the values already typed, and answers with 
 [outcome](/components/outcome) beside the method that failed.
 
 A provider that turns down credentials is answering the secret it was given, so that input carries
-`aria-invalid` and the outcome renders in `field-error` under it. The outcome names the provider the
-customer acted on, which the reason itself cannot: "Cloudflare didn't accept this token", never a
-status code.
+`aria-invalid` and the outcome renders in `field-error` under it. The outcome answers about the
+credential and nothing else — "Token not accepted", never a status code — because the dialog's
+heading already names the provider.
 
 ## Parts
 
