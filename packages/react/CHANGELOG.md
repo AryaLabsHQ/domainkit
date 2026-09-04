@@ -1,3 +1,83 @@
+## @domainkit/react@0.11.0
+
+### The cards read alike, and the flow says what it knows
+
+`Connect.Card` and `Connect.Prompt` share one anatomy: a squircle mark, the provider's display name,
+the line about it directly under, and one action at the right. The mark spans both text rows and
+centres against them at a size derived from the two line heights. Both cards sit on
+`--domainkit-fill` with the dialog panel's inner room, and draw a border only where a host sets
+`--domainkit-card-border`. A record's status is one badge that does not wrap, glyph beside word.
+
+`Connect.holdsConnection` keeps the card, and the dialog it opened, on screen while a command it
+started is still running. `Connect.offering` is false whenever `holdsConnection` is true, so what a
+host reads and what a customer sees cannot disagree.
+
+`Domain.Flow`'s `onState` fires whenever what DomainKit has to say about the domain changes, and
+once on mount. `Domain.FlowState` carries `connected`, `offering`, `provider`, `receiptId`, and
+`applied`, built from the same predicates the surface renders on. `connect="never"` hides the
+prompt while a connected domain keeps its status and its disconnect, and for a domain no configured
+provider serves and nothing holds, the flow renders no connection surface at all, so a host's own
+offers follow in its own order. A host that wants the sentence renders `Connect.Status`, which names
+the provider the customer knows rather than the id the wire carries.
+
+### Disconnecting is one dialog
+
+`Connect.DisconnectDialog` asks once. It plans the cleanup on open from the domain's apply receipt
+and lists the records it would remove under a Base UI `Switch` reading "Remove the N records
+DomainKit added", checked by default; switched off the list stays legible, steps back, and says
+"Records stay in {provider}." Where the connection serves more than one domain the dialog also asks
+whether to detach this domain or end the connection. Confirming runs the cleanup, then the release,
+with the progress and the outcome inside the dialog, and it holds while either is in flight.
+
+The dialog carries `data-cleanup`, `"offered"` while it lists removals and `"none"` otherwise, and
+takes `--domainkit-dialog-wide` in the first case and `--domainkit-dialog-width` in the second, so
+it takes the room the records need and asks one question at one question's width. It owns its own
+cleanup controller, because `Domain.Flow`'s refreshes the snapshot on a receipt and the release
+still needs the connection the cleanup just used. `Cleanup.Flow` stays exported and the actions slot
+still receives its controller.
+
+### The plan lives in its dialog, and connecting opens it
+
+Connecting is the customer saying yes to the records, so `Domain.Flow` plans and opens the review
+the moment a connection lands for its domain, and `review="manual"` waits for the trigger instead.
+`Connect.Controller.established` counts the connections a surface landed, a token connect or a load
+that followed this library's own redirect back, and only ever grows, so the flow acts on a change
+rather than a state that fires every render. The return is told from a reload by what the controller
+wrote down before navigating away, so no host URL parameter carries it.
+
+The page holds the "Review changes" trigger and the outcome; the operations, the consent sentence,
+and the two decisions live in the dialog. Its primary action says what it will do, `Add N records`,
+and approves and applies in one pass; a conflict is listed with its reason and the action approves
+the rest by operation id, and with nothing addable it is disabled beside what to fix. `Decline` is
+the other decision. The dialog closes from the × in its header and from a press outside it, so the
+footer carries nothing else. On success it closes, the outcome compound reports the receipt, and
+`onApplied` fires.
+
+### The connect dialog navigates
+
+The dialog shows one decision at a time. Its header carries the provider's mark in `dialog-media`
+and, where another provider is registered, a `dialog-provider-menu` that renames the dialog and
+re-narrows it. The body leads with the method a customer clicks through, and "Use an API token
+instead" swaps it for the token form with a `dialog-back` link above the fields. A provider that
+offers a token alone opens on its form. The fields a provider does not need sit behind a Base UI
+`Collapsible` reading "Add an account id", which announces `aria-expanded` and carries hover and
+focus states; every quiet control in the dialog reads its spacing from `--domainkit-quiet-lead`,
+`--domainkit-quiet-trail`, `--domainkit-quiet-inset`, and `--domainkit-quiet-pad`.
+
+`Connect.Form` owns the values the customer types, keyed to the one domain and provider they typed
+them into: a rejection keeps them, a connection that lands drops them, and they never follow the
+flow to another domain. `Connect.State.Submitting` carries the discovery it started from, so a
+narrowed dialog stays narrowed while its command runs.
+
+A refused token answers under the field it is about. The input carries `aria-invalid`, the outcome
+renders in `field-error` reading "Token not accepted", and the retry sits beside it on the same
+row. `Messages.Outcome.description` is optional, and `Messages.failure` reads a reason without one
+as a single sentence. Inline outcomes are a three-column grid, glyph then words then action, and
+`outcome-header` is `display: contents` there so a host's own composition lands on the same grid.
+
+Every dialog dismisses on a press outside it and holds while its own command is in flight, and a
+closed dialog sets `pointer-events: none` while it plays its exit.
+
 ## @domainkit/react@0.10.0
 
 ### A first-party connect experience

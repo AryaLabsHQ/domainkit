@@ -1,3 +1,39 @@
+## domainkit@0.11.0
+
+### A fake can read like a real provider
+
+`Testing.provider` accepts `name`, the display name a customer reads, defaulting to `Fake <id>`.
+`Testing.resolver` takes a second argument naming the resolver its answers carry, defaulting to
+`fake`, and `Testing.transport` passes one through as `resolver`. A fixture whose screenshots ship
+can then name a provider and an observer a customer would recognise.
+
+### The snapshot counts the domains a connection serves
+
+`Connect.Snapshot.connectionDomains` counts the attachments on this domain's connection, this
+domain included, and is `0` without one. The discovery route and `Transport` carry it, so a surface
+can ask whether letting the connection go takes other domains with it before it offers the choice.
+
+### A stage can point Cloudflare's OAuth at its own origin
+
+`Cloudflare.Options.oauth.issuer` names the origin Cloudflare serves `/oauth2/auth`,
+`/oauth2/token`, and `/oauth2/revoke` beneath. It defaults to `https://dash.cloudflare.com` and
+stays separate from `baseUrl`, because production serves consent from one host and the REST API
+from another. `serverOrigin` names where the server reaches the exchange and the revocation when
+that differs from where the browser reaches consent, such as an API in a container reaching an
+emulator through `host.docker.internal`, and defaults to `issuer`.
+
+Plaintext OAuth endpoints stay refused, which is right for every request carrying a client secret,
+a code, or a token. Loopback is the one automatic exception: `localhost`, `*.localhost`, `::1`, and
+`127.0.0.0/8` go nowhere and nothing can repoint them. Any other `http:` endpoint takes
+`oauth.allowPlaintext`, because a name resolves wherever DNS or a hosts file says it does.
+
+### A provider offers what a customer clicks through first
+
+`Provider.describeMethods` returns a definition's methods in the order a UI presents them: OAuth,
+then the integration, then the token. `Provider.methods` reads its kinds from the same list, so the
+two never disagree, and a surface that renders the descriptor in order leads with the method a
+customer clicks through and leaves the token they have to go and fetch for last.
+
 ## domainkit@0.10.0
 
 ### Discovery names the provider that hosts the zone
