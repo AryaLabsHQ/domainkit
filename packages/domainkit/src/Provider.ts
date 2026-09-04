@@ -209,6 +209,12 @@ export interface IntegrationAuth {
 export interface Definition<Context = unknown> {
   readonly id: string;
   readonly name: string;
+  /**
+   * Hostname suffixes of the nameservers this provider operates, e.g. `ns.cloudflare.com`.
+   * `Connect.discover` names the provider as a domain's host when every authoritative nameserver
+   * ends in one of them.
+   */
+  readonly nameservers?: ReadonlyArray<string>;
   readonly auth: {
     readonly token?: TokenAuth;
     readonly oauth?: OAuthAuth;

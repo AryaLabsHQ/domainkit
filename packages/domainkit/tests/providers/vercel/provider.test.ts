@@ -27,6 +27,7 @@ const target: Provider.Target = {
 describe("Vercel.provider", () => {
   it("offers tokens only unless an integration is configured", () => {
     assert.deepStrictEqual(Provider.methods(Vercel.provider()), ["token"]);
+    assert.deepStrictEqual(Vercel.provider().nameservers, ["vercel-dns.com"]);
     assert.deepStrictEqual(
       Provider.methods(
         Vercel.provider({

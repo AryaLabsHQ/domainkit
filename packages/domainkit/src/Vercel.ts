@@ -92,6 +92,7 @@ export const provider = (options: Options = {}): Provider.Definition<TeamContext
   return Provider.make<TeamContext>({
     id: "vercel",
     name: "Vercel",
+    nameservers: ["vercel-dns.com"],
     context: TeamContext,
     contextVersion: "vercel.v1",
     auth: {

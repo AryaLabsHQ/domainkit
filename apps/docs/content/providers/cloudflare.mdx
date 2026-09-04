@@ -71,6 +71,9 @@ permissions, so a token missing `dns_records:edit` verifies here and fails at th
 nameservers Cloudflare reports. Those nameservers are what `Connect.discover` matches against a
 domain's authoritative delegation.
 
+The definition declares the `ns.cloudflare.com` nameserver suffix, so `Connect.discover` names
+Cloudflare as the `host` of a domain delegated there before the customer connects it.
+
 A target without a zone id cannot hold records, and DomainKit fails `Unsupported` rather than
 guessing.
 

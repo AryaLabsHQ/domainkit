@@ -193,6 +193,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
   return Provider.make<AccountContext>({
     id: "cloudflare",
     name: "Cloudflare",
+    nameservers: ["ns.cloudflare.com"],
     context: AccountContext,
     contextVersion: "cloudflare.v1",
     auth: {

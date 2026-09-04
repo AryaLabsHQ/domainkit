@@ -64,6 +64,12 @@ the principal's connections can reach, and answers which one serves it.
 The closest zone wins. When several connections hold that zone, a connection whose reported
 nameservers cover every authoritative nameserver wins; otherwise the caller selects.
 
+When no connection reaches the domain, `NotFound` carries the authoritative nameservers and `host`:
+the one registered provider whose declared nameserver suffixes cover every one of them, matched on
+trailing labels and ignoring case. Cloudflare declares `ns.cloudflare.com` and Vercel declares
+`vercel-dns.com`, so a connect screen can name the provider that already serves the domain before
+the customer picks one. `host` is `null` when no provider matches or more than one does.
+
 ## Attaching
 
 <Snippet file="examples/core/connections.ts" region="attach" title="Binding a domain to a zone" />

@@ -202,7 +202,9 @@ const started =
 ```
 
 `connection.discover(domain)` answers which of the customer's existing connections already reaches
-the domain, so a second domain on a connected provider skips the connect step entirely.
+the domain, so a second domain on a connected provider skips the connect step entirely. When none
+does, `NotFound.host` names the registered provider whose declared nameserver suffixes cover the
+domain's delegation, so the connect screen can offer that provider first.
 `Snapshot.providers[].methods[]` carries each method's label, docs URL, and token fields, so a
 connect form renders from the response instead of hard-coding provider names.
 

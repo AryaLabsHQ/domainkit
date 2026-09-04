@@ -21,6 +21,7 @@ const target: Provider.Target = {
 describe("Cloudflare.provider", () => {
   it("offers tokens only unless OAuth is configured", () => {
     assert.deepStrictEqual(Provider.methods(Cloudflare.provider()), ["token"]);
+    assert.deepStrictEqual(Cloudflare.provider().nameservers, ["ns.cloudflare.com"]);
     assert.deepStrictEqual(
       Provider.methods(
         Cloudflare.provider({ oauth: { clientId: "c", clientSecret: Redacted.make("s") } }),

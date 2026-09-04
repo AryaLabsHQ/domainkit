@@ -171,7 +171,9 @@ describe("Server.group over the lifecycle", () => {
     try {
       const before = await call("GET", "/domains/app.example.com/discovery");
       assert.strictEqual(before.status, 200);
-      assert.strictEqual((before.body as { readonly _tag: string })._tag, "NotFound");
+      const notFound = before.body as { readonly _tag: string; readonly host: unknown };
+      assert.strictEqual(notFound._tag, "NotFound");
+      assert.strictEqual(notFound.host, null);
 
       await connected(call, fake.id);
 
@@ -188,6 +190,31 @@ describe("Server.group over the lifecycle", () => {
       assert.strictEqual(resolved.label, "example.com");
       assert.notStrictEqual(resolved.connectionId, "");
       assert.strictEqual("target" in resolved, false);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("names the provider hosting an unconnected domain's zone", async () => {
+    const hosting = Testing.provider({
+      id: "hosting",
+      zones: ["hosted.test"],
+      nameservers: { "hosted.test": ["a.ns.hosting.test", "b.ns.hosting.test"] },
+      nameserverSuffixes: ["ns.hosting.test"],
+    });
+    const { handler, dispose } = Server.toWebHandler(
+      DomainKit.layerMemory({ providers: [hosting], resolver: Testing.resolver() }).pipe(
+        Layer.merge(identity),
+      ),
+    );
+    try {
+      const response = await handler(new Request(`${host}/domains/app.hosted.test/discovery`));
+      assert.strictEqual(response.status, 200);
+      assert.deepStrictEqual(await response.json(), {
+        _tag: "NotFound",
+        nameservers: ["a.ns.hosting.test", "b.ns.hosting.test"],
+        host: { provider: "hosting" },
+      });
     } finally {
       await dispose();
     }
@@ -678,6 +705,11 @@ describe("Server.api", () => {
       | { readonly requestBody?: { readonly content: Record<string, unknown> } }
       | undefined;
     assert.isDefined(observe?.requestBody?.content["application/json"]);
+    const notFound = spec.components?.schemas?.["_domainkit_server_Discovery_NotFoundEncoded"] as
+      | { readonly properties?: Record<string, unknown>; readonly required?: ReadonlyArray<string> }
+      | undefined;
+    assert.isDefined(notFound?.properties?.host);
+    assert.include(notFound?.required ?? [], "host");
   });
 
   it("declares a response for every status a DomainKitError reason produces", () => {

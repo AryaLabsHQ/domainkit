@@ -103,7 +103,14 @@ export type Discovery = Data.TaggedEnum<{
       readonly target: Provider.Target;
     }>;
   };
-  NotFound: { readonly nameservers: ReadonlyArray<string> };
+  /**
+   * No connection reaches the domain. `host` names the one registered provider whose declared
+   * nameserver suffixes cover every authoritative nameserver; `null` when none or several do.
+   */
+  NotFound: {
+    readonly nameservers: ReadonlyArray<string>;
+    readonly host: { readonly provider: string } | null;
+  };
 }>;
 export const Discovery = Data.taggedEnum<Discovery>();
 
@@ -185,6 +192,9 @@ const Target = Schema.Struct({
 
 const invalid = (message: string, field?: string) =>
   Errors.fail(new Reason.InvalidInput({ message, ...(field === undefined ? {} : { field }) }));
+
+/** Nameserver hostnames compare case-insensitively and without a trailing dot. */
+const normalize = (name: string) => name.toLowerCase().replace(/\.$/, "");
 
 export const make: Effect.Effect<
   Interface,
@@ -442,7 +452,6 @@ export const make: Effect.Effect<
           }
         }
       }
-      const normalize = (name: string) => name.toLowerCase().replace(/\.$/, "");
       for (const zone of candidates) {
         const matches = reachable
           .filter(({ target }) => target.zone === zone)
@@ -458,8 +467,25 @@ export const make: Effect.Effect<
         if (decisive.length === 1 && winner !== undefined) return Discovery.Resolved(winner);
         return Discovery.SelectionRequired({ candidates: matches });
       }
-      return Discovery.NotFound({ nameservers });
+      return Discovery.NotFound({ nameservers, host: hostOf(nameservers) });
     });
+
+  /** The one registered provider whose declared suffixes cover every nameserver, else `null`. */
+  const hostOf = (nameservers: ReadonlyArray<string>): { readonly provider: string } | null => {
+    if (nameservers.length === 0) return null;
+    const names = nameservers.map(normalize);
+    const hosts = providers.list().filter((definition) => {
+      const suffixes = (definition.nameservers ?? []).map(normalize);
+      return (
+        suffixes.length > 0 &&
+        names.every((name) =>
+          suffixes.some((suffix) => name === suffix || name.endsWith(`.${suffix}`)),
+        )
+      );
+    });
+    const [host] = hosts;
+    return hosts.length === 1 && host !== undefined ? { provider: host.id } : null;
+  };
 
   const inspect: Interface["inspect"] = (input) =>
     Effect.gen(function* () {

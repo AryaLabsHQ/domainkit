@@ -35,14 +35,15 @@ import { Testing } from "domainkit/testing";
 
 ### Options
 
-| Option        | Effect                                                                               |
-| ------------- | ------------------------------------------------------------------------------------ |
-| `id`          | The provider id. Default `fake`                                                      |
-| `zones`       | Zones the fake credential reaches. Default `example.com`                             |
-| `records`     | Pre-existing records, to produce `Noop` and `Conflict` operations                    |
-| `oauth`       | Offer OAuth beside the token method; the fake redirects to `callbackUrl` immediately |
-| `failWrite`   | Fail the write at this zero-based index, to exercise a partial receipt               |
-| `nameservers` | Nameservers per zone, which `Testing.resolver` answers NS queries from               |
+| Option               | Effect                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| `id`                 | The provider id. Default `fake`                                                                  |
+| `zones`              | Zones the fake credential reaches. Default `example.com`                                         |
+| `records`            | Pre-existing records, to produce `Noop` and `Conflict` operations                                |
+| `oauth`              | Offer OAuth beside the token method; the fake redirects to `callbackUrl` immediately             |
+| `failWrite`          | Fail the write at this zero-based index, to exercise a partial receipt                           |
+| `nameservers`        | Nameservers per zone, which `Testing.resolver` answers NS queries from                           |
+| `nameserverSuffixes` | Suffixes the fake declares as `Definition.nameservers`, so `Connect.discover` names it as a host |
 
 :::caution
 `Testing.provider` registers its zones in one table shared by the whole process, and
