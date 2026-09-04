@@ -39,9 +39,21 @@ export type State = Data.TaggedEnum<{
     readonly connectionId: string;
     readonly candidates: ReadonlyArray<Candidate>;
   };
-  Failure: { readonly error: DomainKit.Error };
+  Failure: {
+    readonly error: DomainKit.Error;
+    readonly snapshot: Snapshot | null;
+    readonly discovery: Discovery | null;
+    /** The provider and method the customer was using, when a command failed rather than a read. */
+    readonly attempt: Attempt | null;
+  };
 }>;
 export const State = Data.taggedEnum<State>();
+
+/** Which provider and method the failed command was for, so the form can answer beside it. */
+export interface Attempt {
+  readonly provider: string;
+  readonly method: Storage.AuthMethod;
+}
 
 export interface ConnectInput {
   readonly provider: string;
@@ -92,9 +104,9 @@ const snapshotOf = (state: State): Snapshot | null => {
     case "Loading":
     case "Submitting":
     case "SelectionRequired":
+    case "Failure":
       return state.snapshot;
     case "Redirecting":
-    case "Failure":
       return null;
   }
 };
@@ -133,6 +145,8 @@ export function useController({ domain, returnTo }: Options): Controller {
     discovery: Discovery | null;
   }>({ discovery: null, domain, snapshot: null });
   const lastCommand = useRef<{ domain: string; run: () => void } | null>(null);
+  // What the customer was doing when it failed, so the dialog can answer beside that method.
+  const attempted = useRef<Attempt | null>(null);
 
   const [inspected, setInspected] = useState(domain);
   if (inspected !== domain) {
@@ -143,9 +157,18 @@ export function useController({ domain, returnTo }: Options): Controller {
     setState(State.Loading({ snapshot: null }));
   }
 
+  // A failure keeps what was already read: the customer's provider list, the domain in the
+  // dialog's description, and the discovery that offered a connection they already have.
   const onFailure = useCallback(
     (error: DomainKit.Error) => {
-      setState(State.Failure({ error }));
+      setState(
+        State.Failure({
+          attempt: attempted.current,
+          discovery: held.current.discovery,
+          error,
+          snapshot: held.current.snapshot,
+        }),
+      );
       emit(Event.Failed({ domain, error }));
     },
     [domain, emit],
@@ -154,6 +177,7 @@ export function useController({ domain, returnTo }: Options): Controller {
   const load = useCallback(() => {
     if (connection === undefined) return;
     lastCommand.current = null;
+    attempted.current = null;
     held.current = { discovery: null, domain, snapshot: null };
     // A refresh keeps the snapshot on screen; a domain change already cleared it.
     setState((previous) => State.Loading({ snapshot: snapshotOf(previous) }));
@@ -215,8 +239,9 @@ export function useController({ domain, returnTo }: Options): Controller {
   );
 
   const submit = useCallback(
-    (effect: Effect.Effect<Transport.Started, DomainKit.Error>) => {
+    (effect: Effect.Effect<Transport.Started, DomainKit.Error>, attempt: Attempt | null) => {
       if (held.current.domain !== domain) return;
+      attempted.current = attempt;
       const command = () => {
         setState(State.Submitting({ snapshot: held.current.snapshot }));
         runner.run(effect, { onFailure, onSuccess: started });
@@ -238,7 +263,10 @@ export function useController({ domain, returnTo }: Options): Controller {
           : input.method === "oauth"
             ? Transport.Method.oauth(interactive)
             : Transport.Method.integration(interactive);
-      submit(connection.start({ domain, method, provider: input.provider }));
+      submit(connection.start({ domain, method, provider: input.provider }), {
+        method: input.method,
+        provider: input.provider,
+      });
     },
     [connection, domain, returnTo, submit],
   );
@@ -252,6 +280,7 @@ export function useController({ domain, returnTo }: Options): Controller {
           domain,
           ...(input.zone === undefined ? {} : { zone: input.zone }),
         }),
+        null,
       );
     },
     [connection, domain, submit],
@@ -268,6 +297,7 @@ export function useController({ domain, returnTo }: Options): Controller {
   const release = useCallback(
     (effect: Effect.Effect<void, DomainKit.Error>, event: Event) => {
       if (held.current.domain !== domain) return;
+      attempted.current = null;
       const command = () => {
         setState(State.Submitting({ snapshot: held.current.snapshot }));
         runner.run(effect, {
@@ -307,7 +337,7 @@ export function useController({ domain, returnTo }: Options): Controller {
     connect,
     detach,
     disconnect,
-    discovery: state._tag === "Disconnected" ? state.discovery : null,
+    discovery: state._tag === "Disconnected" || state._tag === "Failure" ? state.discovery : null,
     providers: snapshotOf(state)?.providers ?? [],
     refresh: load,
     retry,
@@ -425,18 +455,28 @@ interface MethodProps {
 function Method({ controller, method, provider }: MethodProps): ReactElement {
   const { messages } = useDomainKit();
   const icons = useIcons();
-  const busy = controller.state._tag === "Submitting";
+  const state = controller.state;
+  const busy = state._tag === "Submitting";
+  // A failed command answers where it was raised, so the customer keeps the form they filled in.
+  const failed =
+    state._tag === "Failure" &&
+    state.attempt !== null &&
+    state.attempt.provider === provider.id &&
+    state.attempt.method === method.kind;
   if (method.fields === null) {
     return (
-      <button
-        data-domainkit-part={method.kind === "oauth" ? "oauth-connect" : "integration-connect"}
-        data-provider={provider.id}
-        disabled={busy}
-        onClick={() => controller.connect({ method: method.kind, provider: provider.id })}
-        type="button"
-      >
-        {messages.connectWith(method.label)}
-      </button>
+      <>
+        <button
+          data-domainkit-part={method.kind === "oauth" ? "oauth-connect" : "integration-connect"}
+          data-provider={provider.id}
+          disabled={busy}
+          onClick={() => controller.connect({ method: method.kind, provider: provider.id })}
+          type="button"
+        >
+          {messages.connectWith(method.label)}
+        </button>
+        {failed ? <Outcome controller={controller} layout="inline" /> : null}
+      </>
     );
   }
   const fields = method.fields;
@@ -482,6 +522,7 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
           </span>
         </a>
       )}
+      {failed ? <Outcome controller={controller} layout="inline" /> : null}
       <button data-domainkit-part="token-submit" disabled={busy} type="submit">
         {messages.connectWith(method.label)}
       </button>
@@ -626,7 +667,10 @@ export function Dialog({
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   const readOnly = useReadOnly();
   const [open, setOpen] = useState(false);
-  const busy = controller.state._tag === "Submitting";
+  const state = controller.state;
+  const busy = state._tag === "Submitting";
+  // A failure a method already answers is not repeated at the foot of the dialog.
+  const unattributed = state._tag === "Failure" && state.attempt === null;
   const snapshot = controller.snapshot;
   const provider = snapshot?.provider;
   const heading =
@@ -694,7 +738,7 @@ export function Dialog({
           <div data-domainkit-part="dialog-body">
             <Status controller={controller} />
             {body}
-            <Outcome controller={controller} />
+            {unattributed ? <Outcome controller={controller} /> : null}
           </div>
           {busy ? null : (
             <div data-domainkit-part="dialog-footer">

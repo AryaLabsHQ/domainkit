@@ -21,6 +21,11 @@ When the transport declares `connection.discover`, the flow asks on mount which 
 existing connections already reaches the domain and offers that first. A discovery failure is
 silent: the provider list still renders.
 
+A failed connect keeps the page the customer was on. `Connect.State.Failure` carries the snapshot,
+the discovery, and the provider and method the customer was using, so the dialog keeps its
+description, its provider forms, and the values already typed, and answers with an inline
+[outcome](/components/outcome) beside the method that failed.
+
 ## Parts
 
 | Part              | Renders                                                       |

@@ -192,3 +192,28 @@ test("renders an outcome as a card, as an inline row, and in a host's own compos
   );
   await host.screenshot({ path: shot("outcome-host") });
 });
+
+test("keeps the domain, the provider list, and the typed token after a rejected connect", async ({
+  page,
+}) => {
+  await page.goto("/?zone=browser12.example&view=reject");
+  await page.getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Token").fill("cf_bad_token");
+  await dialog.getByRole("button", { name: "Token (fake)" }).click();
+
+  const outcome = dialog.locator("[data-domainkit-part='outcome']");
+  await expect(outcome).toBeVisible();
+  // The failure answers inside the form it came from, on one line.
+  await expect(outcome).toHaveAttribute("data-layout", "inline");
+  await expect(dialog.locator("[data-domainkit-part='token-connect']")).toContainText(
+    "didn't accept this token",
+  );
+  // The domain the dialog authorizes, and the value the customer typed, both survive.
+  await expect(dialog.locator("[data-domainkit-part='dialog-description']")).toHaveText(
+    "Authorize DNS changes for app.browser12.example.",
+  );
+  await expect(dialog.getByLabel("Token")).toHaveValue("cf_bad_token");
+  await expect(dialog.getByText("No DNS providers are available.")).toHaveCount(0);
+  await dialog.screenshot({ path: shot("connect-rejected") });
+});

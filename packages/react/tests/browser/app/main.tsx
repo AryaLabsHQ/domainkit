@@ -2,7 +2,7 @@
  * The browser fixture: `Domain.Flow` over the same fake transport the unit tests use, so the
  * Playwright run exercises the real stylesheet, portals, and focus behaviour with no host app.
  */
-import { DnsRecord, Plan, Verify } from "domainkit";
+import { DnsRecord, DomainKit as Kit, Plan, Reason, Verify } from "domainkit";
 import { Transport } from "domainkit/client";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -113,6 +113,29 @@ const mismatched: Transport.Readiness = {
 };
 
 /**
+ * A provider that turns down every token, the way Cloudflare answers one it does not accept. The
+ * fake provider only refuses an empty token, and a required field never submits empty.
+ */
+const refusesTokens = () => {
+  const connection = transport.connection;
+  if (connection === undefined) throw new Error("The fixture transport has no connection group");
+  return {
+    ...transport,
+    connection: {
+      ...connection,
+      start: (input: Parameters<typeof connection.start>[0]) =>
+        input.method._tag === "Token"
+          ? Effect.fail(
+              new Kit.Error({
+                reason: new Reason.Unauthenticated({ message: "the token was refused" }),
+              }),
+            )
+          : connection.start(input),
+    },
+  };
+};
+
+/**
  * The outcome in the three shapes a host meets it: the default card, the inline row, and a
  * composition of the host's own where only the words come from the catalog.
  */
@@ -195,8 +218,14 @@ createRoot(container).render(
     ) : view === "fetch" ? (
       <FetchProbe />
     ) : (
-      <DomainKit.Root colorScheme={colorScheme} theme={{ accent: "#4f46e5" }} transport={transport}>
-        {view === "outcome" ? (
+      <DomainKit.Root
+        colorScheme={colorScheme}
+        theme={{ accent: "#4f46e5" }}
+        transport={view === "reject" ? refusesTokens() : transport}
+      >
+        {view === "reject" ? (
+          <Connect.Flow domain={domain} />
+        ) : view === "outcome" ? (
           <Outcomes />
         ) : view === "evidence" ? (
           <VerifyUi.Evidence readiness={mismatched} />

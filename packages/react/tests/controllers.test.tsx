@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DnsRecord } from "domainkit";
 import type { Transport } from "domainkit/client";
@@ -165,6 +165,38 @@ describe("Connect.useController", () => {
     const description = alert.querySelector("[data-domainkit-part='outcome-description']");
     expect(title?.textContent).toBe("That provider no longer exists");
     expect(description?.textContent).toBe("Reload the page and start this step again.");
+  });
+
+  it("keeps the snapshot, the discovery, and the provider list when a command fails", async () => {
+    const { domain, transport } = scenario();
+    let controller: Connect.Controller | null = null;
+    function Probe() {
+      controller = Connect.useController({ domain });
+      return null;
+    }
+    const current = (): Connect.Controller => {
+      if (controller === null) throw new Error("The probe rendered no controller");
+      return controller;
+    };
+    render(<Probe />, { wrapper: wrap(transport) });
+    await waitFor(() => expect(current().state._tag).toBe("Disconnected"));
+    const providers = current().providers.length;
+    const discovered = current().discovery?._tag;
+    expect(providers).toBeGreaterThan(0);
+    expect(discovered).toBeDefined();
+
+    act(() => {
+      current().connect({ method: "token", provider: "absent", values: { token: "x" } });
+    });
+    await waitFor(() => expect(current().state._tag).toBe("Failure"));
+    const state = current().state;
+    if (state._tag !== "Failure") throw new Error("The connect did not fail");
+    // The customer keeps the page they were on: the domain, what discovery found, and the form.
+    expect(state.snapshot?.domain).toBe(domain);
+    expect(state.discovery?._tag).toBe(discovered);
+    expect(state.attempt).toEqual({ method: "token", provider: "absent" });
+    expect(current().providers).toHaveLength(providers);
+    expect(current().snapshot?.domain).toBe(domain);
   });
 
   it("preselects a connection discovery already found for the zone", async () => {
