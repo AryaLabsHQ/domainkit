@@ -3,9 +3,20 @@ title: Connection
 description: Connect a DNS provider from a form built out of the provider catalog, reuse a connection the customer already has, and pick a zone when several match.
 ---
 
-`Connect.Flow` is the connection step on its own: the card once connected, the dialog until then.
+`Connect.Flow` is the connection step on its own: the card once connected, the prompt until then.
 
 <ReactExample story="connect" />
+
+## The disconnected offer
+
+Discovery names the provider whose nameservers serve the domain. `Connect.Prompt` states it, and
+the trigger beside it opens a dialog narrowed to that provider.
+
+<ReactExample story="connect-prompt" />
+
+With no provider serving the zone there is nothing DomainKit can connect, so the prompt renders
+nothing. A host application that wants the all-providers dialog anyway passes
+`connect="always"` to `Domain.Flow`, `Connect.Flow`, or `Connect.Prompt`.
 
 ## Usage
 
@@ -14,22 +25,39 @@ description: Connect a DNS provider from a form built out of the provider catalo
 ## What it renders
 
 The connect form is built from the snapshot, not from hard-coded provider names. Each provider
-carries its auth methods, and each method its label, docs URL, and token fields, so a new provider
-appears in the dialog without a UI change.
+carries its auth methods, and each method its docs URL and token fields, so a new provider appears
+in the dialog without a UI change.
+
+When discovery names a host, the dialog is titled after that provider and shows its methods alone;
+the rest wait behind a `Use a different provider` disclosure. With no host every provider is listed,
+one open at a time. Token fields take shadcn's `Field` anatomy (`field`, `field-label`,
+`field-description`, `field-error`), and the fields a provider does not need, such as an account id,
+sit behind a `Need an account id?` disclosure so the common form is one field.
 
 When the transport declares `connection.discover`, the flow asks on mount which of the customer's
 existing connections already reaches the domain and offers that first. A discovery failure is
 silent: the provider list still renders.
 
+A failed connect keeps the page the customer was on. `Connect.State.Failure` carries the snapshot,
+the discovery, and the provider and method the customer was using, so the dialog keeps its
+description, its provider forms, and the values already typed, and answers with an inline
+[outcome](/components/outcome) beside the method that failed.
+
+A provider that turns down credentials is answering the secret it was given, so that input carries
+`aria-invalid` and the outcome renders in `field-error` under it. The outcome names the provider the
+customer acted on, which the reason itself cannot: "Cloudflare didn't accept this token", never a
+status code.
+
 ## Parts
 
 | Part              | Renders                                                       |
 | ----------------- | ------------------------------------------------------------- |
+| `Connect.Prompt`  | The disconnected offer: who serves the zone, and the trigger  |
 | `Connect.Card`    | The connected provider, with detach and disconnect            |
 | `Connect.Dialog`  | The connect surface, with a `render` prop for your own dialog |
 | `Connect.Form`    | The method picker and token fields, without the dialog        |
 | `Connect.Status`  | One line of what the connection is doing                      |
-| `Connect.Outcome` | The last failure, as a sentence from the catalog              |
+| `Connect.Outcome` | The last failure, as an [outcome](/components/outcome)        |
 
 ## Where the customer comes back to
 

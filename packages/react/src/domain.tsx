@@ -33,6 +33,8 @@ export interface ActionsSlotProps {
 export interface ConnectionSlotProps {
   readonly controller: Connect.Controller;
   readonly domain: string;
+  /** What the flow was told to offer when discovery names no host. */
+  readonly connect: Connect.Invitation;
 }
 
 /**
@@ -46,7 +48,7 @@ export interface Slots {
   readonly verification?: (props: VerificationSlotProps) => ReactNode;
   /** Defaults to Approve and Decline, plus cleanup when the transport declares it. */
   readonly actions?: (props: ActionsSlotProps) => ReactNode;
-  /** Defaults to `Connect.Card` once connected and `Connect.Dialog` until then. */
+  /** Defaults to `Connect.Card` once connected and `Connect.Prompt` until then. */
   readonly connection?: (props: ConnectionSlotProps) => ReactNode;
 }
 
@@ -68,16 +70,26 @@ export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children">
   readonly returnTo?: string | null;
   /** Render this domain's state without the controls that change it. Defaults to the root's. */
   readonly readOnly?: boolean;
+  /**
+   * Offer the connect dialog even when discovery names no host, for a host application that lets
+   * a customer connect a provider the domain's nameservers do not point at. Defaults to `detected`.
+   */
+  readonly connect?: Connect.Invitation;
 }
 
-function DefaultConnection({ controller }: ConnectionSlotProps): ReactElement {
+function DefaultConnection({ connect, controller }: ConnectionSlotProps): ReactElement {
+  // The prompt already names who serves the zone, so the status line is for everything else:
+  // what the connection is doing, and what a read-only customer sees where a trigger would be.
+  const stated =
+    controller.state._tag === "Disconnected" && Connect.hostProvider(controller) !== null;
   return controller.state._tag === "Connected" ? (
     <Connect.Card controller={controller} />
   ) : (
     <>
-      <Connect.Status controller={controller} />
-      <Connect.Dialog controller={controller} />
-      <Connect.Outcome controller={controller} />
+      {stated ? null : <Connect.Status controller={controller} />}
+      <Connect.Prompt connect={connect} controller={controller} />
+      {/* A failure the method already answers beside the field announces once, not twice. */}
+      {Connect.answeredInPlace(controller) ? null : <Connect.Outcome controller={controller} />}
     </>
   );
 }
@@ -139,6 +151,7 @@ function DefaultActions({
  * layout containers of its own, so a host's grid can place the slot output directly.
  */
 export function Flow({
+  connect = "detected",
   domain,
   onApplied,
   onCleaned,
@@ -190,9 +203,9 @@ export function Flow({
       children: (
         <ReadOnly value={readOnly ?? inherited}>
           {!capabilities.includes("connection") ? null : slots.connection === undefined ? (
-            <DefaultConnection controller={connection} domain={domain} />
+            <DefaultConnection connect={connect} controller={connection} domain={domain} />
           ) : (
-            slots.connection({ controller: connection, domain })
+            slots.connection({ connect, controller: connection, domain })
           )}
           {slots.records === undefined ? (
             <Records.Table readiness={readiness} records={requirements} />

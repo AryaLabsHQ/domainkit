@@ -26,6 +26,7 @@
     --domainkit-shadow: 0 16px 40px rgb(15 23 42 / 0.12);
     --domainkit-success: #059669;
     --domainkit-text: #18181b;
+    --domainkit-warning: #b45309;
     --domainkit-control-radius: calc(var(--domainkit-radius) * 0.5);
     --domainkit-button-raised-glint: rgb(255 255 255 / 0.95);
     --domainkit-button-raised-shade: color-mix(in srgb, var(--domainkit-text) 10%, transparent);
@@ -43,6 +44,7 @@
     --domainkit-muted: #a1a1aa;
     --domainkit-shadow: 0 16px 40px rgb(0 0 0 / 0.4);
     --domainkit-success: #34d399;
+    --domainkit-warning: #fbbf24;
     --domainkit-text: #fafafa;
     --domainkit-button-raised-glint: rgb(255 255 255 / 0.14);
     --domainkit-button-raised-shade: rgb(0 0 0 / 0.42);
@@ -58,6 +60,7 @@
       --domainkit-muted: #a1a1aa;
       --domainkit-shadow: 0 16px 40px rgb(0 0 0 / 0.4);
       --domainkit-success: #34d399;
+      --domainkit-warning: #fbbf24;
       --domainkit-text: #fafafa;
       --domainkit-button-raised-glint: rgb(255 255 255 / 0.14);
       --domainkit-button-raised-shade: rgb(0 0 0 / 0.42);
@@ -575,7 +578,7 @@
     padding: 0.75rem;
   }
 
-  :where([data-domainkit-part="token-connect"] label) {
+  :where([data-domainkit-part="token-connect"] [data-domainkit-part="field-label"]) {
     color: var(--domainkit-muted);
     display: grid;
     font-size: 0.8125rem;
@@ -748,8 +751,8 @@
   }
 
   :where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="records-panel"]),
-  :where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="flow-outcome"]),
-  :where([data-domainkit-part="cleanup-flow"] > [data-domainkit-part="flow-outcome"]) {
+  :where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="outcome"]),
+  :where([data-domainkit-part="cleanup-flow"] > [data-domainkit-part="outcome"]) {
     flex: 1 1 100%;
   }
 
@@ -1175,18 +1178,111 @@
     gap: 0.5rem;
   }
 
-  :where([data-domainkit-part="flow-outcome"]) {
+  /* -------------------------------------------------------------------------------------------
+   * Outcome: media, title, description, and the action, in a card or on one line
+   * ----------------------------------------------------------------------------------------- */
+
+  :where([data-domainkit-part="outcome"]) {
+    --domainkit-outcome-tone: var(--domainkit-danger);
+    color: var(--domainkit-text);
     font-size: 0.875rem;
-    margin: 0;
     width: 100%;
   }
 
-  :where([data-domainkit-part="flow-outcome"][data-tone="success"]) {
-    color: var(--domainkit-success);
+  :where([data-domainkit-part="outcome"][data-tone="success"]) {
+    --domainkit-outcome-tone: var(--domainkit-success);
   }
 
-  :where([data-domainkit-part="flow-outcome"][data-tone="danger"]) {
-    color: var(--domainkit-danger);
+  :where([data-domainkit-part="outcome"][data-tone="warning"]) {
+    --domainkit-outcome-tone: var(--domainkit-warning);
+  }
+
+  :where([data-domainkit-part="outcome"][data-layout="card"]) {
+    border: 1px dashed color-mix(in srgb, var(--domainkit-outcome-tone) 45%, transparent);
+    border-radius: var(--domainkit-radius);
+    display: grid;
+    gap: 0.75rem;
+    justify-items: center;
+    padding: 1.25rem 1rem;
+    text-align: center;
+  }
+
+  :where([data-domainkit-part="outcome"][data-layout="inline"]) {
+    align-items: center;
+    column-gap: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 0.35rem;
+  }
+
+  :where([data-domainkit-part="outcome-header"]) {
+    display: grid;
+    gap: 0.25rem;
+    justify-items: inherit;
+  }
+
+  :where(
+    [data-domainkit-part="outcome"][data-layout="card"] [data-domainkit-part="outcome-header"]
+  ) {
+    gap: 0.35rem;
+    max-width: 26rem;
+  }
+
+  :where([data-domainkit-part="outcome-media"]) {
+    align-items: center;
+    color: var(--domainkit-outcome-tone);
+    display: inline-flex;
+    justify-content: center;
+  }
+
+  :where([data-domainkit-part="outcome-media"] svg) {
+    height: 1.25rem;
+    width: 1.25rem;
+  }
+
+  :where([data-domainkit-part="outcome-media"][data-variant="icon"]) {
+    background: color-mix(in srgb, var(--domainkit-outcome-tone) 12%, transparent);
+    border-radius: var(--domainkit-control-radius);
+    height: 2.25rem;
+    width: 2.25rem;
+  }
+
+  :where(
+    [data-domainkit-part="outcome"][data-layout="inline"]
+      [data-domainkit-part="outcome-media"][data-variant="icon"]
+  ) {
+    background: none;
+    height: 1.25rem;
+    width: 1.25rem;
+  }
+
+  :where([data-domainkit-part="outcome-title"]) {
+    color: var(--domainkit-text);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  :where([data-domainkit-part="outcome-description"]) {
+    color: var(--domainkit-muted);
+    font-size: 0.8125rem;
+    margin: 0;
+  }
+
+  :where([data-domainkit-part="outcome-content"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  :where(
+    [data-domainkit-part="outcome"][data-layout="inline"] [data-domainkit-part="outcome-header"]
+  ) {
+    align-items: center;
+    column-gap: 0.5rem;
+    display: flex;
+    flex: 1 1 12rem;
+    flex-wrap: wrap;
+    row-gap: 0.15rem;
   }
 
   :where([data-domainkit-part]:focus-visible) {
@@ -1235,12 +1331,17 @@
     gap: 0.5rem;
   }
 
-  [data-domainkit-part="token-field"] {
+  [data-domainkit-part="field"] {
     display: grid;
     gap: 0.25rem;
   }
 
-  [data-domainkit-part="token-field-label"] {
+  [data-domainkit-part="field"][data-orientation="horizontal"] {
+    align-items: center;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  [data-domainkit-part="field-label"] {
     align-items: baseline;
     color: var(--domainkit-muted);
     display: flex;
@@ -1248,12 +1349,12 @@
     gap: 0.375rem;
   }
 
-  [data-domainkit-part="token-field-optional"] {
+  [data-domainkit-part="field-optional"] {
     font-size: 0.75rem;
     opacity: 0.8;
   }
 
-  [data-domainkit-part="token-field-input"] {
+  [data-domainkit-part="field-input"] {
     background-color: var(--domainkit-background);
     border: 1px solid var(--domainkit-border);
     border-radius: var(--domainkit-control-radius);
@@ -1264,12 +1365,21 @@
     width: 100%;
   }
 
-  [data-domainkit-part="token-field-input"]:focus-visible {
+  [data-domainkit-part="field-input"]:focus-visible {
     border-color: var(--domainkit-accent);
     outline: none;
   }
 
-  [data-domainkit-part="token-docs"] {
+  [data-domainkit-part="field-input"][aria-invalid="true"] {
+    border-color: var(--domainkit-danger);
+  }
+
+  [data-domainkit-part="field-error"] {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  [data-domainkit-part="field-description"] {
     align-items: center;
     color: var(--domainkit-muted);
     display: inline-flex;
@@ -1277,6 +1387,81 @@
     gap: 0.25rem;
     justify-self: start;
     text-decoration: none;
+  }
+
+  /* ---------------------------------------------------------------------------------------------
+   * The disconnected prompt, and the disclosures that keep the dialog to one decision
+   * ------------------------------------------------------------------------------------------- */
+
+  [data-domainkit-part="connect-prompt"] {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  [data-domainkit-part="host-identity"] {
+    align-items: center;
+    column-gap: 0.5rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  [data-domainkit-part="host-name"] {
+    font-size: 0.875rem;
+    font-weight: 600;
+    grid-column: 2;
+  }
+
+  [data-domainkit-part="host-statement"] {
+    color: var(--domainkit-muted);
+    font-size: 0.8125rem;
+    grid-column: 2;
+  }
+
+  [data-domainkit-part="other-providers"],
+  [data-domainkit-part="more-options"] {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  [data-domainkit-part="other-providers-trigger"],
+  [data-domainkit-part="more-options-trigger"] {
+    color: var(--domainkit-muted);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    list-style: none;
+    width: fit-content;
+  }
+
+  [data-domainkit-part="other-providers-trigger"]::before,
+  [data-domainkit-part="more-options-trigger"]::before {
+    content: "\25b8";
+    display: inline-block;
+    margin-inline-end: 0.35rem;
+  }
+
+  [data-domainkit-part="other-providers"][open]
+    > [data-domainkit-part="other-providers-trigger"]::before,
+  [data-domainkit-part="more-options"][open]
+    > [data-domainkit-part="more-options-trigger"]::before {
+    transform: rotate(90deg);
+  }
+
+  [data-domainkit-part="other-providers"] {
+    border-top: 1px solid var(--domainkit-border);
+    padding-top: 0.75rem;
+  }
+
+  button[data-domainkit-part="provider-heading"] {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 0;
+    text-align: start;
+    width: 100%;
   }
 
   [data-domainkit-part="discovery-resolved"],

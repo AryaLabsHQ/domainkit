@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DnsRecord } from "domainkit";
+import { DnsRecord, DomainKit as Kit, Reason } from "domainkit";
 import type { Transport } from "domainkit/client";
+import * as Effect from "effect/Effect";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Cleanup, Connect, DomainKit, Provision, Testing, Verify } from "../src/index.ts";
@@ -21,7 +22,8 @@ const scenario = (
     sibling: `mail.${zone}`,
     transport: Testing.transport({
       ...(options.capabilities === undefined ? {} : { capabilities: options.capabilities }),
-      provider: { zones: [zone] },
+      // The zone's nameservers are the fake's own, so discovery names it as the host.
+      provider: { nameserverSuffixes: [zone], zones: [zone] },
     }),
     zone,
   };
@@ -52,7 +54,7 @@ const connectDomain = async (transport: Transport.Interface, domain: string) => 
   await screen.findByRole("button", { name: "Connect" });
   await user.click(screen.getByRole("button", { name: "Connect" }));
   await user.type(await screen.findByLabelText(/Token/), "tok");
-  await user.click(screen.getByRole("button", { name: "Token (fake)" }));
+  await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
   await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
   view.unmount();
 };
@@ -128,7 +130,7 @@ describe("Connect.useController", () => {
     expect(field.getAttribute("type")).toBe("password");
     expect(field.getAttribute("name")).toBe("token");
     await user.type(field, "tok");
-    await user.click(screen.getByRole("button", { name: "Token (fake)" }));
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
     await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
     const start = transport.calls.find((call) => call.method === "connection.start");
     expect(start?.input).toMatchObject({
@@ -159,8 +161,71 @@ describe("Connect.useController", () => {
     render(<Panel />, { wrapper: wrap(transport) });
     await user.click(screen.getByRole("button", { name: "go" }));
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("That provider no longer exists.");
+    expect(alert.textContent).toContain("That provider no longer exists");
     expect(alert.textContent).not.toContain("NotFound");
+    const title = alert.querySelector("[data-domainkit-part='outcome-title']");
+    const description = alert.querySelector("[data-domainkit-part='outcome-description']");
+    expect(title?.textContent).toBe("That provider no longer exists");
+    expect(description?.textContent).toBe("Reload the page and start this step again.");
+  });
+
+  it("keeps the snapshot, the discovery, and the provider list when a command fails", async () => {
+    const { domain, transport } = scenario();
+    let controller: Connect.Controller | null = null;
+    function Probe() {
+      controller = Connect.useController({ domain });
+      return null;
+    }
+    const current = (): Connect.Controller => {
+      if (controller === null) throw new Error("The probe rendered no controller");
+      return controller;
+    };
+    render(<Probe />, { wrapper: wrap(transport) });
+    await waitFor(() => expect(current().state._tag).toBe("Disconnected"));
+    const providers = current().providers.length;
+    const discovered = current().discovery?._tag;
+    expect(providers).toBeGreaterThan(0);
+    expect(discovered).toBeDefined();
+
+    act(() => {
+      current().connect({ method: "token", provider: "absent", values: { token: "x" } });
+    });
+    await waitFor(() => expect(current().state._tag).toBe("Failure"));
+    const state = current().state;
+    if (state._tag !== "Failure") throw new Error("The connect did not fail");
+    // The customer keeps the page they were on: the domain, what discovery found, and the form.
+    expect(state.snapshot?.domain).toBe(domain);
+    expect(state.discovery?._tag).toBe(discovered);
+    expect(state.attempt).toEqual({ method: "token", provider: "absent" });
+    expect(current().providers).toHaveLength(providers);
+    expect(current().snapshot?.domain).toBe(domain);
+  });
+
+  it("offers no connect surface when the domain could not be inspected", async () => {
+    const { domain, transport } = scenario();
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    const unreachable: Transport.Interface = {
+      ...transport,
+      connection: {
+        ...connection,
+        inspect: () =>
+          Effect.fail(
+            new Kit.Error({
+              reason: new Reason.ProviderUnavailable({ message: "down", provider: "fake" }),
+            }),
+          ),
+      },
+    };
+    render(
+      <DomainKit.Root transport={unreachable}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    // Nothing was read, so there is nothing to offer: the failure reads, the trigger does not.
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("isn't responding");
+    expect(screen.queryByRole("button", { name: /^Connect/ })).toBeNull();
   });
 
   it("preselects a connection discovery already found for the zone", async () => {
@@ -171,7 +236,8 @@ describe("Connect.useController", () => {
         <Connect.Flow domain={sibling} />
       </DomainKit.Root>,
     );
-    await click("Connect");
+    // Discovery resolved a connection rather than naming a host, so the trigger says what it opens.
+    await click("Connect a DNS provider");
     await screen.findByText(`${zone} already serves this domain`);
     await user.click(screen.getByRole("button", { name: `Use ${zone}` }));
     await waitFor(() => expect(screen.getByText("fake connected")).toBeDefined());
@@ -248,7 +314,7 @@ describe("Cleanup.useController", () => {
     render(<Panel />, { wrapper: wrap(transport) });
     await user.click(screen.getByRole("button", { name: "plan" }));
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("That receipt no longer exists.");
+    expect(alert.textContent).toContain("That receipt no longer exists");
   });
 });
 
@@ -333,7 +399,9 @@ describe("interactive return destination", () => {
     const zone = `oauth${(cases += 1)}.example`;
     return {
       domain: `app.${zone}`,
-      transport: Testing.transport({ provider: { oauth: true, zones: [zone] } }),
+      transport: Testing.transport({
+        provider: { nameserverSuffixes: [zone], oauth: true, zones: [zone] },
+      }),
     };
   };
 
@@ -345,7 +413,7 @@ describe("interactive return destination", () => {
       </DomainKit.Root>,
     );
     await click("Connect");
-    await click("Sign in (fake)");
+    await click("Continue with Fake fake");
     await waitFor(() => expect(startMethod(transport)).toBeDefined());
     expect(startMethod(transport)).toMatchObject({
       _tag: "OAuth",
@@ -361,7 +429,7 @@ describe("interactive return destination", () => {
       </DomainKit.Root>,
     );
     await click("Connect");
-    await click("Sign in (fake)");
+    await click("Continue with Fake fake");
     await waitFor(() => expect(startMethod(transport)).toBeDefined());
     expect(startMethod(transport)).toMatchObject({
       _tag: "OAuth",
@@ -377,7 +445,7 @@ describe("interactive return destination", () => {
       </DomainKit.Root>,
     );
     await click("Connect");
-    await click("Sign in (fake)");
+    await click("Continue with Fake fake");
     await waitFor(() => expect(startMethod(transport)).toBeDefined());
     expect(startMethod(transport)).toEqual({ _tag: "OAuth" });
   });

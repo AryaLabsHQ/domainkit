@@ -12,7 +12,7 @@ and nothing else.
 
 | Slot           | Receives                                        | Default                                                    |
 | -------------- | ----------------------------------------------- | ---------------------------------------------------------- |
-| `connection`   | `{ controller, domain }`                        | `Connect.Card` once connected, `Connect.Dialog` until then |
+| `connection`   | `{ controller, domain, connect }`               | `Connect.Card` once connected, `Connect.Prompt` until then |
 | `records`      | `{ records, readiness, controller, domain }`    | `Records.Table`                                            |
 | `verification` | `{ controller, domain }`                        | `Verify.Status` with per-requirement evidence              |
 | `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline, Remove records           |
@@ -70,9 +70,9 @@ Each namespace exports a `Flow` of its own when only one step belongs in a scree
 ## Read-only
 
 `readOnly` on `DomainKit.Root`, or on one `Domain.Flow`, removes every slot's write surface rather
-than disabling it. The connection slot renders the catalog's `notConnected` sentence instead of a
-connect control, the actions slot renders nothing, and the records and verification slots are
-untouched.
+than disabling it. The connection slot states who serves the zone, or the catalog's `notConnected`
+sentence when nothing does, in place of a connect control; the actions slot renders nothing; and the
+records and verification slots are untouched.
 
 A slot of your own asks which mode it is in through `DomainKit.useReadOnly()`, and
 `DomainKit.ReadOnly` narrows a subtree.
