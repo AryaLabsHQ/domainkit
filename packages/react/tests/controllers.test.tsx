@@ -299,55 +299,8 @@ describe("Connect.Dialog", () => {
     expect(dialog().querySelector("[data-domainkit-part='token-connect']")).toBeNull();
   });
 
-  it("re-narrows to the provider the header menu names", async () => {
-    const { domain, transport } = both();
-    const connection = transport.connection;
-    if (connection === undefined) throw new Error("The fake transport has no connection group");
-    // A second descriptor in the snapshot: the menu needs two providers, not two registries.
-    const two: Transport.Interface = {
-      ...transport,
-      connection: {
-        ...connection,
-        inspect: (target) =>
-          Effect.map(connection.inspect(target), (snapshot) => ({
-            ...snapshot,
-            providers: [
-              ...snapshot.providers,
-              {
-                id: "vercel",
-                name: "Fake vercel",
-                methods: [
-                  {
-                    docsUrl: null,
-                    fields: [{ name: "token", required: true, secret: true }],
-                    kind: "token" as const,
-                    label: "Access token",
-                  },
-                ],
-              },
-            ],
-          })),
-      },
-    };
-    render(
-      <DomainKit.Root navigate={() => {}} transport={two}>
-        <Connect.Flow domain={domain} />
-      </DomainKit.Root>,
-    );
-    await click("Connect");
-    const menu = dialog().querySelector("[data-domainkit-part='dialog-provider-menu']");
-    expect(menu?.textContent).toContain("Connect Fake fake");
-    await user.click(menu as HTMLElement);
-    await user.click(await screen.findByRole("menuitem", { name: /Fake vercel/ }));
-    await waitFor(() =>
-      expect(
-        dialog().querySelector("[data-domainkit-part='dialog-provider-menu']")?.textContent,
-      ).toContain("Connect Fake vercel"),
-    );
-    // The body follows the header: one provider, and it is the one the customer picked.
-    const section = dialog().querySelector("[data-domainkit-part='provider-authentication']");
-    expect(section?.getAttribute("data-provider")).toBe("vercel");
-  });
+  // The header's provider menu is a floating surface: opening it is a browser concern, and
+  // `tests/browser/flow.spec.ts` covers picking a provider and the dialog re-narrowing to it.
 
   it("renders the form directly for a provider that offers a token and nothing else", async () => {
     const { domain, transport } = scenario();

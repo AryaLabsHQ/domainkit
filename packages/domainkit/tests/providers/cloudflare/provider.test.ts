@@ -433,7 +433,9 @@ describe("Cloudflare.provider", () => {
         clientId: "client-1",
         clientSecret: Redacted.make("secret"),
         // The name the browser knows the emulator by; the API is in a container and cannot
-        // resolve it, so it reaches the same emulator through the host.
+        // resolve it, so it reaches the same emulator through the host. That name is not loopback,
+        // so the plaintext request only goes through because the stage asked for it.
+        allowPlaintext: true,
         issuer: "http://emulator.localhost:8788/cloudflare",
         serverOrigin: "http://host.docker.internal:8788/cloudflare",
       },
@@ -456,8 +458,6 @@ describe("Cloudflare.provider", () => {
         codeVerifier: "verifier",
         params: { state: "state-1", code: "code-1" },
       });
-      // Plaintext through `host.docker.internal` is allowed on purpose: the name resolves to the
-      // container's own host and the request never leaves the machine.
       assert.strictEqual(
         recording.requests[0]?.url,
         "http://host.docker.internal:8788/cloudflare/oauth2/token",
@@ -512,6 +512,27 @@ describe("Cloudflare.provider", () => {
         })
         .pipe(Effect.flip);
       assert.strictEqual(refused.reason._tag, "ProviderUnavailable");
+      assert.deepStrictEqual(recording.requests, []);
+
+      // And a name that is not loopback stays refused until the stage asks for it: a hosts file
+      // can point `host.docker.internal` anywhere, so the name alone proves nothing.
+      const named = Cloudflare.provider({
+        fetch: recording.fetch,
+        oauth: {
+          clientId: "client-1",
+          clientSecret: Redacted.make("secret"),
+          issuer: "http://host.docker.internal:8788/cloudflare",
+        },
+      });
+      const unasked = yield* (named.auth.oauth ?? bail("oauth"))
+        .complete({
+          code: "code-1",
+          callbackUrl: "https://app.example/cb",
+          codeVerifier: "verifier",
+          params: { state: "state-1", code: "code-1" },
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(unasked.reason._tag, "ProviderUnavailable");
       assert.deepStrictEqual(recording.requests, []);
     });
   });

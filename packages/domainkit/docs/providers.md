@@ -28,9 +28,11 @@ same emulator by different names gives `oauth.serverOrigin` as well: the authori
 deriving from `issuer`, while `/oauth2/token` and `/oauth2/revoke` derive from `serverOrigin`. It
 defaults to `issuer`, so a stage where one name works for both names it once.
 
-DomainKit requires HTTPS for every OAuth request except one to this machine: a loopback host, or
-`host.docker.internal`, which a container resolves to its own host. Neither carries the credential
-off the machine.
+DomainKit requires HTTPS for every OAuth request. Loopback is the one automatic exception: it goes
+nowhere and nothing can repoint it. A plaintext endpoint reached by any other name, such as an
+emulator at `host.docker.internal`, takes `oauth.allowPlaintext`, because a hosts file can point a
+name anywhere and the name alone proves nothing. That flag is for a development stage: with it the
+client secret, the code, and the tokens cross the network in the clear.
 
 Cloudflare's token verification does not enumerate DNS permissions, so the capability claim records
 what the definition requires rather than what the token proves. A token without `dns_records:edit`

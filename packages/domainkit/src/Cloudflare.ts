@@ -52,6 +52,13 @@ export interface Options {
      * Defaults to `issuer`.
      */
     readonly serverOrigin?: string;
+    /**
+     * Permit `http:` for these endpoints when they are not loopback, such as an emulator reached
+     * through `host.docker.internal`. Development only: the client secret, the code, and the tokens
+     * cross the network in the clear, and a name resolves wherever the machine has been told to.
+     * Loopback needs no flag.
+     */
+    readonly allowPlaintext?: boolean;
   };
   readonly fetch?: Fetch;
   readonly baseUrl?: string;
@@ -156,6 +163,8 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
     const scopes = settings.scopes ?? defaultScopes;
     const browser = settings.issuer ?? defaultIssuer;
     const endpoints = endpointsOf({ browser, server: settings.serverOrigin ?? browser });
+    const insecure =
+      settings.allowPlaintext === undefined ? {} : { allowPlaintext: settings.allowPlaintext };
     return {
       label: "Sign in with Cloudflare",
       scopes,
@@ -184,6 +193,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
               callbackUrl: input.callbackUrl,
               codeVerifier: input.codeVerifier,
               fetch,
+              ...insecure,
             }),
           ),
           Effect.flatMap(issued),
@@ -204,6 +214,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
             client: yield* oauthClient(settings),
             refreshToken,
             fetch,
+            ...insecure,
           });
           return {
             secret: packSecret(tokens),
@@ -220,6 +231,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
             client: yield* oauthClient(settings),
             token: accessToken,
             fetch,
+            ...insecure,
           });
         }),
     };
