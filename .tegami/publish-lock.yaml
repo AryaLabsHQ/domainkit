@@ -1,35 +1,55 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Discovery names the provider that hosts the zone\n\n`Provider.Definition.nameservers` declares the hostname suffixes a provider's nameservers end in (Cloudflare `ns.cloudflare.com`, Vercel `vercel-dns.com`), and `Connect.discover` answers `NotFound` with `host: { provider }` naming the one registered provider whose suffixes cover every authoritative nameserver, or `null`. The discovery route and `Transport` carry the field, and `Testing.provider` accepts `nameserverSuffixes`.\n"
-    filename: domainkit-discover-zone-host.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## The cards read alike, and the flow says what it knows\n\n`Connect.Card` and `Connect.Prompt` share one anatomy: a squircle mark, the provider's display name,\nthe line about it directly under, and one action at the right. The mark spans both text rows and\ncentres against them at a size derived from the two line heights. Both cards sit on\n`--domainkit-fill` with the dialog panel's inner room, and draw a border only where a host sets\n`--domainkit-card-border`. A record's status is one badge that does not wrap, glyph beside word.\n\n`Connect.holdsConnection` keeps the card, and the dialog it opened, on screen while a command it\nstarted is still running. `Connect.offering` is false whenever `holdsConnection` is true, so what a\nhost reads and what a customer sees cannot disagree.\n\n`Domain.Flow`'s `onState` fires whenever what DomainKit has to say about the domain changes, and\nonce on mount. `Domain.FlowState` carries `connected`, `offering`, `provider`, `receiptId`, and\n`applied`, built from the same predicates the surface renders on. `connect=\"never\"` hides the\nprompt while a connected domain keeps its status and its disconnect, and for a domain no configured\nprovider serves and nothing holds, the flow renders no connection surface at all, so a host's own\noffers follow in its own order. A host that wants the sentence renders `Connect.Status`, which names\nthe provider the customer knows rather than the id the wire carries.\n"
+    filename: react-cards-and-domain-state.md
     v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## A rejected token reads as Unauthenticated\n\nCloudflare's HTTP 400 answers with code 6003 or 6111 (a malformed bearer token) and a 403 from its token verify endpoint fail `Reason.Unauthenticated` with Cloudflare's own message, as 401 does; Vercel's 403 `forbidden` on token verification does the same, while a 403 from zone listing stays `Forbidden`. The server answers 401, and `Testing.conformance.provider` gains a `rejected-token` case that authenticates empty secrets (or the `rejectedToken` values you pass) and expects `Unauthenticated`.\n"
-    filename: domainkit-rejected-token-reason.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Disconnecting is one dialog\n\n`Connect.DisconnectDialog` asks once. It plans the cleanup on open from the domain's apply receipt\nand lists the records it would remove under a Base UI `Switch` reading \"Remove the N records\nDomainKit added\", checked by default; switched off the list stays legible, steps back, and says\n\"Records stay in {provider}.\" Where the connection serves more than one domain the dialog also asks\nwhether to detach this domain or end the connection. Confirming runs the cleanup, then the release,\nwith the progress and the outcome inside the dialog, and it holds while either is in flight.\n\nThe dialog carries `data-cleanup`, `\"offered\"` while it lists removals and `\"none\"` otherwise, and\ntakes `--domainkit-dialog-wide` in the first case and `--domainkit-dialog-width` in the second, so\nit takes the room the records need and asks one question at one question's width. It owns its own\ncleanup controller, because `Domain.Flow`'s refreshes the snapshot on a receipt and the release\nstill needs the connection the cleanup just used. `Cleanup.Flow` stays exported and the actions slot\nstill receives its controller.\n"
+    filename: react-disconnect-with-cleanup.md
     v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## A first-party connect experience\n\n`Outcome` is a compound part: media, title, description, and the action, as a card or on one line.\nEvery flow's `X.Outcome` binds its controller to it, and a host recomposes it with its own parts\nwhile the words stay in the catalog. `Messages.Catalog` returns a `{ title, description }` pair per\n`DomainKit.Error` reason, and `Messages.outcome` reads it.\n\nA failed connect keeps its context. `Connect.State.Failure` carries the snapshot, the discovery, and\nthe provider and method that were in flight, so the dialog keeps its description, its provider\nforms, and the values already typed, and answers beside the method that failed.\n\nA rejected token answers under the field it is about: the input carries `aria-invalid`, the outcome\nrenders in `field-error`, and its title names the provider the customer acted on.\n\nThe disconnected state names the provider that serves the domain. `Connect.Prompt` renders the\nprovider's mark, its name, and \"Owns DNS for this domain.\" beside a `Connect` trigger, and the\ndialog behind it is titled after that provider and shows its methods alone, with the rest behind\n\"Use a different provider\". With no host the flow offers nothing unless it is given\n`connect=\"always\"`. Token fields take shadcn's `Field` anatomy, method buttons carry the verb, and\nthe fields a provider does not need sit behind \"Need an account id?\".\n"
-    filename: react-first-party-connect.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## The plan lives in its dialog, and connecting opens it\n\nConnecting is the customer saying yes to the records, so `Domain.Flow` plans and opens the review\nthe moment a connection lands for its domain, and `review=\"manual\"` waits for the trigger instead.\n`Connect.Controller.established` counts the connections a surface landed, a token connect or a load\nthat followed this library's own redirect back, and only ever grows, so the flow acts on a change\nrather than a state that fires every render. The return is told from a reload by what the controller\nwrote down before navigating away, so no host URL parameter carries it.\n\nThe page holds the \"Review changes\" trigger and the outcome; the operations, the consent sentence,\nand the two decisions live in the dialog. Its primary action says what it will do, `Add N records`,\nand approves and applies in one pass; a conflict is listed with its reason and the action approves\nthe rest by operation id, and with nothing addable it is disabled beside what to fix. `Decline` is\nthe other decision. The dialog closes from the × in its header and from a press outside it, so the\nfooter carries nothing else. On success it closes, the outcome compound reports the receipt, and\n`onApplied` fires.\n"
+    filename: react-plan-opens-itself.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## The connect dialog navigates\n\nThe dialog shows one decision at a time. Its header carries the provider's mark in `dialog-media`\nand, where another provider is registered, a `dialog-provider-menu` that renames the dialog and\nre-narrows it. The body leads with the method a customer clicks through, and \"Use an API token\ninstead\" swaps it for the token form with a `dialog-back` link above the fields. A provider that\noffers a token alone opens on its form. The fields a provider does not need sit behind a Base UI\n`Collapsible` reading \"Add an account id\", which announces `aria-expanded` and carries hover and\nfocus states; every quiet control in the dialog reads its spacing from `--domainkit-quiet-lead`,\n`--domainkit-quiet-trail`, `--domainkit-quiet-inset`, and `--domainkit-quiet-pad`.\n\n`Connect.Form` owns the values the customer types, keyed to the one domain and provider they typed\nthem into: a rejection keeps them, a connection that lands drops them, and they never follow the\nflow to another domain. `Connect.State.Submitting` carries the discovery it started from, so a\nnarrowed dialog stays narrowed while its command runs.\n\nA refused token answers under the field it is about. The input carries `aria-invalid`, the outcome\nrenders in `field-error` reading \"Token not accepted\", and the retry sits beside it on the same\nrow. `Messages.Outcome.description` is optional, and `Messages.failure` reads a reason without one\nas a single sentence. Inline outcomes are a three-column grid, glyph then words then action, and\n`outcome-header` is `display: contents` there so a host's own composition lands on the same grid.\n\nEvery dialog dismisses on a press outside it and holds while its own command is in flight, and a\nclosed dialog sets `pointer-events: none` while it plays its exit.\n"
+    filename: react-connect-dialog-navigates.md
+    v: 0.0.0
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## A fake can read like a real provider\n\n`Testing.provider` accepts `name`, the display name a customer reads, defaulting to `Fake <id>`.\n`Testing.resolver` takes a second argument naming the resolver its answers carry, defaulting to\n`fake`, and `Testing.transport` passes one through as `resolver`. A fixture whose screenshots ship\ncan then name a provider and an observer a customer would recognise.\n"
+    filename: domainkit-fake-provider-names.md
+    v: 0.0.0
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## The snapshot counts the domains a connection serves\n\n`Connect.Snapshot.connectionDomains` counts the attachments on this domain's connection, this\ndomain included, and is `0` without one. The discovery route and `Transport` carry it, so a surface\ncan ask whether letting the connection go takes other domains with it before it offers the choice.\n"
+    filename: domainkit-connection-domain-count.md
+    v: 0.0.0
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## A stage can point Cloudflare's OAuth at its own origin\n\n`Cloudflare.Options.oauth.issuer` names the origin Cloudflare serves `/oauth2/auth`,\n`/oauth2/token`, and `/oauth2/revoke` beneath. It defaults to `https://dash.cloudflare.com` and\nstays separate from `baseUrl`, because production serves consent from one host and the REST API\nfrom another. `serverOrigin` names where the server reaches the exchange and the revocation when\nthat differs from where the browser reaches consent, such as an API in a container reaching an\nemulator through `host.docker.internal`, and defaults to `issuer`.\n\nPlaintext OAuth endpoints stay refused, which is right for every request carrying a client secret,\na code, or a token. Loopback is the one automatic exception: `localhost`, `*.localhost`, `::1`, and\n`127.0.0.0/8` go nowhere and nothing can repoint them. Any other `http:` endpoint takes\n`oauth.allowPlaintext`, because a name resolves wherever DNS or a hosts file says it does.\n"
+    filename: domainkit-cloudflare-oauth-endpoints.md
+    v: 0.0.0
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## A provider offers what a customer clicks through first\n\n`Provider.describeMethods` returns a definition's methods in the order a UI presents them: OAuth,\nthen the integration, then the token. `Provider.methods` reads its kinds from the same list, so the\ntwo never disagree, and a surface that renders the descriptor in order leads with the method a\ncustomer clicks through and leaves the token they have to go and fetch for last.\n"
+    filename: domainkit-interactive-methods-first.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
+  - id: npm:@domainkit/capsuledb
+    updated: true
   - id: npm:@domainkit/docs
     updated: false
   - changelogIds:
-      - domainkit-discover-zone-host.md
-      - domainkit-rejected-token-reason.md
-    id: npm:domainkit
-    updated: true
-  - changelogIds:
-      - react-first-party-connect.md
+      - react-cards-and-domain-state.md
+      - react-disconnect-with-cleanup.md
+      - react-plan-opens-itself.md
+      - react-connect-dialog-navigates.md
     id: npm:@domainkit/react
     updated: true
-  - id: npm:@domainkit/capsuledb
+  - changelogIds:
+      - domainkit-fake-provider-names.md
+      - domainkit-connection-domain-count.md
+      - domainkit-cloudflare-oauth-endpoints.md
+      - domainkit-interactive-methods-first.md
+    id: npm:domainkit
     updated: true
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
-  - id: npm:@domainkit/docs
-  - id: npm:domainkit
-  - id: npm:@domainkit/react
   - id: npm:@domainkit/capsuledb
+  - id: npm:@domainkit/docs
+  - id: npm:@domainkit/react
+  - id: npm:domainkit
