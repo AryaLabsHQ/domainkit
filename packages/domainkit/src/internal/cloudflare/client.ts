@@ -4,7 +4,7 @@ import type * as DnsRecord from "../../DnsRecord.ts";
 import * as Errors from "../error.ts";
 import * as Reason from "../../Reason.ts";
 import type * as Provider from "../../Provider.ts";
-import { bearer, classify, type Fetch, rejected, requestJson } from "../http.ts";
+import { bearer, classify, type Fetch, rejected, rejectedToken, requestJson } from "../http.ts";
 import * as Protocol from "./protocol.ts";
 import * as Records from "./records.ts";
 
@@ -108,8 +108,10 @@ export const listZones = (options: Options, accountId?: string): Fx<ReadonlyArra
     50,
   ).pipe(Effect.map((zones) => zones.filter((zone) => zone.type !== "internal")));
 
-/** Token expiry from the verify endpoint; `null` when the token never expires or verification is unavailable. */
-/** Token status and expiry from a verify endpoint; an inactive token is `Unauthenticated`. */
+/**
+ * Token status and expiry from a verify endpoint; `null` expiry means the token never expires. An
+ * inactive token, or a 403 from the verify endpoint, is `Unauthenticated`.
+ */
 export const verifyToken = (options: Options, path: string): Fx<DateTime.Utc | null> =>
   call(options, path, Protocol.Token).pipe(
     Effect.flatMap(({ result }) =>
@@ -123,26 +125,14 @@ export const verifyToken = (options: Options, path: string): Fx<DateTime.Utc | n
             }),
           ),
     ),
+    rejectedToken,
   );
 
 export const tokenExpiry = (
   options: Options,
   accountId: string | null,
 ): Fx<{ readonly expiresAt: DateTime.Utc | null; readonly kind: "user" | "account" }> => {
-  const verify = (path: string) =>
-    call(options, path, Protocol.Token).pipe(
-      Effect.flatMap(({ result }) =>
-        result.status === "active"
-          ? Effect.succeed(
-              typeof result.expires_on === "string" ? DateTime.makeUnsafe(result.expires_on) : null,
-            )
-          : Errors.fail(
-              new Reason.Unauthenticated({
-                message: `Cloudflare token is ${result.status}`,
-              }),
-            ),
-      ),
-    );
+  const verify = (path: string) => verifyToken(options, path);
   return verify("/user/tokens/verify").pipe(
     Effect.map((expiresAt) => ({ expiresAt, kind: "user" as const })),
     Effect.catchIf(

@@ -104,6 +104,7 @@ describe("Cloudflare.provider", () => {
         { body: failure(6003, "Invalid request headers"), init: { status: 400 } },
         { body: failure(6111, "Invalid format for Authorization header"), init: { status: 400 } },
         { body: failure(9109, "Invalid access token"), init: { status: 403 } },
+        { body: failure(9109, "Unauthorized to access requested resource"), init: { status: 403 } },
       ]);
       const definition = Cloudflare.provider({ fetch: recording.fetch });
       const auth = definition.auth.token ?? bail("token");
@@ -118,6 +119,9 @@ describe("Cloudflare.provider", () => {
           .pipe(Effect.flip);
         assert.strictEqual(forbidden.reason._tag, "Unauthenticated");
         assert.strictEqual(forbidden.reason.message, "Invalid access token");
+        // A 403 while listing zones is a missing permission, which stays Forbidden.
+        const noZoneRead = yield* auth.authenticate({ token }).pipe(Effect.flip);
+        assert.strictEqual(noZoneRead.reason._tag, "Forbidden");
       });
     },
   );

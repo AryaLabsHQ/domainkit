@@ -96,7 +96,15 @@ export const provider = (
   definition: Provider.Definition,
   credential: Provider.Credential,
   zone: string,
-  options: { readonly prefix?: string } = {},
+  options: {
+    readonly prefix?: string;
+    /**
+     * Token values the provider rejects, for the `rejected-token` case. Default: every required
+     * field set to an empty secret, which needs a token method whose required fields are all
+     * secrets.
+     */
+    readonly rejectedToken?: Provider.TokenValues;
+  } = {},
 ): Effect.Effect<void, Errors.DomainKitError> => {
   const prefix = options.prefix ?? "domainkit-conformance";
   const run = <A>(
@@ -298,21 +306,31 @@ export const provider = (
     }).pipe(Effect.ensuring(cleanup(dns, () => created)));
   });
 
-  /** An empty token must read as `Unauthenticated`: a host tells the customer the provider rejected it. */
+  /** A token the provider rejects must read as `Unauthenticated`, so a host tells the customer the provider refused it. */
   const rejectedToken = Effect.gen(function* () {
     const name: Case = "rejected-token";
     const auth = definition.auth.token;
     if (auth === undefined) return;
-    const values = Object.fromEntries(
-      Provider.tokenFields(auth)
-        .filter((field) => field.required)
-        .map((field) => [field.name, Redacted.make("")]),
-    );
+    const required = Provider.tokenFields(auth).filter((field) => field.required);
+    if (options.rejectedToken === undefined && required.some((field) => !field.secret)) {
+      return yield* Effect.fail(
+        failure(
+          name,
+          `the token method requires ${required
+            .filter((field) => !field.secret)
+            .map((field) => field.name)
+            .join(", ")}; pass options.rejectedToken with values the provider rejects`,
+        ),
+      );
+    }
+    const values =
+      options.rejectedToken ??
+      Object.fromEntries(required.map((field) => [field.name, Redacted.make("")]));
     const outcome = yield* auth.authenticate(values).pipe(Effect.result);
     yield* expect(
       name,
       outcome._tag === "Failure" && outcome.failure.reason._tag === "Unauthenticated",
-      "authenticating an empty token must fail Unauthenticated",
+      "authenticating a rejected token must fail Unauthenticated",
     );
   });
 

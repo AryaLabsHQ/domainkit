@@ -73,3 +73,7 @@ nothing to dispose.
 
 The provider runner writes to a real account. Every record it creates carries the `prefix` and is
 removed again, so point it at a zone you own and can inspect.
+
+The `rejected-token` case authenticates with every required token field set to an empty secret and
+expects `Unauthenticated`. A token method with a required non-secret field, such as a region
+selector, needs `rejectedToken`: the values the provider rejects, keyed by field name.

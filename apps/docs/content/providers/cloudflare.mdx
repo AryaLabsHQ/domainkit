@@ -66,8 +66,9 @@ permissions, so a token missing `dns_records:edit` verifies here and fails at th
 `Forbidden`.
 
 A token Cloudflare rejects while connecting fails `Unauthenticated` with Cloudflare's own message,
-whether Cloudflare answers HTTP 400 with code 6003 or 6111 (malformed token), 401, or 403. The
-server answers 401, so a connect form offers a retry on the same field.
+whether Cloudflare answers HTTP 400 with code 6003 or 6111 (malformed token), 401, or 403 from the
+verify endpoint. The server answers 401, so a connect form offers a retry on the same field. A 403
+while listing zones is a missing `zone:read` permission and stays `Forbidden`.
 
 ## Zones and targets
 

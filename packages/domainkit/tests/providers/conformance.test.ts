@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Redacted } from "effect";
+import { Effect, Redacted, Schema } from "effect";
 
-import { DnsRecord, type Provider } from "../../src/index.ts";
+import { DnsRecord, DomainKit, Provider, Reason } from "../../src/index.ts";
 import { Testing } from "../../src/entry/testing.ts";
 
 const credential = { secret: Redacted.make("token"), context: { account: "fake" } };
@@ -28,6 +28,41 @@ describe("provider-author conformance contract", () => {
       );
     }),
   );
+
+  it.effect("asks for rejectedToken when the token method requires a non-secret field", () => {
+    const fake = Testing.provider({ id: "regional", zones: ["example.com"] });
+    const regional: Provider.Definition = {
+      ...fake,
+      auth: {
+        token: Provider.tokenAuth({
+          label: "Regional token",
+          requiredCapabilities: ["dns:read", "dns:write"],
+          fields: Schema.Struct({
+            token: Schema.RedactedFromValue(Schema.String),
+            region: Schema.String,
+          }),
+          authenticate: ({ token }) =>
+            Redacted.value(token) === "good"
+              ? Effect.succeed({ secret: token, context: { account: "regional" }, expiresAt: null })
+              : Effect.fail(
+                  new DomainKit.Error({
+                    reason: new Reason.Unauthenticated({ message: "regional rejected the token" }),
+                  }),
+                ),
+        }),
+      },
+    };
+    return Effect.gen(function* () {
+      const failure = yield* Testing.conformance
+        .provider(regional, credential, "example.com")
+        .pipe(Effect.flip);
+      assert.strictEqual(failure.reason._tag, "InvalidInput");
+      assert.match(failure.message, /rejected-token: the token method requires region/);
+      yield* Testing.conformance.provider(regional, credential, "example.com", {
+        rejectedToken: { token: Redacted.make("bad"), region: Redacted.make("eu") },
+      });
+    });
+  });
 
   it.effect("reports a broken readback as a typed failure and still cleans up", () =>
     Effect.gen(function* () {
