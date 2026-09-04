@@ -418,6 +418,31 @@ describe("Cloudflare.provider", () => {
     });
   });
 
+  it.effect("refuses a plaintext OAuth issuer that is not on this machine", () => {
+    const recording = recordedFetch([{ body: {} }]);
+    const definition = Cloudflare.provider({
+      fetch: recording.fetch,
+      oauth: {
+        clientId: "client-1",
+        clientSecret: Redacted.make("secret"),
+        issuer: "http://oauth.example.com",
+      },
+    });
+    return Effect.gen(function* () {
+      const error = yield* (definition.auth.oauth ?? bail("oauth"))
+        .complete({
+          code: "code-1",
+          callbackUrl: "https://app.example/cb",
+          codeVerifier: "verifier",
+          params: { state: "state-1", code: "code-1" },
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(error.reason._tag, "ProviderUnavailable");
+      // The credential never left the process.
+      assert.deepStrictEqual(recording.requests, []);
+    });
+  });
+
   it.effect("keeps Cloudflare's own OAuth server when the host configures none", () => {
     const definition = Cloudflare.provider({
       oauth: { clientId: "client-1", clientSecret: Redacted.make("secret") },

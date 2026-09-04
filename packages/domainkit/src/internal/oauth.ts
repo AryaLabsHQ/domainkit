@@ -73,12 +73,22 @@ const clientAuth = (client: Client): oauth.ClientAuth => {
 };
 
 /**
- * oauth4webapi refuses plaintext endpoints, which is right for every provider's own server. An
- * `http:` endpoint can only come from a `server` a host configured itself, which is a stage
- * pointing consent at a local emulator, so that request is the one exception.
+ * oauth4webapi refuses plaintext endpoints, which is right for every server that carries a
+ * credential over a network. A loopback `http:` endpoint carries it nowhere: it is a stage pointing
+ * consent at an emulator on the same machine, so that request is the one exception. A remote
+ * `http:` endpoint stays refused however the host configured it.
  */
-const emulated = (endpoint: string | undefined): boolean =>
-  endpoint !== undefined && URL.parse(endpoint)?.protocol === "http:";
+const loopback = (endpoint: string | undefined): boolean => {
+  const url = endpoint === undefined ? null : URL.parse(endpoint);
+  if (url === null || url.protocol !== "http:") return false;
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "::1" ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+  );
+};
 
 const requestOptions = (
   endpoint: string | undefined,
@@ -86,7 +96,7 @@ const requestOptions = (
   signal: AbortSignal,
 ): oauth.TokenEndpointRequestOptions => ({
   signal,
-  ...(emulated(endpoint) ? { [oauth.allowInsecureRequests]: true } : {}),
+  ...(loopback(endpoint) ? { [oauth.allowInsecureRequests]: true } : {}),
   ...(fetch === undefined
     ? {}
     : { [oauth.customFetch]: (url, init) => fetch(url, { ...init, body: init.body }) }),

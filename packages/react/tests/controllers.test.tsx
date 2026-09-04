@@ -328,6 +328,25 @@ describe("Connect.Dialog", () => {
     expect(dialog().querySelector("[data-domainkit-part='dialog-media']")).not.toBeNull();
   });
 
+  it("never carries a token to another domain", async () => {
+    const { domain, sibling, transport } = scenario();
+    // The form itself, kept mounted across the change: the dialog would close and take the field
+    // with it, but a host composing `Connect.Form` keeps it on screen.
+    function Harness({ target }: { readonly target: string }) {
+      const controller = Connect.useController({ domain: target });
+      return (
+        <DomainKit.Root transport={transport}>
+          <Connect.Form controller={controller} />
+        </DomainKit.Root>
+      );
+    }
+    const view = render(<Harness target={domain} />, { wrapper: wrap(transport) });
+    await user.type(await screen.findByLabelText(/Token/), "one-domains-token");
+    view.rerender(<Harness target={sibling} />);
+    const field = await screen.findByLabelText(/Token/);
+    expect((field as HTMLInputElement).value).toBe("");
+  });
+
   it("keeps the typed token after a rejection, so trying again needs no retyping", async () => {
     const { domain, transport } = scenario();
     const connection = transport.connection;

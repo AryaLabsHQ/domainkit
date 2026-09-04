@@ -759,23 +759,34 @@ export function Form({ controller, ...props }: FormProps): ReactElement {
   // One provider open at a time, so a dialog listing every provider is a list rather than a wall.
   // `null` is the customer choosing nothing yet; `""` is them closing what was open.
   const [opened, setOpened] = useState<string | null>(null);
-  // What the customer typed, for the one provider they typed it into. A rejection keeps it, so
-  // "try again" starts from the value rather than from nothing; another provider's form is its
-  // own, and a connection that lands is a form nobody needs again.
+  // What the customer typed, for the one domain and provider they typed it into. A rejection keeps
+  // it, so "try again" starts from the value rather than from nothing. Another provider's form is
+  // its own, a connection that lands is a form nobody needs again, and a credential never follows
+  // the flow to another domain.
   const [entered, setEntered] = useState<{
+    readonly domain: string;
     readonly provider: string;
     readonly values: Readonly<Record<string, string>>;
   } | null>(null);
   const state = controller.state;
-  if (state._tag === "Connected" && entered !== null) setEntered(null);
+  const owner = controller.domain;
+  // Dropped while rendering, not one effect later, so no frame ever shows one domain's token in
+  // another's form.
+  if (entered !== null && (entered.domain !== owner || state._tag === "Connected")) {
+    setEntered(null);
+  }
+  const kept = entered?.domain === owner ? entered : null;
   const enter = (provider: string, name: string, value: string) =>
-    setEntered((previous) => ({
-      provider,
-      values:
-        previous?.provider === provider ? { ...previous.values, [name]: value } : { [name]: value },
-    }));
+    setEntered((previous) => {
+      const held = previous?.domain === owner && previous.provider === provider ? previous : null;
+      return {
+        domain: owner,
+        provider,
+        values: held === null ? { [name]: value } : { ...held.values, [name]: value },
+      };
+    });
   const valuesFor = (provider: string): Readonly<Record<string, string>> =>
-    entered?.provider === provider ? entered.values : {};
+    kept?.provider === provider ? kept.values : {};
   const snapshot = controller.snapshot;
   const discovery = controller.discovery;
   const candidates =
@@ -1136,8 +1147,8 @@ export function DisconnectDialog({
   const readOnly = useReadOnly();
   const [open, setOpen] = useState(false);
   const [alsoRemove, setAlsoRemove] = useState(true);
-  // `idle` until the customer confirms; then at most two commands, in order.
-  const [running, setRunning] = useState<"idle" | "cleaning" | "releasing">("idle");
+  // The first of the two commands the confirm runs. The second is the controller's own.
+  const [removing, setRemoving] = useState(false);
   const snapshot = controller.snapshot;
   const receiptId = snapshot?.lastReceiptId ?? null;
   // Only an apply receipt proves DomainKit created anything, so only then is there a choice.
@@ -1149,31 +1160,28 @@ export function DisconnectDialog({
   });
   const { approve, plan, state: cleaning } = cleanup;
   const disconnect = controller.disconnect;
-  const failed = controller.state._tag === "Failure";
+  // The release is the controller's own command, so its state says whether one is in flight; a
+  // failure ends it and hands the button back with no bookkeeping here.
+  const releasing = controller.state._tag === "Submitting";
 
   useEffect(() => {
-    if (running !== "cleaning") return;
+    if (!removing) return;
     if (cleaning._tag === "Planned") {
       if (cleaning.plan.operations.length === 0) {
-        setRunning("releasing");
+        setRemoving(false);
         disconnect();
       } else approve();
       return;
     }
     if (cleaning._tag === "Applied") {
-      setRunning("releasing");
+      setRemoving(false);
       disconnect();
       return;
     }
-    if (cleaning._tag === "Failure" || cleaning._tag === "Rejected") setRunning("idle");
-  }, [approve, cleaning, disconnect, running]);
+    if (cleaning._tag === "Failure" || cleaning._tag === "Rejected") setRemoving(false);
+  }, [approve, cleaning, disconnect, removing]);
 
-  // A release that lands unmounts this dialog with the card; one that fails hands back the button.
-  useEffect(() => {
-    if (running === "releasing" && failed) setRunning("idle");
-  }, [failed, running]);
-
-  const busy = running !== "idle";
+  const busy = removing || releasing;
   const provider = snapshot?.provider ?? null;
   const heading =
     provider === null
@@ -1233,7 +1241,7 @@ export function DisconnectDialog({
               </label>
             ) : null}
             <Cleanup.Status controller={cleanup} />
-            {running === "releasing" ? (
+            {releasing ? (
               <p data-domainkit-part="disconnect-status" role="status">
                 {messages.disconnecting}
               </p>
@@ -1247,11 +1255,10 @@ export function DisconnectDialog({
               disabled={busy}
               onClick={() => {
                 if (removable && alsoRemove) {
-                  setRunning("cleaning");
+                  setRemoving(true);
                   plan();
                   return;
                 }
-                setRunning("releasing");
                 disconnect();
               }}
               type="button"
