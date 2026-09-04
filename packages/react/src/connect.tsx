@@ -241,9 +241,11 @@ export function useController({ domain, returnTo }: Options): Controller {
         onSuccess: ({ discovery, snapshot }) => {
           if (held.current.domain !== domain) return;
           held.current = { discovery, domain, snapshot };
-          // The customer came back from a provider and the connection is here: this load is the
-          // other half of the connect they started, not a page they opened again later.
-          if (snapshot.status === "connected" && tookReturn(domain)) {
+          // The marker answers exactly one load: the one that came back. It is spent whatever
+          // that load found, so an authorization the customer abandoned cannot leave it lying
+          // there for an ordinary page view to read as a return weeks later.
+          const returned = tookReturn(domain);
+          if (returned && snapshot.status === "connected") {
             setEstablished((count) => count + 1);
           }
           setState(settled(snapshot, discovery));
@@ -1345,6 +1347,9 @@ export function DisconnectDialog({
   }, [cleaning, disconnect, removing]);
 
   const busy = removing || releasing;
+  // Until the plan lands there is nothing to decide over, and a confirm taken now would release
+  // the connection without the removal the option defaults to.
+  const settling = removable && (cleaning._tag === "Idle" || cleaning._tag === "Planning");
   const provider = snapshot?.provider ?? null;
   const named = provider === null ? "" : displayName(controller, provider);
   const heading = provider === null ? messages.disconnect : messages.disconnectTitle(named);
@@ -1453,7 +1458,7 @@ export function DisconnectDialog({
           <div data-domainkit-part="dialog-footer">
             <button
               data-domainkit-part="disconnect-confirm"
-              disabled={busy}
+              disabled={busy || settling}
               onClick={() => {
                 if (choosable && alsoRemove) {
                   setRemoving(true);

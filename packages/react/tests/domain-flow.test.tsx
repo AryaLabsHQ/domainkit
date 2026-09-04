@@ -119,7 +119,8 @@ describe("Domain.Flow", () => {
     // Removing the records DomainKit added is the option inside the disconnect dialog.
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
-    const alsoRemove = within(dialog).getByRole("switch");
+    // The option appears with the plan it is about, which crosses the fake server first.
+    const alsoRemove = await within(dialog).findByRole("switch", {}, patient);
     expect(alsoRemove.getAttribute("aria-checked")).toBe("true");
     // What it is about is on screen: the records the receipt proves DomainKit created.
     expect(within(dialog).getAllByRole("listitem").length).toBeGreaterThan(0);
@@ -286,7 +287,7 @@ describe("Domain.Flow disconnect", () => {
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
     // Removing what the receipt proves is the option, and it is on until the customer says no.
-    const option = within(dialog).getByRole("switch");
+    const option = await within(dialog).findByRole("switch", {}, patient);
     expect(option.getAttribute("aria-checked")).toBe("true");
     expect(option.textContent).toBe("");
     expect(within(dialog).getByText(/Remove the \d+ records? DomainKit added/)).toBeDefined();
@@ -307,7 +308,7 @@ describe("Domain.Flow disconnect", () => {
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
     // Turning it off keeps the list, muted, and says what happens to those records instead.
-    await user.click(within(dialog).getByRole("switch"));
+    await user.click(await within(dialog).findByRole("switch", {}, patient));
     expect(
       dialog
         .querySelector("[data-domainkit-part='disconnect-cleanup']")
@@ -419,6 +420,38 @@ describe("Domain.Flow disconnect", () => {
     );
   });
 
+  it("will not release the connection before the cleanup it offers has been planned", async () => {
+    const scenarioed = scenario();
+    const { domain, requirements, transport } = scenarioed;
+    const cleanup = transport.cleanup;
+    if (cleanup === undefined) throw new Error("The fake transport has no cleanup group");
+    const view = render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await connect();
+    await addRecords();
+    await screen.findByText("DNS records added.");
+    view.unmount();
+
+    // A cleanup plan that never answers: the option cannot be shown, so nothing may be released.
+    render(
+      <DomainKit.Root
+        transport={{ ...transport, cleanup: { ...cleanup, plan: () => Effect.never } }}
+      >
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await click("Disconnect");
+    const dialog = await screen.findByRole("dialog");
+    const confirm = within(dialog).getByRole("button", { name: "Disconnect" });
+    expect(confirm.hasAttribute("disabled")).toBe(true);
+    // Cancelling is still the customer's, so a plan that never lands is not a trap.
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDefined();
+    expect(transport.calls.map((call) => call.method)).not.toContain("connection.disconnect");
+  });
+
   it("offers no option to remove records for a domain that never applied any", async () => {
     const { domain, requirements, transport } = scenario();
     render(
@@ -528,6 +561,83 @@ describe("Domain.Flow one-click onboarding", () => {
     render(harness(transport));
     await screen.findByText("Connected");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("spends the return marker on the load that came back, however it went", async () => {
+    const zone = `abandoned${(cases += 1)}.example`;
+    const domain = `app.${zone}`;
+    const requirements = [
+      DnsRecord.cname({ name: domain, purpose: "Serve your site", target: "edge.example.com" }),
+    ];
+    const transport = Testing.transport({
+      provider: { nameserverSuffixes: [zone], oauth: true, zones: [zone] },
+    });
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    const redirecting: Transport.Interface = {
+      ...transport,
+      connection: {
+        ...connection,
+        start: (input) =>
+          input.method._tag === "Token"
+            ? connection.start(input)
+            : Effect.succeed<Transport.Started>({
+                _tag: "Redirect",
+                authorizationUrl: "https://provider.test/consent",
+              }),
+      },
+    };
+    const harness = (held: Transport.Interface) => (
+      <DomainKit.Root navigate={() => {}} transport={held}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>
+    );
+    const first = render(harness(redirecting));
+    await click("Connect");
+    await click("Continue with Fake fake");
+    await waitFor(() => expect(sessionStorage.getItem("domainkit.returning")).toBe(domain));
+    first.unmount();
+
+    // The customer abandoned the consent screen, so the load that comes back finds nothing.
+    const back = render(harness(transport));
+    await screen.findByText("Owns DNS for this domain.");
+    expect(sessionStorage.getItem("domainkit.returning")).toBeNull();
+    back.unmount();
+
+    // Connecting properly later is not that abandoned return finally arriving.
+    await Effect.runPromise(
+      connection.start({
+        domain,
+        method: Transport.Method.token({ token: "tok" }),
+        provider: "fake",
+      }),
+    );
+    render(harness(transport));
+    await screen.findByText("Connected");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("drops an open review when the flow is pointed at another domain", async () => {
+    const scenarioed = scenario();
+    const { domain, requirements, sibling, transport } = scenarioed;
+    function Harness({ target }: { readonly target: string }) {
+      return (
+        <DomainKit.Root transport={transport}>
+          <Domain.Flow domain={target} requirements={requirements} />
+        </DomainKit.Root>
+      );
+    }
+    const view = render(<Harness target={domain} />);
+    await click("Connect");
+    await user.type(await screen.findByLabelText(/Token/), "tok");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
+    await reviewing();
+
+    // One domain's plan must never stand over another's.
+    view.rerender(<Harness target={sibling} />);
+    await waitFor(() =>
+      expect(document.querySelector("[data-domainkit-part='plan-dialog']")).toBeNull(),
+    );
   });
 
   it("leaves the plan where it is for a host that asks to open it itself", async () => {

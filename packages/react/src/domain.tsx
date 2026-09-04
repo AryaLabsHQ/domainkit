@@ -249,6 +249,13 @@ export function Flow({
   // it opens itself rather than waiting behind another click. `established` only ever grows, so
   // this fires once per connection that landed and never again on a re-render or a reload.
   const [reviewing, setReviewing] = useState(false);
+  // A flow pointed at a new domain drops the review with everything else it was holding, while
+  // rendering rather than an effect later, so no frame shows one domain's plan over another's.
+  const [reviewed, setReviewed] = useState(domain);
+  if (reviewed !== domain) {
+    setReviewed(domain);
+    setReviewing(false);
+  }
   const established = connection.established;
   const answered = useRef(established);
   const buildPlan = provisioning.plan;
