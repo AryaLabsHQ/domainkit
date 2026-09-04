@@ -18,6 +18,13 @@ host's registered OAuth client; the default set is `zone:read`, `dns_records:edi
 `offline_access`. The credential packs the access and refresh tokens together, so refresh and
 revocation need nothing from the host.
 
+`oauth.issuer` names the origin those three endpoints hang off, `/oauth2/auth`, `/oauth2/token`,
+and `/oauth2/revoke`, so a stage points consent at an emulator that mounts the same paths and runs
+the code path a customer does. It stays separate from `baseUrl` because in production these are
+different hosts: `dash.cloudflare.com` for OAuth, `api.cloudflare.com/client/v4` for the REST API.
+DomainKit requires HTTPS for every OAuth request except one to a loopback host, which carries the
+credential nowhere.
+
 Cloudflare's token verification does not enumerate DNS permissions, so the capability claim records
 what the definition requires rather than what the token proves. A token without `dns_records:edit`
 verifies and fails at the first write with `Forbidden`.

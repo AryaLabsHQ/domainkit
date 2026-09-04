@@ -229,7 +229,7 @@ describe("Server.group over the lifecycle", () => {
       assert.isDefined(provider);
       assert.deepStrictEqual(
         provider?.methods.map(({ kind }) => kind),
-        ["token", "oauth"],
+        ["oauth", "token"],
       );
       const token = provider?.methods.find(({ kind }) => kind === "token");
       assert.deepStrictEqual(token?.fields, [{ name: "token", required: true, secret: true }]);

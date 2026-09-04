@@ -72,13 +72,25 @@ const clientAuth = (client: Client): oauth.ClientAuth => {
     : oauth.ClientSecretPost(secret);
 };
 
+/**
+ * oauth4webapi refuses plaintext endpoints, which is right for every provider's own server. An
+ * `http:` endpoint can only come from a `server` a host configured itself, which is a stage
+ * pointing consent at a local emulator, so that request is the one exception.
+ */
+const emulated = (endpoint: string | undefined): boolean =>
+  endpoint !== undefined && URL.parse(endpoint)?.protocol === "http:";
+
 const requestOptions = (
+  endpoint: string | undefined,
   fetch: Fetch | undefined,
   signal: AbortSignal,
-): oauth.TokenEndpointRequestOptions =>
-  fetch === undefined
-    ? { signal }
-    : { signal, [oauth.customFetch]: (url, init) => fetch(url, { ...init, body: init.body }) };
+): oauth.TokenEndpointRequestOptions => ({
+  signal,
+  ...(emulated(endpoint) ? { [oauth.allowInsecureRequests]: true } : {}),
+  ...(fetch === undefined
+    ? {}
+    : { [oauth.customFetch]: (url, init) => fetch(url, { ...init, body: init.body }) }),
+});
 
 const tokens = (response: oauth.TokenEndpointResponse, now: DateTime.Utc): Tokens => ({
   accessToken: response.access_token,
@@ -151,7 +163,7 @@ export const exchangeCode = (input: {
           params,
           input.callbackUrl,
           input.codeVerifier,
-          requestOptions(input.fetch, signal),
+          requestOptions(input.server.token_endpoint, input.fetch, signal),
         );
         return oauth.processAuthorizationCodeResponse(server, client, reply);
       },
@@ -178,7 +190,7 @@ export const refresh = (input: {
           client,
           clientAuth(input.client),
           input.refreshToken,
-          requestOptions(input.fetch, signal),
+          requestOptions(input.server.token_endpoint, input.fetch, signal),
         );
         return oauth.processRefreshTokenResponse(server, client, reply);
       },
@@ -204,7 +216,7 @@ export const revoke = (input: {
         client,
         clientAuth(input.client),
         input.token,
-        requestOptions(input.fetch, signal),
+        requestOptions(input.server.revocation_endpoint, input.fetch, signal),
       );
       await oauth.processRevocationResponse(reply);
     },

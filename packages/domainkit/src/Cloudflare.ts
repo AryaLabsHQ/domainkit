@@ -38,17 +38,33 @@ export interface Options {
     readonly scopes?: ReadonlyArray<string>;
     /** Default `client_secret_basic`. */
     readonly clientAuth?: OAuth.ClientAuth;
+    /**
+     * Origin for consent, token exchange, and revocation, which Cloudflare serves at
+     * `/oauth2/auth`, `/oauth2/token`, and `/oauth2/revoke` beneath it. Default
+     * `https://dash.cloudflare.com`; a stage points it at an emulator that mounts the same three
+     * paths. It stays separate from `baseUrl` because in production these are different hosts:
+     * `dash.cloudflare.com` for OAuth, `api.cloudflare.com/client/v4` for the REST API.
+     */
+    readonly issuer?: string;
   };
   readonly fetch?: Fetch;
   readonly baseUrl?: string;
 }
 
-export const server: OAuth.Server = {
-  authorization_endpoint: "https://dash.cloudflare.com/oauth2/auth",
-  issuer: "https://dash.cloudflare.com",
-  revocation_endpoint: "https://dash.cloudflare.com/oauth2/revoke",
-  token_endpoint: "https://dash.cloudflare.com/oauth2/token",
+const defaultIssuer = "https://dash.cloudflare.com";
+
+/** The three OAuth endpoints Cloudflare serves under one origin. */
+const endpointsOf = (origin: string): OAuth.Server => {
+  const base = origin.replace(/\/$/, "");
+  return {
+    authorization_endpoint: `${base}/oauth2/auth`,
+    issuer: base,
+    revocation_endpoint: `${base}/oauth2/revoke`,
+    token_endpoint: `${base}/oauth2/token`,
+  };
 };
+
+export const server: OAuth.Server = endpointsOf(defaultIssuer);
 
 const defaultScopes = ["zone:read", "dns_records:edit", "offline_access"];
 const capabilities = ["dns:read", "dns:write"] as const;
@@ -121,6 +137,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
 
   function oauthAuth(settings: NonNullable<Options["oauth"]>): Provider.OAuthAuth {
     const scopes = settings.scopes ?? defaultScopes;
+    const endpoints = settings.issuer === undefined ? server : endpointsOf(settings.issuer);
     return {
       label: "Sign in with Cloudflare",
       scopes,
@@ -128,7 +145,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
         oauthClient(settings).pipe(
           Effect.map(({ clientId }) => ({
             authorizationUrl: OAuth.authorizationUrl({
-              server,
+              server: endpoints,
               clientId,
               scopes,
               state: input.state,
@@ -142,7 +159,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
           Effect.flatMap((oauthClientValue) =>
             OAuth.exchangeCode({
               provider: Client.provider,
-              server,
+              server: endpoints,
               client: oauthClientValue,
               code: input.code,
               state: input.params.state ?? "",
@@ -165,7 +182,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
           }
           const tokens = yield* OAuth.refresh({
             provider: Client.provider,
-            server,
+            server: endpoints,
             client: yield* oauthClient(settings),
             refreshToken,
             fetch,
@@ -181,7 +198,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
           const { accessToken } = parseSecret(credential.secret);
           yield* OAuth.revoke({
             provider: Client.provider,
-            server,
+            server: endpoints,
             client: yield* oauthClient(settings),
             token: accessToken,
             fetch,

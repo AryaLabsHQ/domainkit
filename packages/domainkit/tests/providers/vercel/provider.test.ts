@@ -34,7 +34,7 @@ describe("Vercel.provider", () => {
           integration: { clientId: "c", clientSecret: Redacted.make("s"), slug: "domainkit" },
         }),
       ),
-      ["token", "integration"],
+      ["integration", "token"],
     );
   });
 
