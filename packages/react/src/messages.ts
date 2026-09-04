@@ -21,8 +21,6 @@ export interface Catalog {
   /** The provisioning dialog's primary action: what it adds, and how many. */
   readonly addRecords: (count: number) => string;
   readonly decline: string;
-  /** Leaves the plan where it is: the trigger on the page opens it again. */
-  readonly notNow: string;
   /** Why the primary action is unavailable: every operation the plan holds is blocked. */
   readonly everyRecordConflicts: string;
   readonly reviewChanges: string;
@@ -254,7 +252,6 @@ export const english: Catalog = {
   approve: "Approve",
   addRecords: (count) => (count === 1 ? "Add 1 record" : `Add ${count} records`),
   decline: "Decline",
-  notNow: "Not now",
   everyRecordConflicts: "Resolve the records above at your provider, then review again.",
   reviewChanges: "Review changes",
   cleanUp: "Remove records",

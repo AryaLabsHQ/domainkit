@@ -18,10 +18,10 @@ const flow = (page: import("@playwright/test").Page) =>
 const planDialog = (page: import("@playwright/test").Page) =>
   page.locator("[data-domainkit-part='plan-dialog']");
 
-/** The plan opens itself on a connection; set it aside the way a customer who is not ready would. */
-const notNow = async (page: import("@playwright/test").Page) => {
+/** The plan opens itself on a connection; close it the way a customer who is not ready would. */
+const setAside = async (page: import("@playwright/test").Page) => {
   const plan = planDialog(page);
-  await plan.getByRole("button", { name: "Not now" }).click();
+  await plan.getByRole("button", { name: "Close" }).click();
   await expect(plan).toBeHidden();
 };
 
@@ -72,7 +72,9 @@ test("connects, reviews the plan, and approves it", async ({ page }) => {
   await expect(plan.locator("[data-domainkit-part='plan-operations'] li")).toHaveCount(2);
   const add = plan.getByRole("button", { name: "Add 2 records" });
   await expect(add).toBeEnabled();
-  await expect(plan.getByRole("button", { name: "Not now" })).toBeVisible();
+  // The header's close and a press outside dismiss the plan, so the footer is the plan's own.
+  await expect(plan.getByRole("button", { name: "Not now" })).toHaveCount(0);
+  await expect(plan.getByRole("button", { name: "Decline" })).toBeVisible();
   await expect(plan).toHaveCSS("opacity", "1");
   await plan.screenshot({ path: shot("plan-review") });
   await add.click();
@@ -170,7 +172,7 @@ test("renders a read-only domain as state with no controls", async ({ page }) =>
   await page.getByRole("dialog").getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("Connected", { exact: true })).toBeVisible();
-  await notNow(page);
+  await setAside(page);
 
   await page.getByTestId("toggle-readonly").click();
   await expect(page.getByText("Connected", { exact: true })).toBeVisible();
@@ -437,7 +439,7 @@ test("dismisses the connect and disconnect dialogs on an outside press", async (
   await dialog.getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("Connected", { exact: true })).toBeVisible();
-  await notNow(page);
+  await setAside(page);
 
   await page.getByRole("button", { name: "Disconnect" }).click();
   await expect(dialog).toBeVisible();
@@ -480,7 +482,7 @@ test("keeps every dialog open while its own command is in flight", async ({ page
   await dialog.getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.getByText("Connected", { exact: true })).toBeVisible();
-  await notNow(page);
+  await setAside(page);
   await page.getByRole("button", { name: "Disconnect" }).click();
   await dialog.getByRole("button", { name: "Disconnect" }).click();
   await expect(dialog.getByText("Disconnecting…")).toBeVisible();

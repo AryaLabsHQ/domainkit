@@ -62,11 +62,11 @@ const reviewing = async (): Promise<HTMLElement> => {
   return found as unknown as HTMLElement;
 };
 
-/** Set the plan that opened itself aside, the way a customer who is not ready would. */
-const notNow = async () => {
+/** Close the plan that opened itself, the way a customer who is not ready would. */
+const setAside = async () => {
   const dialog = await reviewing();
-  // The plan has to land before there is anything to set aside.
-  await user.click(await within(dialog).findByRole("button", { name: "Not now" }, patient));
+  // The close lands with the plan: a dialog with a command still running keeps it out of reach.
+  await user.click(await within(dialog).findByRole("button", { name: "Close" }, patient));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 };
 
@@ -85,7 +85,7 @@ const connect = async () => {
   await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
   await screen.findByText("Connected");
   // The plan opens itself on a connection; a test that wants it says so.
-  await notNow();
+  await setAside();
 };
 
 describe("Domain.Flow", () => {
@@ -368,7 +368,7 @@ describe("Domain.Flow disconnect", () => {
     await click(new RegExp(`^Use ${scenarioed.zone}$`));
     await screen.findByText("Connected");
     // Attaching a connection this owner already has lands one too, so the plan opens here as well.
-    await notNow();
+    await setAside();
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("radio", { name: "Only this domain" })).toBeDefined();
@@ -406,7 +406,7 @@ describe("Domain.Flow disconnect", () => {
     await click(new RegExp(`^Use ${scenarioed.zone}$`));
     await screen.findByText("Connected");
     // Attaching a connection this owner already has lands one too, so the plan opens here as well.
-    await notNow();
+    await setAside();
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
     // The sibling never applied anything, so there is no receipt and nothing to offer removing.
@@ -599,7 +599,7 @@ describe("Domain.Flow one-click onboarding", () => {
     const back = render(harness(transport));
     await reviewing();
     expect(sessionStorage.getItem("domainkit.returning")).toBeNull();
-    await notNow();
+    await setAside();
     back.unmount();
 
     // A reload after the fact is a page view, not a return: nothing opens itself.

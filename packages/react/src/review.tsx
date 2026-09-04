@@ -331,10 +331,13 @@ export function Dialog({
           {body}
           <div data-domainkit-part="dialog-footer">
             <Actions controller={controller} kind={kind} />
-            {running ? null : (
+            {/*
+             * The close in the header and a press outside already set a plan aside, so the footer
+             * of a provisioning plan carries only the two decisions about the plan itself.
+             */}
+            {running || kind === "provisioning" ? null : (
               <BaseDialog.Close data-domainkit-part="dialog-cancel">
-                {/* The plan stays where it is; the trigger on the page opens it again. */}
-                {kind === "provisioning" ? messages.notNow : messages.cancel}
+                {messages.cancel}
               </BaseDialog.Close>
             )}
           </div>
