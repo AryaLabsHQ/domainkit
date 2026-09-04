@@ -28,6 +28,19 @@
     --domainkit-text: #18181b;
     --domainkit-warning: #b45309;
     --domainkit-control-radius: calc(var(--domainkit-radius) * 0.5);
+    /*
+     * The quiet controls in a dialog — a docs link, a disclosure trigger, a secondary action, the
+     * way back, the provider menu — share one rhythm: what sits above them, what sits below, and
+     * the room their hover and focus states need around the text.
+     */
+    --domainkit-quiet-lead: 0.5rem;
+    --domainkit-quiet-trail: 0.75rem;
+    --domainkit-quiet-inset: 0.5rem;
+    --domainkit-quiet-pad: 0.25rem;
+    /* The inner room a panel gives its contents: the dialog's form, and the two cards. */
+    --domainkit-panel-pad: 0.75rem;
+    /* Cards draw no border of their own. A host that wants one sets this on the part. */
+    --domainkit-card-border: transparent;
     --domainkit-button-raised-glint: rgb(255 255 255 / 0.95);
     --domainkit-button-raised-shade: color-mix(in srgb, var(--domainkit-text) 10%, transparent);
     --domainkit-button-raised-shadow: 0 1px 2px
@@ -109,6 +122,7 @@
     [data-domainkit-part="method-alternate"],
     [data-domainkit-part="dialog-back"],
     [data-domainkit-part="dialog-provider-menu"],
+    [data-domainkit-part="more-options-trigger"],
     [data-domainkit-part="disconnect-trigger"],
     [data-domainkit-part="actions-trigger"],
     [data-domainkit-part="token-connect"] button,
@@ -277,6 +291,15 @@
     box-shadow: inset 0 1px 2px color-mix(in srgb, var(--domainkit-text) 28%, transparent);
   }
 
+  /* Every quiet control in the dialog keeps the same rhythm above and below it. */
+  :where(
+    [data-domainkit-part="method-alternate"],
+    [data-domainkit-part="dialog-back"],
+    [data-domainkit-part="more-options-trigger"]
+  ) {
+    margin-block: var(--domainkit-quiet-lead) var(--domainkit-quiet-trail);
+  }
+
   :where([data-domainkit-part="method-alternate"]) {
     background: transparent;
     border-color: var(--domainkit-border);
@@ -285,8 +308,39 @@
     width: 100%;
   }
 
-  :where([data-domainkit-part="method-alternate"]:hover:not(:disabled)) {
+  :where(
+    [data-domainkit-part="method-alternate"]:hover:not(:disabled),
+    [data-domainkit-part="more-options-trigger"]:hover:not(:disabled)
+  ) {
     background: var(--domainkit-fill);
+  }
+
+  :where([data-domainkit-part="more-options-trigger"]) {
+    background: transparent;
+    border-color: var(--domainkit-border);
+    box-shadow: none;
+    color: var(--domainkit-muted);
+    font-size: 0.8125rem;
+    gap: var(--domainkit-quiet-pad);
+    justify-self: start;
+  }
+
+  :where([data-domainkit-part="more-options-trigger"] svg),
+  :where([data-domainkit-part="dialog-provider-menu"] svg) {
+    height: 1rem;
+    transition: transform 150ms ease;
+    width: 1rem;
+  }
+
+  :where([data-domainkit-part="more-options"][data-state="open"])
+    :where([data-domainkit-part="more-options-trigger"] svg) {
+    transform: rotate(180deg);
+  }
+
+  :where([data-domainkit-part="more-options-panel"]) {
+    display: grid;
+    gap: var(--domainkit-quiet-lead);
+    padding-block-end: var(--domainkit-quiet-lead);
   }
 
   :where([data-domainkit-part="dialog-back"]) {
@@ -295,7 +349,13 @@
     box-shadow: none;
     color: var(--domainkit-muted);
     justify-self: start;
-    padding-inline: 0;
+    margin-inline-start: calc(-1 * var(--domainkit-quiet-inset));
+    padding-inline: var(--domainkit-quiet-inset);
+  }
+
+  :where([data-domainkit-part="dialog-back"]:hover:not(:disabled)) {
+    background: var(--domainkit-fill);
+    color: var(--domainkit-text);
   }
 
   :where([data-domainkit-part="dialog-back"])::before {
@@ -309,17 +369,18 @@
     box-shadow: none;
     color: inherit;
     font: inherit;
-    gap: 0.25rem;
-    padding: 0;
+    gap: var(--domainkit-quiet-pad);
+    margin-inline-start: calc(-1 * var(--domainkit-quiet-inset));
+    padding: var(--domainkit-quiet-pad) var(--domainkit-quiet-inset);
   }
 
   :where([data-domainkit-part="dialog-provider-menu"]:hover:not(:disabled)) {
+    background: var(--domainkit-fill);
     color: var(--domainkit-accent);
   }
 
-  :where([data-domainkit-part="dialog-provider-menu"] svg) {
-    height: 1rem;
-    width: 1rem;
+  :where([data-domainkit-part="dialog-provider-menu"][data-popup-open] svg) {
+    transform: rotate(180deg);
   }
 
   /* Above the dialog that opened it: the trigger sits inside the dialog's own stacking context. */
@@ -718,7 +779,7 @@
     border-radius: var(--domainkit-control-radius);
     display: grid;
     gap: 0.65rem;
-    padding: 0.75rem;
+    padding: var(--domainkit-panel-pad);
   }
 
   :where([data-domainkit-part="token-connect"] [data-domainkit-part="field-label"]) {
@@ -753,17 +814,25 @@
     width: 100%;
   }
 
+  /*
+   * Both cards sit on the host's inset surface rather than floating on the page ground, so a
+   * domain page reads as one section. The border is off unless a host sets `--domainkit-card-border`
+   * on the part.
+   */
+  :where([data-domainkit-part="connected-card"], [data-domainkit-part="connect-prompt"]) {
+    background: var(--domainkit-fill);
+    border: 1px solid var(--domainkit-card-border);
+    border-radius: var(--domainkit-radius);
+    padding: var(--domainkit-panel-pad);
+  }
+
   :where([data-domainkit-part="connected-card"]) {
     align-items: center;
-    background: var(--domainkit-background);
-    border: 1px solid var(--domainkit-border);
-    border-radius: var(--domainkit-radius);
     display: grid;
     gap: 0.75rem 1rem;
     grid-template-columns: minmax(0, 1fr) auto;
     justify-content: space-between;
     min-height: 4.25rem;
-    padding: 1rem;
     width: 100%;
   }
 
@@ -1547,12 +1616,21 @@
 
   [data-domainkit-part="field-description"] {
     align-items: center;
+    border-radius: var(--domainkit-control-radius);
     color: var(--domainkit-muted);
     display: inline-flex;
     font-size: 0.8125rem;
     gap: 0.25rem;
     justify-self: start;
+    margin-block: var(--domainkit-quiet-lead) var(--domainkit-quiet-trail);
+    margin-inline-start: calc(-1 * var(--domainkit-quiet-inset));
+    padding: var(--domainkit-quiet-pad) var(--domainkit-quiet-inset);
     text-decoration: none;
+  }
+
+  [data-domainkit-part="field-description"]:hover {
+    background: var(--domainkit-fill);
+    color: var(--domainkit-text);
   }
 
   /* ---------------------------------------------------------------------------------------------
@@ -1586,40 +1664,6 @@
     color: var(--domainkit-muted);
     font-size: 0.8125rem;
     grid-column: 2;
-  }
-
-  [data-domainkit-part="other-providers"],
-  [data-domainkit-part="more-options"] {
-    display: grid;
-    gap: 0.5rem;
-  }
-
-  [data-domainkit-part="other-providers-trigger"],
-  [data-domainkit-part="more-options-trigger"] {
-    color: var(--domainkit-muted);
-    cursor: pointer;
-    font-size: 0.8125rem;
-    list-style: none;
-    width: fit-content;
-  }
-
-  [data-domainkit-part="other-providers-trigger"]::before,
-  [data-domainkit-part="more-options-trigger"]::before {
-    content: "\25b8";
-    display: inline-block;
-    margin-inline-end: 0.35rem;
-  }
-
-  [data-domainkit-part="other-providers"][open]
-    > [data-domainkit-part="other-providers-trigger"]::before,
-  [data-domainkit-part="more-options"][open]
-    > [data-domainkit-part="more-options-trigger"]::before {
-    transform: rotate(90deg);
-  }
-
-  [data-domainkit-part="other-providers"] {
-    border-top: 1px solid var(--domainkit-border);
-    padding-top: 0.75rem;
   }
 
   button[data-domainkit-part="provider-heading"] {

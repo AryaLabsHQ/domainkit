@@ -29,10 +29,12 @@ carries its auth methods, and each method its docs URL and token fields, so a ne
 in the dialog without a UI change.
 
 When discovery names a host, the dialog is titled after that provider and shows its methods alone;
-the rest wait behind a `Use a different provider` disclosure. With no host every provider is listed,
-one open at a time. Token fields take shadcn's `Field` anatomy (`field`, `field-label`,
-`field-description`, `field-error`), and the fields a provider does not need, such as an account id,
-sit behind a `Need an account id?` disclosure so the common form is one field.
+the heading is a menu that lists the rest and re-narrows the dialog to the one picked. With no host
+every provider is listed, one open at a time. A provider that offers a method the customer clicks
+through leads with it, and `Use an API token instead` puts the token form in the dialog's body with
+a way back. Token fields take shadcn's `Field` anatomy (`field`, `field-label`, `field-description`,
+`field-error`), and the fields a provider does not need, such as an account id, wait behind an
+`Add an account id` collapsible so the common form is one field.
 
 When the transport declares `connection.discover`, the flow asks on mount which of the customer's
 existing connections already reaches the domain and offers that first. A discovery failure is

@@ -451,14 +451,27 @@ describe("Domain.Flow state", () => {
       </DomainKit.Root>,
     );
     await waitFor(() => expect(seen.at(-1)?.offering).toBe(true));
-    expect(seen.at(-1)).toMatchObject({ connected: false, offering: true, provider: "fake" });
+    expect(seen.at(-1)).toMatchObject({
+      applied: false,
+      connected: false,
+      offering: true,
+      provider: "fake",
+      receiptId: null,
+    });
     await connect();
     await waitFor(() => expect(seen.at(-1)?.connected).toBe(true));
     expect(seen.at(-1)).toMatchObject({
+      applied: false,
       connection: "Connected",
       offering: false,
       provider: "fake",
     });
+
+    // A receipt is what cleanup plans from, so a host's own remove dialog waits for one.
+    await click("Review changes");
+    await click("Approve");
+    await waitFor(() => expect(seen.at(-1)?.applied).toBe(true));
+    expect(typeof seen.at(-1)?.receiptId).toBe("string");
   });
 
   it("offers nothing with connect=never and still states a connection it holds", async () => {

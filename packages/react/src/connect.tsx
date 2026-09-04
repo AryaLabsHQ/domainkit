@@ -1,3 +1,4 @@
+import { Collapsible as BaseCollapsible } from "@base-ui/react/collapsible";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { Menu as BaseMenu } from "@base-ui/react/menu";
 import { Receipt, type DomainKit, type Storage } from "domainkit";
@@ -402,6 +403,15 @@ export const answeredInPlace = (controller: Controller): boolean =>
   controller.state._tag === "Failure" && controller.state.attempt !== null;
 
 /**
+ * Whether the surface should read as connected: it is, or a command it started is in flight over a
+ * connection that was. The card and the dialog it opened stay on screen for the length of the
+ * command rather than vanishing under the customer half way through it.
+ */
+export const holdsConnection = (controller: Controller): boolean =>
+  controller.state._tag === "Connected" ||
+  (controller.state._tag === "Submitting" && controller.snapshot?.status === "connected");
+
+/**
  * The provider whose nameservers serve this domain, as the snapshot describes it. Discovery names
  * it by id; without a descriptor there is nothing to draw, so there is no host.
  */
@@ -593,6 +603,9 @@ function TokenField({
  */
 function Method({ controller, method, onEnter, provider, values }: MethodProps): ReactElement {
   const { messages } = useDomainKit();
+  const icons = useIcons();
+  // The fields a provider does not need, and whether the customer asked for them.
+  const [more, setMore] = useState(false);
   const state = controller.state;
   const busy = state._tag === "Submitting";
   // A failed command answers where it was raised, so the customer keeps the form they filled in.
@@ -623,6 +636,8 @@ function Method({ controller, method, onEnter, provider, values }: MethodProps):
   const answered = rejected(failed && state._tag === "Failure" ? state.error.reason : null, fields);
   const required = fields.filter((field) => field.required);
   const optional = fields.filter((field) => !field.required);
+  // A rejection about one of them opens the panel, so the answer is never behind a closed control.
+  const showMore = more || optional.some((field) => field.name === answered);
   // The docs link explains the secret, so it rides that field rather than the form.
   const explains = (required.find((field) => field.secret) ?? required[0] ?? optional[0])?.name;
   const render = (field: Field) => (
@@ -653,13 +668,22 @@ function Method({ controller, method, onEnter, provider, values }: MethodProps):
     >
       {required.map(render)}
       {optional.length === 0 ? null : (
-        <details
+        <BaseCollapsible.Root
           data-domainkit-part="more-options"
-          open={optional.some((field) => field.name === answered) || undefined}
+          data-state={showMore ? "open" : "closed"}
+          onOpenChange={setMore}
+          open={showMore}
         >
-          <summary data-domainkit-part="more-options-trigger">{messages.moreOptions}</summary>
-          {optional.map(render)}
-        </details>
+          <BaseCollapsible.Trigger data-domainkit-part="more-options-trigger">
+            {messages.moreOptions}
+            <span aria-hidden="true" data-icon="inline-end">
+              {icons.chevron}
+            </span>
+          </BaseCollapsible.Trigger>
+          <BaseCollapsible.Panel data-domainkit-part="more-options-panel">
+            {optional.map(render)}
+          </BaseCollapsible.Panel>
+        </BaseCollapsible.Root>
       )}
       {failed && answered === null ? <Outcome controller={controller} layout="inline" /> : null}
       <button data-domainkit-part="token-submit" disabled={busy} type="submit">
@@ -1437,10 +1461,9 @@ export interface FlowProps extends Omit<RootProps, "controller"> {
 /** Connection on its own: the card once connected, the prompt until then. */
 export function Flow({ connect, domain, onCleaned, returnTo, ...props }: FlowProps): ReactElement {
   const controller = useController({ domain, ...(returnTo === undefined ? {} : { returnTo }) });
-  const state = controller.state;
   return (
     <Root controller={controller} {...props}>
-      {state._tag === "Connected" ? (
+      {holdsConnection(controller) ? (
         <Card controller={controller} {...(onCleaned === undefined ? {} : { onCleaned })} />
       ) : (
         <>

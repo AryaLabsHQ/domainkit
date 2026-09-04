@@ -66,6 +66,13 @@ export interface FlowState extends Record<string, unknown> {
   readonly offering: boolean;
   /** Who holds the connection, or whose nameservers serve the zone. */
   readonly provider: string | null;
+  /**
+   * The apply receipt this domain's latest provisioning attempt produced, which is what cleanup
+   * plans from. A host's own "remove this domain" surface offers cleanup only when there is one.
+   */
+  readonly receiptId: Receipt.ReceiptId | null;
+  /** `receiptId !== null`: DomainKit applied records here and can prove which. */
+  readonly applied: boolean;
 }
 
 export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children"> {
@@ -91,6 +98,24 @@ export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children">
   readonly onState?: (state: FlowState) => void;
 }
 
+/** Built from primitives alone, so the effect that announces it depends on exactly those. */
+const flowState = (input: {
+  readonly connected: boolean;
+  readonly offering: boolean;
+  readonly planning: Provision.State["_tag"];
+  readonly provider: string | null;
+  readonly receipt: string | null;
+  readonly status: Connect.State["_tag"];
+}): FlowState => ({
+  applied: input.receipt !== null,
+  connected: input.connected,
+  connection: input.status,
+  offering: input.offering,
+  provider: input.provider,
+  provisioning: input.planning,
+  receiptId: input.receipt === null ? null : Receipt.ReceiptId.make(input.receipt),
+});
+
 interface DefaultConnectionProps extends ConnectionSlotProps {
   readonly onCleaned?: (receipt: Receipt.Model) => void;
 }
@@ -111,7 +136,7 @@ function DefaultConnection({
   // what the connection is doing, what a read-only customer sees where a trigger would be, and a
   // domain whose invitation the host turned off.
   const stated = disconnected && host !== null && Connect.offering(controller, connect);
-  return controller.state._tag === "Connected" ? (
+  return Connect.holdsConnection(controller) ? (
     <Connect.Card controller={controller} {...(onCleaned === undefined ? {} : { onCleaned })} />
   ) : (
     <>
@@ -208,27 +233,16 @@ export function Flow({
   const connected = status === "Connected";
   const offering = Connect.offering(connection, connect);
   const provider = connection.snapshot?.provider ?? Connect.hostProvider(connection)?.id ?? null;
-  const state: FlowState = {
-    connected,
-    connection: status,
-    offering,
-    provider,
-    provisioning: planning,
-  };
+  const receipt = connection.snapshot?.lastReceiptId ?? null;
+  const state = flowState({ connected, offering, planning, provider, receipt, status });
   // The callback rides a ref so a host writing it inline does not re-announce every render.
   const announce = useRef(onState);
   useEffect(() => {
     announce.current = onState;
   });
   useEffect(() => {
-    announce.current?.({
-      connected,
-      connection: status,
-      offering,
-      provider,
-      provisioning: planning,
-    });
-  }, [connected, offering, planning, provider, status]);
+    announce.current?.(flowState({ connected, offering, planning, provider, receipt, status }));
+  }, [connected, offering, planning, provider, receipt, status]);
   return usePart("div", props, state, {
     children: (
       <ReadOnly value={readOnly ?? inherited}>

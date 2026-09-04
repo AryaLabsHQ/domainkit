@@ -305,11 +305,16 @@ test("narrows the dialog to the provider that serves the zone", async ({ page })
     0,
   );
   await expect(dialog.getByRole("link", { name: "Where do I find this?" })).toBeVisible();
-  // The account id is a field the provider does not need, so it waits behind a disclosure.
+  // The account id is a field the provider does not need, so a button of its own asks for it.
+  const more = dialog.locator("[data-domainkit-part='more-options']");
+  await expect(more).toHaveAttribute("data-state", "closed");
   await expect(dialog.getByLabel("Account id")).toBeHidden();
   await dialog.screenshot({ path: shot("connect-dialog-token") });
-  await dialog.getByText("Need an account id?").click();
+  await dialog.getByRole("button", { name: "Add an account id" }).click();
+  await expect(more).toHaveAttribute("data-state", "open");
   await expect(dialog.getByLabel("Account id")).toBeVisible();
+  await expect(more.locator("[data-domainkit-part='more-options-panel']")).toBeVisible();
+  await dialog.screenshot({ path: shot("connect-dialog-token-more") });
   await dialog.getByRole("button", { name: "Back" }).click();
   await expect(dialog.getByRole("button", { name: "Continue with Fake cloudflare" })).toBeVisible();
 
@@ -381,4 +386,91 @@ test("keeps the host's identity and drops its trigger in read-only", async ({ pa
   await page
     .locator("[data-domainkit-part='connect-prompt']")
     .screenshot({ path: shot("prompt-read-only") });
+});
+
+/**
+ * A press outside a modal dismisses it, and a command in flight is the one thing that keeps it.
+ * The library's own backdrop must not swallow the press, and the guard must cancel only while busy.
+ */
+const backdropOf = (page: import("@playwright/test").Page) =>
+  page.locator("[data-domainkit-part='dialog-backdrop']");
+
+const pressOutside = async (page: import("@playwright/test").Page) => {
+  const backdrop = backdropOf(page);
+  await expect(backdrop).toBeVisible();
+  await backdrop.click({ force: true, position: { x: 5, y: 5 } });
+};
+
+test("dismisses the connect and disconnect dialogs on an outside press", async ({ page }) => {
+  await open(page, "browser18.example");
+  const dialog = page.getByRole("dialog");
+
+  await page.getByRole("button", { exact: true, name: "Connect" }).click();
+  await expect(dialog).toBeVisible();
+  await pressOutside(page);
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole("button", { exact: true, name: "Connect" }).click();
+  await revealToken(dialog);
+  await dialog.getByLabel("Token").fill("tok");
+  await page.getByRole("button", { name: "Connect with an API token" }).click();
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Disconnect" }).click();
+  await expect(dialog).toBeVisible();
+  await pressOutside(page);
+  await expect(dialog).toBeHidden();
+});
+
+test("dismisses the review dialog on an outside press", async ({ page }) => {
+  await page.goto("/?zone=browser19.example&view=review");
+  const dialog = page.getByRole("dialog");
+  await page.getByRole("button", { exact: true, name: "Connect" }).click();
+  await revealToken(dialog);
+  await dialog.getByLabel("Token").fill("tok");
+  await page.getByRole("button", { name: "Connect with an API token" }).click();
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Review changes" }).click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Approve" })).toBeEnabled();
+  await pressOutside(page);
+  await expect(dialog).toBeHidden();
+});
+
+test("keeps every dialog open while its own command is in flight", async ({ page }) => {
+  const dialog = page.getByRole("dialog");
+
+  // The connect dialog, with `connection.start` never answering.
+  await page.goto("/?zone=browser20.example&view=hang&hang=start");
+  await page.getByRole("button", { exact: true, name: "Connect" }).click();
+  await dialog.getByRole("button", { name: "Continue with Fake fake" }).click();
+  await expect(dialog.getByText("Connecting…")).toBeVisible();
+  await pressOutside(page);
+  await expect(dialog).toBeVisible();
+
+  // The disconnect dialog, with `connection.disconnect` never answering.
+  await page.goto("/?zone=browser21.example&view=hang&hang=disconnect");
+  await page.getByRole("button", { exact: true, name: "Connect" }).click();
+  await revealToken(dialog);
+  await dialog.getByLabel("Token").fill("tok");
+  await page.getByRole("button", { name: "Connect with an API token" }).click();
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Disconnect" }).click();
+  await dialog.getByRole("button", { name: "Disconnect" }).click();
+  await expect(dialog.getByText("Disconnecting…")).toBeVisible();
+  await pressOutside(page);
+  await expect(dialog).toBeVisible();
+
+  // The review dialog, with `provisioning.plan` never answering.
+  await page.goto("/?zone=browser22.example&view=hang&hang=plan");
+  await page.getByRole("button", { exact: true, name: "Connect" }).click();
+  await revealToken(dialog);
+  await dialog.getByLabel("Token").fill("tok");
+  await page.getByRole("button", { name: "Connect with an API token" }).click();
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Review changes" }).click();
+  await expect(dialog.getByText("Preparing DNS changes…")).toBeVisible();
+  await pressOutside(page);
+  await expect(dialog).toBeVisible();
 });

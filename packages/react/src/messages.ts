@@ -246,7 +246,7 @@ export const english: Catalog = {
   checkDns: "Check DNS",
   checkAgain: "Check again",
   moreActions: "More actions",
-  moreOptions: "Need an account id?",
+  moreOptions: "Add an account id",
   useAnotherProvider: "Use a different provider",
   useTokenInstead: "Use an API token instead",
   back: "Back",

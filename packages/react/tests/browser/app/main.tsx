@@ -17,6 +17,7 @@ import {
   Domain,
   DomainKit,
   Outcome,
+  Provision,
   Testing,
   Verify as VerifyUi,
 } from "../../../src/index.ts";
@@ -253,6 +254,38 @@ function Outcomes() {
   );
 }
 
+/**
+ * One transport verb that never answers, so a dialog can be caught with a command in flight. The
+ * fake transport is in-process, so there is no request to delay from the test side.
+ */
+function Hanging({ verb }: { readonly verb: string }) {
+  const held = useMemo(() => {
+    const connection = transport.connection;
+    const provisioning = transport.provisioning;
+    if (connection === undefined || provisioning === undefined) {
+      throw new Error("The fixture transport is missing a group");
+    }
+    return {
+      ...transport,
+      connection: {
+        ...connection,
+        ...(verb === "start" ? { start: () => Effect.never } : {}),
+        ...(verb === "disconnect" ? { disconnect: () => Effect.never } : {}),
+      },
+      provisioning: {
+        ...provisioning,
+        ...(verb === "plan" ? { plan: () => Effect.never } : {}),
+      },
+    };
+  }, [verb]);
+  return (
+    <DomainKit.Root navigate={() => {}} transport={held}>
+      <Connect.Flow domain={domain} />
+      <Provision.Flow domain={domain} requirements={requirements} />
+    </DomainKit.Root>
+  );
+}
+
 const container = document.querySelector("#root");
 if (container === null) throw new Error("The fixture has no #root");
 
@@ -304,6 +337,8 @@ createRoot(container).render(
   <StrictMode>
     {view === "returnto" ? (
       <ReturnToProbe />
+    ) : view === "hang" ? (
+      <Hanging verb={parameters.get("hang") ?? "start"} />
     ) : view === "fetch" ? (
       <FetchProbe />
     ) : (
@@ -321,6 +356,12 @@ createRoot(container).render(
           />
         ) : view === "reject" ? (
           <Connect.Flow domain={domain} />
+        ) : view === "review" ? (
+          // `Provision.Flow` is the review dialog on its own; `Domain.Flow` reviews inline.
+          <>
+            <Connect.Flow domain={domain} />
+            <Provision.Flow domain={domain} requirements={requirements} />
+          </>
         ) : view === "outcome" ? (
           <Outcomes />
         ) : view === "evidence" ? (

@@ -402,6 +402,56 @@ describe("Connect.Dialog", () => {
     expect((field as HTMLInputElement).value).toBe("");
   });
 
+  it("asks for the fields a provider does not need with a control that reads as one", async () => {
+    const { domain, transport } = scenario();
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    // The fake declares one field; the optional one rides the descriptor, which is where the wire
+    // carries it.
+    const withOptional: Transport.Interface = {
+      ...transport,
+      connection: {
+        ...connection,
+        inspect: (target) =>
+          Effect.map(connection.inspect(target), (snapshot) => ({
+            ...snapshot,
+            providers: snapshot.providers.map((provider) => ({
+              ...provider,
+              methods: provider.methods.map((method) =>
+                method.fields === null
+                  ? method
+                  : {
+                      ...method,
+                      fields: [
+                        ...method.fields,
+                        { name: "accountId", required: false, secret: false },
+                      ],
+                    },
+              ),
+            })),
+          })),
+      },
+    };
+    render(
+      <DomainKit.Root transport={withOptional}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    const more = dialog().querySelector("[data-domainkit-part='more-options']");
+    expect(more?.getAttribute("data-state")).toBe("closed");
+    // A button, not a line of body text: it announces what it does and whether it is open.
+    const trigger = screen.getByRole("button", { name: "Add an account id" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByLabelText(/Account id/)).toBeNull();
+
+    await user.click(trigger);
+    expect(more?.getAttribute("data-state")).toBe("open");
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByLabelText(/Account id/)).toBeDefined();
+    expect(more?.querySelector("[data-domainkit-part='more-options-panel']")).not.toBeNull();
+  });
+
   it("keeps the typed token after a rejection, so trying again needs no retyping", async () => {
     const { domain, transport } = scenario();
     const connection = transport.connection;
