@@ -39,6 +39,11 @@
     --domainkit-quiet-pad: 0.25rem;
     /* The inner room a panel gives its contents: the dialog's form, and the two cards. */
     --domainkit-panel-pad: 0.75rem;
+    /* The switch track, the thumb inside it, and the room it keeps at each end of the track. */
+    --domainkit-switch-width: 2.25rem;
+    --domainkit-switch-height: 1.25rem;
+    --domainkit-switch-thumb: 1rem;
+    --domainkit-switch-inset: 0.125rem;
     /* Cards draw no border of their own. A host that wants one sets this on the part. */
     --domainkit-card-border: transparent;
     --domainkit-button-raised-glint: rgb(255 255 255 / 0.95);
@@ -740,16 +745,24 @@
     gap: 0.6rem;
   }
 
+  /*
+   * Base UI's own Switch anatomy: the root is the track and the thumb is a box laid out inside it.
+   * `border-box` and `inline-flex` make the declared width and height the track a customer sees,
+   * whatever the host's reset does with padding, and centre the thumb between the track's edges.
+   */
   :where([data-domainkit-part="disconnect-cleanup-switch"]) {
+    align-items: center;
     background: var(--domainkit-border);
     border: 0;
     border-radius: 999px;
+    box-sizing: border-box;
     cursor: pointer;
+    display: inline-flex;
     flex: none;
-    height: 1.25rem;
-    padding: 0.125rem;
+    height: var(--domainkit-switch-height);
+    padding: var(--domainkit-switch-inset);
     transition: background-color 150ms ease;
-    width: 2.25rem;
+    width: var(--domainkit-switch-width);
   }
 
   :where([data-domainkit-part="disconnect-cleanup-switch"][data-checked]) {
@@ -765,13 +778,18 @@
     background: var(--domainkit-background);
     border-radius: 999px;
     display: block;
-    height: 1rem;
+    flex: none;
+    height: var(--domainkit-switch-thumb);
     transition: translate 150ms ease;
-    width: 1rem;
+    width: var(--domainkit-switch-thumb);
   }
 
+  /* The travel is the track less the thumb and the room the track keeps at both ends. */
   :where([data-domainkit-part="disconnect-cleanup-thumb"][data-checked]) {
-    translate: 1rem 0;
+    translate: calc(
+      var(--domainkit-switch-width) - var(--domainkit-switch-thumb) -
+        var(--domainkit-switch-inset) * 2
+    );
   }
 
   :where([data-domainkit-part="disconnect-cleanup-panel"]) {
