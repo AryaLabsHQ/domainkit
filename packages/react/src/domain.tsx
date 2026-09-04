@@ -199,23 +199,32 @@ export function Flow({
   // The flow knows what it asked for, so a domain with no attachment can still be verified.
   const verification = Verify.useController({ domain, requirements });
   const readiness = verification.readiness;
+  const status = connection.state._tag;
+  const planning = provisioning.state._tag;
+  const connected = status === "Connected";
+  const offering = Connect.offering(connection, connect);
+  const provider = connection.snapshot?.provider ?? Connect.hostProvider(connection)?.id ?? null;
   const state: FlowState = {
-    connected: connection.state._tag === "Connected",
-    connection: connection.state._tag,
-    offering: Connect.offering(connection, connect),
-    provider: connection.snapshot?.provider ?? Connect.hostProvider(connection)?.id ?? null,
-    provisioning: provisioning.state._tag,
+    connected,
+    connection: status,
+    offering,
+    provider,
+    provisioning: planning,
   };
   // The callback rides a ref so a host writing it inline does not re-announce every render.
   const announce = useRef(onState);
   useEffect(() => {
     announce.current = onState;
   });
-  const latest = useRef(state);
-  latest.current = state;
   useEffect(() => {
-    announce.current?.(latest.current);
-  }, [state.connected, state.connection, state.offering, state.provider, state.provisioning]);
+    announce.current?.({
+      connected,
+      connection: status,
+      offering,
+      provider,
+      provisioning: planning,
+    });
+  }, [connected, offering, planning, provider, status]);
   return usePart("div", props, state, {
     children: (
       <ReadOnly value={readOnly ?? inherited}>
