@@ -76,16 +76,26 @@ export interface RootProps extends PartProps<"div", State> {
   readonly layout?: Layout;
 }
 
-/** The outcome itself. It announces, so a customer reading with assistive tech hears it. */
+/**
+ * The outcome itself. It announces, so a customer reading with assistive tech hears it. A `tone`
+ * or `layout` of its own reaches every part below it, so the glyph and the words agree with the
+ * root's own attributes.
+ */
 export function Root({ layout, tone, ...props }: RootProps): ReactElement {
   const value = useOutcome();
-  const resolved: State = { layout: layout ?? value.layout, tone: tone ?? value.tone };
-  return usePart("div", props, resolved, {
-    "data-domainkit-part": "outcome",
-    "data-layout": resolved.layout,
-    "data-tone": resolved.tone,
-    role: "alert",
-  });
+  const resolved: Value = { ...value, layout: layout ?? value.layout, tone: tone ?? value.tone };
+  const element = usePart(
+    "div",
+    props,
+    { layout: resolved.layout, tone: resolved.tone },
+    {
+      "data-domainkit-part": "outcome",
+      "data-layout": resolved.layout,
+      "data-tone": resolved.tone,
+      role: "alert",
+    },
+  );
+  return <Provider value={resolved}>{element}</Provider>;
 }
 
 export interface HeaderProps extends PartProps<"div", State> {}

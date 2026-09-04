@@ -1,7 +1,8 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DnsRecord } from "domainkit";
+import { DnsRecord, DomainKit as Kit, Reason } from "domainkit";
 import type { Transport } from "domainkit/client";
+import * as Effect from "effect/Effect";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Cleanup, Connect, DomainKit, Provision, Testing, Verify } from "../src/index.ts";
@@ -198,6 +199,33 @@ describe("Connect.useController", () => {
     expect(state.attempt).toEqual({ method: "token", provider: "absent" });
     expect(current().providers).toHaveLength(providers);
     expect(current().snapshot?.domain).toBe(domain);
+  });
+
+  it("offers no connect surface when the domain could not be inspected", async () => {
+    const { domain, transport } = scenario();
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    const unreachable: Transport.Interface = {
+      ...transport,
+      connection: {
+        ...connection,
+        inspect: () =>
+          Effect.fail(
+            new Kit.Error({
+              reason: new Reason.ProviderUnavailable({ message: "down", provider: "fake" }),
+            }),
+          ),
+      },
+    };
+    render(
+      <DomainKit.Root transport={unreachable}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    // Nothing was read, so there is nothing to offer: the failure reads, the trigger does not.
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("isn't responding");
+    expect(screen.queryByRole("button", { name: /^Connect/ })).toBeNull();
   });
 
   it("preselects a connection discovery already found for the zone", async () => {

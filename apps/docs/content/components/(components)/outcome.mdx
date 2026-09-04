@@ -36,7 +36,8 @@ field or beside a step in progress.
 
 `data-tone` is `danger` for a failure and `warning` for a receipt that only partly landed. Each tone
 draws its own glyph from `icons` on `DomainKit.Root` and colours itself from
-`--domainkit-danger`, `--domainkit-warning`, and `--domainkit-success`.
+`--domainkit-danger`, `--domainkit-warning`, and `--domainkit-success`. `tone` and `layout` on
+`Outcome.Root` override what the flow resolved, and every part below reads the override.
 
 ## Words
 

@@ -378,6 +378,13 @@ export function Root({ controller, ...props }: RootProps): ReactElement {
 }
 
 /**
+ * Whether a failure is already answered where it was raised: beside the method the customer used.
+ * A flow rendering its own `Outcome` beside the dialog skips it, so the failure announces once.
+ */
+export const answeredInPlace = (controller: Controller): boolean =>
+  controller.state._tag === "Failure" && controller.state.attempt !== null;
+
+/**
  * The provider whose nameservers serve this domain, as the snapshot describes it. Discovery names
  * it by id; without a descriptor there is nothing to draw, so there is no host.
  */
@@ -471,13 +478,20 @@ export function Status({ controller, ...props }: StatusProps): ReactElement {
 }
 
 /**
- * Whether a rejected command was about this field. A provider that turns down credentials is
- * answering the secret it was given; anything else is about the request, not one input.
+ * The one field a rejected command was about, if any. A provider that turns down credentials is
+ * answering the secret it was given, and it names no field, so the first secret carries the
+ * answer; anything else is about the request rather than one input.
  */
-const rejects = (reason: DomainKit.Error["reason"] | null, field: Field): boolean => {
-  if (reason === null) return false;
-  if (reason._tag === "InvalidInput") return reason.field === field.name;
-  return (reason._tag === "Unauthenticated" || reason._tag === "Forbidden") && field.secret;
+const rejected = (
+  reason: DomainKit.Error["reason"] | null,
+  fields: ReadonlyArray<Field>,
+): string | null => {
+  if (reason === null) return null;
+  if (reason._tag === "InvalidInput") {
+    return fields.find((field) => field.name === reason.field)?.name ?? null;
+  }
+  if (reason._tag !== "Unauthenticated" && reason._tag !== "Forbidden") return null;
+  return fields.find((field) => field.secret)?.name ?? null;
 };
 
 interface MethodProps {
@@ -573,8 +587,7 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
     );
   }
   const fields = method.fields;
-  const rejected = failed && state._tag === "Failure" ? state.error.reason : null;
-  const answered = fields.some((field) => rejects(rejected, field));
+  const answered = rejected(failed && state._tag === "Failure" ? state.error.reason : null, fields);
   const required = fields.filter((field) => field.required);
   const optional = fields.filter((field) => !field.required);
   // The docs link explains the secret, so it rides that field rather than the form.
@@ -584,7 +597,7 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
       controller={controller}
       docsUrl={field.name === explains ? method.docsUrl : null}
       field={field}
-      invalid={rejects(rejected, field)}
+      invalid={field.name === answered}
       key={field.name}
     />
   );
@@ -609,13 +622,13 @@ function Method({ controller, method, provider }: MethodProps): ReactElement {
       {optional.length === 0 ? null : (
         <details
           data-domainkit-part="more-options"
-          open={optional.some((field) => rejects(rejected, field)) || undefined}
+          open={optional.some((field) => field.name === answered) || undefined}
         >
           <summary data-domainkit-part="more-options-trigger">{messages.moreOptions}</summary>
           {optional.map(render)}
         </details>
       )}
-      {failed && !answered ? <Outcome controller={controller} layout="inline" /> : null}
+      {failed && answered === null ? <Outcome controller={controller} layout="inline" /> : null}
       <button data-domainkit-part="token-submit" disabled={busy} type="submit">
         {messages.methodToken}
       </button>
@@ -823,7 +836,7 @@ export function Dialog({
   const state = controller.state;
   const busy = state._tag === "Submitting";
   // A failure a method already answers is not repeated at the foot of the dialog.
-  const unattributed = state._tag === "Failure" && state.attempt === null;
+  const unattributed = state._tag === "Failure" && !answeredInPlace(controller);
   const snapshot = controller.snapshot;
   // The provider the dialog is about: the one already attached, else the one that serves the zone.
   const attached = snapshot?.provider ?? null;
@@ -947,7 +960,13 @@ export function Prompt({
     host !== null ||
     (discovery !== null && discovery._tag !== "NotFound") ||
     (controller.snapshot?.reusable.length ?? 0) > 0;
-  const settling = state._tag === "Loading" || state._tag === "Disconnected";
+  // A command in flight owns the surface whatever discovery found: it is how the customer answers
+  // a zone choice, a reconnect, or a redirect that came back.
+  const inFlight =
+    state._tag === "Submitting" ||
+    state._tag === "Redirecting" ||
+    state._tag === "SelectionRequired" ||
+    state._tag === "Reconnect";
   const element = usePart(
     "div",
     props,
@@ -969,7 +988,7 @@ export function Prompt({
       "data-host": host?.id,
     },
   );
-  if (settling && !offers && connect !== "always") return null;
+  if (!inFlight && !offers && connect !== "always") return null;
   // Read-only keeps the statement and drops the trigger, like every other write surface.
   if (readOnly && host === null) return null;
   return element;
@@ -1043,7 +1062,7 @@ export function Flow({ connect, domain, returnTo, ...props }: FlowProps): ReactE
       ) : (
         <>
           <Prompt controller={controller} {...(connect === undefined ? {} : { connect })} />
-          <Outcome controller={controller} />
+          {answeredInPlace(controller) ? null : <Outcome controller={controller} />}
         </>
       )}
     </Root>

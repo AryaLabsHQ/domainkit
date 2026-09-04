@@ -189,6 +189,25 @@ const refusesTokens = () => {
     ...transport,
     connection: {
       ...connection,
+      // Two secrets, so a rejection that names no field answers once rather than under each.
+      inspect: (target: string) =>
+        Effect.map(connection.inspect(target), (snapshot) => ({
+          ...snapshot,
+          providers: snapshot.providers.map((provider) => ({
+            ...provider,
+            methods: provider.methods.map((method) =>
+              method.fields === null
+                ? method
+                : {
+                    ...method,
+                    fields: [
+                      ...method.fields,
+                      { name: "signingKey", required: true, secret: true },
+                    ],
+                  },
+            ),
+          })),
+        })),
       start: (input: Parameters<typeof connection.start>[0]) =>
         input.method._tag === "Token"
           ? Effect.fail(

@@ -88,7 +88,8 @@ function DefaultConnection({ connect, controller }: ConnectionSlotProps): ReactE
     <>
       {stated ? null : <Connect.Status controller={controller} />}
       <Connect.Prompt connect={connect} controller={controller} />
-      <Connect.Outcome controller={controller} />
+      {/* A failure the method already answers beside the field announces once, not twice. */}
+      {Connect.answeredInPlace(controller) ? null : <Connect.Outcome controller={controller} />}
     </>
   );
 }

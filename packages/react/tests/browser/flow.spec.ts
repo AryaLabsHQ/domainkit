@@ -200,6 +200,7 @@ test("keeps the domain, the provider list, and the typed token after a rejected 
   await page.getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Token").fill("cf_bad_token");
+  await dialog.getByLabel("Signing key").fill("sk_live");
   await dialog.getByRole("button", { name: "Connect with an API token" }).click();
 
   const outcome = dialog.locator("[data-domainkit-part='outcome']");
@@ -210,11 +211,16 @@ test("keeps the domain, the provider list, and the typed token after a rejected 
     "Fake fake didn't accept this token",
   );
   await expect(dialog.getByLabel("Token")).toHaveAttribute("aria-invalid", "true");
+  // The provider named no field, so the first secret carries the answer and it announces once.
+  await expect(dialog.locator("[data-domainkit-part='field-error']")).toHaveCount(1);
+  await expect(dialog.getByLabel("Signing key")).not.toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByRole("alert")).toHaveCount(1);
   // The domain the dialog authorizes, and the value the customer typed, both survive.
   await expect(dialog.locator("[data-domainkit-part='dialog-description']")).toHaveText(
     "Authorize DNS changes for app.browser12.example.",
   );
   await expect(dialog.getByLabel("Token")).toHaveValue("cf_bad_token");
+  await expect(dialog.getByLabel("Signing key")).toHaveValue("sk_live");
   await expect(dialog.getByText("No DNS providers are available.")).toHaveCount(0);
   await dialog.screenshot({ path: shot("connect-rejected") });
 });
