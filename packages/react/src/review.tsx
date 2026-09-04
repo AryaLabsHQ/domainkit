@@ -115,7 +115,7 @@ export function Outcome({
   return (
     <OutcomeUi.Provider
       value={{
-        description: words.description,
+        description: words.description ?? "",
         layout: props.layout ?? "card",
         retry: readOnly || state._tag !== "Failure" ? null : controller.retry,
         retryPart,

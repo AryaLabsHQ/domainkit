@@ -51,15 +51,23 @@ describe("Messages", () => {
     }
   });
 
-  it("gives every failure reason a title and a description written for the customer", () => {
+  it("gives every failure reason a title written for the customer", () => {
     for (const reason of reasons) {
       const words = Messages.outcome(new Kit.Error({ reason }), Messages.english);
       expect(words.title).not.toBe(reason._tag);
       expect(words.title.length).toBeGreaterThan(0);
-      expect(words.description.length).toBeGreaterThan(0);
       // A title is a heading, so it carries no full stop.
       expect(words.title.endsWith(".")).toBe(false);
+      // A reason says what to do about it, or says nothing rather than repeating its title.
+      if (words.description !== undefined) expect(words.description.length).toBeGreaterThan(0);
     }
+  });
+
+  it("reads a reason with no description as one sentence", () => {
+    const error = new Kit.Error({ reason: new Reason.Unauthenticated({ message: "bad token" }) });
+    expect(Messages.failure(error, Messages.english, { provider: "Cloudflare" })).toBe(
+      "Cloudflare didn't accept this token.",
+    );
   });
 
   it("names the provider the customer acted on when the reason cannot", () => {

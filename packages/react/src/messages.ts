@@ -174,7 +174,8 @@ export interface Catalog {
 /** What an outcome says: a heading the customer reads first, then what to do about it. */
 export interface Outcome {
   readonly title: string;
-  readonly description: string;
+  /** What to do about it. Absent where the title has already said the whole of it. */
+  readonly description?: string;
 }
 
 /**
@@ -468,8 +469,9 @@ export const english: Catalog = {
         ? "Check what you entered"
         : `Check the ${humanize(reason.field).toLowerCase()}`,
   }),
+  // The title names the provider and the credential it turned down, and the retry sits beside it.
+  // A second line under that repeats the title and pushes the retry onto a line of its own.
   unauthenticated: (_reason, context) => ({
-    description: "Check it can edit DNS for this zone.",
     title: `${named(context.provider)} didn't accept this token`,
   }),
   forbidden: (_reason, context) => ({
@@ -585,5 +587,5 @@ export const failure = (
   context: OutcomeContext = {},
 ): string => {
   const { description, title } = outcome(error, catalog, context);
-  return `${title}. ${description}`;
+  return description === undefined ? `${title}.` : `${title}. ${description}`;
 };

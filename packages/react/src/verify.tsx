@@ -289,7 +289,7 @@ export function Outcome({ children, controller, ...props }: OutcomeProps): React
   return (
     <OutcomeUi.Provider
       value={{
-        description: words.description,
+        description: words.description ?? "",
         layout: props.layout ?? "card",
         retry: controller.retry,
         retryPart: "verification-retry",

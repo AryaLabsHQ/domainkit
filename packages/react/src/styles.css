@@ -1538,11 +1538,15 @@
     grid-area: 2 / 2;
   }
 
+  /*
+   * The action sits on the title's row. Spanning the description's row too would hold that row
+   * open where an outcome has no description, and leave the row's gap under a single line.
+   */
   :where(
     [data-domainkit-part="outcome"][data-layout="inline"] [data-domainkit-part="outcome-content"]
   ) {
     align-self: start;
-    grid-area: 1 / 3 / 3 / 4;
+    grid-area: 1 / 3;
   }
 
   :where([data-domainkit-part="outcome-header"]) {
