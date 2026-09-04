@@ -1,12 +1,11 @@
 import { Receipt, type DnsRecord } from "domainkit";
-import { useCallback, type ReactElement, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, type ReactElement, type ReactNode } from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import * as Cleanup from "./cleanup.tsx";
 import * as Connect from "./connect.tsx";
 import { ReadOnly, useDomainKit, useReadOnly } from "./domain-kit.tsx";
-import { useIcons } from "./icons.tsx";
 import * as Provision from "./provision.tsx";
 import * as Records from "./records.tsx";
 import * as Verify from "./verify.tsx";
@@ -52,9 +51,21 @@ export interface Slots {
   readonly connection?: (props: ConnectionSlotProps) => ReactNode;
 }
 
+/**
+ * What DomainKit has to say about this domain, on the part's data attributes, in `className` and
+ * `style` callbacks, and through `onState`. A host reads `connected` and `offering` to order its
+ * own offers beside DomainKit's: an offer of its own competes while `offering` is true, and a
+ * domain DomainKit holds needs none.
+ */
 export interface FlowState extends Record<string, unknown> {
   readonly connection: Connect.State["_tag"];
   readonly provisioning: Provision.State["_tag"];
+  /** DomainKit holds a connection for this domain. */
+  readonly connected: boolean;
+  /** The connect surface has something to offer, so a host's own offer would compete with it. */
+  readonly offering: boolean;
+  /** Who holds the connection, or whose nameservers serve the zone. */
+  readonly provider: string | null;
 }
 
 export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children"> {
@@ -72,18 +83,32 @@ export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children">
   readonly readOnly?: boolean;
   /**
    * Offer the connect dialog even when discovery names no host, for a host application that lets
-   * a customer connect a provider the domain's nameservers do not point at. Defaults to `detected`.
+   * a customer connect a provider the domain's nameservers do not point at, or `never` for a
+   * domain the host has already settled another way. Defaults to `detected`.
    */
   readonly connect?: Connect.Invitation;
+  /** Fires whenever what DomainKit has to say about this domain changes, and once on mount. */
+  readonly onState?: (state: FlowState) => void;
 }
 
-function DefaultConnection({ connect, controller }: ConnectionSlotProps): ReactElement {
+interface DefaultConnectionProps extends ConnectionSlotProps {
+  readonly onCleaned?: (receipt: Receipt.Model) => void;
+}
+
+function DefaultConnection({
+  connect,
+  controller,
+  onCleaned,
+}: DefaultConnectionProps): ReactElement {
   // The prompt already names who serves the zone, so the status line is for everything else:
-  // what the connection is doing, and what a read-only customer sees where a trigger would be.
+  // what the connection is doing, what a read-only customer sees where a trigger would be, and a
+  // domain whose invitation the host turned off.
   const stated =
-    controller.state._tag === "Disconnected" && Connect.hostProvider(controller) !== null;
+    controller.state._tag === "Disconnected" &&
+    Connect.hostProvider(controller) !== null &&
+    Connect.offering(controller, connect);
   return controller.state._tag === "Connected" ? (
-    <Connect.Card controller={controller} />
+    <Connect.Card controller={controller} {...(onCleaned === undefined ? {} : { onCleaned })} />
   ) : (
     <>
       {stated ? null : <Connect.Status controller={controller} />}
@@ -94,53 +119,31 @@ function DefaultConnection({ connect, controller }: ConnectionSlotProps): ReactE
   );
 }
 
-function DefaultActions({
-  cleanup,
-  connection,
-  provisioning,
-}: ActionsSlotProps): ReactElement | null {
+/**
+ * Review, approve, and apply. Removing records is not here: it is the option inside the disconnect
+ * dialog, so letting a provider go is one decision. `Cleanup.Flow` stays exported for a host that
+ * wants the standalone surface, and the actions slot still receives its controller.
+ */
+function DefaultActions({ connection, provisioning }: ActionsSlotProps): ReactElement | null {
   const { capabilities, messages } = useDomainKit();
   const readOnly = useReadOnly();
-  const icons = useIcons();
   const connected = connection.state._tag === "Connected";
   // Every control here starts a write; the state a read-only customer may see is rendered above.
   if (readOnly) return null;
-  const hasReceipt = connection.snapshot?.lastReceiptId != null;
+  if (!capabilities.includes("provisioning") || !connected) return null;
   return (
     <>
-      {capabilities.includes("provisioning") && connected ? (
-        <>
-          <button
-            data-domainkit-part="plan-trigger"
-            disabled={provisioning.state._tag === "Planning"}
-            onClick={provisioning.plan}
-            type="button"
-          >
-            {messages.reviewChanges}
-          </button>
-          <Provision.Status controller={provisioning} />
-          <Provision.Actions controller={provisioning} />
-          <Provision.Outcome controller={provisioning} />
-        </>
-      ) : null}
-      {capabilities.includes("cleanup") && connected && hasReceipt ? (
-        <>
-          <button
-            data-domainkit-part="cleanup-trigger"
-            disabled={cleanup.state._tag === "Planning"}
-            onClick={cleanup.plan}
-            type="button"
-          >
-            <span aria-hidden="true" data-icon="inline-start">
-              {icons.close}
-            </span>
-            {messages.cleanUp}
-          </button>
-          <Cleanup.Status controller={cleanup} />
-          <Cleanup.Actions controller={cleanup} />
-          <Cleanup.Outcome controller={cleanup} />
-        </>
-      ) : null}
+      <button
+        data-domainkit-part="plan-trigger"
+        disabled={provisioning.state._tag === "Planning"}
+        onClick={provisioning.plan}
+        type="button"
+      >
+        {messages.reviewChanges}
+      </button>
+      <Provision.Status controller={provisioning} />
+      <Provision.Actions controller={provisioning} />
+      <Provision.Outcome controller={provisioning} />
     </>
   );
 }
@@ -155,6 +158,7 @@ export function Flow({
   domain,
   onApplied,
   onCleaned,
+  onState,
   readOnly,
   requirements,
   returnTo,
@@ -195,42 +199,59 @@ export function Flow({
   // The flow knows what it asked for, so a domain with no attachment can still be verified.
   const verification = Verify.useController({ domain, requirements });
   const readiness = verification.readiness;
-  return usePart(
-    "div",
-    props,
-    { connection: connection.state._tag, provisioning: provisioning.state._tag },
-    {
-      children: (
-        <ReadOnly value={readOnly ?? inherited}>
-          {!capabilities.includes("connection") ? null : slots.connection === undefined ? (
-            <DefaultConnection connect={connect} controller={connection} domain={domain} />
-          ) : (
-            slots.connection({ connect, controller: connection, domain })
-          )}
-          {slots.records === undefined ? (
-            <Records.Table readiness={readiness} records={requirements} />
-          ) : (
-            slots.records({ controller: verification, domain, readiness, records: requirements })
-          )}
-          {!capabilities.includes("verification") ? null : slots.verification === undefined ? (
-            <Verify.Status controller={verification} />
-          ) : (
-            slots.verification({ controller: verification, domain })
-          )}
-          {slots.actions === undefined ? (
-            <DefaultActions
-              cleanup={cleanup}
-              connection={connection}
-              domain={domain}
-              provisioning={provisioning}
-            />
-          ) : (
-            slots.actions({ cleanup, connection, domain, provisioning })
-          )}
-        </ReadOnly>
-      ),
-      "data-domainkit-part": "domain-flow",
-      "data-domain": domain,
-    },
-  );
+  const state: FlowState = {
+    connected: connection.state._tag === "Connected",
+    connection: connection.state._tag,
+    offering: Connect.offering(connection, connect),
+    provider: connection.snapshot?.provider ?? Connect.hostProvider(connection)?.id ?? null,
+    provisioning: provisioning.state._tag,
+  };
+  // The callback rides a ref so a host writing it inline does not re-announce every render.
+  const announce = useRef(onState);
+  useEffect(() => {
+    announce.current = onState;
+  });
+  const latest = useRef(state);
+  latest.current = state;
+  useEffect(() => {
+    announce.current?.(latest.current);
+  }, [state.connected, state.connection, state.offering, state.provider, state.provisioning]);
+  return usePart("div", props, state, {
+    children: (
+      <ReadOnly value={readOnly ?? inherited}>
+        {!capabilities.includes("connection") ? null : slots.connection === undefined ? (
+          <DefaultConnection
+            connect={connect}
+            controller={connection}
+            domain={domain}
+            {...(onCleaned === undefined ? {} : { onCleaned })}
+          />
+        ) : (
+          slots.connection({ connect, controller: connection, domain })
+        )}
+        {slots.records === undefined ? (
+          <Records.Table readiness={readiness} records={requirements} />
+        ) : (
+          slots.records({ controller: verification, domain, readiness, records: requirements })
+        )}
+        {!capabilities.includes("verification") ? null : slots.verification === undefined ? (
+          <Verify.Status controller={verification} />
+        ) : (
+          slots.verification({ controller: verification, domain })
+        )}
+        {slots.actions === undefined ? (
+          <DefaultActions
+            cleanup={cleanup}
+            connection={connection}
+            domain={domain}
+            provisioning={provisioning}
+          />
+        ) : (
+          slots.actions({ cleanup, connection, domain, provisioning })
+        )}
+      </ReadOnly>
+    ),
+    "data-domainkit-part": "domain-flow",
+    "data-domain": domain,
+  });
 }

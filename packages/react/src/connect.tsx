@@ -1,5 +1,5 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import type { DomainKit, Storage } from "domainkit";
+import { Receipt, type DomainKit, type Storage } from "domainkit";
 import { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -13,6 +13,7 @@ import {
   type ReactNode,
 } from "react";
 
+import * as Cleanup from "./cleanup.tsx";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
@@ -73,6 +74,7 @@ export interface ConnectInput {
 }
 
 export interface Controller {
+  readonly domain: string;
   readonly state: State;
   readonly snapshot: Snapshot | null;
   readonly discovery: Discovery | null;
@@ -355,6 +357,7 @@ export function useController({ domain, returnTo }: Options): Controller {
     connect,
     detach,
     disconnect,
+    domain,
     discovery:
       state._tag === "Disconnected" || state._tag === "Failure" || state._tag === "Submitting"
         ? state.discovery
@@ -1024,14 +1027,46 @@ export function Dialog({
   );
 }
 
-/** Whether the flow offers a connect surface when discovery names no host. */
-export type Invitation = "always" | "detected";
+/**
+ * Whether the flow offers a connect surface: only when discovery names a host, always, or never.
+ * `never` is a host that decides for itself, such as a domain already ready without DomainKit; a
+ * connected domain keeps its status and its disconnect either way.
+ */
+export type Invitation = "always" | "detected" | "never";
+
+/**
+ * Whether the connect surface has anything to offer for this domain: a provider that serves the
+ * zone, a connection discovery already found, one the owner already holds, or a command already
+ * running. `Prompt` renders on this, and `Domain.Flow` reports it so a host can order its own
+ * offers beside DomainKit's rather than competing with them.
+ */
+export const offering = (controller: Controller, connect: Invitation = "detected"): boolean => {
+  const state = controller.state;
+  // A command in flight owns the surface whatever discovery found: it is how the customer answers
+  // a zone choice, a reconnect, or a redirect that came back.
+  if (
+    state._tag === "Submitting" ||
+    state._tag === "Redirecting" ||
+    state._tag === "SelectionRequired" ||
+    state._tag === "Reconnect"
+  ) {
+    return true;
+  }
+  if (connect !== "detected") return connect === "always";
+  const discovery = controller.discovery;
+  return (
+    hostProvider(controller) !== null ||
+    (discovery !== null && discovery._tag !== "NotFound") ||
+    (controller.snapshot?.reusable.length ?? 0) > 0
+  );
+};
 
 export interface PromptProps extends PartProps<"div", RootState> {
   readonly controller: Controller;
   /**
    * `detected` offers nothing when discovery names no host, which is the honest answer for a
-   * domain DomainKit cannot write to. `always` offers the all-providers dialog anyway.
+   * domain DomainKit cannot write to. `always` offers the all-providers dialog anyway, and
+   * `never` offers none.
    */
   readonly connect?: Invitation;
 }
@@ -1050,20 +1085,6 @@ export function Prompt({
   const readOnly = useReadOnly();
   const state = controller.state;
   const host = hostProvider(controller);
-  const discovery = controller.discovery;
-  // Something to offer: the provider that serves the zone, a connection discovery already found,
-  // or one this owner holds. With none of them there is no invitation, and none while it loads.
-  const offers =
-    host !== null ||
-    (discovery !== null && discovery._tag !== "NotFound") ||
-    (controller.snapshot?.reusable.length ?? 0) > 0;
-  // A command in flight owns the surface whatever discovery found: it is how the customer answers
-  // a zone choice, a reconnect, or a redirect that came back.
-  const inFlight =
-    state._tag === "Submitting" ||
-    state._tag === "Redirecting" ||
-    state._tag === "SelectionRequired" ||
-    state._tag === "Reconnect";
   const element = usePart(
     "div",
     props,
@@ -1085,18 +1106,178 @@ export function Prompt({
       "data-host": host?.id,
     },
   );
-  if (!inFlight && !offers && connect !== "always") return null;
+  if (!offering(controller, connect)) return null;
   // Read-only keeps the statement and drops the trigger, like every other write surface.
   if (readOnly && host === null) return null;
   return element;
 }
 
+export interface DisconnectDialogProps {
+  readonly controller: Controller;
+  /** The receipt the cleanup this dialog ran produced, for a host that tracks its own state. */
+  readonly onCleaned?: (receipt: Receipt.Model) => void;
+  readonly trigger?: ReactNode;
+}
+
+/**
+ * Letting a provider go, with the records DomainKit added as one decision rather than two.
+ * Confirming removes what the domain's apply receipt proves DomainKit created, then releases the
+ * connection; a plan with nothing in it is not a failure, so it goes straight to the release.
+ *
+ * The cleanup is this dialog's own, so nothing re-reads the snapshot in between: the disconnect
+ * needs the connection the cleanup just used.
+ */
+export function DisconnectDialog({
+  controller,
+  onCleaned,
+  trigger,
+}: DisconnectDialogProps): ReactElement {
+  const { capabilities, colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
+  const readOnly = useReadOnly();
+  const [open, setOpen] = useState(false);
+  const [alsoRemove, setAlsoRemove] = useState(true);
+  // `idle` until the customer confirms; then at most two commands, in order.
+  const [running, setRunning] = useState<"idle" | "cleaning" | "releasing">("idle");
+  const snapshot = controller.snapshot;
+  const receiptId = snapshot?.lastReceiptId ?? null;
+  // Only an apply receipt proves DomainKit created anything, so only then is there a choice.
+  const removable = capabilities.includes("cleanup") && receiptId !== null;
+  const cleanup = Cleanup.useController({
+    domain: controller.domain,
+    ...(onCleaned === undefined ? {} : { onCleaned }),
+    ...(receiptId === null ? {} : { receiptId: Receipt.ReceiptId.make(receiptId) }),
+  });
+  const { approve, plan, state: cleaning } = cleanup;
+  const disconnect = controller.disconnect;
+  const failed = controller.state._tag === "Failure";
+
+  useEffect(() => {
+    if (running !== "cleaning") return;
+    if (cleaning._tag === "Planned") {
+      if (cleaning.plan.operations.length === 0) {
+        setRunning("releasing");
+        disconnect();
+      } else approve();
+      return;
+    }
+    if (cleaning._tag === "Applied") {
+      setRunning("releasing");
+      disconnect();
+      return;
+    }
+    if (cleaning._tag === "Failure" || cleaning._tag === "Rejected") setRunning("idle");
+  }, [approve, cleaning, disconnect, running]);
+
+  // A release that lands unmounts this dialog with the card; one that fails hands back the button.
+  useEffect(() => {
+    if (running === "releasing" && failed) setRunning("idle");
+  }, [failed, running]);
+
+  const busy = running !== "idle";
+  const provider = snapshot?.provider ?? null;
+  const heading =
+    provider === null
+      ? messages.disconnect
+      : messages.disconnectTitle(displayName(controller, provider));
+  if (readOnly) return <></>;
+  return (
+    <BaseDialog.Root
+      onOpenChange={(next, details) => {
+        if (!next && busy) {
+          details.cancel();
+          return;
+        }
+        setOpen(next);
+      }}
+      open={open}
+    >
+      <BaseDialog.Trigger data-domainkit-part="disconnect-action">
+        {trigger ?? messages.disconnect}
+      </BaseDialog.Trigger>
+      <BaseDialog.Portal container={portalContainer}>
+        <BaseDialog.Backdrop
+          data-color-scheme={colorScheme}
+          data-domainkit-part="dialog-backdrop"
+          data-domainkit-root=""
+          style={themeStyle}
+        />
+        <BaseDialog.Popup
+          data-color-scheme={colorScheme}
+          data-domainkit-part="disconnect-dialog"
+          data-domainkit-root=""
+          style={themeStyle}
+        >
+          <div data-domainkit-part="dialog-header">
+            <div data-domainkit-part="dialog-heading">
+              <BaseDialog.Title data-domainkit-part="dialog-title">{heading}</BaseDialog.Title>
+              <BaseDialog.Description data-domainkit-part="dialog-description">
+                {messages.disconnectConsent}
+              </BaseDialog.Description>
+            </div>
+            {busy ? null : (
+              <BaseDialog.Close aria-label={messages.close} data-domainkit-part="dialog-close">
+                ×
+              </BaseDialog.Close>
+            )}
+          </div>
+          <div data-domainkit-part="dialog-body">
+            {removable ? (
+              <label data-domainkit-part="disconnect-cleanup">
+                <input
+                  checked={alsoRemove}
+                  disabled={busy}
+                  onChange={(event) => setAlsoRemove(event.target.checked)}
+                  type="checkbox"
+                />
+                {messages.disconnectWithCleanup}
+              </label>
+            ) : null}
+            <Cleanup.Status controller={cleanup} />
+            {running === "releasing" ? (
+              <p data-domainkit-part="disconnect-status" role="status">
+                {messages.disconnecting}
+              </p>
+            ) : null}
+            <Cleanup.Outcome controller={cleanup} />
+            <Outcome controller={controller} />
+          </div>
+          <div data-domainkit-part="dialog-footer">
+            <button
+              data-domainkit-part="disconnect-confirm"
+              disabled={busy}
+              onClick={() => {
+                if (removable && alsoRemove) {
+                  setRunning("cleaning");
+                  plan();
+                  return;
+                }
+                setRunning("releasing");
+                disconnect();
+              }}
+              type="button"
+            >
+              {messages.disconnect}
+            </button>
+            {busy ? null : (
+              <BaseDialog.Close data-domainkit-part="dialog-cancel">
+                {messages.cancel}
+              </BaseDialog.Close>
+            )}
+          </div>
+        </BaseDialog.Popup>
+      </BaseDialog.Portal>
+    </BaseDialog.Root>
+  );
+}
+
 export interface CardProps extends PartProps<"div", RootState> {
   readonly controller: Controller;
+  /** The receipt a cleanup run from the disconnect dialog produced. */
+  readonly onCleaned?: (receipt: Receipt.Model) => void;
 }
 
 /** A connected domain: which provider holds it, and how to let it go. */
-export function Card({ controller, ...props }: CardProps): ReactElement {
+export function Card({ controller, onCleaned, ...props }: CardProps): ReactElement {
   const { messages } = useDomainKit();
   const readOnly = useReadOnly();
   const state = controller.state;
@@ -1123,14 +1304,10 @@ export function Card({ controller, ...props }: CardProps): ReactElement {
               >
                 {messages.detach}
               </button>
-              <button
-                data-domainkit-part="disconnect-action"
-                disabled={state._tag === "Submitting"}
-                onClick={controller.disconnect}
-                type="button"
-              >
-                {messages.disconnect}
-              </button>
+              <DisconnectDialog
+                controller={controller}
+                {...(onCleaned === undefined ? {} : { onCleaned })}
+              />
             </div>
           )}
           <Outcome controller={controller} />
@@ -1146,16 +1323,18 @@ export interface FlowProps extends Omit<RootProps, "controller"> {
   readonly returnTo?: string | null;
   /** Offer the connect dialog even when discovery names no host. Defaults to `detected`. */
   readonly connect?: Invitation;
+  /** The receipt a cleanup run from the disconnect dialog produced. */
+  readonly onCleaned?: (receipt: Receipt.Model) => void;
 }
 
 /** Connection on its own: the card once connected, the prompt until then. */
-export function Flow({ connect, domain, returnTo, ...props }: FlowProps): ReactElement {
+export function Flow({ connect, domain, onCleaned, returnTo, ...props }: FlowProps): ReactElement {
   const controller = useController({ domain, ...(returnTo === undefined ? {} : { returnTo }) });
   const state = controller.state;
   return (
     <Root controller={controller} {...props}>
       {state._tag === "Connected" ? (
-        <Card controller={controller} />
+        <Card controller={controller} {...(onCleaned === undefined ? {} : { onCleaned })} />
       ) : (
         <>
           <Prompt controller={controller} {...(connect === undefined ? {} : { connect })} />

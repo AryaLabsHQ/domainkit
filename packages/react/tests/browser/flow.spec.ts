@@ -61,8 +61,17 @@ test("connects, reviews the plan, and approves it", async ({ page }) => {
     .screenshot({ path: shot("plan-review") });
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("DNS records added.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Remove records" })).toBeVisible();
   await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("applied") });
+
+  // Removing the records DomainKit added is one decision inside the disconnect dialog.
+  await page.getByRole("button", { name: "Disconnect" }).click();
+  const disconnect = page.getByRole("dialog");
+  await expect(disconnect.getByRole("checkbox")).toBeChecked();
+  await expect(disconnect.getByText("Also remove the records DomainKit added")).toBeVisible();
+  await expect(disconnect).toHaveCSS("opacity", "1");
+  await disconnect.screenshot({ path: shot("disconnect-dialog") });
+  await disconnect.getByRole("button", { name: "Disconnect" }).click();
+  await expect(page.getByText("Owns DNS for this domain.")).toBeVisible();
 });
 
 test("opens the verification popover and reads per-requirement evidence", async ({ page }) => {

@@ -65,6 +65,8 @@ export interface Catalog {
   readonly reconnectRequired: (provider: string) => string;
   readonly disconnectTitle: (provider: string) => string;
   readonly disconnectConsent: string;
+  /** The option inside the disconnect dialog that removes what an apply receipt proves. */
+  readonly disconnectWithCleanup: string;
   readonly detachConsent: string;
   readonly detached: string;
   readonly reusableConnections: string;
@@ -264,7 +266,8 @@ export const english: Catalog = {
   notConnected: "No DNS provider is connected.",
   reconnectRequired: (provider) => `${provider} needs to be reconnected`,
   disconnectTitle: (provider) => `Disconnect ${provider}?`,
-  disconnectConsent: "The provider connection is removed. Existing DNS records are preserved.",
+  disconnectConsent: "The provider connection is removed.",
+  disconnectWithCleanup: "Also remove the records DomainKit added",
   detachConsent: "This domain is detached from the provider. Existing DNS records are preserved.",
   detached: "Domain detached. DNS records were preserved.",
   reusableConnections: "Connections you already have",

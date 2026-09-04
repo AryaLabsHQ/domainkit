@@ -74,8 +74,12 @@ describe("Domain.Flow", () => {
       expect(transport.calls.some((call) => call.method === "verification.observe")).toBe(true),
     );
 
-    await click("Remove records");
-    await click("Approve");
+    // Removing the records DomainKit added is the option inside the disconnect dialog.
+    await click("Disconnect");
+    const dialog = await screen.findByRole("dialog");
+    const alsoRemove = within(dialog).getByRole("checkbox");
+    expect((alsoRemove as HTMLInputElement).checked).toBe(true);
+    await user.click(within(dialog).getByRole("button", { name: "Disconnect" }));
     await waitFor(() => expect(cleaned).toHaveLength(1));
 
     expect(transport.calls.map((call) => call.method)).toEqual(
@@ -90,6 +94,7 @@ describe("Domain.Flow", () => {
         "cleanup.plan",
         "cleanup.approve",
         "cleanup.apply",
+        "connection.disconnect",
       ]),
     );
   });
@@ -211,6 +216,120 @@ describe("Domain.Flow", () => {
     );
     await screen.findByTestId("host-panel");
     expect(screen.getByLabelText(/Token/)).toBeDefined();
+  });
+});
+
+describe("Domain.Flow disconnect", () => {
+  const applied = async () => {
+    const scenarioed = scenario();
+    render(
+      <DomainKit.Root transport={scenarioed.transport}>
+        <Domain.Flow domain={scenarioed.domain} requirements={scenarioed.requirements} />
+      </DomainKit.Root>,
+    );
+    await connect();
+    await click("Review changes");
+    await click("Approve");
+    await screen.findByText("DNS records added.");
+    return scenarioed;
+  };
+
+  const methods = (transport: { readonly calls: ReadonlyArray<{ method: string }> }) =>
+    transport.calls.map((call) => call.method);
+
+  it("removes the records DomainKit added, then releases the connection", async () => {
+    const { transport } = await applied();
+    await click("Disconnect");
+    const dialog = await screen.findByRole("dialog");
+    // Removing what the receipt proves is the option, and it is on until the customer says no.
+    expect((within(dialog).getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
+    await user.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+    await screen.findByText("Owns DNS for this domain.");
+    expect(methods(transport)).toEqual(
+      expect.arrayContaining(["cleanup.plan", "cleanup.approve", "cleanup.apply"]),
+    );
+    expect(methods(transport)).toContain("connection.disconnect");
+    // The records went before the connection did.
+    expect(methods(transport).lastIndexOf("cleanup.apply")).toBeLessThan(
+      methods(transport).lastIndexOf("connection.disconnect"),
+    );
+  });
+
+  it("releases the connection alone when the customer clears the option", async () => {
+    const { transport } = await applied();
+    await click("Disconnect");
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("checkbox"));
+    await user.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+    await screen.findByText("Owns DNS for this domain.");
+    expect(methods(transport)).toContain("connection.disconnect");
+    expect(methods(transport)).not.toContain("cleanup.plan");
+  });
+
+  it("offers no option to remove records for a domain that never applied any", async () => {
+    const { domain, requirements, transport } = scenario();
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await connect();
+    await click("Disconnect");
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByRole("checkbox")).toBeNull();
+  });
+});
+
+describe("Domain.Flow state", () => {
+  it("reports what DomainKit has to say about the domain, and again when it changes", async () => {
+    const { domain, requirements, transport } = scenario();
+    const seen: Array<Domain.FlowState> = [];
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow
+          domain={domain}
+          onState={(state) => seen.push(state)}
+          requirements={requirements}
+        />
+      </DomainKit.Root>,
+    );
+    await waitFor(() => expect(seen.at(-1)?.offering).toBe(true));
+    expect(seen.at(-1)).toMatchObject({ connected: false, offering: true, provider: "fake" });
+    await connect();
+    await waitFor(() => expect(seen.at(-1)?.connected).toBe(true));
+    expect(seen.at(-1)).toMatchObject({
+      connection: "Connected",
+      offering: false,
+      provider: "fake",
+    });
+  });
+
+  it("offers nothing with connect=never and still states a connection it holds", async () => {
+    const { domain, requirements, transport } = scenario();
+    const view = render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow connect="never" domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await screen.findByText("No DNS provider is connected.");
+    expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
+    expect(screen.queryByText("Owns DNS for this domain.")).toBeNull();
+    view.unmount();
+
+    // The same domain, connected: the status and the disconnect stay whatever the invitation says.
+    const connected = render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await connect();
+    connected.rerender(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow connect="never" domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await screen.findByText("fake connected");
+    expect(screen.getByRole("button", { name: "Disconnect" })).toBeDefined();
   });
 });
 

@@ -95,7 +95,7 @@ Each takes one options object and returns a controller whose `state` is a tagged
 | `connection`   | `{ controller, domain, connect }`               | `Connect.Card` once connected, `Connect.Prompt` until then |
 | `records`      | `{ records, readiness, controller, domain }`    | `Records.Table`                                            |
 | `verification` | `{ controller, domain }`                        | `Verify.Status` with per-requirement evidence              |
-| `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline, Remove records           |
+| `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline                           |
 
 <Snippet file="examples/react/slots.tsx" region="one-slot" title="Replacing one slot" />
 
