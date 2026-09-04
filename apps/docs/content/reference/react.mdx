@@ -122,7 +122,14 @@ sentence takes its place.
 ## Styles
 
 Every rule in `@domainkit/react/styles.css` ships inside `@layer domainkit`, which sits below any
-unlayered rule, so a host's own CSS wins without out-specifying a part selector. A host that wants
-the package to win orders a layer of its own below it.
+unlayered rule, so a host's own CSS wins without out-specifying a part selector.
 
-<Snippet file="examples/react/styles.css" region="layer" title="Ordering the layers" />
+A host that uses layers names the order itself. `domainkit` belongs after `base`, because a layer
+sorted under Tailwind's preflight loses the package's buttons to the reset, and before `utilities`,
+so a utility class still wins.
+
+<Snippet
+  file="examples/react/styles.css"
+  region="layer"
+  title="The order that works with Tailwind"
+/>
