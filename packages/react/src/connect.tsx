@@ -1381,6 +1381,8 @@ export function DisconnectDialog({
         />
         <BaseDialog.Popup
           data-color-scheme={colorScheme}
+          // The records it would remove are what needs the room, so the width follows the list.
+          data-cleanup={choosable ? "offered" : "none"}
           data-domainkit-part="disconnect-dialog"
           data-domainkit-root=""
           style={themeStyle}

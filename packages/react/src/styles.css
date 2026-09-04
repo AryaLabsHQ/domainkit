@@ -39,6 +39,9 @@
     --domainkit-quiet-pad: 0.25rem;
     /* The inner room a panel gives its contents: the dialog's form, and the two cards. */
     --domainkit-panel-pad: 0.75rem;
+    /* A dialog that asks one question, and the width a dialog listing records takes instead. */
+    --domainkit-dialog-width: 24rem;
+    --domainkit-dialog-wide: 36rem;
     /* The switch track, the thumb inside it, and the room it keeps at each end of the track. */
     --domainkit-switch-width: 2.25rem;
     --domainkit-switch-height: 1.25rem;
@@ -582,12 +585,20 @@
     transition:
       opacity 150ms ease,
       transform 150ms ease;
-    width: 24rem;
+    width: var(--domainkit-dialog-width);
     z-index: 1001;
   }
 
-  :where([data-domainkit-part="plan-dialog"], [data-domainkit-part="cleanup-dialog"]) {
-    width: 36rem;
+  /*
+   * A dialog that lists records takes the wider width: the plan and the cleanup always do, and the
+   * disconnect dialog does whenever it carries removals to decide over.
+   */
+  :where(
+    [data-domainkit-part="plan-dialog"],
+    [data-domainkit-part="cleanup-dialog"],
+    [data-domainkit-part="disconnect-dialog"][data-cleanup="offered"]
+  ) {
+    --domainkit-dialog-width: var(--domainkit-dialog-wide);
   }
 
   /* The backdrop fades with the dialog it belongs to rather than appearing whole. */

@@ -89,11 +89,22 @@ test("connects, reviews the plan, and approves it", async ({ page }) => {
     "DomainKit stops managing DNS for mail.northwind.dev through Meridian DNS.",
   );
   await expect(disconnect.getByRole("switch")).toBeChecked();
-  // The records it would remove are listed, so the decision is taken over the thing itself.
+  // The records it would remove are listed, so the decision is taken over the thing itself, and
+  // the dialog takes the width the plan dialog takes to list the same records.
   await expect(disconnect.locator("[data-domainkit-part='cleanup-operations'] li")).toHaveCount(3);
   await expect(disconnect.getByText("Remove the 3 records DomainKit added")).toBeVisible();
+  await expect(disconnect).toHaveAttribute("data-cleanup", "offered");
+  await expect(disconnect).toHaveCSS("width", "576px");
   await expect(disconnect).toHaveCSS("opacity", "1");
   await disconnect.screenshot({ path: shot("disconnect-dialog") });
+
+  // Off, the records stay legible and step back, and the dialog keeps its width.
+  await disconnect.getByRole("switch").click();
+  await expect(disconnect.getByRole("switch")).not.toBeChecked();
+  await expect(disconnect.getByText("Records stay in Meridian DNS.")).toBeVisible();
+  await disconnect.screenshot({ path: shot("disconnect-dialog-keep") });
+  await disconnect.getByRole("switch").click();
+  await expect(disconnect.getByRole("switch")).toBeChecked();
   await disconnect.getByRole("button", { name: "Disconnect" }).click();
   await expect(page.getByText("Owns DNS for this domain.")).toBeVisible();
 });
@@ -445,6 +456,9 @@ test("dismisses the connect and disconnect dialogs on an outside press", async (
 
   await page.getByRole("button", { name: "Disconnect" }).click();
   await expect(dialog).toBeVisible();
+  // The plan was set aside rather than applied, so there is nothing to remove and no room needed.
+  await expect(dialog).toHaveAttribute("data-cleanup", "none");
+  await expect(dialog).toHaveCSS("width", "384px");
   await pressOutside(page);
   await expect(dialog).toBeHidden();
 });
