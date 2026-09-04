@@ -109,7 +109,8 @@ raised from a layout effect in the same commit cannot act on the previous domain
 <Snippet file="examples/react/controllers.tsx" region="failure" title="Rendering a failure" />
 
 The failed state carries the `DomainKit.Error` itself, so a host reads `reason`, `category`, and
-`isRetryable` instead of parsing text. `Messages.failure(error, catalog)` picks the sentence.
+`isRetryable` instead of parsing text. `Messages.outcome(error, catalog, context)` picks the title
+and the description; `Messages.failure` joins them into one sentence.
 
 ## Capabilities and permission
 

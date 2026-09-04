@@ -26,6 +26,7 @@
     --domainkit-shadow: 0 16px 40px rgb(15 23 42 / 0.12);
     --domainkit-success: #059669;
     --domainkit-text: #18181b;
+    --domainkit-warning: #b45309;
     --domainkit-control-radius: calc(var(--domainkit-radius) * 0.5);
     --domainkit-button-raised-glint: rgb(255 255 255 / 0.95);
     --domainkit-button-raised-shade: color-mix(in srgb, var(--domainkit-text) 10%, transparent);
@@ -43,6 +44,7 @@
     --domainkit-muted: #a1a1aa;
     --domainkit-shadow: 0 16px 40px rgb(0 0 0 / 0.4);
     --domainkit-success: #34d399;
+    --domainkit-warning: #fbbf24;
     --domainkit-text: #fafafa;
     --domainkit-button-raised-glint: rgb(255 255 255 / 0.14);
     --domainkit-button-raised-shade: rgb(0 0 0 / 0.42);
@@ -58,6 +60,7 @@
       --domainkit-muted: #a1a1aa;
       --domainkit-shadow: 0 16px 40px rgb(0 0 0 / 0.4);
       --domainkit-success: #34d399;
+      --domainkit-warning: #fbbf24;
       --domainkit-text: #fafafa;
       --domainkit-button-raised-glint: rgb(255 255 255 / 0.14);
       --domainkit-button-raised-shade: rgb(0 0 0 / 0.42);
@@ -748,8 +751,8 @@
   }
 
   :where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="records-panel"]),
-  :where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="flow-outcome"]),
-  :where([data-domainkit-part="cleanup-flow"] > [data-domainkit-part="flow-outcome"]) {
+  :where([data-domainkit-part="provisioning-flow"] > [data-domainkit-part="outcome"]),
+  :where([data-domainkit-part="cleanup-flow"] > [data-domainkit-part="outcome"]) {
     flex: 1 1 100%;
   }
 
@@ -1175,18 +1178,111 @@
     gap: 0.5rem;
   }
 
-  :where([data-domainkit-part="flow-outcome"]) {
+  /* -------------------------------------------------------------------------------------------
+   * Outcome: media, title, description, and the action, in a card or on one line
+   * ----------------------------------------------------------------------------------------- */
+
+  :where([data-domainkit-part="outcome"]) {
+    --domainkit-outcome-tone: var(--domainkit-danger);
+    color: var(--domainkit-text);
     font-size: 0.875rem;
-    margin: 0;
     width: 100%;
   }
 
-  :where([data-domainkit-part="flow-outcome"][data-tone="success"]) {
-    color: var(--domainkit-success);
+  :where([data-domainkit-part="outcome"][data-tone="success"]) {
+    --domainkit-outcome-tone: var(--domainkit-success);
   }
 
-  :where([data-domainkit-part="flow-outcome"][data-tone="danger"]) {
-    color: var(--domainkit-danger);
+  :where([data-domainkit-part="outcome"][data-tone="warning"]) {
+    --domainkit-outcome-tone: var(--domainkit-warning);
+  }
+
+  :where([data-domainkit-part="outcome"][data-layout="card"]) {
+    border: 1px dashed color-mix(in srgb, var(--domainkit-outcome-tone) 45%, transparent);
+    border-radius: var(--domainkit-radius);
+    display: grid;
+    gap: 0.75rem;
+    justify-items: center;
+    padding: 1.25rem 1rem;
+    text-align: center;
+  }
+
+  :where([data-domainkit-part="outcome"][data-layout="inline"]) {
+    align-items: center;
+    column-gap: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 0.35rem;
+  }
+
+  :where([data-domainkit-part="outcome-header"]) {
+    display: grid;
+    gap: 0.25rem;
+    justify-items: inherit;
+  }
+
+  :where(
+    [data-domainkit-part="outcome"][data-layout="card"] [data-domainkit-part="outcome-header"]
+  ) {
+    gap: 0.35rem;
+    max-width: 26rem;
+  }
+
+  :where([data-domainkit-part="outcome-media"]) {
+    align-items: center;
+    color: var(--domainkit-outcome-tone);
+    display: inline-flex;
+    justify-content: center;
+  }
+
+  :where([data-domainkit-part="outcome-media"] svg) {
+    height: 1.25rem;
+    width: 1.25rem;
+  }
+
+  :where([data-domainkit-part="outcome-media"][data-variant="icon"]) {
+    background: color-mix(in srgb, var(--domainkit-outcome-tone) 12%, transparent);
+    border-radius: var(--domainkit-control-radius);
+    height: 2.25rem;
+    width: 2.25rem;
+  }
+
+  :where(
+    [data-domainkit-part="outcome"][data-layout="inline"]
+      [data-domainkit-part="outcome-media"][data-variant="icon"]
+  ) {
+    background: none;
+    height: 1.25rem;
+    width: 1.25rem;
+  }
+
+  :where([data-domainkit-part="outcome-title"]) {
+    color: var(--domainkit-text);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  :where([data-domainkit-part="outcome-description"]) {
+    color: var(--domainkit-muted);
+    font-size: 0.8125rem;
+    margin: 0;
+  }
+
+  :where([data-domainkit-part="outcome-content"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  :where(
+    [data-domainkit-part="outcome"][data-layout="inline"] [data-domainkit-part="outcome-header"]
+  ) {
+    align-items: center;
+    column-gap: 0.5rem;
+    display: flex;
+    flex: 1 1 12rem;
+    flex-wrap: wrap;
+    row-gap: 0.15rem;
   }
 
   :where([data-domainkit-part]:focus-visible) {

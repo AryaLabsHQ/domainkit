@@ -161,3 +161,34 @@ test("takes theme tokens and the color scheme from the root", async ({ page }) =
   await expect(root).toHaveCSS("--domainkit-accent", "#4f46e5");
   await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("dark") });
 });
+
+test("renders an outcome as a card, as an inline row, and in a host's own composition", async ({
+  page,
+}) => {
+  await page.goto("/?zone=browser11.example&view=outcome");
+  const outcomes = page.getByTestId("outcomes");
+  await expect(outcomes.getByRole("alert")).toHaveCount(3);
+
+  const card = page.getByTestId("outcome-card").locator("[data-domainkit-part='outcome']");
+  await expect(card).toHaveAttribute("data-layout", "card");
+  await expect(card).toHaveAttribute("data-tone", "danger");
+  await expect(card.locator("[data-domainkit-part='outcome-media']")).toBeVisible();
+  await expect(card.locator("[data-domainkit-part='outcome-title']")).toContainText(
+    "didn't accept this token",
+  );
+  await expect(card.getByRole("button", { name: "Try again" })).toBeVisible();
+  await card.screenshot({ path: shot("outcome-card") });
+
+  const inline = page.getByTestId("outcome-inline").locator("[data-domainkit-part='outcome']");
+  await expect(inline).toHaveAttribute("data-layout", "inline");
+  await inline.screenshot({ path: shot("outcome-inline") });
+
+  // A host brings its own media and drops the header; the words still come from the catalog.
+  const host = page.getByTestId("outcome-host").locator("[data-domainkit-part='outcome']");
+  await expect(host.getByTestId("host-media")).toBeVisible();
+  await expect(host.locator("[data-domainkit-part='outcome-header']")).toHaveCount(0);
+  await expect(host.locator("[data-domainkit-part='outcome-title']")).toContainText(
+    "didn't accept this token",
+  );
+  await host.screenshot({ path: shot("outcome-host") });
+});

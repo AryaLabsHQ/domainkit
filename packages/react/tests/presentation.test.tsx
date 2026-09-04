@@ -1,8 +1,9 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { DnsRecord, DomainKit as Kit, Plan, Reason } from "domainkit";
 import type { Transport } from "domainkit/client";
 
-import { Connect, DomainKit, Messages, Provider, Records, Testing } from "../src/index.ts";
+import { Connect, DomainKit, Messages, Outcome, Provider, Records, Testing } from "../src/index.ts";
 
 const reasons: ReadonlyArray<Reason.Model> = [
   new Reason.InvalidInput({ field: "accountId", message: "must not be empty" }),
@@ -34,6 +35,8 @@ const provider: Provider.Descriptor = {
 
 const transport: Transport.Interface = Testing.transport({ capabilities: ["connection"] });
 
+const user = userEvent.setup({ delay: null });
+
 describe("Messages", () => {
   it("renders a sentence for every failure reason and never its tag", () => {
     for (const reason of reasons) {
@@ -42,6 +45,24 @@ describe("Messages", () => {
       expect(text).not.toBe(reason._tag);
       expect(text).toMatch(/\s/);
     }
+  });
+
+  it("gives every failure reason a title and a description written for the customer", () => {
+    for (const reason of reasons) {
+      const words = Messages.outcome(new Kit.Error({ reason }), Messages.english);
+      expect(words.title).not.toBe(reason._tag);
+      expect(words.title.length).toBeGreaterThan(0);
+      expect(words.description.length).toBeGreaterThan(0);
+      // A title is a heading, so it carries no full stop.
+      expect(words.title.endsWith(".")).toBe(false);
+    }
+  });
+
+  it("names the provider the customer acted on when the reason cannot", () => {
+    const error = new Kit.Error({ reason: new Reason.Unauthenticated({ message: "bad token" }) });
+    expect(Messages.outcome(error, Messages.english, { provider: "Cloudflare" }).title).toBe(
+      "Cloudflare didn't accept this token",
+    );
   });
 
   it("names every plan operation, conflict reason, and attempt status", () => {
@@ -99,6 +120,84 @@ describe("Messages", () => {
       </DomainKit.Root>,
     );
     expect(screen.getByRole("button", { name: "Link DNS" })).toBeDefined();
+  });
+});
+
+describe("Outcome", () => {
+  const failing = () => {
+    const controller = Connect.useController({ domain: "app.outcome.example" });
+    return controller;
+  };
+
+  it("renders media, title, description, and the retry as one composition", async () => {
+    function Panel() {
+      const controller = failing();
+      return (
+        <>
+          <button
+            onClick={() =>
+              controller.connect({ method: "token", provider: "absent", values: { token: "x" } })
+            }
+            type="button"
+          >
+            go
+          </button>
+          <Connect.Outcome controller={controller} />
+        </>
+      );
+    }
+    render(
+      <DomainKit.Root transport={transport}>
+        <Panel />
+      </DomainKit.Root>,
+    );
+    await user.click(screen.getByRole("button", { name: "go" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.getAttribute("data-domainkit-part")).toBe("outcome");
+    expect(alert.getAttribute("data-layout")).toBe("card");
+    expect(alert.getAttribute("data-tone")).toBe("danger");
+    for (const part of ["outcome-media", "outcome-title", "outcome-description", "outcome-content"])
+      expect(alert.querySelector(`[data-domainkit-part='${part}']`)).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeDefined();
+  });
+
+  it("keeps the catalog's words when a host brings its own media and layout", async () => {
+    function Panel() {
+      const controller = failing();
+      return (
+        <>
+          <button
+            onClick={() =>
+              controller.connect({ method: "token", provider: "absent", values: { token: "x" } })
+            }
+            type="button"
+          >
+            go
+          </button>
+          <Connect.Outcome controller={controller} layout="inline">
+            <Outcome.Media>
+              <span data-testid="host-media" />
+            </Outcome.Media>
+            <Outcome.Title />
+            <Outcome.Description />
+            <Outcome.Content />
+          </Connect.Outcome>
+        </>
+      );
+    }
+    render(
+      <DomainKit.Root transport={transport}>
+        <Panel />
+      </DomainKit.Root>,
+    );
+    await user.click(screen.getByRole("button", { name: "go" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.getAttribute("data-layout")).toBe("inline");
+    expect(screen.getByTestId("host-media")).toBeDefined();
+    expect(alert.querySelector("[data-domainkit-part='outcome-title']")?.textContent).toBe(
+      "That provider no longer exists",
+    );
+    expect(alert.querySelector("[data-domainkit-part='outcome-header']")).toBeNull();
   });
 });
 

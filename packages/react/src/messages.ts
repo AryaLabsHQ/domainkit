@@ -92,9 +92,11 @@ export interface Catalog {
   // Receipts
   readonly applied: (receipt: Receipt.Model) => string;
   readonly cleaned: (receipt: Receipt.Model) => string;
+  readonly partiallyAppliedTitle: string;
   readonly partiallyApplied: string;
+  readonly partiallyCleanedTitle: string;
   readonly partiallyCleaned: string;
-  readonly outcome: (outcome: Receipt.Outcome) => string;
+  readonly receiptOutcome: (outcome: Receipt.Outcome) => string;
   readonly skippedReason: (reason: Receipt.Skipped["reason"]) => string;
 
   // Verification
@@ -112,23 +114,42 @@ export interface Catalog {
   readonly hostEvidence: string;
   readonly noEvidence: string;
 
-  // Failures, rendered from the error's reason
-  readonly invalidInput: (reason: Reason.InvalidInput) => string;
-  readonly unauthenticated: (reason: Reason.Unauthenticated) => string;
-  readonly forbidden: (reason: Reason.Forbidden) => string;
-  readonly notFound: (reason: Reason.NotFound) => string;
-  readonly conflict: (reason: Reason.Conflict) => string;
-  readonly stale: (reason: Reason.Stale) => string;
-  readonly expired: (reason: Reason.Expired) => string;
-  readonly busy: (reason: Reason.Busy) => string;
-  readonly providerRejected: (reason: Reason.ProviderRejected) => string;
-  readonly providerUnavailable: (reason: Reason.ProviderUnavailable) => string;
-  readonly providerConflict: (reason: Reason.ProviderConflict) => string;
-  readonly unsupported: (reason: Reason.Unsupported) => string;
-  readonly reconnect: (reason: Reason.Reconnect) => string;
-  readonly storageFailed: (reason: Reason.StorageFailed) => string;
-  readonly cryptoFailed: (reason: Reason.CryptoFailed) => string;
-  readonly resolverFailed: (reason: Reason.ResolverFailed) => string;
+  // Failures, rendered from the error's reason: a heading and the sentence under it
+  readonly invalidInput: (reason: Reason.InvalidInput, context: OutcomeContext) => Outcome;
+  readonly unauthenticated: (reason: Reason.Unauthenticated, context: OutcomeContext) => Outcome;
+  readonly forbidden: (reason: Reason.Forbidden, context: OutcomeContext) => Outcome;
+  readonly notFound: (reason: Reason.NotFound, context: OutcomeContext) => Outcome;
+  readonly conflict: (reason: Reason.Conflict, context: OutcomeContext) => Outcome;
+  readonly stale: (reason: Reason.Stale, context: OutcomeContext) => Outcome;
+  readonly expired: (reason: Reason.Expired, context: OutcomeContext) => Outcome;
+  readonly busy: (reason: Reason.Busy, context: OutcomeContext) => Outcome;
+  readonly providerRejected: (reason: Reason.ProviderRejected, context: OutcomeContext) => Outcome;
+  readonly providerUnavailable: (
+    reason: Reason.ProviderUnavailable,
+    context: OutcomeContext,
+  ) => Outcome;
+  readonly providerConflict: (reason: Reason.ProviderConflict, context: OutcomeContext) => Outcome;
+  readonly unsupported: (reason: Reason.Unsupported, context: OutcomeContext) => Outcome;
+  readonly reconnect: (reason: Reason.Reconnect, context: OutcomeContext) => Outcome;
+  readonly storageFailed: (reason: Reason.StorageFailed, context: OutcomeContext) => Outcome;
+  readonly cryptoFailed: (reason: Reason.CryptoFailed, context: OutcomeContext) => Outcome;
+  readonly resolverFailed: (reason: Reason.ResolverFailed, context: OutcomeContext) => Outcome;
+}
+
+/** What an outcome says: a heading the customer reads first, then what to do about it. */
+export interface Outcome {
+  readonly title: string;
+  readonly description: string;
+}
+
+/**
+ * What the flow was doing when it failed. The reason alone cannot name the provider a customer
+ * typed a token for, so the part that renders the outcome supplies it.
+ */
+export interface OutcomeContext {
+  /** The provider's display name, when the flow knows which one the customer acted on. */
+  readonly provider?: string;
+  readonly domain?: string;
 }
 
 /** The evidence shapes `Verify` produces, structurally, so the catalog needs no service import. */
@@ -167,6 +188,12 @@ const recordTypes: Readonly<Record<Exclude<DnsRecord.Observed["_tag"], "Opaque">
   SRV: "SRV",
   TXT: "TXT",
 };
+
+/** The provider the customer acted on, or a neutral stand-in when the flow does not know it. */
+const named = (provider: string | undefined): string => provider ?? "The provider";
+
+/** The domain the failure is about, or a neutral stand-in. */
+const where = (domain: string | undefined): string => domain ?? "this domain";
 
 /** `accountId` reads as "Account id" until a host names the field itself. */
 const humanize = (name: string): string => {
@@ -304,9 +331,11 @@ export const english: Catalog = {
     receipt.status === "complete" ? "DNS records added." : "Some DNS records were not added.",
   cleaned: (receipt) =>
     receipt.status === "complete" ? "DNS records removed." : "Some DNS records were not removed.",
-  partiallyApplied: "Some DNS changes failed. Review and retry safely.",
-  partiallyCleaned: "Some DNS records could not be deleted. Review and retry safely.",
-  outcome: (outcome) => {
+  partiallyAppliedTitle: "Some DNS changes did not land",
+  partiallyApplied: "Review what applied, then retry. Retrying is safe.",
+  partiallyCleanedTitle: "Some DNS records are still there",
+  partiallyCleaned: "Review what is left, then retry. Retrying is safe.",
+  receiptOutcome: (outcome) => {
     switch (outcome._tag) {
       case "Applied":
         return "Done";
@@ -377,65 +406,129 @@ export const english: Catalog = {
   hostEvidence: "Other checks",
   noEvidence: "Nothing has been checked yet.",
 
-  invalidInput: (reason) =>
-    reason.field === undefined ? reason.message : `${humanize(reason.field)}: ${reason.message}`,
-  unauthenticated: () => "The provider rejected these credentials.",
-  forbidden: () => "You do not have access to this domain.",
-  notFound: (reason) => `That ${entity[reason.entity]} no longer exists.`,
-  conflict: (reason) =>
-    reason.operations.length === 1
-      ? "One DNS record conflicts with what is already in the zone."
-      : `${reason.operations.length} DNS records conflict with what is already in the zone.`,
-  stale: () => "The zone changed while you were reviewing. Build a new plan.",
-  expired: (reason) => `That ${expiredEntity[reason.entity]} expired. Start again.`,
-  busy: () => "Another change is running. Try again in a moment.",
-  providerRejected: (reason) => `${reason.provider} refused the change: ${reason.message}`,
-  providerUnavailable: (reason) => `${reason.provider} is unreachable right now.`,
-  providerConflict: (reason) => `${reason.provider} already holds a conflicting record.`,
-  unsupported: (reason) => `${reason.provider} cannot ${reason.operation}.`,
-  reconnect: (reason) => `Reconnect ${reason.provider} to continue.`,
-  storageFailed: () => "The change could not be saved. Try again.",
-  cryptoFailed: () => "A stored credential could not be read.",
-  resolverFailed: (reason) => `DNS lookups through ${reason.resolver} failed.`,
+  invalidInput: (reason) => ({
+    description: reason.message,
+    title:
+      reason.field === undefined
+        ? "Check what you entered"
+        : `Check the ${humanize(reason.field).toLowerCase()}`,
+  }),
+  unauthenticated: (_reason, context) => ({
+    description: "Check the token can read and edit DNS for this zone, then try again.",
+    title: `${named(context.provider)} didn't accept this token`,
+  }),
+  forbidden: (_reason, context) => ({
+    description: `The connection needs permission to edit DNS for ${where(context.domain)}.`,
+    title: "This connection can't change DNS here",
+  }),
+  notFound: (reason) => ({
+    description: "Reload the page and start this step again.",
+    title: `That ${entity[reason.entity]} no longer exists`,
+  }),
+  conflict: (reason) => ({
+    description: "Review what the zone already holds, then build a new plan.",
+    title:
+      reason.operations.length === 1
+        ? "A record is in the way"
+        : `${reason.operations.length} records are in the way`,
+  }),
+  stale: () => ({
+    description: "Review the new plan before you apply it.",
+    title: "The zone changed since you reviewed",
+  }),
+  expired: (reason) => ({
+    description: "Start this step again.",
+    title: `That ${expiredEntity[reason.entity]} expired`,
+  }),
+  busy: () => ({
+    description: "Wait for it to finish, then try again.",
+    title: "Another change is running",
+  }),
+  providerRejected: (reason, context) => ({
+    description: reason.message,
+    title: `${named(context.provider ?? reason.provider)} refused the change`,
+  }),
+  providerUnavailable: (reason, context) => ({
+    description: "Nothing changed. Try again in a minute.",
+    title: `${named(context.provider ?? reason.provider)} isn't responding`,
+  }),
+  providerConflict: (reason, context) => ({
+    description: "Remove or rename that record at the provider, then try again.",
+    title: `${named(context.provider ?? reason.provider)} already holds a conflicting record`,
+  }),
+  unsupported: (reason, context) => ({
+    description: "Nothing changed. This step needs a provider that can do it.",
+    title: `${named(context.provider ?? reason.provider)} cannot ${reason.operation}`,
+  }),
+  reconnect: (reason, context) => ({
+    description: "The stored credential no longer works. Connect again to continue.",
+    title: `Reconnect ${named(context.provider ?? reason.provider)}`,
+  }),
+  storageFailed: () => ({
+    description: "Nothing changed. Try again.",
+    title: "The change could not be saved",
+  }),
+  cryptoFailed: () => ({
+    description: "Connect the provider again to replace it.",
+    title: "A stored credential could not be read",
+  }),
+  resolverFailed: (reason) => ({
+    description: "The lookup failed, which says nothing about your DNS. Try again in a moment.",
+    title: `DNS lookups through ${reason.resolver} failed`,
+  }),
 };
 
 export const merge = (overrides: Partial<Catalog> = {}): Catalog => ({ ...english, ...overrides });
 
-/** The user-facing sentence for a failure, chosen by the error's reason. */
-export const failure = (error: DomainKit.Error, catalog: Catalog): string => {
+/** The title and description for a failure, chosen by the error's reason. */
+export const outcome = (
+  error: DomainKit.Error,
+  catalog: Catalog,
+  context: OutcomeContext = {},
+): Outcome => {
   const reason = error.reason;
   switch (reason._tag) {
     case "InvalidInput":
-      return catalog.invalidInput(reason);
+      return catalog.invalidInput(reason, context);
     case "Unauthenticated":
-      return catalog.unauthenticated(reason);
+      return catalog.unauthenticated(reason, context);
     case "Forbidden":
-      return catalog.forbidden(reason);
+      return catalog.forbidden(reason, context);
     case "NotFound":
-      return catalog.notFound(reason);
+      return catalog.notFound(reason, context);
     case "Conflict":
-      return catalog.conflict(reason);
+      return catalog.conflict(reason, context);
     case "Stale":
-      return catalog.stale(reason);
+      return catalog.stale(reason, context);
     case "Expired":
-      return catalog.expired(reason);
+      return catalog.expired(reason, context);
     case "Busy":
-      return catalog.busy(reason);
+      return catalog.busy(reason, context);
     case "ProviderRejected":
-      return catalog.providerRejected(reason);
+      return catalog.providerRejected(reason, context);
     case "ProviderUnavailable":
-      return catalog.providerUnavailable(reason);
+      return catalog.providerUnavailable(reason, context);
     case "ProviderConflict":
-      return catalog.providerConflict(reason);
+      return catalog.providerConflict(reason, context);
     case "Unsupported":
-      return catalog.unsupported(reason);
+      return catalog.unsupported(reason, context);
     case "Reconnect":
-      return catalog.reconnect(reason);
+      return catalog.reconnect(reason, context);
     case "StorageFailed":
-      return catalog.storageFailed(reason);
+      return catalog.storageFailed(reason, context);
     case "CryptoFailed":
-      return catalog.cryptoFailed(reason);
+      return catalog.cryptoFailed(reason, context);
     case "ResolverFailed":
-      return catalog.resolverFailed(reason);
+      return catalog.resolverFailed(reason, context);
   }
+};
+
+/** The same failure as one sentence, for a host that renders text rather than a card. */
+export const failure = (
+  error: DomainKit.Error,
+  catalog: Catalog,
+  context: OutcomeContext = {},
+): string => {
+  const { description, title } = outcome(error, catalog, context);
+  return `${title}. ${description}`;
 };

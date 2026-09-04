@@ -15,6 +15,7 @@ export interface Theme {
   readonly shadow?: string;
   readonly success?: string;
   readonly text?: string;
+  readonly warning?: string;
 }
 
 const variables = {
@@ -32,6 +33,7 @@ const variables = {
   shadow: "--domainkit-shadow",
   success: "--domainkit-success",
   text: "--domainkit-text",
+  warning: "--domainkit-warning",
 } as const satisfies Record<keyof Theme, string>;
 
 export function toStyle(theme: Theme = {}): CSSProperties {

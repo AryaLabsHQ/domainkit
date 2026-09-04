@@ -1,9 +1,19 @@
 import type { DnsRecord } from "domainkit";
-import { Cleanup, Connect, Domain, Provider, Provision, Records, Verify } from "@domainkit/react";
+import {
+  Cleanup,
+  Connect,
+  Domain,
+  Outcome,
+  Provider,
+  Provision,
+  Records,
+  Verify,
+} from "@domainkit/react";
 
 declare const domain: string;
 declare const requirements: ReadonlyArray<DnsRecord.Model>;
 declare const provider: Provider.Descriptor;
+declare function MyIcon(): React.ReactElement;
 
 // #region domain-flow
 export function DomainSetup() {
@@ -54,6 +64,25 @@ export function DnsStatus() {
   return <Verify.Status controller={controller} />;
 }
 // #endregion verification
+
+// #region outcome
+/** The default composition, then one the host writes itself. Both take their words from the catalog. */
+export function ConnectionOutcome() {
+  const controller = Connect.useController({ domain });
+  return (
+    <>
+      <Connect.Outcome controller={controller} />
+      <Connect.Outcome controller={controller} layout="inline">
+        <Outcome.Media variant="default">
+          <MyIcon />
+        </Outcome.Media>
+        <Outcome.Title />
+        <Outcome.Content />
+      </Connect.Outcome>
+    </>
+  );
+}
+// #endregion outcome
 
 // #region provider-mark
 export function ProviderIdentity() {

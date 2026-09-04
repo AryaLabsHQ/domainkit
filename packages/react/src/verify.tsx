@@ -18,7 +18,8 @@ import { usePart } from "./composition.tsx";
 import { useDomainKit } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
 import { useIcons } from "./icons.tsx";
-import { failure as describeFailure } from "./messages.ts";
+import { outcome as describeOutcome } from "./messages.ts";
+import * as OutcomeUi from "./outcome.tsx";
 import { identity, requirementsKey, Status as RecordStatus } from "./records.tsx";
 import { useRunner } from "./task.ts";
 
@@ -272,37 +273,33 @@ export function Evidence({ readiness }: EvidenceProps): ReactElement {
   );
 }
 
-export interface OutcomeProps extends PartProps<"p", RootState> {
+export interface OutcomeProps extends OutcomeUi.RootProps {
   readonly controller: Controller;
 }
 
-export function Outcome({ controller, ...props }: OutcomeProps): ReactElement | null {
+/**
+ * The last observation that failed. Observing reads the world rather than changing the domain, so
+ * the retry stays even in read-only.
+ */
+export function Outcome({ children, controller, ...props }: OutcomeProps): ReactElement | null {
   const { messages } = useDomainKit();
   const state = controller.state;
-  const element = usePart(
-    "p",
-    props,
-    { status: state._tag },
-    {
-      children:
-        state._tag === "Failure" ? (
-          <>
-            {describeFailure(state.error, messages)}{" "}
-            <button
-              data-domainkit-part="verification-retry"
-              onClick={controller.retry}
-              type="button"
-            >
-              {messages.retry}
-            </button>
-          </>
-        ) : null,
-      "data-domainkit-part": "flow-outcome",
-      "data-tone": "danger",
-      role: "alert",
-    },
+  if (state._tag !== "Failure") return null;
+  const words = describeOutcome(state.error, messages);
+  return (
+    <OutcomeUi.Provider
+      value={{
+        description: words.description,
+        layout: props.layout ?? "card",
+        retry: controller.retry,
+        retryPart: "verification-retry",
+        title: words.title,
+        tone: "danger",
+      }}
+    >
+      <OutcomeUi.Root {...props}>{children ?? <OutcomeUi.Composition />}</OutcomeUi.Root>
+    </OutcomeUi.Provider>
   );
-  return state._tag === "Failure" ? element : null;
 }
 
 export interface StatusProps extends Omit<RootProps, "render"> {

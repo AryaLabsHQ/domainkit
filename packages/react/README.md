@@ -121,8 +121,8 @@ one is gone, and re-runs the failed step otherwise.
 ## Presentation
 
 `DomainKit.Root` takes `messages`, `marks`, `icons`, `theme`, `colorScheme`, and `portalContainer`,
-so branding stays in your app. `Messages.Catalog` holds every user-visible string, including one
-sentence per `DomainKit.Error` reason; nothing renders a tag. Provider artwork comes from `marks`,
+so branding stays in your app. `Messages.Catalog` holds every user-visible string, including a
+title and a description per `DomainKit.Error` reason; nothing renders a tag. Provider artwork comes from `marks`,
 with the provider's initial as the fallback and no request at render time. The stylesheet is
 opt-in and every color is a `--domainkit-*` custom property.
 
@@ -146,6 +146,20 @@ still wins. Any layer you declare after it wins the same way:
     border-radius: 0;
   }
 }
+```
+
+A failed step renders as `Outcome`: media, the catalog's title and description, and the retry the
+flow allows, as a card or on one line. Pass your own parts as children and the words still come from
+the catalog.
+
+```tsx
+<Connect.Outcome controller={connection} layout="inline">
+  <Outcome.Media variant="default">
+    <MyIcon />
+  </Outcome.Media>
+  <Outcome.Title />
+  <Outcome.Content />
+</Connect.Outcome>
 ```
 
 Every dialog and popover takes a `render` prop that replaces the surface with your own.

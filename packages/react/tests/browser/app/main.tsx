@@ -9,7 +9,14 @@ import * as Effect from "effect/Effect";
 import { StrictMode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { Connect, Domain, DomainKit, Testing, Verify as VerifyUi } from "../../../src/index.ts";
+import {
+  Connect,
+  Domain,
+  DomainKit,
+  Outcome,
+  Testing,
+  Verify as VerifyUi,
+} from "../../../src/index.ts";
 // oxlint-disable-next-line import/no-unassigned-import -- a stylesheet has nothing to bind
 import "../../../src/styles.css";
 
@@ -105,6 +112,39 @@ const mismatched: Transport.Readiness = {
   ],
 };
 
+/**
+ * The outcome in the three shapes a host meets it: the default card, the inline row, and a
+ * composition of the host's own where only the words come from the catalog.
+ */
+function Outcomes() {
+  const controller = Connect.useController({ domain });
+  const connect = controller.connect;
+  // The fake provider refuses an empty token, so the failure comes off the real lifecycle.
+  useEffect(() => {
+    connect({ method: "token", provider: "fake", values: { token: "" } });
+  }, [connect]);
+  return (
+    <div data-testid="outcomes">
+      <div data-testid="outcome-card">
+        <Connect.Outcome controller={controller} />
+      </div>
+      <div data-testid="outcome-inline">
+        <Connect.Outcome controller={controller} layout="inline" />
+      </div>
+      <div data-testid="outcome-host">
+        <Connect.Outcome controller={controller} layout="inline">
+          <Outcome.Media variant="default">
+            <span data-testid="host-media">!</span>
+          </Outcome.Media>
+          <Outcome.Title />
+          <Outcome.Description />
+          <Outcome.Content />
+        </Connect.Outcome>
+      </div>
+    </div>
+  );
+}
+
 const container = document.querySelector("#root");
 if (container === null) throw new Error("The fixture has no #root");
 
@@ -156,7 +196,9 @@ createRoot(container).render(
       <FetchProbe />
     ) : (
       <DomainKit.Root colorScheme={colorScheme} theme={{ accent: "#4f46e5" }} transport={transport}>
-        {view === "evidence" ? (
+        {view === "outcome" ? (
+          <Outcomes />
+        ) : view === "evidence" ? (
           <VerifyUi.Evidence readiness={mismatched} />
         ) : (
           <FlowWithReadOnlyToggle />

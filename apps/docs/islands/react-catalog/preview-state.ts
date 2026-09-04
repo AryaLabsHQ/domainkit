@@ -22,6 +22,7 @@ export const stories = [
   "cleanup",
   "connect",
   "domain-flow",
+  "outcome",
   "provider-mark",
   "provision",
   "record-card",

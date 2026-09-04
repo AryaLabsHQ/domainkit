@@ -5,6 +5,7 @@ import {
   Connect,
   Domain,
   DomainKit,
+  Outcome,
   Provider,
   Provision,
   Records,
@@ -49,6 +50,38 @@ function Verification({ domain }: { readonly domain: string }) {
   return <Verify.Status controller={controller} />;
 }
 
+/**
+ * The outcome in the three shapes a host meets it: the default card, the inline row, and a
+ * composition of the host's own where only the words come from the catalog. The failure is real:
+ * the fake provider refuses an empty token.
+ */
+function Outcomes({
+  domain,
+  providerId,
+}: {
+  readonly domain: string;
+  readonly providerId: string;
+}) {
+  const controller = Connect.useController({ domain });
+  const connect = controller.connect;
+  useEffect(() => {
+    connect({ method: "token", provider: providerId, values: { token: "" } });
+  }, [connect, providerId]);
+  return (
+    <div data-preview-stack="">
+      <Connect.Outcome controller={controller} />
+      <Connect.Outcome controller={controller} layout="inline" />
+      <Connect.Outcome controller={controller} layout="inline">
+        <Outcome.Media variant="default">
+          <span aria-hidden="true">!</span>
+        </Outcome.Media>
+        <Outcome.Title />
+        <Outcome.Content />
+      </Connect.Outcome>
+    </div>
+  );
+}
+
 function ProviderMark({ providerId }: { readonly providerId: string }) {
   const connection = Connect.useController({ domain: `app.${previewZone}` });
   const provider = connection.providers.find((candidate) => candidate.id === providerId);
@@ -89,6 +122,8 @@ function Story({ state }: { readonly state: PreviewState }) {
       );
     case "verification":
       return <Verification domain={domain} />;
+    case "outcome":
+      return <Outcomes domain={domain} providerId={providerId} />;
     case "provider-mark":
       return <ProviderMark providerId={providerId} />;
     case "slots":

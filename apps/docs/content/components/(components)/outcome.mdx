@@ -1,0 +1,66 @@
+---
+title: Outcome
+description: Render a failed step as media, a title, a description, and the action that follows, in a card or on one line, with the words coming from the message catalog.
+---
+
+Every flow ends a failed step in an `Outcome`: what happened, what to do about it, and the retry the
+flow allows. `Connect.Outcome`, `Provision.Outcome`, `Cleanup.Outcome`, and `Verify.Outcome` bind
+their controller to the same parts, so a failure reads the same way everywhere.
+
+<ReactExample story="outcome" />
+
+## Usage
+
+<Snippet file="examples/react/catalog.tsx" region="outcome" title="An outcome, twice" />
+
+## Anatomy
+
+| Part                  | Renders                                                        |
+| --------------------- | -------------------------------------------------------------- |
+| `Outcome.Root`        | The panel, with `data-layout`, `data-tone`, and `role="alert"` |
+| `Outcome.Header`      | Media, title, and description together                         |
+| `Outcome.Media`       | The glyph for the tone, framed (`icon`) or bare (`default`)    |
+| `Outcome.Title`       | The catalog's heading for the reason                           |
+| `Outcome.Description` | The catalog's sentence about what to do next                   |
+| `Outcome.Content`     | The actions, starting with the flow's retry                    |
+
+`X.Outcome` with no children renders that composition. With children it renders yours, and the
+binding stays: `Outcome.Title` and `Outcome.Description` still read the catalog, and
+`Outcome.Content` still holds the flow's retry.
+
+## Layout and tone
+
+`layout="card"` is a dashed panel with the media above the words, for a flow that has room.
+`layout="inline"` puts the media, the title, and the action on one line, for the row under a form
+field or beside a step in progress.
+
+`data-tone` is `danger` for a failure and `warning` for a receipt that only partly landed. Each tone
+draws its own glyph from `icons` on `DomainKit.Root` and colours itself from
+`--domainkit-danger`, `--domainkit-warning`, and `--domainkit-success`.
+
+## Words
+
+`Messages.outcome(error, catalog, context)` returns the `{ title, description }` pair for a reason.
+The context names the provider the customer acted on, which is what lets a rejected token read
+"Cloudflare didn't accept this token" rather than naming an HTTP status. `Messages.failure` returns
+the same pair as one sentence, for a host that renders text rather than a card.
+
+Override one reason on `DomainKit.Root`:
+
+```tsx
+<DomainKit.Root
+  messages={{
+    unauthenticated: (_reason, context) => ({
+      title: `${context.provider ?? "That provider"} turned down the token`,
+      description: "Create a token with DNS edit rights and paste it again.",
+    }),
+  }}
+  transport={transport}
+/>
+```
+
+## Read-only
+
+A retry is a write, so `Outcome.Content` renders nothing when the flow is read-only and the failure
+stays on screen. Verification is the exception: observing reads the world rather than changing the
+domain, so its retry stays.

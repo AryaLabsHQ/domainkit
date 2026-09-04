@@ -10,7 +10,8 @@ import { usePart } from "./composition.tsx";
 import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
 import { useIcons } from "./icons.tsx";
-import { failure as describeFailure } from "./messages.ts";
+import { outcome as describeOutcome } from "./messages.ts";
+import * as OutcomeUi from "./outcome.tsx";
 import * as Provider from "./provider.tsx";
 import { useRunner } from "./task.ts";
 
@@ -338,44 +339,36 @@ export function Root({ controller, ...props }: RootProps): ReactElement {
   );
 }
 
-export interface OutcomeProps extends PartProps<"p", RootState> {
+export interface OutcomeProps extends OutcomeUi.RootProps {
   readonly controller: Controller;
 }
 
-/** The failure sentence, chosen by the error's reason, plus the retry that reason allows. */
-export function Outcome({ controller, ...props }: OutcomeProps): ReactElement | null {
+/**
+ * The last failure as a card: media, the catalog's title and description, and the retry the flow
+ * allows. Children replace the composition and keep the binding.
+ */
+export function Outcome({ children, controller, ...props }: OutcomeProps): ReactElement | null {
   const { messages } = useDomainKit();
   const readOnly = useReadOnly();
   const state = controller.state;
-  const element = usePart(
-    "p",
-    props,
-    { status: state._tag },
-    {
-      children:
-        state._tag === "Failure" ? (
-          <>
-            {describeFailure(state.error, messages)}
-            {readOnly ? null : (
-              <>
-                {" "}
-                <button
-                  data-domainkit-part="connection-retry"
-                  onClick={controller.retry}
-                  type="button"
-                >
-                  {messages.retry}
-                </button>
-              </>
-            )}
-          </>
-        ) : null,
-      "data-domainkit-part": "flow-outcome",
-      "data-tone": "danger",
-      role: "alert",
-    },
+  if (state._tag !== "Failure") return null;
+  const words = describeOutcome(state.error, messages, {
+    ...(controller.snapshot === null ? {} : { domain: controller.snapshot.domain }),
+  });
+  return (
+    <OutcomeUi.Provider
+      value={{
+        description: words.description,
+        layout: props.layout ?? "card",
+        retry: readOnly ? null : controller.retry,
+        retryPart: "connection-retry",
+        title: words.title,
+        tone: "danger",
+      }}
+    >
+      <OutcomeUi.Root {...props}>{children ?? <OutcomeUi.Composition />}</OutcomeUi.Root>
+    </OutcomeUi.Provider>
   );
-  return state._tag === "Failure" ? element : null;
 }
 
 export interface StatusProps extends PartProps<"p", RootState> {

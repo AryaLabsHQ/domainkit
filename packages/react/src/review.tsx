@@ -11,7 +11,8 @@ import type { Controller } from "./attempt.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
 import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
-import { failure as describeFailure } from "./messages.ts";
+import { outcome as describeOutcome } from "./messages.ts";
+import * as OutcomeUi from "./outcome.tsx";
 import * as Operations from "./operations.tsx";
 
 export interface ReviewState extends Record<string, unknown> {
@@ -72,51 +73,49 @@ export function Status({ controller, kind, ...props }: StatusProps): ReactElemen
   );
 }
 
-export interface OutcomeProps extends PartProps<"p", ReviewState>, KindProps {}
+export interface OutcomeProps extends OutcomeUi.RootProps, KindProps {}
 
-/** The failure sentence from the error's reason, with the retry the flow allows. */
-export function Outcome({ controller, kind, ...props }: OutcomeProps): ReactElement | null {
+/**
+ * The failure, or a receipt that only partly landed: media, title, description, and the retry the
+ * flow allows. Children replace the composition and keep the binding.
+ */
+export function Outcome({
+  children,
+  controller,
+  kind,
+  ...props
+}: OutcomeProps): ReactElement | null {
   const { messages } = useDomainKit();
   const readOnly = useReadOnly();
   const state = controller.state;
   const partial = state._tag === "Applied" && state.receipt.status === "partial";
-  const element = usePart(
-    "p",
-    props,
-    { status: state._tag },
-    {
-      children:
-        state._tag === "Failure" ? (
-          <>
-            {describeFailure(state.error, messages)}
-            {readOnly ? null : (
-              <>
-                {" "}
-                <button
-                  data-domainkit-part={
-                    kind === "provisioning" ? "provisioning-retry" : "cleanup-retry"
-                  }
-                  onClick={controller.retry}
-                  type="button"
-                >
-                  {messages.retry}
-                </button>
-              </>
-            )}
-          </>
-        ) : partial ? (
-          kind === "provisioning" ? (
-            messages.partiallyApplied
-          ) : (
-            messages.partiallyCleaned
-          )
-        ) : null,
-      "data-domainkit-part": "flow-outcome",
-      "data-tone": "danger",
-      role: "alert",
-    },
+  const retryPart = kind === "provisioning" ? "provisioning-retry" : "cleanup-retry";
+  if (state._tag !== "Failure" && !partial) return null;
+  const words =
+    state._tag === "Failure"
+      ? describeOutcome(state.error, messages)
+      : {
+          description:
+            kind === "provisioning" ? messages.partiallyApplied : messages.partiallyCleaned,
+          title:
+            kind === "provisioning"
+              ? messages.partiallyAppliedTitle
+              : messages.partiallyCleanedTitle,
+        };
+  return (
+    <OutcomeUi.Provider
+      value={{
+        description: words.description,
+        layout: props.layout ?? "card",
+        retry: readOnly || state._tag !== "Failure" ? null : controller.retry,
+        retryPart,
+        title: words.title,
+        tone: state._tag === "Failure" ? "danger" : "warning",
+      }}
+    >
+      <OutcomeUi.Root {...props}>{children ?? <OutcomeUi.Composition />}</OutcomeUi.Root>
+    </OutcomeUi.Provider>
   );
-  return state._tag === "Failure" || partial ? element : null;
 }
 
 export interface ActionsProps extends PartProps<"div", ReviewState>, KindProps {}

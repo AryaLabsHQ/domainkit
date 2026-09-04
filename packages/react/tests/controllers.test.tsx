@@ -159,8 +159,12 @@ describe("Connect.useController", () => {
     render(<Panel />, { wrapper: wrap(transport) });
     await user.click(screen.getByRole("button", { name: "go" }));
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("That provider no longer exists.");
+    expect(alert.textContent).toContain("That provider no longer exists");
     expect(alert.textContent).not.toContain("NotFound");
+    const title = alert.querySelector("[data-domainkit-part='outcome-title']");
+    const description = alert.querySelector("[data-domainkit-part='outcome-description']");
+    expect(title?.textContent).toBe("That provider no longer exists");
+    expect(description?.textContent).toBe("Reload the page and start this step again.");
   });
 
   it("preselects a connection discovery already found for the zone", async () => {
@@ -248,7 +252,7 @@ describe("Cleanup.useController", () => {
     render(<Panel />, { wrapper: wrap(transport) });
     await user.click(screen.getByRole("button", { name: "plan" }));
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("That receipt no longer exists.");
+    expect(alert.textContent).toContain("That receipt no longer exists");
   });
 });
 
