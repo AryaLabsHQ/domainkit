@@ -67,7 +67,9 @@ test("connects, reviews the plan, and approves it", async ({ page }) => {
   await page.getByRole("button", { name: "Disconnect" }).click();
   const disconnect = page.getByRole("dialog");
   await expect(disconnect.getByRole("checkbox")).toBeChecked();
-  await expect(disconnect.getByText("Also remove the records DomainKit added")).toBeVisible();
+  await expect(
+    disconnect.getByText("Also remove the records DomainKit added for this domain"),
+  ).toBeVisible();
   await expect(disconnect).toHaveCSS("opacity", "1");
   await disconnect.screenshot({ path: shot("disconnect-dialog") });
   await disconnect.getByRole("button", { name: "Disconnect" }).click();

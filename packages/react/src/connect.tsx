@@ -1216,7 +1216,9 @@ export function DisconnectDialog({
   const [removing, setRemoving] = useState(false);
   const snapshot = controller.snapshot;
   const receiptId = snapshot?.lastReceiptId ?? null;
-  // Only an apply receipt proves DomainKit created anything, so only then is there a choice.
+  // Only an apply receipt proves DomainKit created anything, so only then is there a choice. The
+  // receipt is this domain's, so releasing a shared connection leaves the other domains' records
+  // where they are; the option says so rather than promising more than it can do.
   const removable = capabilities.includes("cleanup") && receiptId !== null;
   // Releasing a connection takes every domain on it, so a shared one asks which the customer meant.
   const shared = (snapshot?.connectionDomains ?? 0) > 1;

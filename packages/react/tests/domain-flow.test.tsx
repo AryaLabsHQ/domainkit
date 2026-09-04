@@ -326,6 +326,41 @@ describe("Domain.Flow disconnect", () => {
     expect(transport.calls.map((call) => call.method)).not.toContain("connection.disconnect");
   });
 
+  it("removes only this domain's records when the release covers every domain on the connection", async () => {
+    const scenarioed = scenario();
+    const { domain, requirements, sibling, transport } = scenarioed;
+    const view = render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await connect();
+    await click("Review changes");
+    await click("Approve");
+    await screen.findByText("DNS records added.");
+    view.unmount();
+
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={sibling} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await click("Connect a DNS provider");
+    await click(new RegExp(`^Use ${scenarioed.zone}$`));
+    await screen.findByText("Connected");
+    await click("Disconnect");
+    const dialog = await screen.findByRole("dialog");
+    // The sibling never applied anything, so there is no receipt and nothing to offer removing.
+    expect(within(dialog).queryByRole("checkbox")).toBeNull();
+    // The option, where there is one, says which records go: only an apply receipt proves any.
+    expect(within(dialog).getByRole("radio", { name: "All 2 domains" })).toBeDefined();
+    await user.click(within(dialog).getByRole("radio", { name: "All 2 domains" }));
+    await user.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+    await waitFor(() =>
+      expect(transport.calls.map((call) => call.method)).toContain("connection.disconnect"),
+    );
+  });
+
   it("offers no option to remove records for a domain that never applied any", async () => {
     const { domain, requirements, transport } = scenario();
     render(
