@@ -1347,9 +1347,10 @@ export function DisconnectDialog({
   }, [cleaning, disconnect, removing]);
 
   const busy = removing || releasing;
-  // Until the plan lands there is nothing to decide over, and a confirm taken now would release
-  // the connection without the removal the option defaults to.
-  const settling = removable && (cleaning._tag === "Idle" || cleaning._tag === "Planning");
+  // No plan, no promise: while one is being built, and after one failed to build, the option this
+  // dialog defaults to cannot be honoured, so confirming would release the connection and leave
+  // the records behind. The cleanup outcome carries the retry, and cancelling is always there.
+  const settling = removable && removals === null;
   const provider = snapshot?.provider ?? null;
   const named = provider === null ? "" : displayName(controller, provider);
   const heading = provider === null ? messages.disconnect : messages.disconnectTitle(named);

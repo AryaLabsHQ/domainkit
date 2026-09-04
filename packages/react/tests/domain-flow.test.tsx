@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DnsRecord, type Receipt } from "domainkit";
+import { DnsRecord, DomainKit as Kit, Reason, type Receipt } from "domainkit";
 import { Transport } from "domainkit/client";
 import * as Effect from "effect/Effect";
 
@@ -448,6 +448,51 @@ describe("Domain.Flow disconnect", () => {
     const confirm = within(dialog).getByRole("button", { name: "Disconnect" });
     expect(confirm.hasAttribute("disabled")).toBe(true);
     // Cancelling is still the customer's, so a plan that never lands is not a trap.
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDefined();
+    expect(transport.calls.map((call) => call.method)).not.toContain("connection.disconnect");
+  });
+
+  it("will not release the connection when the cleanup it offers could not be planned", async () => {
+    const scenarioed = scenario();
+    const { domain, requirements, transport } = scenarioed;
+    const cleanup = transport.cleanup;
+    if (cleanup === undefined) throw new Error("The fake transport has no cleanup group");
+    const view = render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await connect();
+    await addRecords();
+    await screen.findByText("DNS records added.");
+    view.unmount();
+
+    // The provider is down when the dialog asks what it would remove.
+    const failing = {
+      ...transport,
+      cleanup: {
+        ...cleanup,
+        plan: () =>
+          Effect.fail(
+            new Kit.Error({
+              reason: new Reason.ProviderUnavailable({ message: "down", provider: "fake" }),
+            }),
+          ),
+      },
+    };
+    render(
+      <DomainKit.Root transport={failing}>
+        <Domain.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await click("Disconnect");
+    const dialog = await screen.findByRole("dialog");
+    // The promise cannot be kept, so the release stays blocked and the failure offers the retry.
+    await within(dialog).findByText(/isn't responding/, {}, patient);
+    expect(
+      within(dialog).getByRole("button", { name: "Disconnect" }).hasAttribute("disabled"),
+    ).toBe(true);
+    expect(within(dialog).getByRole("button", { name: "Try again" })).toBeDefined();
     expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDefined();
     expect(transport.calls.map((call) => call.method)).not.toContain("connection.disconnect");
   });
