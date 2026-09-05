@@ -32,6 +32,8 @@ export interface FakeProviderOptions {
   readonly name?: string;
   /** Zones the fake credential can reach. Default: `example.com`. */
   readonly zones?: ReadonlyArray<string>;
+  /** The label each zone carries, keyed by zone. Default: the zone name. */
+  readonly labels?: Readonly<Record<string, string>>;
   /** Pre-existing records, to produce `Noop` and `Conflict` operations. */
   readonly records?: ReadonlyArray<{ readonly zone: string; readonly record: DnsRecord.Observed }>;
   /** Offer OAuth in addition to tokens; the fake redirects to `callbackUrl` immediately. */
@@ -54,6 +56,8 @@ export interface FakeProvider extends Provider.Definition<FakeContext> {
 
 interface Zone {
   readonly name: string;
+  /** What a customer reads for this zone: the account it sits in, where the fake names one. */
+  readonly label: string;
   readonly nameservers: ReadonlyArray<string>;
   readonly rows: Array<{ readonly id: string; readonly record: DnsRecord.Observed }>;
 }
@@ -81,6 +85,7 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
     const normalized = DomainName.fromStringUnsafe(name);
     const zone: Zone = {
       name: normalized,
+      label: options.labels?.[name] ?? options.labels?.[normalized] ?? normalized,
       nameservers: options.nameservers?.[name] ??
         options.nameservers?.[normalized] ?? [`ns1.${normalized}`, `ns2.${normalized}`],
       rows: [],
@@ -113,7 +118,7 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
     [...zones.values()].map((zone): Provider.Target => ({
       zone: zone.name,
       context: { zone: zone.name },
-      label: zone.name,
+      label: zone.label,
       nameservers: zone.nameservers,
     }));
 

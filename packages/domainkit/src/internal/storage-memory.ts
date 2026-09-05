@@ -239,6 +239,7 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Interfa
               connectionId: input.connectionId,
               domain: input.domain,
               zone: input.zone,
+              label: input.label,
               target: input.target,
               createdAt: yield* DateTime.now,
             });

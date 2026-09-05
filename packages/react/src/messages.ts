@@ -36,8 +36,10 @@ export interface Catalog {
   readonly useTokenInstead: string;
   /** Returns from one method's form to the provider's methods. */
   readonly back: string;
-  /** The connected card's own line, beside the provider's name. */
-  readonly connected: string;
+  /** The connected card's identity: who holds the connection and which account it reaches. */
+  readonly connectedAccount: (provider: string, account: string) => string;
+  /** How many records this domain's apply receipt proves DomainKit added. */
+  readonly recordsAdded: (count: number) => string;
   readonly needsReconnect: string;
   /** The disconnect dialog's scope question, when the connection serves other domains too. */
   readonly disconnectScope: string;
@@ -49,6 +51,14 @@ export interface Catalog {
   readonly download: string;
   readonly useConnection: (label: string) => string;
   readonly chooseZone: string;
+  /** The domain field's listbox, named for a customer reading it with assistive technology. */
+  readonly zoneSuggestions: string;
+  /** Which account a typed domain's records will go to. */
+  readonly recordsGoTo: (provider: string, account: string) => string;
+  /** A typed domain no connected account reaches; the customer adds the records by hand. */
+  readonly notInConnectedAccount: string;
+  /** A held connection whose credential the provider turned down. */
+  readonly reconnectAccount: (account: string) => string;
   readonly getToken: string;
 
   // Progress
@@ -70,7 +80,7 @@ export interface Catalog {
   /** The dialog heading, and the trigger, when no provider is named yet. */
   readonly connectAnyTitle: string;
   /** What the disconnected prompt says about the provider whose nameservers serve the domain. */
-  readonly hostOwnsZone: string;
+  readonly hostDetected: (provider: string) => string;
   readonly connectDescription: (domain: string) => string;
   readonly connectedTo: (provider: string) => string;
   /** Shown where a connect control would be when the customer may not connect. */
@@ -111,6 +121,10 @@ export interface Catalog {
   readonly declineReason: (reason: string) => string;
   readonly operation: (operation: Plan.Operation) => string;
   readonly conflictReason: (reason: Plan.Conflict["reason"]) => string;
+  /** What to do about a conflict, in the row that reports it. */
+  readonly conflictAdvice: (reason: Plan.Conflict["reason"]) => string;
+  /** What a pending plan holds for one row: a write, a record already there, or a blocker. */
+  readonly planStatus: (operation: Plan.Operation) => string;
   readonly attemptStatus: (status: Storage.AttemptStatus) => string;
 
   // Records
@@ -253,7 +267,7 @@ export const english: Catalog = {
   approve: "Approve",
   addRecords: (count) => (count === 1 ? "Add 1 record" : `Add ${count} records`),
   decline: "Decline",
-  everyRecordConflicts: "Resolve the records above at your provider, then review again.",
+  everyRecordConflicts: "Resolve the records above at your provider, then check again.",
   reviewChanges: "Review changes",
   cleanUp: "Remove records",
   checkDns: "Check DNS",
@@ -263,7 +277,8 @@ export const english: Catalog = {
   useAnotherProvider: "Use a different provider",
   useTokenInstead: "Use an API token instead",
   back: "Back",
-  connected: "Connected",
+  connectedAccount: (provider, account) => `${provider} · ${account}`,
+  recordsAdded: (count) => (count === 1 ? "1 added" : `${count} added`),
   needsReconnect: "Needs reconnecting",
   disconnectScope: "This connection serves other domains.",
   disconnectThisDomain: "Only this domain",
@@ -274,6 +289,10 @@ export const english: Catalog = {
   download: "Download",
   useConnection: (label) => `Use ${label}`,
   chooseZone: "Choose the zone that serves this domain",
+  zoneSuggestions: "Zones your connected accounts serve",
+  recordsGoTo: (provider, account) => `Records go to ${provider} through ${account}.`,
+  notInConnectedAccount: "Not in a connected account.",
+  reconnectAccount: (account) => `Reconnect ${account}`,
   getToken: "Where do I find this?",
 
   loading: "Loading…",
@@ -291,7 +310,7 @@ export const english: Catalog = {
 
   connectTitle: (provider) => `Connect ${provider}`,
   connectAnyTitle: "Connect a DNS provider",
-  hostOwnsZone: "Owns DNS for this domain.",
+  hostDetected: (provider) => `${provider} DNS detected`,
   connectDescription: (domain) => `Authorize DNS changes for ${domain}.`,
   connectedTo: (provider) => `${provider} connected`,
   notConnected: "No DNS provider is connected.",
@@ -350,6 +369,32 @@ export const english: Catalog = {
         return "A record here uses a form DomainKit will not overwrite.";
       case "missing":
         return "The record this plan expected is gone.";
+    }
+  },
+  conflictAdvice: (reason) => {
+    switch (reason) {
+      case "exclusive-name":
+        return "Remove the record on that name at your provider, then check again.";
+      case "cname-collision":
+        return "Remove the other records on that name at your provider, then check again.";
+      case "value-mismatch":
+        return "Point that record at this value at your provider, or remove it and check again.";
+      case "opaque":
+        return "Remove that record at your provider, then check again.";
+      case "missing":
+        return "Check again to build a plan from what is there now.";
+    }
+  },
+  planStatus: (operation) => {
+    switch (operation._tag) {
+      case "Create":
+        return "Will add";
+      case "Noop":
+        return "Already there";
+      case "Delete":
+        return "Will remove";
+      case "Conflict":
+        return "In the way";
     }
   },
   attemptStatus: (status) => {

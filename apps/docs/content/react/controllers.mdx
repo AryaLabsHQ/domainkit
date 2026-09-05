@@ -27,13 +27,13 @@ Every part of the flow is a hook. Each takes one options object and returns a co
 | `SelectionRequired` | The credential reaches several matching zones                                             |
 | `Failure`           | Carries the `DomainKit.Error`                                                             |
 
-| Command                                             | Does                                                      |
-| --------------------------------------------------- | --------------------------------------------------------- |
-| `connect({ provider, method, values?, returnTo? })` | Starts a connection                                       |
-| `reuse({ connectionId, zone? })`                    | Attaches the domain to a connection the owner already has |
-| `select(zone)`                                      | Answers `SelectionRequired`                               |
-| `detach()` / `disconnect()`                         | Releases the domain, or the whole connection              |
-| `refresh()` / `retry()`                             | Re-inspects, or re-runs the step that failed              |
+| Command                                             | Does                                                                                            |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `connect({ provider, method, values?, returnTo? })` | Starts a connection, or proves the same provider again for a connection that needs reconnecting |
+| `reuse({ connectionId, zone? })`                    | Attaches the domain to a connection the owner already has                                       |
+| `select(zone)`                                      | Answers `SelectionRequired`                                                                     |
+| `detach()` / `disconnect()`                         | Releases the domain, or the whole connection                                                    |
+| `refresh()` / `retry()`                             | Re-inspects, or re-runs the step that failed                                                    |
 
 Discovery runs on mount whenever the transport declares it and the domain has no connection yet. A
 discovery failure leaves `discovery` null and the provider list still renders: discovery is an
@@ -43,6 +43,29 @@ optimisation, not a step the customer asked for.
 started from, read when they connect rather than when the controller renders, so a flow mounted on
 one screen and used on another still returns to the right place. Pass `null` to send none and leave
 the server's `defaultReturnTo` in charge; a per-call `connect({ returnTo })` still wins.
+
+The controller attaches on sight: when it settles `Disconnected` with a `Resolved` discovery on a
+surface that is not read-only, it calls `reuse` for that connection and zone straight away, so a
+second domain on an account the workspace already holds never meets the connect dialog. Two
+connections that both reach the zone stay a decision, and `SelectionRequired` keeps the prompt.
+Each domain, connection, and zone is tried once, so an attach that failed and a detach the customer
+chose both stand.
+
+`receipt` carries what this domain's last apply landed, read once per receipt id, so the connected
+card can say how many records it holds without another call.
+
+## Zones and accounts
+
+`Connect.useZones({ provider? })` lists every zone the owner's connections reach. Its state is
+`Loading`, `Ready { zones, connections, providers }`, or `Failure`; a connection whose credential
+the provider turned down appears in `connections` as `reconnect` and contributes no zones.
+
+`Connect.useAccounts({ returnTo })` reads the same listing and adds two commands:
+`connect({ provider, method, values? })` starts a provider with no domain attached, and
+`reconnect({ connectionId, provider, method, values? })` replaces the credential behind a
+connection the owner already holds, keeping its domains. A token
+method finishes in place; an interactive one redirects and returns through the library's own
+callback. `Connect.DomainField` is the default surface over both.
 
 ## Provisioning and cleanup
 

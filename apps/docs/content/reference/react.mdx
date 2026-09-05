@@ -18,21 +18,21 @@ The package entry carries `"use client"`. Namespaces mirror the core lifecycle.
 
 ## Namespaces
 
-| Namespace    | Carries                                                                                                               |
-| ------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `DomainKit`  | `Root`, `ReadOnly`, `useTransport`, `useCapabilities`, `useReadOnly`, `useDomainKit`                                  |
-| `Domain`     | `Flow`, its slot props, and the slot defaults                                                                         |
-| `Connect`    | `useController`, `Flow`, `Card`, `Dialog`, `Form`, `Prompt`, `Status`, `Outcome`, `Root`                              |
-| `Outcome`    | `Root`, `Header`, `Media`, `Title`, `Description`, `Content`, `Composition`, `useOutcome`                             |
-| `Provision`  | `useController`, `Flow`, `Actions`, `Dialog`, `Status`, `Outcome`, `Root`, `State`                                    |
-| `Cleanup`    | The same set over a plan built from an apply receipt                                                                  |
-| `Verify`     | `useController`, `Status`, `Evidence`, `ObserveAction`, `Outcome`, `Root`, `State`                                    |
-| `Records`    | `Table`, `Card`, `ZoneFile`, `CopyValue`, `Status`, the table leaf parts, `identity`, `requirementsKey`, `toZoneFile` |
-| `Operations` | `List`, `Item`, and the leaf parts one plan operation renders as                                                      |
-| `Provider`   | `Mark`, `Marks`, and the provider `Descriptor` the snapshot carries                                                   |
-| `Messages`   | `Catalog`, `english`, `merge`, and `failure(error, catalog)`                                                          |
-| `Theme`      | The `Theme` shape and `toStyle`, over the `--domainkit-*` custom properties                                           |
-| `Testing`    | `transport`, re-exported from `domainkit/testing` for UI tests                                                        |
+| Namespace    | Carries                                                                                                                                         |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DomainKit`  | `Root`, `ReadOnly`, `useTransport`, `useCapabilities`, `useReadOnly`, `useDomainKit`                                                            |
+| `Domain`     | `Flow`, its slot props, and the slot defaults                                                                                                   |
+| `Connect`    | `useController`, `useZones`, `useAccounts`, `DomainField`, `Flow`, `Card`, `Dialog`, `Form`, `Prompt`, `Status`, `Outcome`, `Root`              |
+| `Outcome`    | `Root`, `Header`, `Media`, `Title`, `Description`, `Content`, `Composition`, `useOutcome`                                                       |
+| `Provision`  | `useController`, `Flow`, `Action`, `Actions`, `Dialog`, `Status`, `Outcome`, `Root`, `State`                                                    |
+| `Cleanup`    | The same set over a plan built from an apply receipt                                                                                            |
+| `Verify`     | `useController`, `Status`, `Evidence`, `ObserveAction`, `Outcome`, `Root`, `State`                                                              |
+| `Records`    | `Table`, `Card`, `ZoneFile`, `CopyValue`, `Status`, `PlanStatus`, `statusOf`, the table leaf parts, `identity`, `requirementsKey`, `toZoneFile` |
+| `Operations` | `List`, `Item`, and the leaf parts one plan operation renders as                                                                                |
+| `Provider`   | `Mark`, `Marks`, and the provider `Descriptor` the snapshot carries                                                                             |
+| `Messages`   | `Catalog`, `english`, `merge`, and `failure(error, catalog)`                                                                                    |
+| `Theme`      | The `Theme` shape and `toStyle`, over the `--domainkit-*` custom properties                                                                     |
+| `Testing`    | `transport`, re-exported from `domainkit/testing` for UI tests                                                                                  |
 
 ## Top-level exports
 
@@ -80,6 +80,8 @@ Each takes one options object and returns a controller whose `state` is a tagged
 | Hook                      | Options                                | State tags                                                                                                       |
 | ------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `Connect.useController`   | `{ domain, returnTo? }`                | `Loading`, `Disconnected`, `Connected`, `Reconnect`, `Submitting`, `Redirecting`, `SelectionRequired`, `Failure` |
+| `Connect.useZones`        | `{ provider? }`                        | `Loading`, `Ready`, `Failure`                                                                                    |
+| `Connect.useAccounts`     | `{ returnTo? }`                        | `Loading`, `Ready`, `Submitting`, `Redirecting`, `Failure`                                                       |
 | `Provision.useController` | `{ domain, requirements, onApplied? }` | `Idle`, `Planning`, `Planned`, `Approving`, `Applying`, `Applied`, `Rejecting`, `Rejected`, `Failure`            |
 | `Cleanup.useController`   | `{ domain, receiptId?, onCleaned? }`   | The same set                                                                                                     |
 | `Verify.useController`    | `{ domain, polling?, requirements? }`  | `Idle`, `Observing`, `Observed`, `Failure`                                                                       |
@@ -88,19 +90,32 @@ Each takes one options object and returns a controller whose `state` is a tagged
 
 ## Slots
 
-`Domain.Flow` renders four slots, each with a default and no layout container of its own.
+`Domain.Flow` renders three slots, each with a default and no layout container of its own.
 
-| Slot           | Receives                                        | Default                                                    |
-| -------------- | ----------------------------------------------- | ---------------------------------------------------------- |
-| `connection`   | `{ controller, domain, connect }`               | `Connect.Card` once connected, `Connect.Prompt` until then |
-| `records`      | `{ records, readiness, controller, domain }`    | `Records.Table`                                            |
-| `verification` | `{ controller, domain }`                        | `Verify.Status` with per-requirement evidence              |
-| `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline                           |
+| Slot           | Receives                                                         | Default                                                    |
+| -------------- | ---------------------------------------------------------------- | ---------------------------------------------------------- |
+| `connection`   | `{ controller, domain, connect }`                                | `Connect.Card` once connected, `Connect.Prompt` until then |
+| `records`      | `{ records, readiness, plan, provisioning, controller, domain }` | `Records.Table` with the plan and `Provision.Action`       |
+| `verification` | `{ controller, domain }`                                         | `Verify.Status` with per-requirement evidence              |
 
 <Snippet file="examples/react/slots.tsx" region="one-slot" title="Replacing one slot" />
 
 `Domain.Flow` also takes `returnTo` for the connection it owns, and `readOnly` for one domain among
 several.
+
+## Flow state
+
+`Domain.FlowState` reaches a host three ways: the part's data attributes, its `className` and
+`style` callbacks, and `onState`, which fires on every change and once on mount.
+
+| Field                    | Carries                                                                       |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `connection`             | `Connect.State["_tag"]`                                                       |
+| `provisioning`           | `Provision.State["_tag"]`                                                     |
+| `connected` / `offering` | Whether DomainKit holds a connection, and whether it is offering one          |
+| `provider`               | Who holds the connection, or whose nameservers serve the zone                 |
+| `label`                  | The account the records go to, from the attachment; `null` until there is one |
+| `receiptId` / `applied`  | The apply receipt this domain produced, and whether there is one              |
 
 ## Read-only
 

@@ -67,6 +67,8 @@ export class Attachment extends Schema.Class<Attachment>("@domainkit/Storage/Att
   connectionId: Schema.String,
   domain: Schema.String,
   zone: Schema.String,
+  /** The target's label as the provider gave it at attach time, so a UI names the account without a provider call. */
+  label: Schema.String,
   /** Provider zone identity (zone id, account id) decoded by the provider's `context` schema. */
   target: Schema.Unknown,
   createdAt: Schema.DateTimeUtcFromString,
@@ -199,6 +201,7 @@ export interface Interface {
       readonly connectionId: string;
       readonly domain: string;
       readonly zone: string;
+      readonly label: string;
       readonly target: unknown;
     }) => Fx<Attachment>;
     readonly get: (id: string) => Fx<Attachment>;
@@ -331,6 +334,7 @@ export interface AsyncInterface {
         readonly connectionId: string;
         readonly domain: string;
         readonly zone: string;
+        readonly label: string;
         readonly target: unknown;
       },
     ) => Promise<Attachment>;

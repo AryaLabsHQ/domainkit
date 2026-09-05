@@ -27,6 +27,9 @@ export type Readiness = Server.Readiness;
 export type Attempt = Server.Attempt;
 export type Candidate = Server.Candidate;
 export type Discovery = Server.Discovery;
+export type Zone = Server.Zone;
+export type Zones = Server.Zones;
+export type Attachment = Server.Attachment;
 export type Field = Server.Field;
 export type MethodDescriptor = Server.MethodDescriptor;
 export type Method = Server.Method;
@@ -45,9 +48,17 @@ export interface ConnectionGroup {
   readonly inspect: (domain: string) => Fx<Snapshot>;
   /** Which of this owner's existing connections already reaches the domain. */
   readonly discover: (domain: string) => Fx<Discovery>;
+  /** Every zone this owner's connections reach, and where each connection stands. */
+  readonly zones: (options?: { readonly provider?: string }) => Fx<Zones>;
+  /** Connect a provider. Without a domain the account connects alone and attaches nothing. */
   readonly start: (input: {
-    readonly domain: string;
+    readonly domain?: string;
     readonly provider: string;
+    readonly method: Method;
+  }) => Fx<Started>;
+  /** Prove an account again for a connection this owner holds, keeping its domains. */
+  readonly reconnect: (input: {
+    readonly connectionId: string;
     readonly method: Method;
   }) => Fx<Started>;
   readonly attach: (input: {
@@ -76,6 +87,8 @@ export interface ProvisioningGroup {
   readonly apply: (approvalId: Approval.ApprovalId) => Fx<Receipt.Model>;
   /** The stored plan with its status, approval, receipt, and rejection. */
   readonly attempt: (planId: Plan.PlanId) => Fx<Attempt>;
+  /** What one apply landed, by receipt id, for a surface that holds the id and not the attempt. */
+  readonly receipt: (receiptId: Receipt.ReceiptId) => Fx<Receipt.Model>;
 }
 
 export interface VerificationGroup {
@@ -228,11 +241,31 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Interfac
         path: `/domains/${encodeURIComponent(domain)}/discovery`,
         success: Server.Discovery,
       }),
+    zones: (filter) =>
+      request({
+        method: "GET",
+        path:
+          filter?.provider === undefined
+            ? "/zones"
+            : `/zones?provider=${encodeURIComponent(filter.provider)}`,
+        success: Server.Zones,
+      }),
     start: (input) =>
       request({
         method: "POST",
         path: "/connections",
-        body: Schema.encodeSync(Server.StartPayload)(input),
+        body: Schema.encodeSync(Server.StartPayload)(
+          input.domain === undefined
+            ? { provider: input.provider, method: input.method }
+            : { domain: input.domain, provider: input.provider, method: input.method },
+        ),
+        success: Server.Started,
+      }),
+    reconnect: (input) =>
+      request({
+        method: "POST",
+        path: `/connections/${encodeURIComponent(input.connectionId)}/reconnections`,
+        body: Schema.encodeSync(Server.ReconnectPayload)({ method: input.method }),
         success: Server.Started,
       }),
     attach: (input) =>
@@ -276,6 +309,12 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Interfac
         method: "GET",
         path: `/plans/${encodeURIComponent(planId)}`,
         success: Server.Attempt,
+      }),
+    receipt: (receiptId) =>
+      request({
+        method: "GET",
+        path: `/receipts/${encodeURIComponent(receiptId)}`,
+        success: Receipt.Model,
       }),
   };
 

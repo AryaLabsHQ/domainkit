@@ -1,6 +1,6 @@
 ---
 title: domainkit/server
-description: The mountable route group and its fifteen endpoints, the Identity service a host implements, the wire schemas, the options, and the Web handler.
+description: The mountable route group and its seventeen endpoints, the Identity service a host implements, the wire schemas, the options, and the Web handler.
 sidebar:
   label: domainkit/server
 seo:
@@ -21,29 +21,40 @@ import { Server } from "domainkit/server";
 
 ## Endpoints
 
-`Server.group` is one `HttpApiGroup` with fifteen endpoints. It declares no prefix of its own, so
+`Server.group` is one `HttpApiGroup` with seventeen endpoints. It declares no prefix of its own, so
 `Server.group.prefix("/internal/dns")` or a router mount moves every route at once and the OAuth
 callback URL follows the mount.
 
-| Method   | Path                                     | Endpoint      | Answers                  |
-| -------- | ---------------------------------------- | ------------- | ------------------------ |
-| `GET`    | `/domains/:domain`                       | `inspect`     | `Snapshot`               |
-| `GET`    | `/domains/:domain/discovery`             | `discover`    | `Discovery`              |
-| `POST`   | `/connections`                           | `start`       | `Started`                |
-| `GET`    | `/callback/:provider`                    | `callback`    | `302` to the return path |
-| `POST`   | `/connections/:connectionId/attachments` | `attach`      | `Started`                |
-| `DELETE` | `/attachments/:attachmentId`             | `detach`      | Empty                    |
-| `DELETE` | `/connections/:connectionId`             | `disconnect`  | Empty                    |
-| `POST`   | `/domains/:domain/plans`                 | `createPlan`  | `Plan.Model`             |
-| `POST`   | `/plans/:planId/approvals`               | `approve`     | `Approval.Model`         |
-| `POST`   | `/plans/:planId/rejections`              | `reject`      | `Attempt`                |
-| `POST`   | `/approvals/:approvalId/apply`           | `apply`       | `Receipt.Model`          |
-| `GET`    | `/plans/:planId`                         | `plan`        | `Attempt`                |
-| `GET`    | `/receipts/:receiptId`                   | `receipt`     | `Receipt.Model`          |
-| `POST`   | `/domains/:domain/observations`          | `observe`     | `Readiness`              |
-| `POST`   | `/receipts/:receiptId/cleanup-plans`     | `cleanupPlan` | `Plan.Model`             |
+| Method   | Path                                       | Endpoint      | Answers                  |
+| -------- | ------------------------------------------ | ------------- | ------------------------ |
+| `GET`    | `/domains/:domain`                         | `inspect`     | `Snapshot`               |
+| `GET`    | `/domains/:domain/discovery`               | `discover`    | `Discovery`              |
+| `GET`    | `/zones`                                   | `zones`       | `Zones`                  |
+| `POST`   | `/connections`                             | `start`       | `Started`                |
+| `GET`    | `/callback/:provider`                      | `callback`    | `302` to the return path |
+| `POST`   | `/connections/:connectionId/reconnections` | `reconnect`   | `Started`                |
+| `POST`   | `/connections/:connectionId/attachments`   | `attach`      | `Started`                |
+| `DELETE` | `/attachments/:attachmentId`               | `detach`      | Empty                    |
+| `DELETE` | `/connections/:connectionId`               | `disconnect`  | Empty                    |
+| `POST`   | `/domains/:domain/plans`                   | `createPlan`  | `Plan.Model`             |
+| `POST`   | `/plans/:planId/approvals`                 | `approve`     | `Approval.Model`         |
+| `POST`   | `/plans/:planId/rejections`                | `reject`      | `Attempt`                |
+| `POST`   | `/approvals/:approvalId/apply`             | `apply`       | `Receipt.Model`          |
+| `GET`    | `/plans/:planId`                           | `plan`        | `Attempt`                |
+| `GET`    | `/receipts/:receiptId`                     | `receipt`     | `Receipt.Model`          |
+| `POST`   | `/domains/:domain/observations`            | `observe`     | `Readiness`              |
+| `POST`   | `/receipts/:receiptId/cleanup-plans`       | `cleanupPlan` | `Plan.Model`             |
 
 Approve, reject, and apply serve both provisioning and cleanup: the stored attempt knows its kind.
+
+`start` takes an optional `domain`. Without one it connects the account alone and answers
+`Connected` with the connection it made and no snapshot, which is how a customer grants an account
+before they have named a domain in it. `zones` lists every zone those accounts reach, ordered by
+zone, and marks a connection whose credential the provider turned down as `reconnect` beside the
+zones that did come back. `?provider=` narrows it to one provider's connections. `reconnect` proves the connection's own
+provider again and replaces the credential behind it, keeping the connection and every domain
+attached to it; starting instead would mint a second account and leave the domains on the one the
+provider turned down.
 
 ## Identity
 
@@ -90,6 +101,8 @@ The client and `@domainkit/react` decode these, so the three cannot drift.
 | Schema             | Shape                                                                                    |
 | ------------------ | ---------------------------------------------------------------------------------------- |
 | `Snapshot`         | Domain, attachment, connection, provider, status, reusable connections, provider catalog |
+| `Attachment`       | The attachment's `id` and the zone `label` the provider gave when it was created         |
+| `Zones`            | Every zone the principal's connections reach, how each connection stands, the catalog    |
 | `Started`          | `Connected`, `Redirect`, or `SelectionRequired`                                          |
 | `Discovery`        | `DiscoveryResolved`, `DiscoverySelectionRequired`, or `DiscoveryNotFound`                |
 | `Method`           | `Token`, `OAuth`, or `Integration`                                                       |

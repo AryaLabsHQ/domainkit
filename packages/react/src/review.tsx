@@ -4,7 +4,7 @@
  * the two flows differs on screen.
  */
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import type { Plan } from "domainkit";
+import { Plan } from "domainkit";
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 
 import type { Controller } from "./attempt.ts";
@@ -130,9 +130,12 @@ export function Outcome({
 
 export interface ActionsProps extends PartProps<"div", ReviewState>, KindProps {}
 
-/** What a plan would actually write: an operation blocked by a conflict is not one of them. */
+/**
+ * What a plan would actually write. A conflict blocks and a record already in place is nothing to
+ * write, so neither is approvable and naming either id is refused.
+ */
 const addable = (plan: Plan.Model | null): ReadonlyArray<Plan.Operation> =>
-  plan === null ? [] : plan.operations.filter((operation) => operation._tag !== "Conflict");
+  plan === null ? [] : Plan.writes(plan);
 
 /**
  * The primary action, and Decline. The primary authorizes the digest and applies it in one step,
@@ -147,7 +150,8 @@ export function Actions({ controller, kind, ...props }: ActionsProps): ReactElem
   const plan = state._tag === "Planned" ? state.plan : null;
   const running = busy(state._tag);
   const writes = addable(plan);
-  const blocked = plan !== null && writes.length === 0;
+  // Every record blocked says what to fix; every record already in place needs no action at all.
+  const blocked = writes.length === 0 && plan !== null && Plan.conflicts(plan).length > 0;
   const element = usePart(
     "div",
     props,

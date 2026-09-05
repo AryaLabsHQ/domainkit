@@ -1,6 +1,6 @@
-import { DnsRecord } from "domainkit";
+import { DnsRecord, type Plan } from "domainkit";
 import type { Transport } from "domainkit/client";
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { leafPart, usePart } from "./composition.tsx";
@@ -226,13 +226,31 @@ export function ZoneFile({ domain, records, ...props }: ZoneFileProps) {
 // Status
 // ---------------------------------------------------------------------------------------------
 
-/** The readiness this record reached, or `null` when nothing has observed it. */
-export const statusOf = (
-  record: DnsRecord.Model,
-  readiness: Readiness | null | undefined,
-): RequirementStatus | null =>
-  readiness?.requirements.find((requirement) => DnsRecord.equals(requirement.record, record))
-    ?.status ?? null;
+/**
+ * What a row has to say about one record: while a plan is pending it is what the plan will do to
+ * it, and otherwise what the last observation read back.
+ */
+export type Standing =
+  | { readonly _tag: "Operation"; readonly operation: Plan.Operation }
+  | { readonly _tag: "Readiness"; readonly status: RequirementStatus };
+
+export interface Sources {
+  /** A plan still awaiting its apply. Pass `null` once one has landed; readiness answers then. */
+  readonly plan?: Plan.Model | null | undefined;
+  readonly readiness?: Readiness | null | undefined;
+}
+
+/** The row's standing, or `null` when neither a plan nor an observation covers the record. */
+export const statusOf = (record: DnsRecord.Model, sources: Sources): Standing | null => {
+  const operation = sources.plan?.operations.find((entry) =>
+    DnsRecord.equals(entry.record, record),
+  );
+  if (operation !== undefined) return { _tag: "Operation", operation };
+  const status = sources.readiness?.requirements.find((requirement) =>
+    DnsRecord.equals(requirement.record, record),
+  )?.status;
+  return status === undefined ? null : { _tag: "Readiness", status };
+};
 
 export interface StatusProps extends PartProps<"span", { readonly status: RequirementStatus }> {
   readonly status: RequirementStatus;
@@ -262,17 +280,64 @@ export function Status({ status, ...props }: StatusProps) {
   );
 }
 
+export interface PlanStatusProps extends PartProps<
+  "span",
+  { readonly operation: Plan.Operation["_tag"] }
+> {
+  readonly operation: Plan.Operation;
+}
+
+/** What a pending plan will do to one record: add it, leave it, or nothing while it is blocked. */
+export function PlanStatus({ operation, ...props }: PlanStatusProps) {
+  const { messages } = useDomainKit();
+  const icons = useIcons();
+  const glyph =
+    operation._tag === "Conflict"
+      ? icons.failure
+      : operation._tag === "Noop"
+        ? icons.success
+        : icons.pending;
+  return usePart(
+    "span",
+    props,
+    { operation: operation._tag },
+    {
+      children: (
+        <>
+          <span aria-hidden="true" data-icon="inline-start">
+            {glyph}
+          </span>
+          {messages.planStatus(operation)}
+        </>
+      ),
+      "data-domainkit-part": "record-status",
+      "data-operation": operation._tag,
+    },
+  );
+}
+
+/** One row's standing, whichever of the two it is. */
+function Standing({ standing }: { readonly standing: Standing }): ReactElement {
+  return standing._tag === "Operation" ? (
+    <PlanStatus operation={standing.operation} />
+  ) : (
+    <Status status={standing.status} />
+  );
+}
+
 // ---------------------------------------------------------------------------------------------
 // Parts
 // ---------------------------------------------------------------------------------------------
 
-export const Header = leafPart("thead", "records-header");
+export const Columns = leafPart("thead", "records-columns");
 export const Body = leafPart("tbody", "records-body");
 export const Footer = leafPart("tfoot", "records-footer");
 export const Row = leafPart("tr", "records-row");
 export const Head = leafPart("th", "records-head");
 export const Cell = leafPart("td", "records-cell");
-export const Caption = leafPart("caption", "records-caption");
+/** Above the table rather than inside it, so the one action sits beside the name. */
+export const Caption = leafPart("div", "records-caption");
+export const Actions = leafPart("div", "records-actions");
 export const Value = leafPart("span", "record-value");
 export const Purpose = leafPart("span", "record-purpose");
 export const CardHeader = leafPart("div", "record-card-head");
@@ -281,12 +346,31 @@ export const CardContent = leafPart("dl", "record-card-content");
 
 export interface RootProps extends PartProps<"table", { readonly count: number }> {
   readonly count?: number;
+  /** Names the table. Rendered in the header and read by assistive technology as its label. */
+  readonly caption?: string;
+  /** What the customer can do with these records; the plan's one action is what goes here. */
+  readonly actions?: ReactNode;
 }
 
-export function Root({ count = 0, ...props }: RootProps) {
+export function Root({ actions, caption, count = 0, ...props }: RootProps) {
+  const table = usePart(
+    "table",
+    props,
+    { count },
+    {
+      "aria-label": caption,
+      "data-domainkit-part": "records-table",
+    },
+  );
   return (
     <div data-domainkit-part="records-panel">
-      {usePart("table", props, { count }, { "data-domainkit-part": "records-table" })}
+      {caption === undefined && actions === undefined ? null : (
+        <div data-domainkit-part="records-header">
+          {caption === undefined ? null : <Caption>{caption}</Caption>}
+          {actions === undefined ? null : <Actions>{actions}</Actions>}
+        </div>
+      )}
+      {table}
     </div>
   );
 }
@@ -311,7 +395,7 @@ export interface CardProps extends PartProps<"section", { readonly record: strin
 
 export function Card({ readiness, record, ...props }: CardProps): ReactElement {
   const { messages } = useDomainKit();
-  const status = statusOf(record, readiness);
+  const standing = statusOf(record, { readiness });
   return usePart(
     "section",
     props,
@@ -321,7 +405,7 @@ export function Card({ readiness, record, ...props }: CardProps): ReactElement {
         <>
           <CardHeader>
             <CardTitle>{messages.recordType(record)}</CardTitle>
-            {status === null ? null : <Status status={status} />}
+            {standing === null ? null : <Standing standing={standing} />}
           </CardHeader>
           <CardContent>
             <div>
@@ -354,18 +438,39 @@ export function Card({ readiness, record, ...props }: CardProps): ReactElement {
 
 export interface TableProps extends PartProps<"table", { readonly count: number }> {
   readonly caption?: string;
+  /** A plan awaiting its apply. Its operations become the status column; `null` after one lands. */
+  readonly plan?: Plan.Model | null;
   readonly readiness?: Readiness | null;
   readonly records: ReadonlyArray<DnsRecord.Model>;
+  /** Rendered in the header beside the caption. `Provision.Action` is what the flow puts here. */
+  readonly actions?: ReactNode;
 }
 
-/** The default records presentation: one row per requirement, with readiness when there is any. */
-export function Table({ caption, readiness, records, ...props }: TableProps): ReactElement {
+/**
+ * The default records presentation: one row per requirement, and a status column that reads the
+ * plan while one is pending and the last observation after that. A conflict explains itself in a
+ * row under the record it blocks, because that is where the customer can act on it.
+ */
+export function Table({
+  actions,
+  caption,
+  plan,
+  readiness,
+  records,
+  ...props
+}: TableProps): ReactElement {
   const { messages } = useDomainKit();
-  const withStatus = readiness !== null && readiness !== undefined;
+  const withStatus =
+    (plan !== null && plan !== undefined) || (readiness !== null && readiness !== undefined);
+  const columns = withStatus ? 4 : 3;
   return (
-    <Root count={records.length} {...props}>
-      {caption === undefined ? null : <Caption>{caption}</Caption>}
-      <Header>
+    <Root
+      count={records.length}
+      {...(actions === undefined ? {} : { actions })}
+      {...(caption === undefined ? {} : { caption })}
+      {...props}
+    >
+      <Columns>
         <Row>
           <Head scope="col">{messages.headingType}</Head>
           <Head scope="col">{messages.headingName}</Head>
@@ -376,28 +481,46 @@ export function Table({ caption, readiness, records, ...props }: TableProps): Re
             </Head>
           ) : null}
         </Row>
-      </Header>
+      </Columns>
       <Body>
         {records.map((record) => {
-          const status = statusOf(record, readiness);
+          const standing = statusOf(record, { plan, readiness });
+          const conflict =
+            standing?._tag === "Operation" && standing.operation._tag === "Conflict"
+              ? standing.operation
+              : null;
           return (
-            <Row key={identity(record)}>
-              <Cell>{messages.recordType(record)}</Cell>
-              <Cell>
-                <CopyValue value={record.name} />
-              </Cell>
-              <Cell>
-                <Value>
-                  <CopyValue value={DnsRecord.data(record)} />
-                  {record.purpose === undefined ? null : <Purpose>{record.purpose}</Purpose>}
-                </Value>
-              </Cell>
-              {withStatus ? (
-                <Cell data-column="status">
-                  {status === null ? null : <Status status={status} />}
+            <Fragment key={identity(record)}>
+              <Row>
+                <Cell>{messages.recordType(record)}</Cell>
+                <Cell>
+                  <CopyValue value={record.name} />
                 </Cell>
-              ) : null}
-            </Row>
+                <Cell>
+                  <Value>
+                    <CopyValue value={DnsRecord.data(record)} />
+                    {record.purpose === undefined ? null : <Purpose>{record.purpose}</Purpose>}
+                  </Value>
+                </Cell>
+                {withStatus ? (
+                  <Cell data-column="status">
+                    {standing === null ? null : <Standing standing={standing} />}
+                  </Cell>
+                ) : null}
+              </Row>
+              {conflict === null ? null : (
+                <Row data-domainkit-part="record-conflict" data-reason={conflict.reason}>
+                  <Cell colSpan={columns}>
+                    <span data-domainkit-part="record-conflict-reason">
+                      {messages.conflictReason(conflict.reason)}
+                    </span>{" "}
+                    <span data-domainkit-part="record-conflict-advice">
+                      {messages.conflictAdvice(conflict.reason)}
+                    </span>
+                  </Cell>
+                </Row>
+              )}
+            </Fragment>
           );
         })}
       </Body>

@@ -36,7 +36,8 @@ provider names.
 ## Connecting
 
 A token method finishes in one call. OAuth and marketplace installs answer with a redirect and
-finish at the callback.
+finish at the callback. The domain is optional: the account is what the customer is granting, and a
+`start` without a domain connects it and attaches nothing.
 
 <Snippet file="examples/core/connections.ts" region="token" title="A token method" />
 
@@ -52,6 +53,15 @@ finish at the callback.
 
 The continuation created by `start` is spent exactly once, so a replayed callback fails `NotFound`
 rather than connecting twice.
+
+## Listing the zones an owner reaches
+
+`Connect.zones({ provider? })` lists every zone the principal's connections can serve, ordered by
+zone, each with the connection that reaches it and the label the provider gave it. A connection
+whose credential the provider turned down is reported once in the sibling `connections` array with
+status `reconnect`, and contributes no zones, so one dead account never costs the customer the
+others. The reply also carries the provider catalog, so a picker offers a new account without a
+second call.
 
 ## Reusing a connection
 
@@ -75,7 +85,8 @@ the customer picks one. `host` is `null` when no provider matches or more than o
 <Snippet file="examples/core/connections.ts" region="attach" title="Binding a domain to a zone" />
 
 An attachment is exact: one domain, one connection, one zone, and the provider identity that
-addresses it. Every session handed to planning, applying, or observing is re-checked against the
+addresses it. It also keeps `label`, the zone's name as the provider gave it at attach time, so a
+surface names the account the records go to without asking the provider again. Every session handed to planning, applying, or observing is re-checked against the
 provider, so a zone the credential can no longer reach fails `NotFound` instead of writing
 somewhere else.
 
@@ -99,7 +110,14 @@ single-flights through the storage lock so two requests never refresh at once. I
 
 An access token expiring is not the authorization expiring: a credential with a refresh token stays
 usable. A credential the provider will no longer refresh surfaces as the `Reconnect` reason, and the
-host asks the customer to connect again.
+host asks the customer to prove the account again.
+
+`Connect.reconnect({ connectionId, method })` is what answers that. It puts a fresh credential
+behind the authorization the connection already points at, so the connection keeps its id and every
+domain on it stays attached. Starting again would create a second account and fail on the first
+domain, which is already attached to the connection the provider turned down. The zone check on
+every session still applies, so a credential for a different account fails `NotFound` on a zone it
+cannot reach rather than writing somewhere else.
 
 `Connect.Policy` sets `refreshBeforeMs`, the continuation lifetime, and `allowReuse`, which decides
 whether one of an owner's connections may serve a given domain.

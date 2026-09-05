@@ -60,6 +60,44 @@ const connected = async (call: ReturnType<typeof server>["call"], provider: stri
 };
 
 describe("Server.group over the lifecycle", () => {
+  it("connects an account without a domain and lists the zones it reaches", async () => {
+    const { fake, call, dispose } = server();
+    try {
+      const started = await call("POST", "/connections", {
+        provider: fake.id,
+        method: { _tag: "Token", values: { token: "token" } },
+      });
+      assert.strictEqual(started.status, 200);
+      const connection = started.body as Server.Connected;
+      assert.strictEqual(connection._tag, "Connected");
+      assert.strictEqual(connection.provider, fake.id);
+      assert.strictEqual(connection.label, fake.name);
+      assert.strictEqual(connection.snapshot, null);
+
+      const listed = await call("GET", "/zones");
+      assert.strictEqual(listed.status, 200);
+      const zones = listed.body as Server.Zones;
+      assert.deepStrictEqual(
+        zones.zones.map(({ connectionId, provider, zone }) => [connectionId, provider, zone]),
+        [[connection.connectionId, fake.id, "example.com"]],
+      );
+      assert.deepStrictEqual(zones.connections, [
+        { connectionId: connection.connectionId, provider: fake.id, status: "connected" },
+      ]);
+
+      assert.deepStrictEqual(
+        zones.providers.map(({ id }) => id),
+        [fake.id],
+      );
+
+      const narrowed = await call("GET", "/zones?provider=nobody");
+      assert.strictEqual(narrowed.status, 200);
+      assert.deepStrictEqual((narrowed.body as Server.Zones).zones, []);
+    } finally {
+      void dispose();
+    }
+  });
+
   it("connects with a token, plans, approves, applies, observes, and detaches", async () => {
     const { fake, call, dispose } = server();
     try {
@@ -69,7 +107,7 @@ describe("Server.group over the lifecycle", () => {
       assert.strictEqual(started.snapshot.provider, fake.id);
       assert.strictEqual(started.snapshot.method, "token");
       assert.strictEqual(started.snapshot.connectionDomains, 1);
-      const attachmentId = started.snapshot.attachmentId;
+      const attachmentId = started.snapshot.attachment?.id ?? null;
       assert.isNotNull(attachmentId);
 
       const inspected = await call("GET", "/domains/app.example.com");
@@ -680,7 +718,7 @@ describe("Server.api", () => {
   it("generates an OpenAPI document covering every route", () => {
     const spec = OpenApi.fromApi(Server.api);
     const operations = Object.values(spec.paths).flatMap((item) => Object.values(item));
-    assert.strictEqual(operations.length, 15);
+    assert.strictEqual(operations.length, 17);
     assert.deepStrictEqual(
       operations
         .map((operation) => (operation as { readonly operationId: string }).operationId)
@@ -699,8 +737,10 @@ describe("Server.api", () => {
         "domainkit.observe",
         "domainkit.plan",
         "domainkit.receipt",
+        "domainkit.reconnect",
         "domainkit.reject",
         "domainkit.start",
+        "domainkit.zones",
       ],
     );
     const observe = spec.paths["/domains/{domain}/observations"]?.post as
