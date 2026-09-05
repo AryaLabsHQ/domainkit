@@ -77,6 +77,7 @@ const connect = (principal: Principal.Interface, id: string) =>
       connectionId: connection.id,
       domain: `app.${id}.example.com`,
       zone: `${id}.example.com`,
+      label: `${id}.example.com (${id})`,
       target: { zoneId: `zone-${id}` },
     });
     return { storage, connection, attachment };
@@ -545,6 +546,28 @@ export const cases = (layer: Layer.Layer<Storage.Service, unknown>): ReadonlyArr
       ),
     },
     {
+      name: "returns an attachment's label from every read",
+      run: run(
+        Effect.gen(function* () {
+          const { storage, connection, attachment } = yield* connect(owner, "auth-label");
+          const label = `${attachment.zone} (auth-label)`;
+          yield* expect(attachment.label === label, "create must return the label it was given");
+          const read = yield* storage.attachments.get(attachment.id);
+          yield* expect(read.label === label, "get must return the stored label");
+          const byDomain = yield* storage.attachments.byDomain(attachment.domain);
+          yield* expect(
+            Option.isSome(byDomain) && byDomain.value.label === label,
+            "byDomain must return the stored label",
+          );
+          const listed = yield* storage.attachments.list(connection.id);
+          yield* expect(
+            listed.every((row) => row.label === label),
+            "list must return the stored label",
+          );
+        }).pipe(Effect.provideService(Principal.Service, owner)),
+      ),
+    },
+    {
       name: "blocks connection removal while attachments exist",
       run: run(
         Effect.gen(function* () {
@@ -559,6 +582,7 @@ export const cases = (layer: Layer.Layer<Storage.Service, unknown>): ReadonlyArr
               connectionId: connection.id,
               domain: attachment.domain,
               zone: attachment.zone,
+              label: attachment.label,
               target: {},
             }),
             "InvalidInput",

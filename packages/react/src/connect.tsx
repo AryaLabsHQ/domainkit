@@ -260,20 +260,23 @@ export function useController({ domain, returnTo }: Options): Controller {
     (result: Transport.Started) => {
       if (held.current.domain !== domain) return;
       switch (result._tag) {
-        case "Connected":
-          held.current = { discovery: null, domain, snapshot: result.snapshot };
+        case "Connected": {
+          const snapshot = result.snapshot;
           setEstablished((count) => count + 1);
-          setState(settled(result.snapshot, null));
-          if (result.snapshot.connectionId !== null) {
-            emit(
-              Event.Connected({
-                connectionId: result.snapshot.connectionId,
-                domain,
-                snapshot: result.snapshot,
-              }),
-            );
+          // This controller is one domain's, so every command it sends carries that domain and
+          // comes back with its snapshot. A reply without one connected an account alone, which
+          // only a host calling the transport directly can do, so read the domain again.
+          if (snapshot === null) {
+            load();
+            return;
+          }
+          held.current = { discovery: null, domain, snapshot };
+          setState(settled(snapshot, null));
+          if (snapshot.connectionId !== null) {
+            emit(Event.Connected({ connectionId: snapshot.connectionId, domain, snapshot }));
           }
           return;
+        }
         case "Redirect":
           markReturn(domain);
           setState(State.Redirecting({ url: result.authorizationUrl }));
@@ -290,7 +293,7 @@ export function useController({ domain, returnTo }: Options): Controller {
           return;
       }
     },
-    [domain, emit, navigate],
+    [domain, emit, load, navigate],
   );
 
   const submit = useCallback(
@@ -380,7 +383,7 @@ export function useController({ domain, returnTo }: Options): Controller {
   );
 
   const detach = useCallback(() => {
-    const attachmentId = held.current.snapshot?.attachmentId;
+    const attachmentId = held.current.snapshot?.attachment?.id;
     if (connection === undefined || attachmentId == null || held.current.domain !== domain) return;
     release(connection.detach(attachmentId), Event.Detached({ domain }));
   }, [connection, domain, release]);

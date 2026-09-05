@@ -114,21 +114,37 @@ describe("Transport.fromFetch", () => {
         method: Transport.Method.token("token"),
       });
       assert.strictEqual(started._tag, "Connected");
-      if (started._tag !== "Connected") return;
-      assert.strictEqual(started.snapshot.status, "connected");
-      assert.strictEqual(started.snapshot.provider, fake.id);
-      const attachmentId = started.snapshot.attachmentId;
+      if (started._tag !== "Connected" || started.snapshot === null) return;
+      const snapshotOfStart = started.snapshot;
+      assert.strictEqual(snapshotOfStart.status, "connected");
+      assert.strictEqual(snapshotOfStart.provider, fake.id);
+      assert.strictEqual(started.label, "example.com");
+      const attachmentId = snapshotOfStart.attachment?.id ?? null;
       assert.isNotNull(attachmentId);
+
+      const listing = yield* connection.zones();
+      assert.deepStrictEqual(
+        listing.zones.map(({ connectionId, provider, zone, label }) => [
+          connectionId,
+          provider,
+          zone,
+          label,
+        ]),
+        [[started.connectionId, fake.id, "example.com", "example.com"]],
+      );
+      assert.deepStrictEqual(listing.connections, [
+        { connectionId: started.connectionId, provider: fake.id, status: "connected" },
+      ]);
 
       const discovery = yield* connection.discover("app.example.com");
       assert.strictEqual(discovery._tag, "Resolved");
       if (discovery._tag === "Resolved") {
         assert.strictEqual(discovery.zone, "example.com");
-        assert.strictEqual(discovery.connectionId, started.snapshot.connectionId);
+        assert.strictEqual(discovery.connectionId, snapshotOfStart.connectionId);
       }
 
       const snapshot = yield* connection.inspect("app.example.com");
-      assert.deepStrictEqual(snapshot, started.snapshot);
+      assert.deepStrictEqual(snapshot, snapshotOfStart);
       assert.deepStrictEqual(
         snapshot.providers.map(({ id }) => id),
         [fake.id],
@@ -178,7 +194,7 @@ describe("Transport.fromFetch", () => {
       yield* connection.detach(attachmentId);
       const detached = yield* connection.inspect("app.example.com");
       assert.strictEqual(detached.status, "disconnected");
-      assert.strictEqual(detached.attachmentId, null);
+      assert.strictEqual(detached.attachment, null);
     }).pipe(Effect.ensuring(Effect.promise(dispose)));
   });
 
@@ -287,6 +303,7 @@ describe("Transport.fromFetch", () => {
       connection: {
         inspect: () => Effect.die("unused"),
         discover: () => Effect.die("unused"),
+        zones: () => Effect.die("unused"),
         start: () => Effect.die("unused"),
         attach: () => Effect.die("unused"),
         detach: () => Effect.die("unused"),

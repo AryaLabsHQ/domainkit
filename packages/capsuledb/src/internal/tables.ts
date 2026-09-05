@@ -62,6 +62,8 @@ export const make = (prefix: string): Tables => ({
       connection_id: Schema.text(),
       domain: Schema.text(),
       zone: Schema.text(),
+      /** The provider's label for the zone at attach time, so a UI names the account offline. */
+      label: Schema.text(),
       target: Schema.json(),
       created_at: Schema.timestamp(),
     },

@@ -157,6 +157,7 @@ interface AttachmentRow {
   readonly connection_id: string;
   readonly domain: string;
   readonly zone: string;
+  readonly label: string;
   readonly target: unknown;
   readonly created_at: unknown;
 }
@@ -234,6 +235,7 @@ const attachmentOf = (row: AttachmentRow) =>
     connectionId: row.connection_id,
     domain: row.domain,
     zone: row.zone,
+    label: row.label,
     target: fromJson(row.target),
     createdAt: iso(row.created_at),
   });
@@ -605,6 +607,7 @@ export const make = (
                   connectionId: input.connectionId,
                   domain: input.domain,
                   zone: input.zone,
+                  label: input.label,
                   target: input.target,
                   createdAt: yield* DateTime.now,
                 });
@@ -613,10 +616,11 @@ export const make = (
                 // attaches cannot both win.
                 const inserted = yield* sql<{ readonly id: string }>`
                   INSERT INTO ${attachments} (
-                    id, owner_id, connection_id, domain, zone, target, created_at
+                    id, owner_id, connection_id, domain, zone, label, target, created_at
                   ) VALUES (
                     ${encoded.id}, ${encoded.ownerId}, ${encoded.connectionId}, ${encoded.domain},
-                    ${encoded.zone}, ${toJson(encoded.target)}, ${at(encoded.createdAt)}
+                    ${encoded.zone}, ${encoded.label}, ${toJson(encoded.target)},
+                    ${at(encoded.createdAt)}
                   ) ON CONFLICT (owner_id, domain) DO NOTHING RETURNING id
                 `;
                 return inserted[0] === undefined

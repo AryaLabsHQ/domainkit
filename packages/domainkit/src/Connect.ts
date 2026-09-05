@@ -116,8 +116,38 @@ export type Discovery = Data.TaggedEnum<{
 }>;
 export const Discovery = Data.taggedEnum<Discovery>();
 
+/** One zone a connection reaches, with the connection that reaches it. */
+export interface Zone {
+  readonly connectionId: string;
+  readonly provider: string;
+  readonly target: Provider.Target;
+}
+
+/**
+ * A connection's standing in a zone listing. `reconnect` is a credential the provider turned down:
+ * the connection is still the owner's, and the other connections' zones came back regardless.
+ */
+export interface ZoneConnection {
+  readonly connectionId: string;
+  readonly provider: string;
+  readonly status: "connected" | "reconnect";
+}
+
+/** Every zone the principal's connections reach, and how each connection is standing. */
+export interface Zones {
+  /** Ordered by zone, then by connection, so two listings of the same state read the same. */
+  readonly zones: ReadonlyArray<Zone>;
+  readonly connections: ReadonlyArray<ZoneConnection>;
+}
+
 export interface Interface {
   readonly inspect: (domain: string) => Fx<Snapshot>;
+  /**
+   * Every zone the principal's connections can serve, from `Provider.Session.listTargets`. A
+   * connection whose credential the provider turned down is marked `reconnect` in `connections`
+   * and contributes no zones; the rest still list.
+   */
+  readonly zones: (options?: { readonly provider?: string }) => Fx<Zones>;
   /**
    * Resolve the domain's authoritative nameservers, then match them against the zones each of
    * the principal's connections can reach: the closest zone wins, a decisive nameserver match
@@ -402,6 +432,7 @@ export const make: Effect.Effect<
             connectionId: input.connection.id,
             domain,
             zone: resolution.target.zone,
+            label: resolution.target.label,
             target: {
               ...resolution.target,
               context: yield* Provider.encodeContext(input.definition, resolution.target.context),
@@ -488,6 +519,44 @@ export const make: Effect.Effect<
     const [host] = hosts;
     return hosts.length === 1 && host !== undefined ? { provider: host.id } : null;
   };
+
+  const zones: Interface["zones"] = (options = {}) =>
+    Effect.gen(function* () {
+      const reachable: Array<Zone> = [];
+      const connections: Array<ZoneConnection> = [];
+      const filter = options.provider === undefined ? undefined : { provider: options.provider };
+      for (const connection of yield* storage.connections.list(filter)) {
+        const authorization = yield* storage.authorizations.get(connection.authorizationId);
+        const targets = yield* sessionFor(connection).pipe(
+          Effect.flatMap((session) => session.listTargets()),
+          Effect.map(Option.some),
+          // A dead credential is one connection's problem, not the listing's: it is reported as
+          // needing a reconnect and every other connection still answers.
+          Effect.catch(() => Effect.succeed(Option.none<ReadonlyArray<Provider.Target>>())),
+        );
+        connections.push({
+          connectionId: connection.id,
+          provider: authorization.provider,
+          status: Option.isNone(targets) ? "reconnect" : "connected",
+        });
+        if (Option.isNone(targets)) continue;
+        for (const target of targets.value) {
+          reachable.push({
+            connectionId: connection.id,
+            provider: authorization.provider,
+            target,
+          });
+        }
+      }
+      return {
+        zones: reachable.sort(
+          (left, right) =>
+            left.target.zone.localeCompare(right.target.zone) ||
+            left.connectionId.localeCompare(right.connectionId),
+        ),
+        connections,
+      };
+    });
 
   const inspect: Interface["inspect"] = (input) =>
     Effect.gen(function* () {
@@ -758,6 +827,7 @@ export const make: Effect.Effect<
 
   return {
     inspect,
+    zones,
     discover,
     start,
     complete,
@@ -783,6 +853,7 @@ const accessor =
     Effect.flatMap(Service, (service) => pick(service)(...args));
 
 export const inspect = accessor((service) => service.inspect);
+export const zones = accessor((service) => service.zones);
 export const discover = accessor((service) => service.discover);
 export const start = accessor((service) => service.start);
 export const complete = accessor((service) => service.complete);

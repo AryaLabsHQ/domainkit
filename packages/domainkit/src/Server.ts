@@ -81,9 +81,16 @@ export const MethodDescriptor = Schema.Struct({
 export type MethodDescriptor = typeof MethodDescriptor.Type;
 
 /** Everything the UI needs about a domain, flattened; provider context never crosses the wire. */
+/** The attachment a domain holds, with the zone label the provider gave when it was created. */
+export const Attachment = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+});
+export type Attachment = typeof Attachment.Type;
+
 export const Snapshot = Schema.Struct({
   domain: Schema.String,
-  attachmentId: Schema.NullOr(Schema.String),
+  attachment: Schema.NullOr(Attachment),
   connectionId: Schema.NullOr(Schema.String),
   provider: Schema.NullOr(Schema.String),
   method: Schema.NullOr(Storage.AuthMethod),
@@ -125,8 +132,9 @@ export class Integration extends Schema.TaggedClass<Integration>(
 export const Method = Schema.Union([Token, OAuth, Integration]);
 export type Method = typeof Method.Type;
 
+/** A start without a domain connects the account alone; the customer picks a zone afterwards. */
 export const StartPayload = Schema.Struct({
-  domain: Schema.String,
+  domain: Schema.optionalKey(Schema.String),
   provider: Schema.String,
   method: Method,
 });
@@ -138,9 +146,19 @@ export class Candidate extends Schema.Class<Candidate>("@domainkit/server/Candid
   label: Schema.String,
 }) {}
 
+/**
+ * The connection the start produced. `label` names the account the way the customer will read it:
+ * the attached zone's label, or the provider's name when the start carried no domain. `snapshot`
+ * is the domain's state, and is null for a start that attached none.
+ */
 export class Connected extends Schema.TaggedClass<Connected>("@domainkit/server/Started/Connected")(
   "Connected",
-  { snapshot: Snapshot },
+  {
+    connectionId: Schema.String,
+    provider: Schema.String,
+    label: Schema.String,
+    snapshot: Schema.NullOr(Snapshot),
+  },
 ) {}
 export class Redirect extends Schema.TaggedClass<Redirect>("@domainkit/server/Started/Redirect")(
   "Redirect",
@@ -180,6 +198,32 @@ export const Discovery = Schema.Union([
   DiscoveryNotFound,
 ]);
 export type Discovery = typeof Discovery.Type;
+
+/** One zone a connection reaches, named for a customer to pick from. */
+export const Zone = Schema.Struct({
+  connectionId: Schema.String,
+  provider: Schema.String,
+  zone: Schema.String,
+  label: Schema.String,
+  nameservers: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+export type Zone = typeof Zone.Type;
+
+/**
+ * Every zone the principal's connections reach, and where each connection stands. A connection
+ * marked `reconnect` contributes no zones and needs the customer to authorize it again.
+ */
+export const Zones = Schema.Struct({
+  zones: Schema.Array(Zone),
+  connections: Schema.Array(
+    Schema.Struct({
+      connectionId: Schema.String,
+      provider: Schema.String,
+      status: ConnectionStatus,
+    }),
+  ),
+});
+export type Zones = typeof Zones.Type;
 
 export const AttachPayload = Schema.Struct({
   domain: Schema.String,
@@ -272,6 +316,13 @@ export const group = HttpApiGroup.make("domainkit")
     HttpApiEndpoint.get("discover", "/domains/:domain/discovery", {
       params: { domain: Schema.String },
       success: Discovery,
+      error: errors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("zones", "/zones", {
+      query: { provider: Schema.optionalKey(Schema.String) },
+      success: Zones,
       error: errors,
     }),
   )
@@ -487,7 +538,10 @@ const sameOrigin = (destination: string, callback: URL): string | null => {
 
 const snapshotOf = (snapshot: Connect.Snapshot): Snapshot => ({
   domain: snapshot.domain,
-  attachmentId: snapshot.attachment?.id ?? null,
+  attachment:
+    snapshot.attachment === null
+      ? null
+      : { id: snapshot.attachment.id, label: snapshot.attachment.label },
   connectionId: snapshot.connection?.id ?? null,
   provider: snapshot.authorization?.provider ?? null,
   method: snapshot.authorization?.method ?? null,
@@ -545,6 +599,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
       const cleanup = yield* Cleanup.Service;
       const verify = yield* Verify.Service;
       const storage = yield* Storage.Service;
+      const providers = yield* Providers.Service;
 
       /**
        * Run a lifecycle effect as the principal the host derives from this request, once the host
@@ -587,16 +642,37 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         }
       };
 
-      const connected = (domain: string) =>
-        Effect.map(snapshot(domain), (value) => new Connected({ snapshot: value }));
+      /**
+       * The connection a start or an attach produced. `label` is the zone the attachment named,
+       * or the provider itself where the connection carries no domain yet.
+       */
+      const connected = (input: {
+        readonly connection: Storage.Connection;
+        readonly attachment: Storage.Attachment | null;
+        readonly domain: string | undefined;
+      }): Effect.Effect<Connected, Errors.DomainKitError, Principal.Service> =>
+        Effect.gen(function* () {
+          const authorization = yield* storage.authorizations.get(input.connection.authorizationId);
+          const definition = yield* providers.get(authorization.provider);
+          return new Connected({
+            connectionId: input.connection.id,
+            provider: authorization.provider,
+            label: input.attachment?.label ?? definition.name,
+            snapshot: input.domain === undefined ? null : yield* snapshot(input.domain),
+          });
+        });
 
       const startedOf = (
         started: Connect.Started,
-        domain: string,
+        domain: string | undefined,
       ): Effect.Effect<Started, Errors.DomainKitError, Principal.Service> => {
         switch (started._tag) {
           case "Connected":
-            return connected(domain);
+            return connected({
+              attachment: started.attachment,
+              connection: started.connection,
+              domain,
+            });
           case "Redirect":
             return Effect.succeed(new Redirect({ authorizationUrl: started.authorizationUrl }));
           case "SelectionRequired":
@@ -619,11 +695,14 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         readonly zone: string | undefined;
       }): Effect.Effect<Started, Errors.DomainKitError, Principal.Service> =>
         Effect.gen(function* () {
+          const connection = yield* storage.connections.get(input.connectionId);
+          const attached = (attachment: Storage.Attachment) =>
+            connected({ attachment, connection, domain: input.domain });
           const first = yield* connect.attach({
             connectionId: input.connectionId,
             domain: input.domain,
           });
-          if (!("_tag" in first)) return yield* connected(input.domain);
+          if (!("_tag" in first)) return yield* attached(first);
           if (input.zone === undefined) {
             return new SelectionRequired({
               connectionId: input.connectionId,
@@ -634,12 +713,14 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
           if (target === undefined) {
             return yield* Errors.fail(new Reason.NotFound({ entity: "zone", id: input.zone }));
           }
-          yield* connect.attach({
+          const second = yield* connect.attach({
             connectionId: input.connectionId,
             domain: input.domain,
             target,
           });
-          return yield* connected(input.domain);
+          return "_tag" in second
+            ? yield* Errors.fail(new Reason.NotFound({ entity: "zone", id: input.zone }))
+            : yield* attached(second);
         });
 
       /** Provisioning and cleanup share the approve and apply routes; the attempt knows its kind. */
@@ -650,6 +731,25 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         .handle("inspect", ({ params, request }) => as("inspect", request, snapshot(params.domain)))
         .handle("discover", ({ params, request }) =>
           as("discover", request, Effect.map(connect.discover(params.domain), discovered)),
+        )
+        .handle("zones", ({ query, request }) =>
+          as(
+            "zones",
+            request,
+            Effect.map(
+              connect.zones(query.provider === undefined ? {} : { provider: query.provider }),
+              (listing): Zones => ({
+                zones: listing.zones.map(({ connectionId, provider, target }) => ({
+                  connectionId,
+                  provider,
+                  zone: target.zone,
+                  label: target.label,
+                  ...(target.nameservers === undefined ? {} : { nameservers: target.nameservers }),
+                })),
+                connections: listing.connections,
+              }),
+            ),
+          ),
         )
         .handle("start", ({ payload, request }) =>
           as(
@@ -668,7 +768,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                     })).toString();
               const started = yield* connect.start({
                 provider: payload.provider,
-                domain: payload.domain,
+                ...(payload.domain === undefined ? {} : { domain: payload.domain }),
                 method: methodOf(payload.method),
                 ...(callbackUrl === undefined ? {} : { callbackUrl }),
               });
