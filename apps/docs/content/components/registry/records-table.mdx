@@ -1,0 +1,36 @@
+---
+title: Records table
+description: The records a domain needs, with the pending plan or the last observation on every row, one copy control per value, and a blocked record's reason beneath it.
+---
+
+`records-table` is the requirements, as a table. Every cell aligns middle, so the status column
+lines up with the type and the name rather than floating above them.
+
+<Component path="registry/records-table" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/records-table.json
+```
+
+## What a row says
+
+While a plan is pending, the status column is what the plan will do: add it, leave it, or nothing
+while it is blocked. Once an apply has landed it is what the observers read back. `Records.statusOf`
+answers which of the two a row is on, so the table never decides.
+
+A blocked record gets a second row under it naming what is in the way and what to do about it, both
+from the message catalog.
+
+## API
+
+| Prop     | Type          | Required | Description                                    |
+| -------- | ------------- | -------- | ---------------------------------------------- |
+| `flow`   | `Domain.Flow` | yes      | The flow whose requirements the table renders. |
+| `header` | `ReactNode`   | no       | The line above the table, where the row goes.  |
+
+## Boundary
+
+The table renders what the plan and the observation already decided. Observing DNS, and deciding
+what readiness means for your product, both stay outside it.

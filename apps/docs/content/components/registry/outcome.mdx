@@ -1,0 +1,42 @@
+---
+title: Outcome
+description: "A failed step in the message catalog's words: a heading the customer reads first, what to do about it, and the retry the surface allows, as a card or one line."
+---
+
+`outcome` renders a `DomainKit.Error`. The title and the description come from the error's reason
+through the catalog, so nothing renders a tag, a status literal, or a reason name.
+
+<Component path="registry/outcome" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/outcome.json
+```
+
+## Usage
+
+```tsx
+<Outcome
+  context={{ domain, provider: "Cloudflare" }}
+  error={state._tag === "Failure" ? state.error : null}
+  onRetry={controller.retry}
+/>
+```
+
+The reason alone cannot name the provider a customer typed a token for, so the surface supplies it
+in `context`.
+
+## API
+
+| Prop      | Type                      | Required | Description                                   |
+| --------- | ------------------------- | -------- | --------------------------------------------- |
+| `error`   | `DomainKit.Error \| null` | yes      | The failure, or `null` when the step is fine. |
+| `context` | `Messages.OutcomeContext` | no       | The provider and domain the words may name.   |
+| `onRetry` | `(() => void) \| null`    | no       | The retry to offer, or none.                  |
+| `layout`  | `"card" \| "inline"`      | no       | A panel of its own, or a line under a field.  |
+
+## Boundary
+
+A retry is a write, so a read-only surface passes `null` and the outcome offers none. What is
+retryable is on the error itself: read `isRetryable` rather than matching on words.

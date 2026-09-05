@@ -30,15 +30,14 @@ Add the persistence package when the host runs Effect on PostgreSQL:
 
 ## Entry points
 
-| Import                        | Carries                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------ |
-| `domainkit`                   | Lifecycle services, host seams, providers, values, and `DomainKit.Error` |
-| `domainkit/server`            | `Server.group`, its layers, `Server.Identity`, and the wire schemas      |
-| `domainkit/client`            | `Transport.fromFetch` and the Promise adapters                           |
-| `domainkit/testing`           | Fakes, the recording transport, and the conformance runners              |
-| `@domainkit/react`            | React flows, controllers, parts, messages, and themes                    |
-| `@domainkit/react/styles.css` | The optional default stylesheet                                          |
-| `@domainkit/capsuledb`        | `Storage` on PostgreSQL as one CapsuleDB capsule                         |
+| Import                 | Carries                                                                  |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `domainkit`            | Lifecycle services, host seams, providers, values, and `DomainKit.Error` |
+| `domainkit/server`     | `Server.group`, its layers, `Server.Identity`, and the wire schemas      |
+| `domainkit/client`     | `Transport.fromFetch` and the Promise adapters                           |
+| `domainkit/testing`    | Fakes, the recording transport, and the conformance runners              |
+| `@domainkit/react`     | The React flow hook, the controllers, the message catalog, and `Testing` |
+| `@domainkit/capsuledb` | `Storage` on PostgreSQL as one CapsuleDB capsule                         |
 
 `domainkit/client` runs in the browser and holds no credential. `domainkit/server` and
 `@domainkit/capsuledb` run on the server and never reach browser code.

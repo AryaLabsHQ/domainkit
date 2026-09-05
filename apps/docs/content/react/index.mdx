@@ -1,15 +1,16 @@
 ---
 title: React
-description: A complete custom-domain flow over a transport your server owns, the slots that replace one part of it, and the controllers that sit behind both.
+description: Headless hooks that run the custom-domain lifecycle over a transport your server owns, and the shadcn registry that renders them in your design system.
 sidebar:
   label: Overview
 seo:
-  title: DomainKit React flows
+  title: DomainKit React hooks
 ---
 
-`@domainkit/react` renders the whole custom-domain lifecycle over a transport your server owns.
-Provider credentials never reach the browser: the transport calls the routes you mounted from
-`domainkit/server`.
+`@domainkit/react` runs the whole custom-domain lifecycle over a transport your server owns, and
+paints none of it. The package supplies state, copy, and accessibility; your application supplies
+the markup. Provider credentials never reach the browser: the transport calls the routes you
+mounted from `domainkit/server`.
 
 ```package-install
 @domainkit/react domainkit effect@rc react react-dom
@@ -17,7 +18,7 @@ Provider credentials never reach the browser: the transport calls the routes you
 
 React 19 is required. Install `domainkit` and `@domainkit/react` at the same release version.
 
-## Two components
+## One hook
 
 <Snippet
   file="examples/react/domain-settings.tsx"
@@ -27,25 +28,36 @@ React 19 is required. Install `domainkit` and `@domainkit/react` at the same rel
 
 <Snippet file="examples/react/domain-settings.tsx" region="flow" title="The whole flow" />
 
-<ReactExample story="domain-flow" />
-
-`Domain.Flow` connects a provider, plans the DNS changes, takes the customer's approval or refusal,
-applies the plan, observes the records, and cleans them up against the apply receipt. It renders
-only the capability groups the transport declares.
+`Domain.useFlow` connects a provider, plans the DNS changes, takes the customer's approval or
+refusal, applies the plan, observes the records, and cleans them up against the apply receipt. It
+returns the four controllers, the plan the rows report, the latest readiness, the capability groups
+the transport declares, and a `FlowState` your own surface reads.
 
 Writing `Transport.fromFetch("/api/domainkit")` inline in JSX is fine: `DomainKit.Root` keeps the
 transport's identity for the whole mount, so the controllers do not restart on every render.
 
-## Three ways in
+## The styled path
 
-| Level       | You write                             | Reach for it when                                      |
-| ----------- | ------------------------------------- | ------------------------------------------------------ |
-| The flow    | `<Domain.Flow domain requirements />` | The product needs a working screen today               |
-| Slots       | One or more slot render functions     | Most of the flow fits and one part is yours            |
-| Controllers | `useController` and your own markup   | The lifecycle belongs inside a screen you already have |
+The [registry](/components/registry) vends the flow as shadcn components written against your own
+`ui/button`, `ui/dialog`, `ui/table`, and `ui/badge`, on the Base UI idiom.
 
-[Composition](/docs/react/composition) covers slots, [controllers](/docs/react/controllers) the
-hooks, and [presentation](/docs/react/presentation) the theme, messages, marks, and icons.
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/domain-flow.json
+```
+
+The files land in `components/domainkit/` and are yours after the copy. A project without a shadcn
+kit composes the hooks directly.
+
+## Two ways in
+
+| Level     | You write                            | Reach for it when                                      |
+| --------- | ------------------------------------ | ------------------------------------------------------ |
+| The block | `<DomainFlow domain requirements />` | The product needs a working screen today               |
+| The hooks | `useFlow` or the four controllers    | The lifecycle belongs inside a screen you already have |
+
+[Composition](/docs/react/composition) covers the surface you write over the flow,
+[controllers](/docs/react/controllers) the hooks behind it, and [words](/docs/react/presentation)
+the message catalog every string comes from.
 
 ## Events
 
@@ -71,27 +83,21 @@ a client module rather than passing one down from a server component.
 
 ## The member view
 
-A customer who may read a domain but not change it gets `readOnly`. Status, records, and evidence
-render; every control that would start a write is gone rather than disabled, because a dead button
-is a worse answer than no button.
+A customer who may read a domain but not change it gets `readOnly`. Every command that would start
+a write refuses to run, and the flag rides on `flow.state.readOnly`, so your surface can say who may
+connect instead of rendering an empty row.
 
 <Snippet file="examples/react/read-only.tsx" region="root" title="Read-only for the whole tree" />
 
 <Snippet file="examples/react/read-only.tsx" region="per-domain" title="One domain among several" />
 
-Capability gating is the other half and is unchanged: a group the transport never declares still
-never renders. `readOnly` covers the authorization a transport cannot express, such as a member of
-an organisation who reaches the same routes and would get a 403 from any write.
+Capability gating is the other half and is unchanged: a group the transport never declares is absent
+from `flow.capabilities`. `readOnly` covers the authorization a transport cannot express, such as a
+member of an organisation who reaches the same routes and would get a 403 from any write.
 
 Observation stays available, because checking DNS reads the world rather than changing the domain.
-Retrying does not: a flow that becomes read-only after a write failed keeps the failure on screen
-and drops the retry.
-
-<Snippet
-  file="examples/react/read-only.tsx"
-  region="observe"
-  title="When members may not observe either"
-/>
+Retrying does not: a flow that becomes read-only after a write failed keeps the failure and
+re-inspects instead of resending the command.
 
 ## Verification without a connection
 
@@ -111,44 +117,17 @@ which records are in place instead of failing on the missing receipt.
 `returnTo` defaults to the page the customer started from, read when they connect rather than when
 the flow renders. Pass `null` to send none and leave the server's `defaultReturnTo` in charge.
 
-## Styles
-
-```ts
-import "@domainkit/react/styles.css";
-```
-
-The stylesheet is opt-in and every colour in it is a `--domainkit-*` custom property, so a host that
-imports it can still restyle everything through `theme`.
-
-Every rule ships inside `@layer domainkit`, which sits below any unlayered rule. Your own stylesheet
-wins without out-specifying a part selector, and a utility class lands where you put it.
-
-Once your app uses layers of its own, name the order. A layer's priority is its position in that
-list, and one you never declare lands wherever it first appears, so `domainkit` can end up under
-Tailwind's preflight and the package's buttons render as bare text.
-
-<Snippet
-  file="examples/react/styles.css"
-  region="layer"
-  title="The order that works with Tailwind"
-/>
-
-`domainkit` sits after `base` so preflight cannot strip it, and before `utilities` so a utility
-class still wins. Any layer you declare after it wins the same way.
-
-<Snippet file="examples/react/styles.css" region="override" title="Overriding a part" />
-
 ## Next
 
 <CardGroup cols={2}>
-  <Card title="Component catalog" href="/components" icon="component">
-    Every flow and part, with a preview that runs the real lifecycle.
+  <Card title="Registry" href="/components/registry" icon="component">
+    The styled flow, with a preview that runs the real lifecycle.
   </Card>
   <Card title="@domainkit/react reference" href="/docs/reference/react" icon="book">
-    Namespaces, controller states, slots, and props.
+    Namespaces, hooks, controller states, and options.
   </Card>
-  <Card title="Shadcn registry" href="/docs/react/registry" icon="copy">
-    Copy-in display components with no DomainKit runtime.
+  <Card title="Adding a domain" href="/docs/react/composition" icon="copy">
+    The zone picker, and a surface of your own over the flow.
   </Card>
   <Card title="The transport" href="/docs/react/transport" icon="link">
     What the browser calls, and what it never holds.

@@ -1,61 +1,52 @@
 ---
 title: Components
-description: Complete custom-domain flows, the parts they are built from, and copy-in display components with no runtime, each with a preview that runs for real.
+description: The styled custom-domain flow and the plain DNS display components, copied into your project with the shadcn CLI and previewed against a real server.
 sidebar:
   label: Overview
 seo:
   title: DomainKit React components
 ---
 
-Every interactive component here runs over a transport your app supplies, so credentials, routes,
-storage, tenants, consent, and audit policy stay in your app. The previews on these pages run the
-real lifecycle against an in-memory server, so clicking through them behaves the way a real
-integration does.
+Everything on these pages is a file you copy into your project. `@domainkit/react` supplies the
+behaviour, the state, the copy, and the accessibility; the registry supplies the markup, written
+against your own kit.
 
-## Flows
+The previews run the real lifecycle against an in-memory server, so clicking through them behaves
+the way a real integration does.
+
+## The flow
 
 <CardGroup cols={2}>
-  <Card title="Domain flow" href="/components/domain">
-    The whole lifecycle for one customer domain.
+  <Card title="Domain flow" href="/components/registry/domain-flow">
+    The whole of one domain's setup, on one hook.
   </Card>
-  <Card title="Composed flow" href="/components/composition">
-    Replace one slot and keep the rest.
+  <Card title="Provider row" href="/components/registry/provider-row">
+    Who serves the zone, and the one action.
   </Card>
-  <Card title="Connection" href="/components/connection">
-    Connect a provider, reuse one, or pick a zone.
+  <Card title="Records table" href="/components/registry/records-table">
+    The records to add, and where each one stands.
   </Card>
-  <Card title="Provisioning" href="/components/provisioning">
-    Review the exact changes and approve them.
+  <Card title="Plan action" href="/components/registry/plan-action">
+    Approve a plan's digest and apply it in one press.
   </Card>
-  <Card title="Cleanup" href="/components/cleanup">
-    Remove what an apply receipt proves was created.
+  <Card title="Connect dialog" href="/components/registry/connect-dialog">
+    A provider's methods, one decision at a time.
+  </Card>
+  <Card title="Disconnect dialog" href="/components/registry/disconnect-dialog">
+    Release a provider and remove what it holds.
+  </Card>
+  <Card title="Domain field" href="/components/registry/domain-field">
+    One input over every zone your accounts reach.
+  </Card>
+  <Card title="Outcome" href="/components/registry/outcome">
+    A failed step in the catalog's words.
   </Card>
 </CardGroup>
 
-## Components
+## The display components
 
-<CardGroup cols={2}>
-  <Card title="Records" href="/components/records">
-    The requirements as a table or a zone file.
-  </Card>
-  <Card title="Record card" href="/components/record-card">
-    One requirement, for narrow layouts.
-  </Card>
-  <Card title="Verification" href="/components/verification">
-    Provider evidence and public DNS, kept apart.
-  </Card>
-  <Card title="Outcome" href="/components/outcome">
-    A failed step as media, words, and the next action.
-  </Card>
-  <Card title="Provider mark" href="/components/provider-mark">
-    Provider identity with your artwork or a fallback.
-  </Card>
-</CardGroup>
-
-## Registry
-
-The registry ships plain React display components you copy into your project with the shadcn CLI.
-They import no DomainKit runtime and render only the props you pass them.
+These take plain props and import no DomainKit runtime, for a product that already has its own
+state.
 
 <CardGroup cols={2}>
   <Card title="Registry overview" href="/components/registry">
@@ -81,5 +72,4 @@ They import no DomainKit runtime and render only the props you pass them.
   </Card>
 </CardGroup>
 
-Start with the [React overview](/docs/react) to choose between the flow, the slots, and the
-controllers.
+Start with the [React overview](/docs/react) to see what the hooks behind these files hand you.

@@ -1,0 +1,39 @@
+---
+title: Provider row
+description: "The line that heads a records card: the provider mark, the account the records go to, the one action, and disconnecting behind the row's own menu."
+---
+
+`provider-row` is the connection, as one line rather than a panel of its own. It states who serves
+the zone, names the account the records go to, and carries the single thing to do about it.
+
+<Component path="registry/provider-row" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/provider-row.json
+```
+
+## What it says
+
+| State                   | The line                                  | The action    |
+| ----------------------- | ----------------------------------------- | ------------- |
+| Discovery named a host  | `{Provider} DNS detected`                 | Connect       |
+| Connected               | `{Provider} · {account}`                  | Add N records |
+| Connected with an apply | `{Provider} · {account}`                  | `N added`     |
+| Read-only with a host   | `An administrator can connect {Provider}` | None          |
+
+Disconnecting is behind the row's menu, because it is the rare action and the common one must not
+sit beside it.
+
+## API
+
+| Prop     | Type              | Required | Description                           |
+| -------- | ----------------- | -------- | ------------------------------------- |
+| `flow`   | `Domain.Flow`     | yes      | The flow the row reports on.          |
+| `marks`  | `ProviderArtwork` | no       | Your artwork per provider id.         |
+| `action` | `ReactNode`       | no       | Replaces the one action on the right. |
+
+`marks` is keyed by provider id and takes a node or a function of the provider descriptor. Whatever
+you pass is the mark: nothing wraps it in a tile, so a circular logo stays a circle and a square one
+stays square. Without an entry the mark is the provider's initial, and nothing is fetched at render.

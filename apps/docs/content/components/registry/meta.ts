@@ -3,6 +3,14 @@ import { defineMeta } from "blume";
 export default defineMeta({
   pages: [
     "index",
+    "domain-flow",
+    "provider-row",
+    "records-table",
+    "plan-action",
+    "connect-dialog",
+    "disconnect-dialog",
+    "domain-field",
+    "outcome",
     "dns-table",
     "dns-operation",
     "dns-status",

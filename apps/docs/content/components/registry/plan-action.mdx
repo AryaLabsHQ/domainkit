@@ -1,0 +1,33 @@
+---
+title: Plan action
+description: "The one press a plan needs: it names how many records it will add, authorizes the digest, and applies it in the same action, then reports what landed."
+---
+
+`plan-action` is the single control the flow offers once a plan exists. It approves the plan's
+digest and applies it in one press, because connecting was already the customer saying yes.
+
+<Component path="registry/plan-action" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/plan-action.json
+```
+
+## What it does
+
+Only a create or a delete is approvable: a conflict blocks, and a record already in place is nothing
+to write. Where a conflict blocks part of a plan the action names the remaining ids, so the rest
+still goes in; where every operation is blocked it says what to fix instead. Once an apply has
+landed it reports how many records the receipt proves it added.
+
+## API
+
+| Prop   | Type          | Required | Description                            |
+| ------ | ------------- | -------- | -------------------------------------- |
+| `flow` | `Domain.Flow` | yes      | The flow whose plan the press applies. |
+
+## Boundary
+
+Approval is digest-bound: the plan the customer saw is the plan that applies. Nothing here retries a
+write on its own, and a read-only surface renders no action at all.

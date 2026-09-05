@@ -1,0 +1,39 @@
+---
+title: Disconnect dialog
+description: "Letting a provider go, with the records DomainKit added as one decision: a switch over the exact cleanup plan, then the release of the connection itself."
+---
+
+`disconnect-dialog` asks one question rather than two. Confirming removes what this domain's apply
+receipt proves DomainKit created, then releases the connection.
+
+<Component path="registry/disconnect-dialog" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/disconnect-dialog.json
+```
+
+## What it offers
+
+The cleanup plan is built when the dialog opens, so what would be removed is on screen while the
+customer decides rather than after. Only an apply receipt proves DomainKit created anything, so the
+switch appears over records or not at all, and a plan with nothing in it goes straight to the
+release.
+
+Releasing a connection takes every domain on it, so a shared connection asks which the customer
+meant: this domain alone detaches, and every domain ends the connection.
+
+## API
+
+| Prop           | Type                      | Required | Description                                   |
+| -------------- | ------------------------- | -------- | --------------------------------------------- |
+| `flow`         | `Domain.Flow`             | yes      | The flow whose connection is released.        |
+| `trigger`      | `ReactNode`               | no       | Replaces the default trigger.                 |
+| `open`         | `boolean`                 | no       | Drive the dialog from your own state.         |
+| `onOpenChange` | `(open: boolean) => void` | no       | Fires when the dialog wants to open or close. |
+
+## Boundary
+
+Cleanup is separate from apply and bound to a receipt: it removes only what an apply proved
+DomainKit created, and never a record the customer wrote themselves.

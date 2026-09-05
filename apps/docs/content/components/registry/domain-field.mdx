@@ -1,0 +1,41 @@
+---
+title: Domain field
+description: One input over every zone your customer's connected accounts reach, completing what they type and naming the account the records will go to.
+---
+
+`domain-field` is how a customer adds a domain without typing the whole of it. The zones every
+connected account reaches load when the field mounts, typing filters them, and the line underneath
+says where the records will go.
+
+<Component path="registry/domain-field" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/domain-field.json
+```
+
+## How it completes
+
+A suggestion never replaces what the customer typed, it finishes it: "mail.ex" against
+`example.com` completes to `mail.example.com`. The arrow keys move the highlight, Tab or Enter
+completes it, and Escape closes the list. A domain outside every connected zone leaves the input a
+plain text field, because those records are ones the customer adds by hand.
+
+With no account connected yet, the field offers the providers instead, and an account the provider
+turned down is offered as a reconnect rather than as a second account.
+
+## API
+
+| Prop          | Type                                      | Required | Description                             |
+| ------------- | ----------------------------------------- | -------- | --------------------------------------- |
+| `value`       | `string`                                  | yes      | The value your form holds.              |
+| `onChange`    | `(value: string) => void`                 | yes      | Fires on every keystroke.               |
+| `onResolve`   | `(input: { domain, connection }) => void` | no       | Fires when the value's account changes. |
+| `marks`       | `ProviderArtwork`                         | no       | Your artwork per provider id.           |
+| `placeholder` | `string`                                  | no       | The input's placeholder.                |
+
+## Boundary
+
+The field lists what the transport reports and writes nothing. Creating the domain in your product
+is your own submit; `onResolve` gives it the connection to submit alongside the name.
