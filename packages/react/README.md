@@ -86,7 +86,10 @@ so `offering` is false. Pass `connect: "always"` to offer every provider anyway,
 
 Connecting is the customer saying yes to the records, so the plan builds itself the moment a
 connection lands, after a token connect and after the customer returns from a provider. One
-`approve` adds them.
+`approve` adds them, and the flow observes the domain again to read them back. A domain that already
+holds an apply receipt plans again when a later observation reads one of its records back missing or
+wrong, so records deleted at the provider are offered again from the same button. Records the flow's
+own cleanup took away are not that.
 
 ## Controllers
 
