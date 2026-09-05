@@ -347,7 +347,16 @@ function Hanging({ verb }: { readonly verb: string }) {
   }, [verb]);
   return (
     <DomainKit.Root marks={marks} navigate={() => {}} transport={held}>
-      <Domain.Flow domain={domain} requirements={requirements} />
+      {verb === "plan" ? (
+        // `Domain.Flow` plans into the table; the dialog that has to survive a plan in flight is
+        // the standalone one a host opens itself.
+        <>
+          <Connect.Flow domain={domain} />
+          <Provision.Flow domain={domain} requirements={requirements} />
+        </>
+      ) : (
+        <Domain.Flow domain={domain} requirements={requirements} />
+      )}
     </DomainKit.Root>
   );
 }

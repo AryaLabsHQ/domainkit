@@ -113,6 +113,10 @@ export interface Catalog {
   readonly declineReason: (reason: string) => string;
   readonly operation: (operation: Plan.Operation) => string;
   readonly conflictReason: (reason: Plan.Conflict["reason"]) => string;
+  /** What to do about a conflict, in the row that reports it. */
+  readonly conflictAdvice: (reason: Plan.Conflict["reason"]) => string;
+  /** What a pending plan holds for one row: a write, a record already there, or a blocker. */
+  readonly planStatus: (operation: Plan.Operation) => string;
   readonly attemptStatus: (status: Storage.AttemptStatus) => string;
 
   // Records
@@ -353,6 +357,32 @@ export const english: Catalog = {
         return "A record here uses a form DomainKit will not overwrite.";
       case "missing":
         return "The record this plan expected is gone.";
+    }
+  },
+  conflictAdvice: (reason) => {
+    switch (reason) {
+      case "exclusive-name":
+        return "Remove the record on that name at your provider, then check again.";
+      case "cname-collision":
+        return "Remove the other records on that name at your provider, then check again.";
+      case "value-mismatch":
+        return "Point that record at this value at your provider, or remove it and check again.";
+      case "opaque":
+        return "Remove that record at your provider, then check again.";
+      case "missing":
+        return "Check again to build a plan from what is there now.";
+    }
+  },
+  planStatus: (operation) => {
+    switch (operation._tag) {
+      case "Create":
+        return "Will add";
+      case "Noop":
+        return "Already there";
+      case "Delete":
+        return "Will remove";
+      case "Conflict":
+        return "In the way";
     }
   },
   attemptStatus: (status) => {

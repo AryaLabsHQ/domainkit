@@ -18,12 +18,15 @@ const flow = (page: import("@playwright/test").Page) =>
 const planDialog = (page: import("@playwright/test").Page) =>
   page.locator("[data-domainkit-part='plan-dialog']");
 
-/** The plan opens itself on a connection; close it the way a customer who is not ready would. */
-const setAside = async (page: import("@playwright/test").Page) => {
-  const plan = planDialog(page);
-  await plan.getByRole("button", { name: "Close" }).click();
-  await expect(plan).toBeHidden();
-};
+/** The one action the records header carries once a plan is there to act on. */
+const planAction = (page: import("@playwright/test").Page) =>
+  page.locator("[data-domainkit-part='plan-action']");
+
+/** The status one row reports, by the record name in it. */
+const rowStatus = (page: import("@playwright/test").Page, name: string) =>
+  page
+    .locator("[data-domainkit-part='records-row']", { hasText: name })
+    .locator("[data-domainkit-part='record-status']");
 
 /** A page load builds its own server, so every view opens on the fixture's one zone. */
 const open = async (page: import("@playwright/test").Page, scheme = "light") => {
@@ -59,7 +62,7 @@ test("opens the connect dialog and renders the provider's declared token field",
   await expect(page.getByRole("button", { exact: true, name: "Connect" })).toBeFocused();
 });
 
-test("connects, reviews the plan, and approves it", async ({ page }) => {
+test("connects, reads the plan in the table, and adds the records", async ({ page }) => {
   await open(page);
   await page.getByRole("button", { name: "Connect" }).click();
   await revealToken(page.getByRole("dialog"));
@@ -67,16 +70,14 @@ test("connects, reviews the plan, and approves it", async ({ page }) => {
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.locator("[data-domainkit-part='connected-card']")).toBeVisible();
 
-  // The plan opened itself on the connection: the operations are listed and one action adds them.
-  const plan = page.locator("[data-domainkit-part='plan-dialog']");
-  await expect(plan.locator("[data-domainkit-part='plan-operations'] li")).toHaveCount(3);
-  const add = plan.getByRole("button", { name: "Add 3 records" });
+  // The plan built itself on the connection and landed in the rows: every one says what will
+  // happen to it, and the header carries the one press that makes it happen. No dialog opens.
+  const add = planAction(page);
+  await expect(add).toHaveText("Add 3 records");
   await expect(add).toBeEnabled();
-  // The header's close and a press outside dismiss the plan, so the footer is the plan's own.
-  await expect(plan.getByRole("button", { name: "Not now" })).toHaveCount(0);
-  await expect(plan.getByRole("button", { name: "Decline" })).toBeVisible();
-  await expect(plan).toHaveCSS("opacity", "1");
-  await plan.screenshot({ path: shot("plan-review") });
+  await expect(rowStatus(page, "track.mail.northwind.dev")).toHaveText("Will add");
+  await expect(planDialog(page)).toHaveCount(0);
+  await flow(page).screenshot({ path: shot("plan-in-table") });
   await add.click();
   await expect(flow(page).getByText("DNS records added.")).toBeVisible();
   await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("applied") });
@@ -116,10 +117,7 @@ test("opens the verification popover and reads per-requirement evidence", async 
   await page.getByRole("dialog").getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.locator("[data-domainkit-part='connected-card']")).toBeVisible();
-  await page
-    .locator("[data-domainkit-part='plan-dialog']")
-    .getByRole("button", { name: /^Add \d+ records?$/ })
-    .click();
+  await planAction(page).click();
   await expect(flow(page).getByText("DNS records added.")).toBeVisible();
 
   await page.getByRole("button", { name: /Check/ }).click();
@@ -187,16 +185,16 @@ test("renders a read-only domain as state with no controls", async ({ page }) =>
   await page.getByRole("dialog").getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.locator("[data-domainkit-part='connected-card']")).toBeVisible();
-  await setAside(page);
 
   await page.getByTestId("toggle-readonly").click();
   await expect(page.locator("[data-domainkit-part='connected-card']")).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Type" })).toBeVisible();
   await Promise.all(
-    ["Connect", "Detach domain", "Disconnect", "Review changes"].map((name) =>
+    ["Connect", "Detach domain", "Disconnect"].map((name) =>
       expect(page.getByRole("button", { name })).toHaveCount(0),
     ),
   );
+  await expect(planAction(page)).toHaveCount(0);
   await page.locator("[data-domainkit-part='domain-flow']").screenshot({ path: shot("read-only") });
 });
 
@@ -451,11 +449,10 @@ test("dismisses the connect and disconnect dialogs on an outside press", async (
   await dialog.getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.locator("[data-domainkit-part='connected-card']")).toBeVisible();
-  await setAside(page);
 
   await page.getByRole("button", { name: "Disconnect" }).click();
   await expect(dialog).toBeVisible();
-  // The plan was set aside rather than applied, so there is nothing to remove and no room needed.
+  // Nothing was applied, so there is nothing to remove and no room needed.
   await expect(dialog).toHaveAttribute("data-cleanup", "none");
   await expect(dialog).toHaveCSS("width", "384px");
   await pressOutside(page);
@@ -497,20 +494,20 @@ test("keeps every dialog open while its own command is in flight", async ({ page
   await dialog.getByLabel("Token").fill("tok");
   await page.getByRole("button", { name: "Connect with an API token" }).click();
   await expect(page.locator("[data-domainkit-part='connected-card']")).toBeVisible();
-  await setAside(page);
   await page.getByRole("button", { name: "Disconnect" }).click();
   await dialog.getByRole("button", { name: "Disconnect" }).click();
   await expect(dialog.getByText("Disconnecting…")).toBeVisible();
   await pressOutside(page);
   await expect(dialog).toBeVisible();
 
-  // The review dialog, with `provisioning.plan` never answering.
+  // The standalone review dialog, with `provisioning.plan` never answering.
   await page.goto("/?view=hang&hang=plan");
   await page.getByRole("button", { exact: true, name: "Connect" }).click();
   await revealToken(dialog);
   await dialog.getByLabel("Token").fill("tok");
-  // The plan opens itself on the connection and never answers, so the progress is what shows.
   await page.getByRole("button", { name: "Connect with an API token" }).click();
+  await expect(page.locator("[data-domainkit-part='connected-card']")).toBeVisible();
+  await page.getByRole("button", { name: "Review changes" }).click();
   await expect(planDialog(page).getByText("Preparing DNS changes…")).toBeVisible();
   await pressOutside(page);
   await expect(dialog).toBeVisible();

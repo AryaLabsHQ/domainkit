@@ -1,9 +1,8 @@
-import { Receipt, type DnsRecord } from "domainkit";
-import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { Receipt, type DnsRecord, type Plan } from "domainkit";
+import { useCallback, useEffect, useRef, type ReactElement, type ReactNode } from "react";
 
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
-import * as Cleanup from "./cleanup.tsx";
 import * as Connect from "./connect.tsx";
 import { ReadOnly, useDomainKit, useReadOnly } from "./domain-kit.tsx";
 import * as Provision from "./provision.tsx";
@@ -13,19 +12,15 @@ import * as Verify from "./verify.tsx";
 export interface RecordsSlotProps {
   readonly records: ReadonlyArray<DnsRecord.Model>;
   readonly readiness: Verify.Readiness | null;
+  /** The plan awaiting its apply, whose operations the rows report; `null` once one has landed. */
+  readonly plan: Plan.Model | null;
+  readonly provisioning: Provision.Controller;
   readonly controller: Verify.Controller;
   readonly domain: string;
 }
 
 export interface VerificationSlotProps {
   readonly controller: Verify.Controller;
-  readonly domain: string;
-}
-
-export interface ActionsSlotProps {
-  readonly connection: Connect.Controller;
-  readonly provisioning: Provision.Controller;
-  readonly cleanup: Cleanup.Controller;
   readonly domain: string;
 }
 
@@ -45,8 +40,6 @@ export interface Slots {
   readonly records?: (props: RecordsSlotProps) => ReactNode;
   /** Defaults to `Verify.Status`. Rendered only when the transport declares `verification`. */
   readonly verification?: (props: VerificationSlotProps) => ReactNode;
-  /** Defaults to Approve and Decline, plus cleanup when the transport declares it. */
-  readonly actions?: (props: ActionsSlotProps) => ReactNode;
   /** Defaults to `Connect.Card` once connected and `Connect.Prompt` until then. */
   readonly connection?: (props: ConnectionSlotProps) => ReactNode;
 }
@@ -99,11 +92,6 @@ export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children">
   readonly connect?: Connect.Invitation;
   /** Fires whenever what DomainKit has to say about this domain changes, and once on mount. */
   readonly onState?: (state: FlowState) => void;
-  /**
-   * `auto` plans and opens the review the moment a connection lands, so connecting and adding the
-   * records is one pass rather than three. `manual` waits for the trigger.
-   */
-  readonly review?: Review;
 }
 
 /** Built from primitives alone, so the effect that announces it depends on exactly those. */
@@ -123,9 +111,6 @@ const flowState = (input: {
   provisioning: input.planning,
   receiptId: input.receipt === null ? null : Receipt.ReceiptId.make(input.receipt),
 });
-
-/** Whether the flow opens the plan itself once a connection lands, or waits to be asked. */
-export type Review = "auto" | "manual";
 
 interface DefaultConnectionProps extends ConnectionSlotProps {
   readonly onCleaned?: (receipt: Receipt.Model) => void;
@@ -159,42 +144,27 @@ function DefaultConnection({
   );
 }
 
-/**
- * The page carries the trigger and, once an attempt ends, its outcome. What the plan will do,
- * whether to approve it, and how the apply is going all belong to the dialog the trigger opens:
- * approving beside no operations is a decision taken without the thing it is about. Removing
- * records is not here either — it is the option inside the disconnect dialog — and `Cleanup.Flow`
- * stays exported for a host that wants the standalone surface.
- */
-interface DefaultActionsProps extends ActionsSlotProps {
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
-}
-
-function DefaultActions({
-  connection,
-  onOpenChange,
-  open,
-  provisioning,
-}: DefaultActionsProps): ReactElement | null {
-  const readOnly = useReadOnly();
-  const { capabilities } = useDomainKit();
-  const connected = connection.state._tag === "Connected";
-  // Every control here starts a write; the state a read-only customer may see is rendered above.
-  if (readOnly) return null;
-  if (!capabilities.includes("provisioning") || !connected) return null;
-  return (
-    <>
-      <Provision.Dialog controller={provisioning} onOpenChange={onOpenChange} open={open} />
-      {open ? null : <Provision.Outcome controller={provisioning} />}
-    </>
-  );
-}
+/** The plan the rows report, which is one still awaiting its apply. */
+const pendingPlan = (state: Provision.State): Plan.Model | null => {
+  switch (state._tag) {
+    case "Planned":
+    case "Approving":
+    case "Applying":
+      return state.plan;
+    case "Idle":
+    case "Planning":
+    case "Applied":
+    case "Rejecting":
+    case "Rejected":
+    case "Failure":
+      return null;
+  }
+};
 
 /**
- * The whole lifecycle for one domain: connect, review, apply, observe, clean up. The flow renders
- * only what the transport declares, and every part of it is a slot with a default. It adds no
- * layout containers of its own, so a host's grid can place the slot output directly.
+ * The whole lifecycle for one domain: connect, add the records, observe, clean up. The flow
+ * renders only what the transport declares, and every part of it is a slot with a default. It adds
+ * no layout containers of its own, so a host's grid can place the slot output directly.
  */
 export function Flow({
   connect = "detected",
@@ -205,11 +175,10 @@ export function Flow({
   readOnly,
   requirements,
   returnTo,
-  review = "auto",
   slots = {},
   ...props
 }: FlowProps): ReactElement {
-  const { capabilities } = useDomainKit();
+  const { capabilities, messages } = useDomainKit();
   const inherited = useReadOnly();
   const connection = Connect.useController({
     domain,
@@ -227,63 +196,56 @@ export function Flow({
     ),
     requirements,
   });
-  const cleanup = Cleanup.useController({
-    domain,
-    onCleaned: useCallback(
-      (receipt: Receipt.Model) => {
-        refresh();
-        onCleaned?.(receipt);
-      },
-      [onCleaned, refresh],
-    ),
-    ...(connection.snapshot?.lastReceiptId == null
-      ? {}
-      : { receiptId: Receipt.ReceiptId.make(connection.snapshot.lastReceiptId) }),
-  });
   // The flow knows what it asked for, so a domain with no attachment can still be verified.
   const verification = Verify.useController({ domain, requirements });
   const readiness = verification.readiness;
   const status = connection.state._tag;
   const planning = provisioning.state._tag;
-  // Connecting is the customer saying yes to the records; the plan is what those records are, so
-  // it opens itself rather than waiting behind another click. `established` only ever grows, so
-  // this fires once per connection that landed and never again on a re-render or a reload.
-  const [reviewing, setReviewing] = useState(false);
-  // A flow pointed at a new domain drops the review with everything else it was holding, while
-  // rendering rather than an effect later, so no frame shows one domain's plan over another's.
-  const [reviewed, setReviewed] = useState(domain);
-  if (reviewed !== domain) {
-    setReviewed(domain);
-    setReviewing(false);
-  }
-  const established = connection.established;
-  const answered = useRef(established);
+  const surfaceReadOnly = readOnly ?? inherited;
+  // The plan is what the table is: an attached domain with nothing applied to it yet has records
+  // that are still a proposal, and the rows say so. The signature is what makes that one call per
+  // reason to make it — the domain, the connection that landed, the receipt that is or is not
+  // there, and what the host asked for — rather than one per render.
+  const attached = connection.snapshot?.attachment != null;
+  const receiptId = connection.snapshot?.lastReceiptId ?? null;
+  const signature =
+    surfaceReadOnly || !capabilities.includes("provisioning") || !attached || receiptId !== null
+      ? null
+      : [domain, connection.established, Records.requirementsKey(requirements)].join("|");
+  const plan = pendingPlan(provisioning.state);
+  const planned = useRef<string | null>(null);
   const buildPlan = provisioning.plan;
   useEffect(() => {
-    if (answered.current === established) return;
-    answered.current = established;
-    if (review === "manual") return;
+    if (signature === null || planned.current === signature) return;
+    planned.current = signature;
     buildPlan();
-    setReviewing(true);
-  }, [buildPlan, established, review]);
+  }, [buildPlan, signature]);
   // The same predicate the surface renders on, so the state a host reads and the surface a
   // customer sees never disagree, including while a disconnect is in flight.
   const connected = Connect.holdsConnection(connection);
   const offering = Connect.offering(connection, connect);
   const provider = connection.snapshot?.provider ?? Connect.hostProvider(connection)?.id ?? null;
-  const receipt = connection.snapshot?.lastReceiptId ?? null;
-  const state = flowState({ connected, offering, planning, provider, receipt, status });
+  const state = flowState({
+    connected,
+    offering,
+    planning,
+    provider,
+    receipt: receiptId,
+    status,
+  });
   // The callback rides a ref so a host writing it inline does not re-announce every render.
   const announce = useRef(onState);
   useEffect(() => {
     announce.current = onState;
   });
   useEffect(() => {
-    announce.current?.(flowState({ connected, offering, planning, provider, receipt, status }));
-  }, [connected, offering, planning, provider, receipt, status]);
+    announce.current?.(
+      flowState({ connected, offering, planning, provider, receipt: receiptId, status }),
+    );
+  }, [connected, offering, planning, provider, receiptId, status]);
   return usePart("div", props, state, {
     children: (
-      <ReadOnly value={readOnly ?? inherited}>
+      <ReadOnly value={surfaceReadOnly}>
         {!capabilities.includes("connection") ? null : slots.connection === undefined ? (
           <DefaultConnection
             connect={connect}
@@ -295,26 +257,29 @@ export function Flow({
           slots.connection({ connect, controller: connection, domain })
         )}
         {slots.records === undefined ? (
-          <Records.Table readiness={readiness} records={requirements} />
+          <Records.Table
+            {...(capabilities.includes("provisioning")
+              ? { actions: <Provision.Action controller={provisioning} /> }
+              : {})}
+            caption={messages.recordsCaption(domain)}
+            plan={plan}
+            readiness={readiness}
+            records={requirements}
+          />
         ) : (
-          slots.records({ controller: verification, domain, readiness, records: requirements })
+          slots.records({
+            controller: verification,
+            domain,
+            plan,
+            provisioning,
+            readiness,
+            records: requirements,
+          })
         )}
         {!capabilities.includes("verification") ? null : slots.verification === undefined ? (
           <Verify.Status controller={verification} />
         ) : (
           slots.verification({ controller: verification, domain })
-        )}
-        {slots.actions === undefined ? (
-          <DefaultActions
-            cleanup={cleanup}
-            connection={connection}
-            domain={domain}
-            onOpenChange={setReviewing}
-            open={reviewing}
-            provisioning={provisioning}
-          />
-        ) : (
-          slots.actions({ cleanup, connection, domain, provisioning })
         )}
       </ReadOnly>
     ),

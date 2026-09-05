@@ -4,7 +4,7 @@ import { useCallback, useState, type ReactElement, type ReactNode } from "react"
 import { State, useAttempt, type Controller } from "./attempt.ts";
 import type { PartProps } from "./composition.tsx";
 import { usePart } from "./composition.tsx";
-import { useDomainKit } from "./domain-kit.tsx";
+import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
 import * as Records from "./records.tsx";
 import * as Review from "./review.tsx";
@@ -70,6 +70,66 @@ export interface ActionsProps extends Omit<Review.ActionsProps, "kind"> {}
 /** Approve and Decline for a plan already under review. */
 export function Actions(props: ActionsProps): ReactElement | null {
   return <Review.Actions {...props} kind="provisioning" />;
+}
+
+export interface ActionProps extends PartProps<"div", RootState> {
+  readonly controller: Controller;
+}
+
+/**
+ * The one action a plan needs: it names what it will add, authorizes the digest, and applies it in
+ * the same press. Where a conflict blocks part of a plan it approves the rest by id; where every
+ * operation is blocked it says what to fix instead. The outcome sits under it, so an apply that
+ * failed is answered where it was started.
+ */
+export function Action({ controller, ...props }: ActionProps): ReactElement | null {
+  const { messages } = useDomainKit();
+  const readOnly = useReadOnly();
+  const state = controller.state;
+  const plan = state._tag === "Planned" ? state.plan : null;
+  const running = state._tag === "Approving" || state._tag === "Applying";
+  // A conflict is not a write, so it never counts towards what the button says it will add.
+  const writes =
+    plan === null ? [] : plan.operations.filter((operation) => operation._tag !== "Conflict");
+  const blocked = plan !== null && writes.length === 0;
+  const element = usePart(
+    "div",
+    props,
+    { status: state._tag },
+    {
+      children: (
+        <>
+          {plan === null && !running ? null : (
+            <button
+              data-domainkit-part="plan-action"
+              disabled={running || plan === null || writes.length === 0}
+              onClick={() =>
+                // Naming the ids is what leaves a conflict out; approving the whole plan would not.
+                controller.approve(
+                  writes.length === plan?.operations.length
+                    ? undefined
+                    : writes.map((operation) => operation.id),
+                )
+              }
+              type="button"
+            >
+              {running ? messages.applying : messages.addRecords(writes.length)}
+            </button>
+          )}
+          {blocked ? (
+            <p data-domainkit-part="plan-blocked">{messages.everyRecordConflicts}</p>
+          ) : null}
+          <Outcome controller={controller} layout="inline" />
+        </>
+      ),
+      "data-domainkit-part": "plan-actions",
+    },
+  );
+  // Every press here starts a write, and a count the flow does not have yet would be a claim it
+  // cannot make: nothing renders until there is a plan to act on or an outcome to report.
+  if (readOnly) return null;
+  const reporting = state._tag === "Applied" || state._tag === "Failure";
+  return plan === null && !running && !reporting ? null : element;
 }
 
 export interface OutcomeProps extends Omit<Review.OutcomeProps, "kind"> {}

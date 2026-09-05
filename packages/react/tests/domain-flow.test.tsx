@@ -49,38 +49,30 @@ const click = async (name: string | RegExp) => {
  */
 const patient = { timeout: 20_000 } as const;
 
-/**
- * The review dialog by name. The connect dialog it followed may still be closing beside it, and a
- * query by role would take whichever the DOM happens to hold at that instant.
- */
-const reviewing = async (): Promise<HTMLElement> => {
-  let found: Element | null = null;
-  await waitFor(() => {
-    found = document.querySelector("[data-domainkit-part='plan-dialog']");
-    expect(found).not.toBeNull();
-  }, patient);
-  return found as unknown as HTMLElement;
-};
-
 /** The connected card, which is what a domain that holds a connection renders. */
 const connectedCard = () => document.querySelector("[data-domainkit-part='connected-card']");
 
 const untilConnected = () => waitFor(() => expect(connectedCard()).not.toBeNull());
 
-/** Close the plan that opened itself, the way a customer who is not ready would. */
-const setAside = async () => {
-  const dialog = await reviewing();
-  // The close lands with the plan: a dialog with a command still running keeps it out of reach.
-  await user.click(await within(dialog).findByRole("button", { name: "Close" }, patient));
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+/** The status a row reports, by record name, as the table renders it. */
+const rowStatus = (name: string): string | null => {
+  const rows = [...document.querySelectorAll("[data-domainkit-part='records-row']")];
+  const row = rows.find((entry) => entry.textContent?.includes(name));
+  return row?.querySelector("[data-domainkit-part='record-status']")?.textContent ?? null;
 };
 
-/** Open the plan from the page and add what it holds, in the one step the dialog offers. */
+/** The one action the records header carries once a plan is there to act on. */
+const planAction = () =>
+  document.querySelector<HTMLButtonElement>("[data-domainkit-part='plan-action']");
+
+/** Add what the plan holds, in the one press the header offers. */
 const addRecords = async () => {
-  await click("Review changes");
-  const dialog = await reviewing();
-  const add = await within(dialog).findByRole("button", { name: /^Add \d+ records?$/ }, patient);
-  await waitFor(() => expect(add.hasAttribute("disabled")).toBe(false));
+  const add = await waitFor(() => {
+    const button = planAction();
+    expect(button).not.toBeNull();
+    expect(button?.hasAttribute("disabled")).toBe(false);
+    return button as HTMLButtonElement;
+  }, patient);
   await user.click(add);
 };
 
@@ -89,8 +81,6 @@ const connect = async () => {
   await user.type(await screen.findByLabelText(/Token/), "tok");
   await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
   await untilConnected();
-  // The plan opens itself on a connection; a test that wants it says so.
-  await setAside();
 };
 
 describe("Domain.Flow", () => {
@@ -110,7 +100,9 @@ describe("Domain.Flow", () => {
     );
 
     await connect();
-
+    // The plan builds itself on the connection, so the rows say what will happen before anything
+    // does, and the header carries the one press that does it.
+    await waitFor(() => expect(rowStatus(domain)).toBe("Will add"), patient);
     await addRecords();
     await waitFor(() => expect(applied).toHaveLength(1));
     expect(applied[0]?.status).toBe("complete");
@@ -159,18 +151,40 @@ describe("Domain.Flow", () => {
           onApplied={(receipt) => applied.push(receipt)}
           requirements={requirements}
           slots={{
-            records: ({ readiness, records }) => (
+            records: ({ plan, provisioning, readiness, records }) => (
               <table data-testid="host-table">
                 <caption>Host DNS</caption>
                 <tbody>
-                  {records.map((record) => (
-                    <tr key={record.name}>
-                      <td>{record.name}</td>
-                      <td>{DnsRecord.data(record)}</td>
-                      <td>{Records.statusOf(record, readiness) ?? "—"}</td>
-                    </tr>
-                  ))}
+                  {records.map((record) => {
+                    const standing = Records.statusOf(record, { plan, readiness });
+                    return (
+                      <tr key={record.name}>
+                        <td>{record.name}</td>
+                        <td>{DnsRecord.data(record)}</td>
+                        <td>
+                          {standing === null
+                            ? "—"
+                            : standing._tag === "Operation"
+                              ? standing.operation._tag
+                              : standing.status}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3}>
+                      <button
+                        data-testid="host-add"
+                        onClick={() => provisioning.approve()}
+                        type="button"
+                      >
+                        Add them
+                      </button>
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             ),
           }}
@@ -183,11 +197,13 @@ describe("Domain.Flow", () => {
     expect(screen.queryByRole("columnheader", { name: "Type" })).toBeNull();
 
     await connect();
-    await addRecords();
+    // The flow hands the slot the plan it built, so a host table reports the same operations.
+    await waitFor(() => expect(within(table).getAllByText("Create")).toHaveLength(2), patient);
+    await user.click(screen.getByTestId("host-add"));
     await waitFor(() => expect(applied).toHaveLength(1));
   });
 
-  it("renders slot output as direct children, so inlining actions needs no display: contents", async () => {
+  it("renders slot output as direct children, so inlining it needs no display: contents", async () => {
     const { domain, requirements, transport } = scenario();
     render(
       <DomainKit.Root transport={transport}>
@@ -195,13 +211,12 @@ describe("Domain.Flow", () => {
           domain={domain}
           requirements={requirements}
           slots={{
-            actions: ({ provisioning }) => (
-              <button data-testid="host-action" onClick={provisioning.plan} type="button">
+            connection: () => null,
+            records: () => (
+              <button data-testid="host-action" type="button">
                 Apply DNS
               </button>
             ),
-            connection: () => null,
-            records: () => null,
             verification: () => null,
           }}
         />
@@ -228,23 +243,8 @@ describe("Domain.Flow", () => {
     );
     await screen.findByRole("button", { name: "Connect" });
     expect(screen.queryByRole("button", { name: /Check/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
+    expect(planAction()).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove records" })).toBeNull();
-  });
-
-  it("declines a plan from the default actions slot and reports the rejection", async () => {
-    const { domain, requirements, transport } = scenario();
-    render(
-      <DomainKit.Root transport={transport}>
-        <Domain.Flow domain={domain} requirements={requirements} />
-      </DomainKit.Root>,
-    );
-    await connect();
-    await click("Review changes");
-    const plan = await reviewing();
-    // Decline renders with the plan it would decline, which crosses the fake server first.
-    await user.click(await within(plan).findByRole("button", { name: "Decline" }, patient));
-    await waitFor(() => expect(screen.getByText(/Declined by/)).toBeDefined());
   });
 
   it("takes a dialog surface from the host through the connection slot's render prop", async () => {
@@ -370,8 +370,6 @@ describe("Domain.Flow disconnect", () => {
     );
     // Discovery resolves to the connection this owner already holds, so it attaches on sight.
     await untilConnected();
-    // Attaching a connection this owner already has lands one too, so the plan opens here as well.
-    await setAside();
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("radio", { name: "Only this domain" })).toBeDefined();
@@ -406,8 +404,6 @@ describe("Domain.Flow disconnect", () => {
       </DomainKit.Root>,
     );
     await untilConnected();
-    // Attaching a connection this owner already has lands one too, so the plan opens here as well.
-    await setAside();
     await click("Disconnect");
     const dialog = await screen.findByRole("dialog");
     // The sibling never applied anything, so there is no receipt and nothing to offer removing.
@@ -513,9 +509,7 @@ describe("Domain.Flow disconnect", () => {
 });
 
 describe("Domain.Flow one-click onboarding", () => {
-  const opened = reviewing;
-
-  it("opens the plan on a token connect and adds the records in one step", async () => {
+  it("plans on a token connect and adds the records in one press", async () => {
     const { domain, requirements, transport } = scenario();
     const applied: Array<Receipt.Model> = [];
     render(
@@ -531,25 +525,23 @@ describe("Domain.Flow one-click onboarding", () => {
     await user.type(await screen.findByLabelText(/Token/), "tok");
     await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
 
-    // No second click to get here: the plan is what the customer just said yes to.
-    const dialog = await opened();
-    // The action appears with the plan, so waiting for it is waiting for the operations.
-    const add = await within(dialog).findByRole("button", { name: "Add 2 records" }, patient);
-    expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
-    await waitFor(() => expect(add.hasAttribute("disabled")).toBe(false));
-    await user.click(add);
+    // No second click to get here: the plan is what the customer just said yes to, and it lands
+    // in the rows rather than behind a dialog.
+    await waitFor(() => expect(planAction()?.textContent).toBe("Add 2 records"), patient);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(rowStatus(domain)).toBe("Will add");
+    await addRecords();
 
-    // One step: approve and apply, the dialog closing on the receipt.
+    // One press: approve and apply.
     await waitFor(() => expect(applied).toHaveLength(1));
     expect(applied[0]?.status).toBe("complete");
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await screen.findByText("DNS records added.");
     expect(transport.calls.map((call) => call.method)).toEqual(
       expect.arrayContaining(["provisioning.approve", "provisioning.apply"]),
     );
   });
 
-  it("opens the plan when the customer comes back from a provider, and not again after that", async () => {
+  it("plans when the customer comes back from a provider, and not again after that", async () => {
     const zone = `oneclick${(cases += 1)}.example`;
     const domain = `app.${zone}`;
     const requirements = [
@@ -598,12 +590,12 @@ describe("Domain.Flow one-click onboarding", () => {
     );
 
     const back = render(harness(transport));
-    await reviewing();
+    await waitFor(() => expect(planAction()).not.toBeNull(), patient);
     expect(sessionStorage.getItem("domainkit.returning")).toBeNull();
-    await setAside();
     back.unmount();
 
-    // A reload after the fact is a page view, not a return: nothing opens itself.
+    // A reload finds the same attached domain with nothing applied, so it plans again and no
+    // dialog opens over it either way.
     render(harness(transport));
     await untilConnected();
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -663,9 +655,8 @@ describe("Domain.Flow one-click onboarding", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("drops an open review when the flow is pointed at another domain", async () => {
-    const scenarioed = scenario();
-    const { domain, requirements, sibling, transport } = scenarioed;
+  it("drops one domain's plan when the flow is pointed at another", async () => {
+    const { domain, requirements, sibling, transport } = scenario();
     function Harness({ target }: { readonly target: string }) {
       return (
         <DomainKit.Root transport={transport}>
@@ -677,28 +668,12 @@ describe("Domain.Flow one-click onboarding", () => {
     await click("Connect");
     await user.type(await screen.findByLabelText(/Token/), "tok");
     await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-    await reviewing();
+    await waitFor(() => expect(rowStatus(domain)).toBe("Will add"), patient);
 
-    // One domain's plan must never stand over another's.
+    // One domain's plan must never stand over another's; the sibling attaches on sight and builds
+    // its own, which is about its own records.
     view.rerender(<Harness target={sibling} />);
-    await waitFor(() =>
-      expect(document.querySelector("[data-domainkit-part='plan-dialog']")).toBeNull(),
-    );
-  });
-
-  it("leaves the plan where it is for a host that asks to open it itself", async () => {
-    const { domain, requirements, transport } = scenario();
-    render(
-      <DomainKit.Root transport={transport}>
-        <Domain.Flow domain={domain} requirements={requirements} review="manual" />
-      </DomainKit.Root>,
-    );
-    await click("Connect");
-    await user.type(await screen.findByLabelText(/Token/), "tok");
-    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-    await untilConnected();
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("button", { name: "Review changes" })).toBeDefined();
+    await waitFor(() => expect(rowStatus(domain)).toBeNull(), patient);
   });
 
   it("adds what it can when a record is in the way, and says what to fix when none can", async () => {
@@ -735,17 +710,51 @@ describe("Domain.Flow one-click onboarding", () => {
     await click("Connect");
     await user.type(await screen.findByLabelText(/Token/), "tok");
     await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-    const dialog = await opened();
-    // The action appears with the plan, so waiting for it is waiting for the operations.
-    const add = await within(dialog).findByRole("button", { name: /^Add \d+ records?$/ }, patient);
-    // The blocked record is not one of them, so the action offers the rest and stays available.
-    await waitFor(() => expect(add.hasAttribute("disabled")).toBe(false));
-    expect(add.textContent).toBe("Add 1 record");
-    expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
-    expect(
-      dialog.querySelector("[data-domainkit-part='operation-item'][data-operation='Conflict']")
-        ?.textContent,
-    ).toMatch(/cannot share a name|already owns this name/);
+    // The blocked record is not a write, so the action offers the rest and stays available.
+    await waitFor(() => expect(planAction()?.textContent).toBe("Add 1 record"), patient);
+    expect(planAction()?.hasAttribute("disabled")).toBe(false);
+    expect(rowStatus(domain)).toBe("In the way");
+    expect(rowStatus(`_acme.${domain}`)).toBe("Will add");
+    // The row under the record says what is wrong and what to do about it.
+    const conflict = document.querySelector("[data-domainkit-part='record-conflict']");
+    expect(conflict?.textContent).toMatch(/cannot share a name|already owns this name/);
+    expect(conflict?.textContent).toContain("at your provider");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("says what to fix when every record is in the way", async () => {
+    const zone = `blocked${(cases += 1)}.example`;
+    const domain = `app.${zone}`;
+    const wanted = DnsRecord.cname({
+      name: domain,
+      purpose: "Serve your site",
+      target: "edge.example.com",
+    });
+    const transport = Testing.transport({
+      provider: {
+        nameserverSuffixes: [zone],
+        records: [
+          {
+            record: DnsRecord.txt({ name: domain, purpose: "Something else", value: "held" }),
+            zone,
+          },
+        ],
+        zones: [zone],
+      },
+    });
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={[wanted]} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await user.type(await screen.findByLabelText(/Token/), "tok");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
+    await waitFor(() => expect(planAction()).not.toBeNull(), patient);
+    expect(planAction()?.hasAttribute("disabled")).toBe(true);
+    expect(document.querySelector("[data-domainkit-part='plan-blocked']")?.textContent).toBe(
+      "Resolve the records above at your provider, then review again.",
+    );
   });
 });
 
@@ -985,7 +994,7 @@ describe("Domain.Flow read-only", () => {
       </DomainKit.Root>,
     );
     await untilConnected();
-    expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
+    expect(planAction()).toBeNull();
     expect(screen.queryByRole("button", { name: "Detach domain" })).toBeNull();
   });
 
@@ -996,7 +1005,7 @@ describe("Domain.Flow read-only", () => {
         <Domain.Flow domain={domain} requirements={requirements} />
       </DomainKit.Root>,
     );
-    expect(await screen.findByRole("button", { name: "Review changes" })).toBeDefined();
+    await waitFor(() => expect(planAction()).not.toBeNull(), patient);
     expect(screen.getByRole("button", { name: "Disconnect" })).toBeDefined();
   });
 });

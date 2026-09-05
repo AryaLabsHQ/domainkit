@@ -131,6 +131,7 @@
     [data-domainkit-part="connection-retry"],
     [data-domainkit-part="plan-trigger"],
     [data-domainkit-part="plan-apply"],
+    [data-domainkit-part="plan-action"],
     [data-domainkit-part="provisioning-retry"],
     [data-domainkit-part="observe-action"],
     [data-domainkit-part="cleanup-trigger"],
@@ -180,6 +181,7 @@
     [data-domainkit-part="oauth-connect"],
     [data-domainkit-part="plan-trigger"],
     [data-domainkit-part="plan-apply"],
+    [data-domainkit-part="plan-action"],
     [data-domainkit-part="connection-trigger"],
     [data-domainkit-part="token-submit"]
   ) {
@@ -205,6 +207,7 @@
     [data-domainkit-part="oauth-connect"]:hover:not(:disabled),
     [data-domainkit-part="plan-trigger"]:hover:not(:disabled),
     [data-domainkit-part="plan-apply"]:hover:not(:disabled),
+    [data-domainkit-part="plan-action"]:hover:not(:disabled),
     [data-domainkit-part="connection-trigger"]:hover:not(:disabled),
     [data-domainkit-part="token-submit"]:hover:not(:disabled)
   ) {
@@ -217,6 +220,7 @@
     [data-domainkit-part="oauth-connect"]:active:not(:disabled),
     [data-domainkit-part="plan-trigger"]:active:not(:disabled),
     [data-domainkit-part="plan-apply"]:active:not(:disabled),
+    [data-domainkit-part="plan-action"]:active:not(:disabled),
     [data-domainkit-part="connection-trigger"]:active:not(:disabled),
     [data-domainkit-part="token-submit"]:active:not(:disabled)
   ) {
@@ -1237,6 +1241,49 @@
     width: 100%;
   }
 
+  /* The name of the table and the one action over it, above the rows they are about. */
+  :where([data-domainkit-part="records-header"]) {
+    align-items: center;
+    border-bottom: 1px solid var(--domainkit-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: space-between;
+    padding: 0.65rem 0.75rem;
+  }
+
+  :where([data-domainkit-part="records-caption"]) {
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  :where([data-domainkit-part="records-actions"], [data-domainkit-part="plan-actions"]) {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+
+  :where([data-domainkit-part="plan-blocked"]) {
+    color: var(--domainkit-muted);
+    font-size: 0.75rem;
+    margin: 0;
+  }
+
+  /* A conflict reads under the record it blocks, in prose rather than in the record's monospace. */
+  :where([data-domainkit-part="record-conflict"] td) {
+    border-top: 0;
+    color: var(--domainkit-muted);
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding-top: 0;
+  }
+
+  :where([data-domainkit-part="record-conflict-reason"]) {
+    color: var(--domainkit-danger);
+  }
+
   :where([data-domainkit-part="records-table"]) {
     border-collapse: collapse;
     min-width: 36rem;
@@ -1400,6 +1447,22 @@
   }
 
   :where([data-domainkit-part="record-status"][data-status="Unavailable"]) {
+    background: var(--domainkit-background);
+    color: var(--domainkit-muted);
+  }
+
+  :where([data-domainkit-part="record-status"][data-operation="Noop"]) {
+    background: color-mix(in srgb, var(--domainkit-success) 16%, transparent);
+    color: var(--domainkit-success);
+  }
+
+  :where([data-domainkit-part="record-status"][data-operation="Conflict"]) {
+    background: color-mix(in srgb, var(--domainkit-danger) 14%, transparent);
+    color: var(--domainkit-danger);
+  }
+
+  :where([data-domainkit-part="record-status"][data-operation="Create"]),
+  :where([data-domainkit-part="record-status"][data-operation="Delete"]) {
     background: var(--domainkit-background);
     color: var(--domainkit-muted);
   }

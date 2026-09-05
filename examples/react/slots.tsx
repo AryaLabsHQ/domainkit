@@ -54,7 +54,7 @@ export function DomainSettingsInAGrid() {
 // #endregion layout
 
 // #region actions
-/** The actions slot receives all three controllers, so a host can drive its own buttons. */
+/** The records slot carries the plan and the provisioning controller, so a host owns the action. */
 export function DomainSettingsWithMyButtons() {
   return (
     <DomainKit.Root transport={transport}>
@@ -62,13 +62,11 @@ export function DomainSettingsWithMyButtons() {
         domain="app.example.com"
         requirements={requirements}
         slots={{
-          actions: ({ cleanup, provisioning }) => (
-            <div className="my-actions">
-              <button onClick={provisioning.plan} type="button">
-                Review DNS changes
-              </button>
-              <button onClick={cleanup.plan} type="button">
-                Remove records
+          records: ({ plan, provisioning, readiness, records }) => (
+            <div className="my-records">
+              <Records.Table plan={plan} readiness={readiness} records={records} />
+              <button disabled={plan === null} onClick={() => provisioning.approve()} type="button">
+                Add these records
               </button>
             </div>
           ),
