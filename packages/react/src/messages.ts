@@ -51,6 +51,14 @@ export interface Catalog {
   readonly download: string;
   readonly useConnection: (label: string) => string;
   readonly chooseZone: string;
+  /** The domain field's listbox, named for a customer reading it with assistive technology. */
+  readonly zoneSuggestions: string;
+  /** Which account a typed domain's records will go to. */
+  readonly recordsGoTo: (provider: string, account: string) => string;
+  /** A typed domain no connected account reaches; the customer adds the records by hand. */
+  readonly notInConnectedAccount: string;
+  /** A held connection whose credential the provider turned down. */
+  readonly reconnectAccount: (account: string) => string;
   readonly getToken: string;
 
   // Progress
@@ -281,6 +289,10 @@ export const english: Catalog = {
   download: "Download",
   useConnection: (label) => `Use ${label}`,
   chooseZone: "Choose the zone that serves this domain",
+  zoneSuggestions: "Zones your connected accounts serve",
+  recordsGoTo: (provider, account) => `Records go to ${provider} through ${account}.`,
+  notInConnectedAccount: "Not in a connected account.",
+  reconnectAccount: (account) => `Reconnect ${account}`,
   getToken: "Where do I find this?",
 
   loading: "Loading…",

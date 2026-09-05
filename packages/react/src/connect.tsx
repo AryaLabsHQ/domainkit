@@ -28,6 +28,27 @@ import * as Operations from "./operations.tsx";
 import * as Provider from "./provider.tsx";
 import { useRunner } from "./task.ts";
 
+export {
+  AccountsState,
+  completionOf,
+  DomainField,
+  placementOf,
+  suggestionsFor,
+  useAccounts,
+  useZones,
+  ZonesState,
+  type Account,
+  type AccountsController,
+  type AccountsOptions,
+  type ConnectAccountInput,
+  type DomainFieldProps,
+  type DomainFieldState,
+  type Placement,
+  type Zone,
+  type ZonesController,
+  type ZonesOptions,
+} from "./domain-field.tsx";
+
 export type Snapshot = Transport.Snapshot;
 export type Discovery = Transport.Discovery;
 export type Candidate = Transport.Candidate;

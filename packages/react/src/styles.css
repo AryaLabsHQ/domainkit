@@ -140,6 +140,8 @@
     [data-domainkit-part="disconnect-action"],
     [data-domainkit-part="disconnect-confirm"],
     [data-domainkit-part="method-alternate"],
+    [data-domainkit-part="domain-field-connect"],
+    [data-domainkit-part="domain-field-reconnect"],
     [data-domainkit-part="dialog-back"],
     [data-domainkit-part="dialog-provider-menu"],
     [data-domainkit-part="more-options-trigger"],
@@ -1231,6 +1233,66 @@
     color: var(--domainkit-muted);
     font-size: 0.75rem;
     margin: 0;
+  }
+
+  /* One input, its suggestions under it, and the line that says where the records will go. */
+  :where([data-domainkit-part="domain-field"]) {
+    display: grid;
+    gap: 0.4rem;
+    position: relative;
+    width: 100%;
+  }
+
+  :where([data-domainkit-part="domain-input"]) {
+    background: var(--domainkit-background);
+    border: 1px solid var(--domainkit-border);
+    border-radius: var(--domainkit-control-radius);
+    color: var(--domainkit-text);
+    font: inherit;
+    font-size: 0.875rem;
+    min-height: 2.25rem;
+    padding: 0.45rem 0.65rem;
+    width: 100%;
+  }
+
+  :where([data-domainkit-part="domain-suggestions"]) {
+    background: var(--domainkit-fill);
+    border: 1px solid var(--domainkit-border);
+    border-radius: var(--domainkit-control-radius);
+    display: grid;
+    list-style: none;
+    margin: 0;
+    max-height: 14rem;
+    overflow-y: auto;
+    padding: 0.25rem;
+  }
+
+  :where([data-domainkit-part="domain-suggestion"]) {
+    align-items: baseline;
+    border-radius: calc(var(--domainkit-control-radius) - 2px);
+    cursor: pointer;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: space-between;
+    padding: 0.35rem 0.5rem;
+  }
+
+  :where([data-domainkit-part="domain-suggestion"][aria-selected="true"]) {
+    background: color-mix(in srgb, var(--domainkit-accent) 12%, transparent);
+  }
+
+  :where([data-domainkit-part="domain-suggestion-account"]) {
+    color: var(--domainkit-muted);
+    font-size: 0.75rem;
+  }
+
+  :where([data-domainkit-part="domain-field-footer"]) {
+    align-items: center;
+    color: var(--domainkit-muted);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.75rem;
+    gap: 0.5rem;
   }
 
   :where([data-domainkit-part="records-panel"]) {

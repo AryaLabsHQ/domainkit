@@ -138,6 +138,8 @@ export interface Zones {
   /** Ordered by zone, then by connection, so two listings of the same state read the same. */
   readonly zones: ReadonlyArray<Zone>;
   readonly connections: ReadonlyArray<ZoneConnection>;
+  /** Every provider a customer could connect from here, so an offer needs no second call. */
+  readonly providers: Snapshot["providers"];
 }
 
 export interface Interface {
@@ -555,6 +557,11 @@ export const make: Effect.Effect<
             left.connectionId.localeCompare(right.connectionId),
         ),
         connections,
+        providers: providers.list().map((definition) => ({
+          id: definition.id,
+          name: definition.name,
+          methods: Provider.describeMethods(definition),
+        })),
       };
     });
 

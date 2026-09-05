@@ -80,6 +80,13 @@ describe("Connect.zones", () => {
         { connectionId: first.id, provider: "one", status: "connected" },
         { connectionId: second.id, provider: "two", status: "connected" },
       ]);
+      assert.deepStrictEqual(
+        listing.providers.map(({ id, name }) => [id, name]),
+        [
+          ["one", "Fake one"],
+          ["two", "Fake two"],
+        ],
+      );
       const narrowed = yield* Connect.zones({ provider: "two" });
       assert.deepStrictEqual(
         narrowed.zones.map(({ target }) => target.zone),

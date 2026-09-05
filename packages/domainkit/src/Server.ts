@@ -222,6 +222,14 @@ export const Zones = Schema.Struct({
       status: ConnectionStatus,
     }),
   ),
+  /** Every provider a customer could connect, so a picker offers one without a second call. */
+  providers: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      methods: Schema.Array(MethodDescriptor),
+    }),
+  ),
 });
 export type Zones = typeof Zones.Type;
 
@@ -747,6 +755,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                   ...(target.nameservers === undefined ? {} : { nameservers: target.nameservers }),
                 })),
                 connections: listing.connections,
+                providers: listing.providers,
               }),
             ),
           ),

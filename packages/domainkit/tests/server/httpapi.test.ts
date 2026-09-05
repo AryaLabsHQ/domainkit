@@ -85,6 +85,11 @@ describe("Server.group over the lifecycle", () => {
         { connectionId: connection.connectionId, provider: fake.id, status: "connected" },
       ]);
 
+      assert.deepStrictEqual(
+        zones.providers.map(({ id }) => id),
+        [fake.id],
+      );
+
       const narrowed = await call("GET", "/zones?provider=nobody");
       assert.strictEqual(narrowed.status, 200);
       assert.deepStrictEqual((narrowed.body as Server.Zones).zones, []);
