@@ -1,0 +1,42 @@
+---
+title: Provider artwork
+description: "Your logo per provider id, drawn as the mark itself: nothing wraps it in a tile, so a circular logo stays a circle and a square one stays square."
+---
+
+`provider-artwork` is the one place the flow decides what a provider looks like. The provider row,
+the connect dialog, and the domain field all draw their marks through it, so a host supplies its
+artwork once.
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/provider-artwork.json
+```
+
+## Usage
+
+```tsx
+const marks = {
+  cloudflare: <CloudflareLogo />,
+  vercel: (provider) => <img alt="" src={`/logos/${provider.id}.svg`} />,
+};
+
+<DomainFlow domain={domain} marks={marks} requirements={requirements} />;
+```
+
+`marks` is keyed by provider id and takes a node or a function of the provider descriptor. Whatever
+you pass is the mark. Without an entry the mark is the provider's initial, and nothing is fetched
+while the surface renders, so a list of providers costs no requests.
+
+## API
+
+| Export            | Is                                                                |
+| ----------------- | ----------------------------------------------------------------- |
+| `ProviderArtwork` | The map from provider id to a node or a function of the provider  |
+| `Mark`            | One provider's mark, with the name it carries for a screen reader |
+| `providerArtwork` | The node a provider resolves to, for a surface of your own        |
+
+## Boundary
+
+The accessible name comes from the provider descriptor the transport reports; the picture is yours.
+Nothing here reaches a provider's servers for a logo.

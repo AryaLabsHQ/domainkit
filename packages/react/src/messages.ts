@@ -85,6 +85,11 @@ export interface Catalog {
   readonly connectedTo: (provider: string) => string;
   /** Shown where a connect control would be when the customer may not connect. */
   readonly notConnected: string;
+  /**
+   * What a customer who may read the domain but not write to it is told in place of the connect
+   * control, so the surface explains the gap rather than leaving an empty row.
+   */
+  readonly administratorConnects: (provider: string) => string;
   readonly reconnectRequired: (provider: string) => string;
   readonly disconnectTitle: (provider: string) => string;
   /**
@@ -314,6 +319,7 @@ export const english: Catalog = {
   connectDescription: (domain) => `Authorize DNS changes for ${domain}.`,
   connectedTo: (provider) => `${provider} connected`,
   notConnected: "No DNS provider is connected.",
+  administratorConnects: (provider) => `An administrator can connect ${provider}`,
   reconnectRequired: (provider) => `${provider} needs to be reconnected`,
   disconnectTitle: (provider) => `Disconnect ${provider}?`,
   disconnectConsent: (domain, provider) =>

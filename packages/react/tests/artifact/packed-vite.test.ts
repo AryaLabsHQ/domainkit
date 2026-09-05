@@ -18,7 +18,7 @@ const pack = async (packageDirectory: string, destination: string): Promise<stri
   return join(destination, filename);
 };
 
-/** What a host actually writes: a fetch transport and the two components. */
+/** What a host actually writes: a fetch transport, the flow hook, and markup of its own. */
 const consumerSource = `
 import React from "react";
 import { createRoot } from "react-dom/client";
@@ -31,11 +31,29 @@ const transport = Transport.fromFetch("/api/domainkit");
 const requirements = [
   DnsRecord.cname({ name: "app.example.com", target: "edge.example.com", purpose: "Serve your site" }),
 ];
-const app = React.createElement(
-  DomainKit.Root,
-  { transport },
-  React.createElement(Domain.Flow, { domain: "app.example.com", requirements }),
-);
+
+function DomainSetup() {
+  const flow = Domain.useFlow({ domain: "app.example.com", requirements });
+  return React.createElement(
+    "table",
+    null,
+    React.createElement(
+      "tbody",
+      null,
+      requirements.map((record) =>
+        React.createElement(
+          "tr",
+          { key: record.name },
+          React.createElement("td", null, record._tag),
+          React.createElement("td", null, record.name),
+          React.createElement("td", null, flow.state.connection),
+        ),
+      ),
+    ),
+  );
+}
+
+const app = React.createElement(DomainKit.Root, { transport }, React.createElement(DomainSetup));
 export const html = renderToString(app);
 if (typeof document !== "undefined") createRoot(document.getElementById("root")).render(app);
 `;
@@ -116,8 +134,7 @@ describe("packed Next.js consumer", () => {
       await run("mkdir", ["-p", "app"], directory);
       await writeFile(
         join(directory, "app/layout.js"),
-        `import "@domainkit/react/styles.css";
-export default function Layout({ children }) { return <html><body>{children}</body></html>; }`,
+        "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
       );
       // The transport is an object of functions, so it cannot cross the server/client boundary:
       // a host builds it inside a client module. The packed entry carries "use client" itself, so
@@ -134,10 +151,15 @@ const requirements = [
   DnsRecord.cname({ name: "app.example.com", target: "edge.example.com", purpose: "Serve your site" }),
 ];
 
+function Records() {
+  const flow = Domain.useFlow({ domain: "app.example.com", requirements });
+  return <p data-state={flow.state.connection}>{requirements[0].name}</p>;
+}
+
 export function DomainSettings() {
   return (
     <DomainKit.Root transport={transport}>
-      <Domain.Flow domain="app.example.com" requirements={requirements} />
+      <Records />
     </DomainKit.Root>
   );
 }`,

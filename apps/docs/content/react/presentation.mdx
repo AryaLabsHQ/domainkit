@@ -1,73 +1,52 @@
 ---
-title: Theme, messages, and marks
-description: Restyle the flow through custom properties, replace any sentence in the message catalog, supply provider artwork, and swap the default icon set.
+title: Words and outcomes
+description: Replace any sentence the flow puts on screen through the message catalog, and render a failed step from the title and description its reason resolves to.
 sidebar:
-  label: Presentation
+  label: Words
 seo:
-  title: Style and localise the DomainKit React flow
+  title: Localise the DomainKit React flow
 ---
 
-Branding stays in your app. `DomainKit.Root` takes everything the flow renders with, and the
-defaults are only defaults.
-
-## Theme
-
-<Snippet file="examples/react/presentation.tsx" region="theme" title="A theme" />
-
-Every value becomes a `--domainkit-*` custom property on the root element, so the stylesheet reads
-your values and you can also set them from CSS.
-
-| Key                            | Property                            |
-| ------------------------------ | ----------------------------------- |
-| `accent`, `accentContrast`     | `--domainkit-accent`, `-contrast`   |
-| `danger`, `dangerContrast`     | `--domainkit-danger`, `-contrast`   |
-| `success`                      | `--domainkit-success`               |
-| `background`, `fill`, `border` | The three surfaces                  |
-| `text`, `muted`                | Foreground and secondary foreground |
-| `radius`, `shadow`, `backdrop` | Shape, elevation, dialog backdrop   |
-| `fontFamily`                   | `--domainkit-font-family`           |
-
-`colorScheme` is `inherit`, `light`, or `dark`. `inherit` follows whatever your page already does.
+Nothing in `@domainkit/react` renders a tag, a status literal, or a reason name. Every user-visible
+string arrives from `Messages.Catalog` first, so one prop translates the whole surface.
 
 ## Messages
 
-<Snippet file="examples/react/presentation.tsx" region="messages" title="Replacing sentences" />
-
-`Messages.Catalog` holds every user-visible string in eight groups: actions, progress, connection,
-plan review, records, receipts, verification, and one function per `DomainKit.Error` reason. A
-reason's function returns a title and a description, which is what an [outcome](/components/outcome)
-draws. The
-catalog is closed, so every key has a default in `Messages.english`; `messages` takes a
+`Messages.Catalog` holds every string in eight groups: actions, progress, connection, plan review,
+records, receipts, verification, and one function per `DomainKit.Error` reason. The catalog is
+closed, so every key has a default in `Messages.english`; `messages` on `DomainKit.Root` takes a
 `Partial<Catalog>` and merges over it, and a host replaces one key without restating the rest.
+`DomainKit.useMessages()` returns the merged catalog to a component of your own.
 
-Nothing renders a tag. A reason becomes words through the catalog, an operation becomes a
-sentence through `operation`, and a token field name becomes a label through `fieldLabel`, which
-humanises `accountId` into "Account id" until a host names it properly.
+An operation becomes a sentence through `operation`, a conflict becomes a reason and an advice
+through `conflictReason` and `conflictAdvice`, and a token field name becomes a label through
+`fieldLabel`, which humanises `accountId` into "Account id" until a host names it properly.
 
 The verification group phrases what a failing check found: `expectedValue(value)`,
 `observedValues(values)`, and `observedNothing`. The only observer text that reaches a customer
 unwrapped is the `detail` the observer itself wrote.
 
-`notConnected` is what the connection slot says in read-only, where a connect control would
-otherwise be.
+`administratorConnects(provider)` is what a read-only surface says where a connect control would
+otherwise be, and `notConnected` is what it says when no provider serves the zone at all.
 
-## Provider marks
+## Outcomes
 
-<Snippet file="examples/react/presentation.tsx" region="marks" title="Provider artwork" />
+A failure carries the `DomainKit.Error` itself, so a surface reads `reason`, `category`, and
+`isRetryable` rather than parsing text. `Outcome.useDescribe()` binds the catalog and returns the
+pair the reason resolves to: a heading the customer reads first, and what to do about it.
 
-<ReactExample story="provider-mark" />
+<Snippet file="examples/react/controllers.tsx" region="failure" title="A failed connect" />
 
-`marks` is keyed by provider id and takes a node or a function of the provider descriptor. Without
-an entry the mark is the provider's own initial, drawn with the theme's tokens. Nothing is fetched
-at render time, so a provider list costs no requests.
+<Component path="registry/outcome" />
 
-## Icons
+The reason alone cannot name the provider the customer typed a token for, so the surface supplies it
+in the context. `Outcome.describe(error, catalog)` is the same answer without a React context, for a
+server render or a log line.
 
-`icons` overrides `defaultIcons` by slot name. `useIcons()` returns the set in context, so a part
-you render yourself uses the same icons as the rest of the flow.
+## Provider artwork
 
-## Portals
+Provider marks are the host's, and the registry's `provider-row` takes them keyed by provider id.
+Whatever you pass is the mark: nothing wraps it in a tile, so a circular logo stays a circle. Without
+an entry the mark is the provider's initial, and nothing is fetched while the row renders.
 
-`portalContainer` decides where dialogs and popovers render. Pass the element your app portals into;
-DomainKit checks it belongs to the same document before using it, and falls back to the body when it
-does not.
+<Component path="registry/provider-row" />

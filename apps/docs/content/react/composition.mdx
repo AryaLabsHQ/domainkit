@@ -1,81 +1,74 @@
 ---
 title: Composition
-description: Replace one part of the flow and keep the rest, place the slots in your own layout, and swap any element with your own.
+description: Write the domain surface yourself over the flow hook, place its pieces in your own layout, and add a domain through the zone picker your accounts already reach.
 sidebar:
   label: Composition
 seo:
-  title: Compose the DomainKit React flow
+  title: Compose a DomainKit React surface
 ---
 
-`Domain.Flow` renders three slots, and every one has a default. Replacing a slot changes that part
-and nothing else.
+`Domain.useFlow` returns everything a surface needs and renders nothing, so the markup is yours from
+the first element. The [registry block](/components/registry/domain-flow) is one such surface, on
+shadcn; this page is the shape of writing another.
 
-| Slot           | Receives                                                         | Default                                                    |
-| -------------- | ---------------------------------------------------------------- | ---------------------------------------------------------- |
-| `connection`   | `{ controller, domain, connect }`                                | `Connect.Card` once connected, `Connect.Prompt` until then |
-| `records`      | `{ records, readiness, plan, provisioning, controller, domain }` | `Records.Table` with the plan and `Provision.Action`       |
-| `verification` | `{ controller, domain }`                                         | `Verify.Status` with per-requirement evidence              |
+## What the flow hands you
 
-## One slot
+| Field                     | Carries                                                              |
+| ------------------------- | -------------------------------------------------------------------- |
+| `state`                   | What DomainKit has to say about the domain, as plain fields          |
+| `connection`              | The connect controller: `connect`, `reuse`, `detach`, `disconnect`   |
+| `provisioning`, `cleanup` | The plan, approve, apply machine for adding and for removing         |
+| `verification`            | The observer, with the readiness it last read                        |
+| `plan`                    | The plan still awaiting its apply, which is what the rows report     |
+| `readiness`               | The last observation, which is what the rows report after an apply   |
+| `capabilities`            | The groups the transport declares, so nothing offers a step it lacks |
+| `requirements`, `domain`  | What the host asked for, and for which domain                        |
 
-<Snippet file="examples/react/slots.tsx" region="one-slot" title="Your own records table" />
+## One row's standing
 
-<ReactExample story="slots" />
+`Records.statusOf` answers what a row has to say without the surface deciding: while a plan is
+pending it is the operation the plan holds for that record, and once an apply has landed it is the
+status the observers read back.
 
-## Your own layout
+<Snippet file="examples/react/controllers.tsx" region="hooks" title="A surface over the hooks" />
 
-<Snippet file="examples/react/slots.tsx" region="layout" title="Placing the slots" />
+## The one action
 
-`Domain.Flow` adds no layout container around a slot: its output is a direct child of the flow root,
-so a grid on the flow places the slots directly without `display: contents`.
+`provisioning.approve()` authorizes the plan's digest and applies it in the same call. Name the
+operation ids to approve part of a plan, which is how a blocked record is left out while the rest
+goes in; approving a whole plan that holds a conflict is refused.
 
-## Your own action
+<Snippet file="examples/react/controllers.tsx" region="commands" title="Approve and decline" />
 
-<Snippet
-  file="examples/react/slots.tsx"
-  region="actions"
-  title="Driving the flow from your button"
-/>
+## Adding a domain
 
-The records slot receives the pending plan and the provisioning controller, so the one action can
-live in a toolbar somewhere else in your screen while the flow keeps the state.
-`provisioning.approve()` authorizes the plan and applies it in the same call.
+`Connect.useZones` lists every zone the workspace's accounts reach, and `Connect.useDomainField`
+turns one text input into a combobox over them: it returns the props for the input, the listbox, and
+each option, moves the highlight with the arrow keys, and completes on Tab or Enter while keeping
+whatever subdomain was typed in front of the zone.
 
-## Parts
+<Snippet file="examples/react/add-domain.tsx" region="field" title="The zone picker" />
 
-Every rendered element is a part. A part takes its element's own props plus three composition props.
+<Component path="registry/domain-field" />
 
-| Prop        | Takes                                                            |
-| ----------- | ---------------------------------------------------------------- |
-| `className` | A string, or a function of the part's state                      |
-| `style`     | A `CSSProperties`, or a function of the part's state             |
-| `render`    | An element or render function that replaces the element outright |
+A domain outside every connected zone leaves the input a plain text field, because the customer will
+add those records by hand. `onResolve` reports the account a value settles in, so a form submits the
+domain and its connection together.
 
-Parts also carry `data-domainkit-part` and, where they have one, a state attribute, so a stylesheet
-can target them without a class name.
+<Snippet file="examples/react/add-domain.tsx" region="accounts" title="Connecting an account" />
 
-Every dialog and popover takes a `render` prop of its own that replaces the surface, so a host with
-its own dialog primitive keeps its dialog and DomainKit's behaviour.
-
-## Standalone flows
-
-Each namespace exports a `Flow` of its own when only one step belongs in a screen.
-
-<ReactExample story="connect" />
-
-<ReactExample story="provision" />
-
-<ReactExample story="cleanup" />
+Connecting an account names no domain: what the customer grants is the account itself.
+`Connect.describeMethods` arranges one provider's methods into the interactive ones a customer
+clicks through and the ones that ask for credentials, so a surface asks for one decision at a time.
 
 ## Read-only
 
-`readOnly` on `DomainKit.Root`, or on one `Domain.Flow`, removes every slot's write surface rather
-than disabling it. The connection slot states who serves the zone, or the catalog's `notConnected`
-sentence when nothing does, in place of a connect control; the records table keeps its rows and
-drops the action over them, and nothing plans, because planning is a write; the verification slot
-is untouched.
+`readOnly` on `DomainKit.Root`, or on one `Domain.useFlow`, refuses every command that would change
+the domain, in the controller rather than in your markup, and reports itself on
+`flow.state.readOnly`. A surface reads it and says who may connect rather than rendering an empty
+row.
 
-A slot of your own asks which mode it is in through `DomainKit.useReadOnly()`, and
-`DomainKit.ReadOnly` narrows a subtree.
+<Snippet file="examples/react/read-only.tsx" region="hook" title="A surface that knows the mode" />
 
-<Snippet file="examples/react/read-only.tsx" region="hook" title="A part that knows the mode" />
+`DomainKit.useReadOnly()` answers for a component of your own, and `DomainKit.ReadOnly` narrows one
+subtree without touching the rest of the page.

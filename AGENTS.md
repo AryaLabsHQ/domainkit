@@ -28,7 +28,9 @@ entries applied before finishing:
 
 - **Core API** — `packages/domainkit/src`, its `server`, `client`, and `testing` entry points,
   schemas, and tests.
-- **React package** — `packages/react`, its browser fixture, and its packed consumers.
+- **React package** — `packages/react`, its hook tests, and its packed consumers.
+- **Registry** — `apps/docs/registry`, the docs preview kit, the registry manifest, the scratch
+  install check, and the browser spec that drives the block.
 - **Providers** — the Cloudflare and Vercel adapters, provider docs, conformance, and provider
   tests.
 - **Documentation** — `apps/docs/content`, the reference inventories, navigation, links, and the

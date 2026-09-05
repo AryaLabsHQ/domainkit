@@ -1,7 +1,8 @@
 # @domainkit/react
 
-React flows for custom-domain setup, over a transport your server owns. Provider credentials never
-reach the browser.
+Headless React hooks for custom-domain setup, over a transport your server owns. The package
+supplies state, copy, and accessibility; your application supplies the markup. Provider credentials
+never reach the browser.
 
 ## Install
 
@@ -11,13 +12,20 @@ npm install @domainkit/react domainkit effect@rc react react-dom
 
 React 19 is required. Install `domainkit` and `@domainkit/react` at the same release version.
 
-## Two components
+For the styled composition, add the flow from the DomainKit registry into your own shadcn kit:
+
+```sh
+npx shadcn@latest add https://domain-kit.dev/r/domain-flow.json
+```
+
+## One hook
 
 ```tsx
+"use client";
+
 import { DnsRecord } from "domainkit";
 import { Transport } from "domainkit/client";
 import { Domain, DomainKit } from "@domainkit/react";
-import "@domainkit/react/styles.css";
 
 const transport = Transport.fromFetch("/api/domainkit");
 
@@ -30,18 +38,24 @@ const requirements = [
   }),
 ];
 
+function DomainSetup() {
+  const flow = Domain.useFlow({ domain: "app.example.com", requirements });
+  return <DomainFlowCard flow={flow} />;
+}
+
 export function DomainSettings() {
   return (
-    <DomainKit.Root transport={transport} colorScheme="inherit">
-      <Domain.Flow domain="app.example.com" requirements={requirements} />
+    <DomainKit.Root transport={transport}>
+      <DomainSetup />
     </DomainKit.Root>
   );
 }
 ```
 
-`Domain.Flow` connects a provider, plans the DNS changes, takes the customer's approval or refusal,
-applies the plan, observes the records, and cleans them up against the apply receipt. It renders
-only the capability groups the transport declares.
+`Domain.useFlow` connects a provider, plans the DNS changes, takes the customer's approval or
+refusal, applies the plan, observes the records, and cleans them up against the apply receipt. It
+returns the four controllers, the plan the rows report, the latest readiness, the capability groups
+the transport declares, and a `FlowState` your own surface reads.
 
 `Transport.fromFetch` points at the routes you mounted from `domainkit/server`. Writing it inline in
 JSX is fine: `DomainKit.Root` keeps the transport's identity for the whole mount, so the controllers
@@ -51,90 +65,28 @@ the UI did not make.
 An interactive provider returns the customer to the page they started from. Pass `returnTo` to name
 a different destination, or `null` to leave the server's `defaultReturnTo` in charge.
 
-## The disconnected offer
+## What the flow says about a domain
 
-Discovery names the provider whose nameservers serve the domain. `Connect.Prompt` states it beside a
-trigger, and the dialog behind that trigger is narrowed to that provider, with the rest behind a
-disclosure.
+`flow.state` is what DomainKit has to say, so your own offers can be ordered beside it rather than
+competing with it.
 
-When no registered provider serves the zone there is nothing DomainKit can connect, so the flow
-offers nothing. Pass `connect="always"` to offer the all-providers dialog anyway, or `connect="never"`
-for a domain your application has already settled another way. A domain DomainKit holds keeps its
-status and its disconnect whatever the invitation says.
+| Field                        | Says                                                          |
+| ---------------------------- | ------------------------------------------------------------- |
+| `connected`                  | DomainKit holds a connection for this domain                  |
+| `offering`                   | The connect surface has something to offer                    |
+| `provider`, `label`          | Who holds the connection, and which account the records go to |
+| `receiptId`, `applied`       | The apply this domain's records came from                     |
+| `connection`, `provisioning` | The tag each controller's state carries                       |
+| `readOnly`                   | The customer may read this domain but not write to it         |
 
-```tsx
-<Domain.Flow domain="app.example.com" requirements={requirements} connect="always" />
-```
+Discovery names the provider whose nameservers serve the domain, and `Connect.hostProvider` returns
+its descriptor. When no registered provider serves the zone there is nothing DomainKit can connect,
+so `offering` is false. Pass `connect: "always"` to offer every provider anyway, or
+`connect: "never"` for a domain your application has already settled another way.
 
-Connecting is the customer saying yes to the records, so the plan opens itself the moment a
-connection lands — after a token connect, and after the customer returns from a provider — and one
-action adds them. `review="manual"` waits for the trigger instead.
-
-`onState` reports what DomainKit has to say about the domain, so your own offers can be ordered
-beside it rather than competing with it:
-
-```tsx
-<Domain.Flow
-  domain="app.example.com"
-  requirements={requirements}
-  onState={({ connected, offering, provider }) => setDomainKitOffers(connected || offering)}
-/>
-```
-
-Letting a provider go is one dialog: `Disconnect` asks whether to remove the records an apply
-receipt proves DomainKit created, removes them when the option stays checked, then releases the
-connection. `Cleanup.Flow` is still exported for a host that wants removal on its own.
-
-## Own one piece, keep the rest
-
-Every part of the flow is a slot with a default.
-
-```tsx
-<Domain.Flow
-  domain="app.example.com"
-  requirements={requirements}
-  slots={{
-    records: ({ records, readiness }) => <MyTable records={records} readiness={readiness} />,
-  }}
-  onApplied={(receipt) => track("dns.applied", { receiptId: receipt.id })}
-/>
-```
-
-| Slot           | Receives                                        | Default                                                    |
-| -------------- | ----------------------------------------------- | ---------------------------------------------------------- |
-| `connection`   | `{ controller, domain, connect }`               | `Connect.Card` once connected, `Connect.Prompt` until then |
-| `records`      | `{ records, readiness, controller, domain }`    | `Records.Table`                                            |
-| `verification` | `{ controller, domain }`                        | `Verify.Status` with per-requirement evidence              |
-| `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline                           |
-
-`Domain.Flow` adds no layout container around a slot: its output is a direct child of the flow root,
-so your own grid can place it without `display: contents`.
-
-## The member view
-
-A customer who may read a domain but not change it gets `readOnly`. Status renders; every control
-that would start a write does not.
-
-```tsx
-<DomainKit.Root transport={transport} readOnly>
-  <Domain.Flow domain="app.example.com" requirements={requirements} />
-</DomainKit.Root>
-```
-
-`Domain.Flow` takes the same flag when only one domain on the page is read-only, and `useReadOnly()`
-tells a part of your own which mode it is in. Capability gating is the other half: a group the
-transport does not declare never renders, so a transport built with
-`Transport.fromFetch(url, { capabilities: ["connection", "verification"] })` already hides
-provisioning and cleanup. `readOnly` covers the authorization a transport cannot express, such as a
-member of an organisation who reaches the same routes.
-
-Verification does not wait for a connection: the flow observes the requirements it was given, so a
-domain with no provider attached still reports which records are in place.
-
-Observation stays available in read-only, because checking DNS reads the world rather than changing
-the domain. Retrying is not: a flow that becomes read-only after a write failed keeps the failure on
-screen and drops the retry.
-If your `Identity.authorize` denies `observe` to members, pass `slots={{ verification: () => null }}`.
+Connecting is the customer saying yes to the records, so the plan builds itself the moment a
+connection lands, after a token connect and after the customer returns from a provider. One
+`approve` adds them.
 
 ## Controllers
 
@@ -152,51 +104,76 @@ const verification = Verify.useController({ domain, polling: true });
 attempt is terminal and a new plan is needed. `retry` builds a new plan when the reason says the old
 one is gone, and re-runs the failed step otherwise.
 
-## Presentation
+`Connect.describeMethods` arranges one provider's auth methods into the interactive ones a customer
+clicks through and the ones that ask for credentials, so a connect surface asks for one decision at
+a time. `Connect.rejectedField` names the one field a rejection was about.
 
-`DomainKit.Root` takes `messages`, `marks`, `icons`, `theme`, `colorScheme`, and `portalContainer`,
-so branding stays in your app. `Messages.Catalog` holds every user-visible string, including a
-title and a description per `DomainKit.Error` reason; nothing renders a tag. Provider artwork comes from `marks`,
-with the provider's initial as the fallback and no request at render time. The stylesheet is
-opt-in and every color is a `--domainkit-*` custom property.
+## Adding a domain
 
-Every rule ships inside `@layer domainkit`. An unlayered rule of yours already beats every layer, so
-plain CSS needs nothing here.
-
-Once your app uses layers, name the order yourself: a layer's priority is its position in that list,
-and a layer you never declare lands wherever it first appears, so `domainkit` can sort under
-Tailwind's preflight and the package's buttons render as bare text.
-
-```css
-@layer theme, base, components, domainkit, utilities;
-```
-
-`domainkit` sits after `base` so preflight cannot strip it, and before `utilities` so a utility class
-still wins. Any layer you declare after it wins the same way:
-
-```css
-@layer utilities {
-  [data-domainkit-part="records-panel"] {
-    border-radius: 0;
-  }
-}
-```
-
-A failed step renders as `Outcome`: media, the catalog's title and description, and the retry the
-flow allows, as a card or on one line. Pass your own parts as children and the words still come from
-the catalog.
+`Connect.useZones` lists every zone the workspace's accounts reach, `Connect.useAccounts` adds
+another account without naming a domain, and `Connect.useDomainField` turns a text input into a
+combobox over those zones: it returns `inputProps`, `listboxProps`, and `optionProps`, moves the
+highlight with the arrow keys, and completes on Tab or Enter while keeping whatever subdomain was
+typed in front of the zone.
 
 ```tsx
-<Connect.Outcome controller={connection} layout="inline">
-  <Outcome.Media variant="default">
-    <MyIcon />
-  </Outcome.Media>
-  <Outcome.Title />
-  <Outcome.Content />
-</Connect.Outcome>
+const { zones } = Connect.useZones();
+const field = Connect.useDomainField({ zones, value, onChange: setValue, onResolve });
+
+<input {...field.inputProps} />
+<ul {...field.listboxProps}>
+  {field.suggestions.map((zone) => (
+    <li key={`${zone.connectionId}:${zone.zone}`} {...field.optionProps(zone)}>
+      {zone.zone}
+    </li>
+  ))}
+</ul>;
 ```
 
-Every dialog and popover takes a `render` prop that replaces the surface with your own.
+## The member view
+
+A customer who may read a domain but not change it gets `readOnly`. State still reports; every
+command that would change the domain refuses to run, at the controller rather than in your markup,
+so a control you render anyway cannot reach the transport.
+
+```tsx
+<DomainKit.Root transport={transport} readOnly>
+  <DomainSetup />
+</DomainKit.Root>
+```
+
+`Domain.useFlow` takes the same flag when only one domain on the page is read-only, and it rides on
+`flow.state.readOnly`, so your surface can say who may connect instead of rendering nothing.
+Capability gating is the other half: a group the transport does not declare is absent from
+`flow.capabilities`, so a transport built with
+`Transport.fromFetch(url, { capabilities: ["connection", "verification"] })` already rules out
+provisioning and cleanup. `readOnly` covers the authorization a transport cannot express, such as a
+member of an organisation who reaches the same routes.
+
+Verification does not wait for a connection: the flow observes the requirements it was given, so a
+domain with no provider attached still reports which records are in place.
+
+Observation stays available in read-only, because checking DNS reads the world rather than changing
+the domain. Retrying is not: a flow that becomes read-only after a write failed keeps the failure
+and re-inspects instead of resending the command.
+
+## Words
+
+`Messages.Catalog` holds every user-visible string, including a title and a description per
+`DomainKit.Error` reason; nothing renders a tag, a status literal, or a reason name. Pass
+`messages` to `DomainKit.Root` to override any key.
+
+```tsx
+const describe = Outcome.useDescribe();
+const words = describe(error, { provider: "Cloudflare" });
+```
+
+## Records
+
+`Records.statusOf` answers what one row has to say: the operation a pending plan holds for it, or
+the status the last observation read back. `Records.useCopy` is the clipboard control a value
+needs, and `Records.toZoneFile` and `Records.downloadZoneFile` spell the whole requirement set for a
+customer who edits DNS by hand.
 
 ## Next.js
 
@@ -205,6 +182,7 @@ a client module rather than passing one from a server component.
 
 ## Learn more
 
+- [Registry](https://domain-kit.dev/components/registry)
 - [React source](https://github.com/AryaLabsHQ/domainkit/tree/main/packages/react)
 - [Transport contract](https://github.com/AryaLabsHQ/domainkit/blob/main/packages/domainkit/src/Transport.ts)
 - [Issues](https://github.com/AryaLabsHQ/domainkit/issues)

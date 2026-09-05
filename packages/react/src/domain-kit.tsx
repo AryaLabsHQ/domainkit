@@ -7,60 +7,40 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useSyncExternalStore,
+  type ReactElement,
   type ReactNode,
-  type RefObject,
 } from "react";
 
-import type { PartProps } from "./composition.tsx";
-import { usePart } from "./composition.tsx";
 import type { Listener } from "./events.ts";
-import type { Icons } from "./icons.tsx";
-import { IconsProvider } from "./icons.tsx";
 import type { Catalog } from "./messages.ts";
 import { merge as mergeMessages } from "./messages.ts";
-import type { Marks } from "./provider.tsx";
-import type { Theme } from "./theme.ts";
-import { toStyle } from "./theme.ts";
 
-export interface RootState extends Record<string, unknown> {
-  readonly colorScheme: "dark" | "inherit" | "light";
-}
-
-export interface RootProps extends Omit<PartProps<"div", RootState>, "children"> {
+export interface RootProps {
   readonly children: ReactNode;
-  readonly colorScheme?: RootState["colorScheme"];
-  readonly icons?: Partial<Icons>;
-  readonly marks?: Marks;
   readonly messages?: Partial<Catalog>;
   /** Where an interactive provider flow sends the customer. Defaults to `window.location`. */
   readonly navigate?: (url: string) => void;
   readonly onEvent?: Listener;
-  readonly portalContainer?: HTMLElement | null;
   /**
-   * Render the state without the controls that change it, for a customer who may read the domain
-   * but not write to it. Capability gating already hides a group the transport does not declare;
-   * this covers authorization the transport cannot express, such as a member of an organisation.
+   * Report the domain's state without the controls that change it, for a customer who may read
+   * the domain but not write to it. Capability gating already hides a group the transport does
+   * not declare; this covers authorization the transport cannot express, such as a member of an
+   * organisation. Every flow carries it on `FlowState.readOnly`, so a surface can explain it.
    */
   readonly readOnly?: boolean;
   /** Bump to re-inspect every mounted domain after a change the UI did not make. */
   readonly revision?: number;
-  readonly theme?: Theme;
   /** The transport, by value. Rebuilding it inline on every render does not restart controllers. */
   readonly transport: Transport.Interface;
 }
 
 interface ContextValue {
   readonly capabilities: ReadonlyArray<Transport.Capability>;
-  readonly colorScheme: RootState["colorScheme"];
   readonly emit: Listener;
-  readonly marks: Marks;
   readonly messages: Catalog;
   readonly navigate: (url: string) => void;
-  readonly portalContainer: RefObject<HTMLElement | null>;
   readonly readOnly: boolean;
   readonly revision: number;
-  readonly themeStyle: ReturnType<typeof toStyle>;
   readonly transport: Transport.Interface;
 }
 
@@ -120,49 +100,20 @@ const useStableTransport = (transport: Transport.Interface): StableTransport => 
   }, [signature]);
 };
 
-const resolvePortalContainer = (
-  container: HTMLElement | null,
-  ownerDocument: Document | null,
-): HTMLElement | null => {
-  if (container === null || ownerDocument === null) return null;
-  return container.ownerDocument === ownerDocument && container.getRootNode() === ownerDocument
-    ? container
-    : null;
-};
-
-const usePortalContainer = (container: HTMLElement | null): HTMLElement | null => {
-  const ownerDocument = useMemo(() => container?.ownerDocument ?? null, [container]);
-  const subscribe = useCallback(
-    (notify: () => void) => {
-      if (ownerDocument === null || typeof MutationObserver === "undefined") return () => {};
-      const observer = new MutationObserver(notify);
-      observer.observe(ownerDocument, { childList: true, subtree: true });
-      return () => observer.disconnect();
-    },
-    [ownerDocument],
-  );
-  const getSnapshot = useCallback(
-    () => resolvePortalContainer(container, ownerDocument),
-    [container, ownerDocument],
-  );
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-};
-
+/**
+ * The transport, the catalog, and the two host callbacks every hook below reads. It renders no
+ * element of its own: `@domainkit/react` supplies behaviour, state, copy, and accessibility, and
+ * the host application supplies the markup.
+ */
 export function Root({
   children,
-  colorScheme = "inherit",
-  icons,
-  marks = {},
   messages,
   navigate = navigateInBrowser,
   onEvent,
-  portalContainer = null,
   readOnly = false,
   revision = 0,
-  theme,
   transport,
-  ...props
-}: RootProps) {
+}: RootProps): ReactElement {
   const { capabilities, transport: stable } = useStableTransport(transport);
   const onEventRef = useRef(onEvent);
   useLayoutEffect(() => {
@@ -175,49 +126,29 @@ export function Root({
       // Host observers are best-effort and cannot change a completed operation's outcome.
     }
   }, []);
-  const themeStyle = toStyle(theme);
-  const resolvedPortalContainer = usePortalContainer(portalContainer);
-  const portalContainerRef = useMemo<RefObject<HTMLElement | null>>(
-    () => ({ current: resolvedPortalContainer }),
-    [resolvedPortalContainer],
-  );
   const value: ContextValue = {
     capabilities,
-    colorScheme,
     emit,
-    marks,
     messages: mergeMessages(messages),
     navigate,
-    portalContainer: portalContainerRef,
     readOnly,
     revision,
-    themeStyle,
     transport: stable,
   };
-  const content = usePart(
-    "div",
-    props,
-    { colorScheme },
-    {
-      children,
-      "data-color-scheme": colorScheme,
-      "data-domainkit-root": "",
-      style: themeStyle,
-    },
-  );
-  return (
-    <Context.Provider value={value}>
-      <IconsProvider {...(icons === undefined ? {} : { icons })}>{content}</IconsProvider>
-    </Context.Provider>
-  );
+  return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 
 export function useDomainKit(): ContextValue {
   const value = useContext(Context);
   if (value === null) {
-    throw new Error("DomainKit components must be rendered inside DomainKit.Root");
+    throw new Error("DomainKit hooks must be called inside DomainKit.Root");
   }
   return value;
+}
+
+/** The catalog `DomainKit.Root` holds, with the host's overrides already merged in. */
+export function useMessages(): Catalog {
+  return useDomainKit().messages;
 }
 
 /** The transport `DomainKit.Root` holds, with the identity it keeps for the whole mount. */
@@ -238,14 +169,14 @@ export function ReadOnly({
   return <ReadOnlyContext.Provider value={value}>{children}</ReadOnlyContext.Provider>;
 }
 
-/** Whether this part may offer controls that change the domain. */
+/** Whether this surface may offer controls that change the domain. */
 export function useReadOnly(): boolean {
   const scoped = useContext(ReadOnlyContext);
   const root = useDomainKit().readOnly;
   return scoped ?? root;
 }
 
-/** Which capability groups the host's transport declares, for gating a custom part. */
+/** Which capability groups the host's transport declares, for gating a surface of your own. */
 export function useCapabilities(): ReadonlyArray<Transport.Capability> {
   return useDomainKit().capabilities;
 }

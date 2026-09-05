@@ -6,7 +6,6 @@ export default defineConfig({
   entry: { index: "src/index.ts" },
   deps: {
     neverBundle: [
-      "@base-ui/react",
       "domainkit",
       "domainkit/client",
       "domainkit/testing",

@@ -5,20 +5,55 @@ sidebar:
   label: Overview
 ---
 
-The DomainKit registry contains small React components for DNS interfaces. Add the files to your
+The DomainKit registry contains React components for DNS interfaces. Add the files to your
 application with the shadcn CLI, then own their markup, styling, and behavior.
 
-These components take plain props. They do not import `domainkit`, Effect, Atom, transports, provider
-clients, or persistence. Use the packaged `@domainkit/react` flows when you need connection,
-planning, authorization, apply, verification, or cleanup tied to a receipt.
+The registry follows shadcn conventions. Your project needs an initialized `components.json`;
+required shadcn primitives are listed as `registryDependencies`, and the CLI installs those for you.
+Components accept native element props and `className`, use `data-slot` attributes, and inherit your
+shadcn color, radius, and focus-ring tokens.
 
-The registry follows shadcn conventions. Your project needs an initialized `components.json`; each
-item is installed into the configured `ui` alias, and required shadcn primitives are listed as
-`registryDependencies`. The CLI installs those primitives for you. Components accept native element
-props and `className`, use `data-slot` attributes, and inherit your shadcn color, radius, and
-focus-ring tokens.
+## The flow
 
-## Registry items
+The flow items install into `components/domainkit/` and are written against `@domainkit/react` and
+your own kit, on the Base UI idiom: components take `render`, not `asChild`. They are the one styled
+path DomainKit ships.
+
+<CardGroup cols={2}>
+  <Card title="Domain flow" href="/components/registry/domain-flow">
+    The whole of one domain's setup, on one hook.
+  </Card>
+  <Card title="Provider row" href="/components/registry/provider-row">
+    Who serves the zone, and the one action.
+  </Card>
+  <Card title="Records table" href="/components/registry/records-table">
+    The records to add, and where each one stands.
+  </Card>
+  <Card title="Plan action" href="/components/registry/plan-action">
+    Approve a plan's digest and apply it in one press.
+  </Card>
+  <Card title="Connect dialog" href="/components/registry/connect-dialog">
+    A provider's methods, one decision at a time.
+  </Card>
+  <Card title="Disconnect dialog" href="/components/registry/disconnect-dialog">
+    Release a provider and remove what it holds.
+  </Card>
+  <Card title="Domain field" href="/components/registry/domain-field">
+    One input over every zone your accounts reach.
+  </Card>
+  <Card title="Outcome" href="/components/registry/outcome">
+    A failed step in the catalog's words.
+  </Card>
+  <Card title="Provider artwork" href="/components/registry/provider-artwork">
+    Your logo per provider, with no tile around it.
+  </Card>
+</CardGroup>
+
+## The display components
+
+These install into the configured `ui` alias, take plain props, and import no DomainKit runtime: no
+`domainkit`, no Effect, no transport, no provider client. They suit a product that already has its
+own state and only needs the surface.
 
 <CardGroup cols={2}>
   <Card title="DNS table" href="/components/registry/dns-table">
@@ -46,9 +81,13 @@ focus-ring tokens.
 Install one item or several items directly into your application:
 
 ```package-install
-npx shadcn@latest add https://domain-kit.dev/r/dns-table.json https://domain-kit.dev/r/dns-operation.json
+npx shadcn@latest add https://domain-kit.dev/r/domain-flow.json
 ```
 
 The source is yours after you copy it. Change its classes, icons, and layout to fit your design
-system. Keep credentials, authenticated routes, storage, and readiness rules outside these display
-components.
+system. Keep credentials, authenticated routes, storage, and readiness rules outside it: the
+behaviour behind the flow still runs through the transport your server owns.
+
+The [components overview](/components) lists every item with a preview, and the
+[registry guide](/docs/react/registry) covers where the boundary sits between a copied file and the
+transport behind it.

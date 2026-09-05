@@ -68,6 +68,8 @@ export interface Options {
   readonly plan: () => Effect.Effect<Plan.Model, DomainKit.Error> | null;
   readonly done: (receipt: Receipt.Model) => Event;
   readonly onDone: ((receipt: Receipt.Model) => void) | undefined;
+  /** Refuse every step. Defaults to the surrounding `readOnly`. */
+  readonly readOnly: boolean | undefined;
 }
 
 /** Reasons that mean the plan itself is gone: retrying the same step would fail the same way. */
@@ -76,10 +78,50 @@ const needsNewPlan = (error: DomainKit.Error): boolean =>
   error.reason._tag === "Expired" ||
   error.reason._tag === "Conflict";
 
+/** The plan an attempt holds, whatever step it is on; `null` before there is one. */
+export const planOf = (state: State): Plan.Model | null => {
+  switch (state._tag) {
+    case "Planned":
+    case "Approving":
+    case "Applying":
+    case "Rejecting":
+    case "Rejected":
+    case "Applied":
+      return state.plan;
+    case "Idle":
+    case "Planning":
+    case "Failure":
+      return null;
+  }
+};
+
+/**
+ * The plan still awaiting its apply, which is what a row of records reports; `null` once one has
+ * landed, because from then on an observation answers instead.
+ */
+export const pendingPlan = (state: State): Plan.Model | null => {
+  switch (state._tag) {
+    case "Planned":
+    case "Approving":
+    case "Applying":
+      return state.plan;
+    case "Idle":
+    case "Planning":
+    case "Applied":
+    case "Rejecting":
+    case "Rejected":
+    case "Failure":
+      return null;
+  }
+};
+
 export function useAttempt(options: Options): Controller {
   const { domain, done, group, key, onDone } = options;
   const { emit } = useDomainKit();
-  const readOnly = useReadOnly();
+  const inherited = useReadOnly();
+  // Every step of an attempt is a write, planning included: a plan is an attempt the server
+  // records. A read-only surface may render a button anyway, so the refusal lives here.
+  const readOnly = options.readOnly ?? inherited;
   const runner = useRunner();
   const [state, setState] = useState<State>(State.Idle());
   // The key travels with what it produced, so a command raised before the reset commits still
@@ -116,7 +158,7 @@ export function useAttempt(options: Options): Controller {
 
   const applyWith = useCallback(
     (plan: Plan.Model, approval: Approval.Model) => {
-      if (group === undefined || held.current.key !== key) return;
+      if (readOnly || group === undefined || held.current.key !== key) return;
       const command = () => {
         setState(State.Applying({ approval, plan }));
         runner.run(group.apply(approval.id), {
@@ -131,10 +173,11 @@ export function useAttempt(options: Options): Controller {
       lastCommand.current = { key, run: command };
       command();
     },
-    [done, emit, group, key, onDone, onFailure, runner],
+    [done, emit, group, key, onDone, onFailure, readOnly, runner],
   );
 
   const buildPlan = useCallback(() => {
+    if (readOnly) return;
     const effect = build.current();
     if (effect === null) return;
     const command = () => {
@@ -150,12 +193,12 @@ export function useAttempt(options: Options): Controller {
     };
     lastCommand.current = { key, run: command };
     command();
-  }, [key, onFailure, runner]);
+  }, [key, onFailure, readOnly, runner]);
 
   const approve = useCallback(
     (operationIds?: ReadonlyArray<Plan.OperationId>) => {
       const plan = held.current.plan;
-      if (group === undefined || plan === null || held.current.key !== key) return;
+      if (readOnly || group === undefined || plan === null || held.current.key !== key) return;
       const command = () => {
         setState(State.Approving({ plan }));
         runner.run(
@@ -176,13 +219,13 @@ export function useAttempt(options: Options): Controller {
       lastCommand.current = { key, run: command };
       command();
     },
-    [applyWith, group, key, onFailure, runner],
+    [applyWith, group, key, onFailure, readOnly, runner],
   );
 
   const reject = useCallback(
     (reason?: string) => {
       const plan = held.current.plan;
-      if (group === undefined || plan === null || held.current.key !== key) return;
+      if (readOnly || group === undefined || plan === null || held.current.key !== key) return;
       const command = () => {
         setState(State.Rejecting({ plan }));
         runner.run(group.reject({ planId: plan.id, ...(reason === undefined ? {} : { reason }) }), {
@@ -196,12 +239,12 @@ export function useAttempt(options: Options): Controller {
       lastCommand.current = { key, run: command };
       command();
     },
-    [domain, emit, group, key, onFailure, runner],
+    [domain, emit, group, key, onFailure, readOnly, runner],
   );
 
   const apply = useCallback(() => {
     const { approval, plan } = held.current;
-    if (approval === null || plan === null) return;
+    if (readOnly || approval === null || plan === null) return;
     applyWith(plan, approval);
   }, [applyWith]);
 

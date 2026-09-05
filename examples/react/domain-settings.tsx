@@ -1,4 +1,4 @@
-import { DnsRecord } from "domainkit";
+import { DnsRecord, Plan } from "domainkit";
 import { Transport } from "domainkit/client";
 import { Domain, DomainKit } from "@domainkit/react";
 
@@ -22,14 +22,29 @@ const requirements = [
 
 // #region flow
 /**
- * Two components. `Domain.Flow` connects a provider, plans the changes, takes the customer's
- * approval or refusal, applies the plan, observes the records, and cleans them up against the
- * receipt. It renders only the capability groups the transport declares.
+ * One hook. `Domain.useFlow` connects a provider, plans the changes, takes the customer's approval
+ * or refusal, applies the plan, observes the records, and cleans them up against the receipt. It
+ * reports only the capability groups the transport declares, and your markup renders it.
  */
+function DomainSetup() {
+  const flow = Domain.useFlow({ domain: "app.example.com", requirements });
+  const writes = flow.plan === null ? [] : Plan.writes(flow.plan);
+  return (
+    <section>
+      <p>{flow.state.connected ? `Connected to ${flow.state.provider}` : "Not connected"}</p>
+      {writes.length === 0 ? null : (
+        <button onClick={() => flow.provisioning.approve()} type="button">
+          Add {writes.length} records
+        </button>
+      )}
+    </section>
+  );
+}
+
 export function DomainSettings() {
   return (
-    <DomainKit.Root transport={transport} colorScheme="inherit">
-      <Domain.Flow domain="app.example.com" requirements={requirements} />
+    <DomainKit.Root transport={transport}>
+      <DomainSetup />
     </DomainKit.Root>
   );
 }
@@ -40,12 +55,12 @@ export function DomainSettings() {
 export function DomainSettingsWithEvents() {
   return (
     <DomainKit.Root
-      transport={transport}
       onEvent={(event) => {
         if (event._tag === "Applied") track("dns.applied", { receiptId: event.receipt.id });
       }}
+      transport={transport}
     >
-      <Domain.Flow domain="app.example.com" requirements={requirements} />
+      <DomainSetup />
     </DomainKit.Root>
   );
 }
@@ -57,14 +72,19 @@ export function DomainSettingsWithEvents() {
  * connect rather than when the flow renders. Name a different destination, or pass `null` to leave
  * the server's `defaultReturnTo` in charge.
  */
+function DomainSetupWithReturn() {
+  const flow = Domain.useFlow({
+    domain: "app.example.com",
+    requirements,
+    returnTo: "/settings/domains?connected=1",
+  });
+  return <p>{flow.state.connection}</p>;
+}
+
 export function DomainSettingsWithReturn() {
   return (
     <DomainKit.Root transport={transport}>
-      <Domain.Flow
-        domain="app.example.com"
-        requirements={requirements}
-        returnTo="/settings/domains?connected=1"
-      />
+      <DomainSetupWithReturn />
     </DomainKit.Root>
   );
 }

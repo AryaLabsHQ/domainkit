@@ -81,6 +81,170 @@
           "type": "registry:ui"
         }
       ]
+    },
+    {
+      "name": "provider-artwork",
+      "type": "registry:component",
+      "title": "Provider Artwork",
+      "description": "Your logo per provider id, drawn as the mark itself with no tile around it.",
+      "dependencies": ["@domainkit/react"],
+      "registryDependencies": ["https://domain-kit.dev/r/provider-mark.json"],
+      "files": [
+        {
+          "path": "registry/domainkit/provider-artwork.tsx",
+          "type": "registry:component",
+          "target": "components/domainkit/provider-artwork.tsx"
+        }
+      ]
+    },
+    {
+      "name": "outcome",
+      "type": "registry:component",
+      "title": "Outcome",
+      "description": "A failed step in the catalog's words, as a card or on one line.",
+      "dependencies": ["@domainkit/react", "domainkit", "lucide-react"],
+      "registryDependencies": ["button"],
+      "files": [
+        {
+          "path": "registry/domainkit/outcome.tsx",
+          "type": "registry:component",
+          "target": "components/domainkit/outcome.tsx"
+        }
+      ]
+    },
+    {
+      "name": "plan-action",
+      "type": "registry:component",
+      "title": "Plan Action",
+      "description": "The one press that approves a plan's digest and applies it.",
+      "dependencies": ["@domainkit/react", "domainkit"],
+      "registryDependencies": ["button", "https://domain-kit.dev/r/outcome.json"],
+      "files": [
+        {
+          "path": "registry/domainkit/plan-action.tsx",
+          "type": "registry:component",
+          "target": "components/domainkit/plan-action.tsx"
+        }
+      ]
+    },
+    {
+      "name": "records-table",
+      "type": "registry:component",
+      "title": "Records Table",
+      "description": "The records a domain needs, with the plan or the observation on every row.",
+      "dependencies": ["@domainkit/react", "domainkit"],
+      "registryDependencies": [
+        "table",
+        "https://domain-kit.dev/r/dns-status.json",
+        "https://domain-kit.dev/r/copy-value.json"
+      ],
+      "files": [
+        {
+          "path": "registry/domainkit/records-table.tsx",
+          "type": "registry:component",
+          "target": "components/domainkit/records-table.tsx"
+        }
+      ]
+    },
+    {
+      "name": "disconnect-dialog",
+      "type": "registry:component",
+      "title": "Disconnect Dialog",
+      "description": "Releasing a provider, with the records DomainKit added as one decision.",
+      "dependencies": ["@domainkit/react", "domainkit"],
+      "registryDependencies": [
+        "button",
+        "dialog",
+        "label",
+        "switch",
+        "https://domain-kit.dev/r/outcome.json"
+      ],
+      "files": [
+        {
+          "path": "registry/domainkit/disconnect-dialog.tsx",
+          "type": "registry:component",
+          "target": "components/domainkit/disconnect-dialog.tsx"
+        }
+      ]
+    },
+    {
+      "name": "connect-dialog",
+      "type": "registry:component",
+      "title": "Connect Dialog",
+      "description": "Authorizing DNS changes, one decision at a time.",
+      "dependencies": ["@domainkit/react", "domainkit", "lucide-react"],
+      "registryDependencies": [
+        "button",
+        "dialog",
+        "dropdown-menu",
+        "input",
+        "label",
+        "https://domain-kit.dev/r/outcome.json",
+        "https://domain-kit.dev/r/provider-artwork.json"
+      ],
+      "files": [
+        {
+          "path": "registry/domainkit/connect-dialog.tsx",
+          "type": "registry:component",
+          "target": "components/domainkit/connect-dialog.tsx"
+        }
+      ]
+    },
+    {
+      "name": "provider-row",
+      "type": "registry:component",
+      "title": "Provider Row",
+      "description": "The line that heads a records card: who serves the zone and the one action.",
+      "dependencies": ["@domainkit/react", "lucide-react"],
+      "registryDependencies": [
+        "button",
+        "dropdown-menu",
+        "https://domain-kit.dev/r/provider-artwork.json",
+        "https://domain-kit.dev/r/connect-dialog.json",
+        "https://domain-kit.dev/r/disconnect-dialog.json",
+        "https://domain-kit.dev/r/plan-action.json"
+      ],
+      "files": [
+        {
+          "path": "registry/domainkit/provider-row.tsx",
+          "type": "registry:component",
+          "target": "components/domainkit/provider-row.tsx"
+        }
+      ]
+    },
+    {
+      "name": "domain-field",
+      "type": "registry:component",
+      "title": "Domain Field",
+      "description": "One input over every zone your customer's connected accounts reach.",
+      "dependencies": ["@domainkit/react"],
+      "registryDependencies": ["button", "input", "https://domain-kit.dev/r/provider-artwork.json"],
+      "files": [
+        {
+          "path": "registry/domainkit/domain-field.tsx",
+          "type": "registry:component",
+          "target": "components/domainkit/domain-field.tsx"
+        }
+      ]
+    },
+    {
+      "name": "domain-flow",
+      "type": "registry:block",
+      "title": "Domain Flow",
+      "description": "The whole of one domain's setup: the provider row, the records, and the outcome.",
+      "dependencies": ["@domainkit/react", "domainkit"],
+      "registryDependencies": [
+        "https://domain-kit.dev/r/provider-row.json",
+        "https://domain-kit.dev/r/records-table.json",
+        "https://domain-kit.dev/r/outcome.json"
+      ],
+      "files": [
+        {
+          "path": "registry/domainkit/domain-flow.tsx",
+          "type": "registry:component",
+          "target": "components/domainkit/domain-flow.tsx"
+        }
+      ]
     }
   ]
 }

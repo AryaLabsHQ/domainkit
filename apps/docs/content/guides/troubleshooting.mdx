@@ -95,9 +95,10 @@ returned before looking at the database.
 
 ## The UI renders less than you expect
 
-`@domainkit/react` renders only the capability groups the transport declares. If the review actions
-or the cleanup button are missing, the transport was built with fewer capabilities than the server
-mounts, or those routes are not mounted at all. `Transport.capabilities(transport)` reports what it
+`Domain.useFlow` reports only the capability groups the transport declares, so a surface written on
+`flow.capabilities` offers only what the server can serve. If the plan action or the disconnect
+option is missing, the transport was built with fewer capabilities than the server mounts, or those
+routes are not mounted at all. `Transport.capabilities(transport)` reports what it
 has, and `DomainKit.useCapabilities()` reports the same inside the tree.
 
 ## Something answered that DomainKit did not send

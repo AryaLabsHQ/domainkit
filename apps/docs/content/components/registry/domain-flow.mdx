@@ -1,0 +1,46 @@
+---
+title: Domain flow
+description: "The whole of one customer domain's setup in one block: who serves the zone, the records to add, the one press that adds them, and where each record stands."
+---
+
+`domain-flow` is the block. It runs `Domain.useFlow` and renders the result with your own kit: the
+provider row heads the records card, the one action sits on the right of that row, and disconnecting
+is behind the row's menu.
+
+<Component path="registry/domain-flow" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/domain-flow.json
+```
+
+The block pulls `provider-row`, `records-table`, `plan-action`, `connect-dialog`,
+`disconnect-dialog`, and `outcome` with it, along with the shadcn primitives each one needs.
+
+## Usage
+
+```tsx
+<DomainKit.Root transport={transport}>
+  <DomainFlow domain="mail.northwind.app" marks={marks} requirements={requirements} />
+</DomainKit.Root>
+```
+
+## API
+
+| Prop           | Type                                | Required | Description                                           |
+| -------------- | ----------------------------------- | -------- | ----------------------------------------------------- |
+| `domain`       | `string`                            | yes      | The domain this surface is about.                     |
+| `requirements` | `ReadonlyArray<DnsRecord.Model>`    | yes      | The records your product needs at that name.          |
+| `marks`        | `ProviderArtwork`                   | no       | Your artwork per provider id.                         |
+| `connect`      | `"always" \| "detected" \| "never"` | no       | What to offer when discovery names no host.           |
+| `readOnly`     | `boolean`                           | no       | Report the state without the commands that change it. |
+| `returnTo`     | `string \| null`                    | no       | Where an interactive provider returns the customer.   |
+| `onApplied`    | `(receipt: Receipt.Model) => void`  | no       | Fires when an apply lands.                            |
+| `onCleaned`    | `(receipt: Receipt.Model) => void`  | no       | Fires when a cleanup lands.                           |
+
+## Boundary
+
+The block calls your transport and nothing else. Credentials, authenticated routes, storage,
+tenancy, consent, and audit policy stay in your application. Nothing here collapses once a domain is
+ready, because the records are what a customer comes back to check.

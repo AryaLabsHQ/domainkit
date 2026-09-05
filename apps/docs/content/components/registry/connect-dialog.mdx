@@ -1,0 +1,42 @@
+---
+title: Connect dialog
+description: "Authorizing DNS changes one decision at a time: the provider that serves the zone, the methods it declares, and the token form behind the interactive offer."
+---
+
+`connect-dialog` is the surface a disconnected domain opens. It is narrowed to the provider whose
+nameservers serve the zone, so the common case is one decision rather than a wall of providers.
+
+<Component path="registry/connect-dialog" />
+
+## Installation
+
+```package-install
+npx shadcn@latest add https://domain-kit.dev/r/connect-dialog.json
+```
+
+## What it asks
+
+`Connect.describeMethods` arranges the provider's declared methods. Where a provider offers both an
+interactive method and a token, the interactive one is the offer and a plain control opens the token
+form in its place, with a way back. The token form draws one input per declared field; the fields a
+provider does not need sit behind a disclosure, and a rejection about one of them opens it.
+
+The header's menu moves the dialog to another provider the workspace could use instead, and any
+connection the owner already holds that would serve the zone is offered before a new one.
+
+A provider that turns credentials down is answering the secret it was given, so the failure is shown
+beside that field rather than at the foot of the dialog.
+
+## API
+
+| Prop      | Type              | Required | Description                             |
+| --------- | ----------------- | -------- | --------------------------------------- |
+| `flow`    | `Domain.Flow`     | yes      | The flow the dialog connects.           |
+| `marks`   | `ProviderArtwork` | no       | Your artwork per provider id.           |
+| `trigger` | `ReactNode`       | no       | Replaces the default "Connect" trigger. |
+
+## Boundary
+
+The dialog hands credentials to your transport, which hands them to the routes you mounted. Nothing
+in the browser stores a token, and an interactive method leaves the page and returns through your
+own callback.

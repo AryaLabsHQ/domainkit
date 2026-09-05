@@ -1,0 +1,54 @@
+/*
+ * The fixture serves no Tailwind build, so the few rules the registry's utility classes would have
+ * supplied for stacking are written out here. Everything else is deliberately unstyled: this run is
+ * about behaviour, focus, and portals rather than appearance.
+ */
+[data-slot="dialog-overlay"] {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgb(0 0 0 / 0.5);
+}
+
+[data-slot="dialog-content"] {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 60;
+  display: grid;
+  gap: 1rem;
+  width: min(32rem, calc(100% - 2rem));
+  padding: 1.5rem;
+  background: white;
+  transform: translate(-50%, -50%);
+}
+
+[data-slot="dropdown-menu-content"] {
+  z-index: 60;
+  background: white;
+}
+
+[data-slot="domain-field"] [role="listbox"] {
+  background: white;
+}
+
+[hidden] {
+  display: none;
+}
+
+/* The switch is a zero-size span without its utility classes, so give it a real hit area. */
+[data-slot="switch"] {
+  display: inline-block;
+  width: 2rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+[data-slot="switch-thumb"] {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: white;
+}
