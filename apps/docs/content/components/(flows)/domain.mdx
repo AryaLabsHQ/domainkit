@@ -25,17 +25,39 @@ exported for a host that wants the standalone surface.
 
 ## Props
 
-| Prop           | Type                               | Required | Means                                       |
-| -------------- | ---------------------------------- | -------- | ------------------------------------------- |
-| `domain`       | `string`                           | yes      | The customer domain this flow is for        |
-| `requirements` | `ReadonlyArray<DnsRecord.Model>`   | yes      | The records your product needs              |
-| `slots`        | `Domain.Slots`                     | no       | Replace one part of the flow, keep the rest |
-| `onApplied`    | `(receipt: Receipt.Model) => void` | no       | Fires once an apply produced a receipt      |
-| `onCleaned`    | `(receipt: Receipt.Model) => void` | no       | Fires once a cleanup produced a receipt     |
-| `returnTo`     | `string \| null`                   | no       | Where an interactive provider returns       |
-| `readOnly`     | `boolean`                          | no       | Render without the controls that change it  |
+| Prop           | Type                                | Required | Means                                         |
+| -------------- | ----------------------------------- | -------- | --------------------------------------------- |
+| `domain`       | `string`                            | yes      | The customer domain this flow is for          |
+| `requirements` | `ReadonlyArray<DnsRecord.Model>`    | yes      | The records your product needs                |
+| `slots`        | `Domain.Slots`                      | no       | Replace one part of the flow, keep the rest   |
+| `onApplied`    | `(receipt: Receipt.Model) => void`  | no       | Fires once an apply produced a receipt        |
+| `onCleaned`    | `(receipt: Receipt.Model) => void`  | no       | Fires once a cleanup produced a receipt       |
+| `returnTo`     | `string \| null`                    | no       | Where an interactive provider returns         |
+| `readOnly`     | `boolean`                           | no       | Render without the controls that change it    |
+| `connect`      | `Connect.Invitation`                | no       | Offer the dialog when discovery names no host |
+| `onState`      | `(state: Domain.FlowState) => void` | no       | What DomainKit has to say about the domain    |
 
 It also takes the composition props every part takes: `className`, `style`, and `render`.
+
+## What the flow reports
+
+`onState` fires whenever what DomainKit has to say about this domain changes, and once on mount.
+The same values reach the part's data attributes and its `className` and `style` callbacks.
+
+| Field          | Means                                                                             |
+| -------------- | --------------------------------------------------------------------------------- |
+| `connection`   | The connection controller's state tag                                             |
+| `provisioning` | The provisioning controller's state tag                                           |
+| `connected`    | DomainKit holds a connection here, including while a command over it runs         |
+| `offering`     | The connect surface has something to offer, so a host's own offer would compete   |
+| `provider`     | Who holds the connection, or whose nameservers serve the zone                     |
+| `label`        | The account the records go to, as the provider labelled the zone at attach time   |
+| `receiptId`    | The apply receipt this domain's latest attempt produced, which cleanup plans from |
+| `applied`      | `receiptId !== null`: DomainKit added records here and can prove which            |
+
+`provider` and `label` are what a host's own summary line is built from, so "3 records ·
+Cloudflare · acme-dns" needs no reach into the connection slot. Both are `null` until there is
+something to name.
 
 ## The member view
 

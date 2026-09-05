@@ -103,6 +103,20 @@ Each takes one options object and returns a controller whose `state` is a tagged
 `Domain.Flow` also takes `returnTo` for the connection it owns, and `readOnly` for one domain among
 several.
 
+## Flow state
+
+`Domain.FlowState` reaches a host three ways: the part's data attributes, its `className` and
+`style` callbacks, and `onState`, which fires on every change and once on mount.
+
+| Field                    | Carries                                                                       |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `connection`             | `Connect.State["_tag"]`                                                       |
+| `provisioning`           | `Provision.State["_tag"]`                                                     |
+| `connected` / `offering` | Whether DomainKit holds a connection, and whether it is offering one          |
+| `provider`               | Who holds the connection, or whose nameservers serve the zone                 |
+| `label`                  | The account the records go to, from the attachment; `null` until there is one |
+| `receiptId` / `applied`  | The apply receipt this domain produced, and whether there is one              |
+
 ## Read-only
 
 `readOnly` renders the state without the controls that change it. A write surface is removed rather

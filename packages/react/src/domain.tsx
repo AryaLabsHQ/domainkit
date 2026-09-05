@@ -63,6 +63,12 @@ export interface FlowState extends Record<string, unknown> {
   /** Who holds the connection, or whose nameservers serve the zone. */
   readonly provider: string | null;
   /**
+   * The account the records go to, as the provider labelled the zone when the domain was attached.
+   * `null` until there is an attachment. A host writing its own summary line names the account
+   * from this rather than reaching into the connection slot for it.
+   */
+  readonly label: string | null;
+  /**
    * The apply receipt this domain's latest provisioning attempt produced, which is what cleanup
    * plans from. A host's own "remove this domain" surface offers cleanup only when there is one.
    */
@@ -97,6 +103,7 @@ export interface FlowProps extends Omit<PartProps<"div", FlowState>, "children">
 /** Built from primitives alone, so the effect that announces it depends on exactly those. */
 const flowState = (input: {
   readonly connected: boolean;
+  readonly label: string | null;
   readonly offering: boolean;
   readonly planning: Provision.State["_tag"];
   readonly provider: string | null;
@@ -106,6 +113,7 @@ const flowState = (input: {
   applied: input.receipt !== null,
   connected: input.connected,
   connection: input.status,
+  label: input.label,
   offering: input.offering,
   provider: input.provider,
   provisioning: input.planning,
@@ -207,6 +215,7 @@ export function Flow({
   // reason to make it — the domain, the connection that landed, the receipt that is or is not
   // there, and what the host asked for — rather than one per render.
   const attached = connection.snapshot?.attachment != null;
+  const label = connection.snapshot?.attachment?.label ?? null;
   const receiptId = connection.snapshot?.lastReceiptId ?? null;
   const signature =
     surfaceReadOnly || !capabilities.includes("provisioning") || !attached || receiptId !== null
@@ -227,6 +236,7 @@ export function Flow({
   const provider = connection.snapshot?.provider ?? Connect.hostProvider(connection)?.id ?? null;
   const state = flowState({
     connected,
+    label,
     offering,
     planning,
     provider,
@@ -240,9 +250,9 @@ export function Flow({
   });
   useEffect(() => {
     announce.current?.(
-      flowState({ connected, offering, planning, provider, receipt: receiptId, status }),
+      flowState({ connected, label, offering, planning, provider, receipt: receiptId, status }),
     );
-  }, [connected, offering, planning, provider, receiptId, status]);
+  }, [connected, label, offering, planning, provider, receiptId, status]);
   return usePart("div", props, state, {
     children: (
       <ReadOnly value={surfaceReadOnly}>

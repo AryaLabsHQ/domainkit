@@ -905,7 +905,7 @@ describe("Domain.Flow with nothing to offer", () => {
 
 describe("Domain.Flow state", () => {
   it("reports what DomainKit has to say about the domain, and again when it changes", async () => {
-    const { domain, requirements, transport } = scenario();
+    const { domain, requirements, transport, zone } = scenario();
     const seen: Array<Domain.FlowState> = [];
     render(
       <DomainKit.Root transport={transport}>
@@ -920,6 +920,8 @@ describe("Domain.Flow state", () => {
     expect(seen.at(-1)).toMatchObject({
       applied: false,
       connected: false,
+      // Nothing is attached, so there is no account to name.
+      label: null,
       offering: true,
       provider: "fake",
       receiptId: null,
@@ -929,6 +931,8 @@ describe("Domain.Flow state", () => {
     expect(seen.at(-1)).toMatchObject({
       applied: false,
       connection: "Connected",
+      // The attachment's own label, so a host writes its summary line without the connection slot.
+      label: zone,
       offering: false,
       provider: "fake",
     });
@@ -937,6 +941,37 @@ describe("Domain.Flow state", () => {
     await addRecords();
     await waitFor(() => expect(seen.at(-1)?.applied).toBe(true));
     expect(typeof seen.at(-1)?.receiptId).toBe("string");
+  });
+
+  it("names the account from the attachment, not from the domain it was derived for", async () => {
+    const zone = `labelled${(cases += 1)}.example`;
+    const domain = `app.${zone}`;
+    const requirements = [
+      DnsRecord.cname({ name: domain, purpose: "Serve your site", target: "edge.example.com" }),
+    ];
+    const transport = Testing.transport({
+      provider: {
+        labels: { [zone]: `${zone} (Acme Production)` },
+        nameserverSuffixes: [zone],
+        zones: [zone],
+      },
+    });
+    const seen: Array<Domain.FlowState> = [];
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow
+          domain={domain}
+          onState={(state) => seen.push(state)}
+          requirements={requirements}
+        />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await user.type(await screen.findByLabelText(/Token/), "tok");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
+    // The provider's own words for the zone, kept on the attachment, so a host's summary line
+    // reads the same as the connected card without a provider call of its own.
+    await waitFor(() => expect(seen.at(-1)?.label).toBe(`${zone} (Acme Production)`), patient);
   });
 
   it("keeps saying it holds the connection while a disconnect is in flight", async () => {
