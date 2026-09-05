@@ -21,9 +21,12 @@ product verification policy.
   and no element.
 - `Domain.useFlow` is the whole lifecycle for one domain: the four controllers, the pending plan,
   the readiness, and a `FlowState` a host reads to order its own offers beside DomainKit's. It
-  plans as soon as the domain is attached with nothing applied. Attaching to a connection discovery
-  already resolved belongs to `Connect.useController`, so a surface built on the controller alone
-  gets it too.
+  plans as soon as the domain is attached with nothing applied, and again when an observation made
+  after the apply reads a record back missing or wrong. The plan signature is one entry per reason
+  to plan — the domain, the connection that landed, the requirements, the receipt, and which
+  records drifted — so a poll that reports the same drift plans nothing. Attaching to a connection
+  discovery already resolved belongs to `Connect.useController`, so a surface built on the
+  controller alone gets it too.
 - `readOnly` refuses every command that changes the domain, at the controller rather than in the
   markup: the surface is the host's now, so a control it renders anyway must not reach the
   transport. `DomainKit.Root` sets it for the page, `DomainKit.ReadOnly` narrows a subtree, and

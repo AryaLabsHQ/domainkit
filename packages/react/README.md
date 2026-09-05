@@ -86,7 +86,9 @@ so `offering` is false. Pass `connect: "always"` to offer every provider anyway,
 
 Connecting is the customer saying yes to the records, so the plan builds itself the moment a
 connection lands, after a token connect and after the customer returns from a provider. One
-`approve` adds them.
+`approve` adds them. A domain that already holds an apply receipt plans again when an observation
+reads one of its records back missing or wrong, so records deleted at the provider are offered
+again from the same button.
 
 ## Controllers
 

@@ -1,17 +1,19 @@
 /**
  * The whole lifecycle for one domain in one hook: connect, add the records, observe, clean up.
  * `useFlow` runs the four controllers together and plans as soon as the domain is attached with
- * nothing applied, so the styled surface is only markup.
+ * nothing applied, and again when an observation reads an applied record back missing or wrong, so
+ * the styled surface is only markup.
  */
 import { Receipt, type DnsRecord, type Plan } from "domainkit";
 import type { Transport } from "domainkit/client";
+import * as DateTime from "effect/DateTime";
 import { useCallback, useEffect, useRef } from "react";
 
 import * as Cleanup from "./cleanup.ts";
 import * as Connect from "./connect.ts";
 import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
 import * as Provision from "./provision.ts";
-import { requirementsKey } from "./records.ts";
+import { identity, requirementsKey } from "./records.ts";
 import * as Verify from "./verify.ts";
 
 /**
@@ -111,6 +113,34 @@ const flowState = (input: {
   receiptId: input.receipt === null ? null : Receipt.ReceiptId.make(input.receipt),
 });
 
+/**
+ * Which records an applied domain lost, keyed by the records themselves rather than by when they
+ * were read, so every observation that reports the same drift is one reason to plan. `null` when
+ * there is nothing to add back:
+ *
+ * - the observation is older than the receipt, so it is evidence about a zone from before the
+ *   apply wrote to it rather than about records that went missing since;
+ * - this flow is the one taking the records away, because a cleanup the customer asked for must
+ *   not turn into an offer to put them back;
+ * - every requirement was found.
+ */
+const driftKey = (
+  readiness: Verify.Readiness | null,
+  receipt: Receipt.Model | null,
+  cleanup: Cleanup.State,
+): string | null => {
+  if (readiness === null || receipt === null) return null;
+  if (DateTime.isLessThan(readiness.checkedAt, receipt.appliedAt)) return null;
+  if (cleanup._tag === "Approving" || cleanup._tag === "Applying" || cleanup._tag === "Applied") {
+    return null;
+  }
+  const drifted = readiness.requirements
+    .filter(({ status }) => status === "missing" || status === "mismatch")
+    .map(({ record, status }) => `${identity(record)} ${status}`)
+    .sort();
+  return drifted.length === 0 ? null : drifted.join("\n");
+};
+
 export function useFlow({
   connect = "detected",
   domain,
@@ -154,14 +184,27 @@ export function useFlow({
   });
 
   // The plan is what the table is: an attached domain with nothing applied to it yet has records
-  // that are still a proposal, and the rows say so. The signature is what makes that one call per
-  // reason to make it — the domain, the connection that landed, the receipt that is or is not
-  // there, and what the host asked for — rather than one per render.
+  // that are still a proposal, and the rows say so. An applied domain plans again once an
+  // observation reads a record back missing or wrong, so a customer whose records were deleted at
+  // the provider is offered them again instead of a count of what once landed. The signature is
+  // what makes that one call per reason to make it — the domain, the connection that landed, what
+  // the host asked for, the receipt, and which records drifted — rather than one per render or one
+  // per poll.
   const attached = connection.snapshot?.attachment != null;
+  const drift = driftKey(verification.readiness, connection.receipt, cleanup.state);
   const signature =
-    surfaceReadOnly || !capabilities.includes("provisioning") || !attached || receiptId !== null
+    surfaceReadOnly ||
+    !capabilities.includes("provisioning") ||
+    !attached ||
+    (receiptId !== null && drift === null)
       ? null
-      : [domain, connection.established, requirementsKey(requirements)].join("|");
+      : [
+          domain,
+          connection.established,
+          requirementsKey(requirements),
+          receiptId ?? "",
+          drift ?? "",
+        ].join("|");
   const planned = useRef<string | null>(null);
   const buildPlan = provisioning.plan;
   useEffect(() => {
