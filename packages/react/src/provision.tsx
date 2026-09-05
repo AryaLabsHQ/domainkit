@@ -1,4 +1,4 @@
-import { DnsRecord, type Receipt } from "domainkit";
+import { DnsRecord, Plan, type Receipt } from "domainkit";
 import { useCallback, useState, type ReactElement, type ReactNode } from "react";
 
 import { State, useAttempt, type Controller } from "./attempt.ts";
@@ -88,9 +88,9 @@ export function Action({ controller, ...props }: ActionProps): ReactElement | nu
   const state = controller.state;
   const plan = state._tag === "Planned" ? state.plan : null;
   const running = state._tag === "Approving" || state._tag === "Applying";
-  // A conflict is not a write, so it never counts towards what the button says it will add.
-  const writes =
-    plan === null ? [] : plan.operations.filter((operation) => operation._tag !== "Conflict");
+  // Only a create or a delete is approvable: a conflict blocks and a record already in place is
+  // nothing to write, and naming either id in an approval is refused.
+  const writes = plan === null ? [] : Plan.writes(plan);
   const blocked = plan !== null && writes.length === 0;
   const element = usePart(
     "div",

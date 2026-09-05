@@ -722,6 +722,59 @@ describe("Domain.Flow one-click onboarding", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("counts only the records it will write, and adds them beside one already in place", async () => {
+    const zone = `noop${(cases += 1)}.example`;
+    const domain = `app.${zone}`;
+    const present = DnsRecord.cname({
+      name: domain,
+      purpose: "Serve your site",
+      target: "edge.example.com",
+    });
+    const missing = DnsRecord.txt({
+      name: `_acme.${domain}`,
+      purpose: "Prove ownership",
+      value: "acme-verify=7f3a",
+    });
+    const blocked = DnsRecord.txt({
+      name: `_other.${domain}`,
+      purpose: "Something else",
+      value: "wanted",
+    });
+    const transport = Testing.transport({
+      provider: {
+        nameserverSuffixes: [zone],
+        records: [
+          { record: present, zone },
+          {
+            record: DnsRecord.cname({ name: `_other.${domain}`, target: "held.example.com" }),
+            zone,
+          },
+        ],
+        zones: [zone],
+      },
+    });
+    const applied: Array<Receipt.Model> = [];
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow
+          domain={domain}
+          onApplied={(receipt) => applied.push(receipt)}
+          requirements={[present, missing, blocked]}
+        />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await user.type(await screen.findByLabelText(/Token/), "tok");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
+    // A record already in place is nothing to write, and a blocked one cannot be written, so the
+    // action names the one record it will actually add.
+    await waitFor(() => expect(planAction()?.textContent).toBe("Add 1 record"), patient);
+    expect(rowStatus(domain)).toBe("Already there");
+    expect(rowStatus(`_other.${domain}`)).toBe("In the way");
+    await addRecords();
+    await waitFor(() => expect(applied).toHaveLength(1), patient);
+  });
+
   it("says what to fix when every record is in the way", async () => {
     const zone = `blocked${(cases += 1)}.example`;
     const domain = `app.${zone}`;

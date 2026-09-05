@@ -207,22 +207,43 @@ export function useAccounts({ returnTo }: AccountsOptions = {}): AccountsControl
 
 const normalize = (value: string): string => value.trim().toLowerCase().replace(/\.$/, "");
 
-/** The zone a value already sits in: the longest listed zone the value is at or under. */
+/**
+ * The zone a value already sits in: the longest listed zone the value is at or under. Two accounts
+ * can serve the same zone, so `preferred` names the one the customer picked and wins among equals;
+ * without it the first listed account answers.
+ */
 export const placementOf = (
   value: string,
   zones: ReadonlyArray<Zone>,
+  preferred?: Placement | null,
 ): { readonly zone: Zone; readonly placement: Placement } | null => {
   const domain = normalize(value);
   if (domain === "") return null;
-  let best: Zone | null = null;
-  for (const candidate of zones) {
+  const matching = zones.filter((candidate) => {
     const zone = normalize(candidate.zone);
-    if (domain !== zone && !domain.endsWith(`.${zone}`)) continue;
-    if (best === null || zone.length > normalize(best.zone).length) best = candidate;
-  }
-  return best === null
-    ? null
-    : { placement: { connectionId: best.connectionId, zone: best.zone }, zone: best };
+    return domain === zone || domain.endsWith(`.${zone}`);
+  });
+  const longest = matching.reduce(
+    (best, candidate) =>
+      best === null || normalize(candidate.zone).length > normalize(best.zone).length
+        ? candidate
+        : best,
+    null as Zone | null,
+  );
+  if (longest === null) return null;
+  const closest = matching.filter(
+    (candidate) => normalize(candidate.zone) === normalize(longest.zone),
+  );
+  const best =
+    closest.find(
+      (candidate) =>
+        preferred != null &&
+        candidate.connectionId === preferred.connectionId &&
+        normalize(candidate.zone) === normalize(preferred.zone),
+    ) ??
+    closest[0] ??
+    longest;
+  return { placement: { connectionId: best.connectionId, zone: best.zone }, zone: best };
 };
 
 /**
@@ -309,9 +330,12 @@ export function DomainField({
   const listId = `${inputId}-suggestions`;
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  // Which account the customer completed from, so a zone two accounts both serve stays the one
+  // they picked rather than whichever the listing happens to hold first.
+  const [chosen, setChosen] = useState<Placement | null>(null);
   const suggestions = suggestionsFor(value, accounts.zones);
   const highlighted = suggestions[Math.min(active, Math.max(suggestions.length - 1, 0))] ?? null;
-  const found = placementOf(value, accounts.zones);
+  const found = placementOf(value, accounts.zones, chosen);
   const showing = open && suggestions.length > 0;
 
   // The host is told what the value resolved to, not every keystroke that left it where it was.
@@ -326,6 +350,7 @@ export function DomainField({
 
   const complete = (zone: Zone) => {
     onChange(completionOf(value, zone));
+    setChosen({ connectionId: zone.connectionId, zone: zone.zone });
     setOpen(false);
     setActive(0);
   };
@@ -350,6 +375,15 @@ export function DomainField({
             id={inputId}
             onChange={(event) => {
               onChange(event.target.value);
+              // Typing on is a new choice: the account only stands while the value it was picked
+              // for still sits in that zone.
+              setChosen((held) =>
+                held === null ||
+                placementOf(event.target.value, accounts.zones, held)?.placement.connectionId !==
+                  held.connectionId
+                  ? null
+                  : held,
+              );
               setActive(0);
               setOpen(true);
             }}
@@ -461,21 +495,20 @@ function Footer({ accounts, found, readOnly, value }: FooterProps): ReactElement
       : accounts.providers.map((provider) => (
           <Offer busy={busy} connect={accounts.connect} key={provider.id} provider={provider} />
         ));
+  // Reconnecting is the connection's own surface: starting a provider from here would leave the
+  // rejected connection where it is and add a second one beside it, so this only says so.
   const reconnects =
-    readOnly || stale.length === 0
+    stale.length === 0
       ? null
-      : stale.map((entry) => {
-          const provider = accounts.providers.find((held) => held.id === entry.provider);
-          return provider === undefined ? null : (
-            <Offer
-              busy={busy}
-              connect={accounts.connect}
-              key={entry.connectionId}
-              label={messages.reconnectAccount(named(entry.provider))}
-              provider={provider}
-            />
-          );
-        });
+      : stale.map((entry) => (
+          <span
+            data-connection-id={entry.connectionId}
+            data-domainkit-part="domain-field-reconnect"
+            key={entry.connectionId}
+          >
+            {messages.reconnectAccount(named(entry.provider))}
+          </span>
+        ));
   if (line === null && offers === null && reconnects === null) return null;
   return (
     <div data-domainkit-part="domain-field-footer">
@@ -489,7 +522,6 @@ function Footer({ accounts, found, readOnly, value }: FooterProps): ReactElement
 interface OfferProps {
   readonly busy: boolean;
   readonly connect: AccountsController["connect"];
-  readonly label?: string;
   readonly provider: Provider.Descriptor;
 }
 
@@ -498,13 +530,13 @@ interface OfferProps {
  * press; a token method asks for the values it declares first, because there is nowhere else on
  * this surface to type them.
  */
-function Offer({ busy, connect, label, provider }: OfferProps): ReactElement {
+function Offer({ busy, connect, provider }: OfferProps): ReactElement {
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<Readonly<Record<string, string>>>({});
   const interactive = provider.methods.find((method) => method.fields === null);
   const typed = provider.methods.find((method) => method.fields !== null);
-  const name = label ?? messages.connectTitle(provider.name);
+  const name = messages.connectTitle(provider.name);
   if (interactive !== undefined || typed === undefined) {
     return (
       <button

@@ -149,6 +149,31 @@ describe("Connect.DomainField", () => {
     expect(last?.connection?.zone).toBe(first);
   });
 
+  it("keeps the account the customer completed from when two of them serve the zone", async () => {
+    const { transport, zones } = scenario();
+    await connectAccount(transport);
+    await connectAccount(transport);
+    const resolved: Array<{
+      readonly domain: string;
+      readonly connection: Connect.Placement | null;
+    }> = [];
+    render(<Harness onResolve={(reported) => resolved.push(reported)} transport={transport} />);
+    const [first] = [...zones].sort();
+    if (first === undefined) throw new Error("the scenario has no zones");
+    await user.click(input());
+    await user.type(input(), `mail.${first.slice(0, 10)}`);
+    // Two accounts serve the same zone, so the listing holds the zone twice.
+    await waitFor(() => expect(options()).toHaveLength(2));
+    const second = options()[1];
+    if (second === undefined) throw new Error("the listing holds one account");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Enter}");
+    expect(screen.getByTestId("value").textContent).toBe(`mail.${first}`);
+    // The domain alone cannot say which account it goes to, so the field remembers the choice.
+    const last = resolved.at(-1);
+    expect(second.id).toContain(last?.connection?.connectionId ?? "nothing");
+  });
+
   it("says a domain outside every connected zone is one the customer adds by hand", async () => {
     const { transport } = scenario();
     await connectAccount(transport);
@@ -213,6 +238,13 @@ describe("Connect.DomainField", () => {
       },
     };
     render(<Harness transport={failing} />);
-    expect(await screen.findByRole("button", { name: /Reconnect Fake fake/ })).toBeDefined();
+    // Reconnecting is the connection's own surface: starting a provider here would add a second
+    // account beside the rejected one, so the field says which account needs it and stops there.
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-domainkit-part='domain-field-reconnect']")?.textContent,
+      ).toBe("Reconnect Fake fake"),
+    );
+    expect(screen.queryByRole("button", { name: /Reconnect/ })).toBeNull();
   });
 });

@@ -15,6 +15,41 @@ const connect = (provider: string) =>
     }),
   );
 
+/** A provider that is simply down: nothing is wrong with the credential. */
+const unavailable = Provider.make({
+  id: "unavailable",
+  name: "Unavailable",
+  context: Schema.Struct({}),
+  contextVersion: "unavailable.v1",
+  auth: {
+    token: Provider.tokenAuth({
+      label: "Token",
+      requiredCapabilities: [],
+      fields: Schema.Struct({ token: Schema.RedactedFromValue(Schema.String) }),
+      authenticate: ({ token }) => Effect.succeed({ secret: token, context: {}, expiresAt: null }),
+    }),
+  },
+  session: () => ({
+    capabilities: () => Effect.succeed(["dns:read", "dns:write"]),
+    listTargets: () =>
+      Effect.fail(
+        new DomainKitError({
+          reason: new Reason.ProviderUnavailable({
+            provider: "unavailable",
+            message: "the provider is down",
+          }),
+        }),
+      ),
+    resolveTarget: () => Effect.succeed(Provider.Resolution.NotFound()),
+    dns: () => ({
+      list: () => Effect.succeed([]),
+      create: () => Effect.succeed({ providerRecordId: "unused" }),
+      get: () => Effect.succeed(null),
+      delete: () => Effect.void,
+    }),
+  }),
+});
+
 /** A provider whose credential the account turns down the moment anything asks it for zones. */
 const rejecting = Provider.make({
   id: "rejecting",
@@ -128,6 +163,24 @@ describe("Connect.zones", () => {
       ),
     );
   });
+
+  it.effect(
+    "raises a failure that is not the credential's rather than asking for a reconnect",
+    () => {
+      return Effect.gen(function* () {
+        yield* connect("unavailable");
+        const outcome = yield* Effect.flip(Connect.zones());
+        // A provider outage is retryable and says so; dressing it up as `reconnect` would send the
+        // customer to grant an authorization that was never the problem.
+        assert.strictEqual(outcome.reason._tag, "ProviderUnavailable");
+      }).pipe(
+        withPrincipal,
+        Effect.provide(
+          DomainKit.layerMemory({ providers: [unavailable], resolver: Testing.resolver([]) }),
+        ),
+      );
+    },
+  );
 
   it.effect("remembers the zone's label on the attachment it creates", () => {
     const fake = Testing.provider({

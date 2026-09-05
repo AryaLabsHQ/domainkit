@@ -529,12 +529,20 @@ export const make: Effect.Effect<
       const filter = options.provider === undefined ? undefined : { provider: options.provider };
       for (const connection of yield* storage.connections.list(filter)) {
         const authorization = yield* storage.authorizations.get(connection.authorizationId);
+        // A credential the provider turned down is one connection's problem, not the listing's:
+        // it is reported as needing a reconnect and every other connection still answers. Any
+        // other failure is the listing's own, so it is raised rather than dressed up as an
+        // authorization the customer has to grant again.
         const targets = yield* sessionFor(connection).pipe(
           Effect.flatMap((session) => session.listTargets()),
           Effect.map(Option.some),
-          // A dead credential is one connection's problem, not the listing's: it is reported as
-          // needing a reconnect and every other connection still answers.
-          Effect.catch(() => Effect.succeed(Option.none<ReadonlyArray<Provider.Target>>())),
+          Effect.catchIf(
+            (error) =>
+              error.reason._tag === "Reconnect" ||
+              error.reason._tag === "Unauthenticated" ||
+              error.reason._tag === "Forbidden",
+            () => Effect.succeed(Option.none<ReadonlyArray<Provider.Target>>()),
+          ),
         );
         connections.push({
           connectionId: connection.id,

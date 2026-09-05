@@ -141,7 +141,6 @@
     [data-domainkit-part="disconnect-confirm"],
     [data-domainkit-part="method-alternate"],
     [data-domainkit-part="domain-field-connect"],
-    [data-domainkit-part="domain-field-reconnect"],
     [data-domainkit-part="dialog-back"],
     [data-domainkit-part="dialog-provider-menu"],
     [data-domainkit-part="more-options-trigger"],
@@ -1284,6 +1283,10 @@
   :where([data-domainkit-part="domain-suggestion-account"]) {
     color: var(--domainkit-muted);
     font-size: 0.75rem;
+  }
+
+  :where([data-domainkit-part="domain-field-reconnect"]) {
+    color: var(--domainkit-danger);
   }
 
   :where([data-domainkit-part="domain-field-footer"]) {

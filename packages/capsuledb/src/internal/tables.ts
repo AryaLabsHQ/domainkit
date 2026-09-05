@@ -62,8 +62,11 @@ export const make = (prefix: string): Tables => ({
       connection_id: Schema.text(),
       domain: Schema.text(),
       zone: Schema.text(),
-      /** The provider's label for the zone at attach time, so a UI names the account offline. */
-      label: Schema.text(),
+      /**
+       * The provider's label for the zone at attach time, so a UI names the account offline. The
+       * default is what fills the rows an installation attached before the column existed.
+       */
+      label: Schema.text({ default: "" }),
       target: Schema.json(),
       created_at: Schema.timestamp(),
     },
@@ -135,6 +138,29 @@ export const make = (prefix: string): Tables => ({
     indexes: [{ columns: ["owner_id", "next_check_at"] }, { columns: ["attachment_id"] }],
   }),
 });
+
+/**
+ * The attachments table as the first migration created it, before `label`.
+ *
+ * A migration is history: what it renders must not move, or an installation that already ran it
+ * sees a different checksum for work it has done. The declaration above is the current shape, and
+ * the migration that adds the column carries the difference.
+ */
+export const attachmentsV1 = (prefix: string): Schema.Table =>
+  Schema.table(`${prefix}_attachments`, {
+    columns: {
+      id: Schema.text(),
+      owner_id: Schema.text(),
+      connection_id: Schema.text(),
+      domain: Schema.text(),
+      zone: Schema.text(),
+      target: Schema.json(),
+      created_at: Schema.timestamp(),
+    },
+    primaryKey: ["id"],
+    uniques: [["owner_id", "domain"]],
+    indexes: [{ columns: ["owner_id", "connection_id"] }],
+  });
 
 export const list = (tables: Tables): ReadonlyArray<Schema.Table> => [
   tables.authorizations,
