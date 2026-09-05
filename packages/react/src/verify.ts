@@ -78,13 +78,13 @@ export function useController({ domain, polling = true, requirements }: Options)
 
   // Readiness belongs to the domain that was observed. Dropping it while rendering, rather than
   // in an effect, keeps the first frame for a new domain free of the previous one's evidence.
+  // The domain travels with it, so an answer that arrives after the controller moved refuses
+  // itself rather than hanging one domain's evidence under another's name.
+  const held = useRef(domain);
   const [observed, setObserved] = useState(domain);
   if (observed !== domain) {
     setObserved(domain);
-    // Interrupting while rendering, not one effect later, is what keeps the previous domain's
-    // observation from landing in between and restoring its evidence under the new one.
-    runner.cancel();
-    clearTimeout(timer.current);
+    held.current = domain;
     setState(State.Idle());
   }
 
@@ -98,10 +98,14 @@ export function useController({ domain, polling = true, requirements }: Options)
         : verification.observe(domain, requested),
       {
         onFailure: (error) => {
+          if (held.current !== domain) return;
           setState((previous) => State.Failure({ error, readiness: readinessOf(previous) }));
           emit(Event.Failed({ domain, error }));
         },
-        onSuccess: (readiness) => setState(State.Observed({ readiness })),
+        onSuccess: (readiness) => {
+          if (held.current !== domain) return;
+          setState(State.Observed({ readiness }));
+        },
       },
     );
   }, [domain, emit, requested, runner, verification]);

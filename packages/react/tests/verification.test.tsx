@@ -31,6 +31,24 @@ describe("Verify.useController", () => {
     expect(view.result.current.readiness).toBeNull();
   });
 
+  it("refuses an answer that arrives after the controller moved to another domain", async () => {
+    const { domain, requirements, sibling, transport } = scenario();
+    await attach(transport, domain);
+    const view = mount(
+      transport,
+      ({ target }: { readonly target: string }) =>
+        Verify.useController({ domain: target, polling: false, requirements }),
+      { initialProps: { target: domain } },
+    );
+    await until(() => expect(view.result.current.readiness?.domain).toBe(domain));
+    act(() => view.rerender({ target: sibling }));
+    // The first frame is free of the previous domain's evidence, and the answer still in flight
+    // for it never puts that evidence back.
+    expect(view.result.current.readiness).toBeNull();
+    await until(() => expect(view.result.current.state._tag).toBe("Observed"));
+    expect(view.result.current.readiness?.domain).toBe(sibling);
+  });
+
   it("observes again when a requirement changes in a way only the wire sees", async () => {
     const { domain, transport } = scenario();
     const base = DnsRecord.cname({

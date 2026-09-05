@@ -19,7 +19,10 @@ export function providerArtwork(
   marks: ProviderArtwork | undefined,
   provider: Connect.Descriptor,
 ): ReactNode {
-  const held = marks?.[provider.id];
+  // A provider id is any string, so `toString` or `__proto__` must not reach `Object.prototype`
+  // and be drawn as artwork. Only a mark the host actually wrote counts.
+  const held =
+    marks !== undefined && Object.hasOwn(marks, provider.id) ? marks[provider.id] : undefined;
   if (typeof held === "function") return held(provider);
   return held ?? provider.name.trim().charAt(0).toUpperCase();
 }
