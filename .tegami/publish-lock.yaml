@@ -1,60 +1,26 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Connecting a domain that needs reconnecting re-credits what it has\n\n`Connect.useController`'s `connect` proves the same provider again for a connection the provider\nturned down, rather than starting a second one, so the domains on it stay where they are. The\ndomain field's footer offers the same for an account its listing reports as `reconnect`, through\n`Connect.useAccounts`'s new `reconnect` command.\n"
-    filename: react-reconnect-in-place.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Headless hooks, and the registry as the styled path\n\n`@domainkit/react` keeps behaviour and loses paint. `usePart`, `leafPart`, `PartProps`, every\ncomponent, the `data-domainkit-part` vocabulary, `styles.css`, `Theme`, `icons`, the `marks` map,\nand `Provider.Mark` are gone, along with `DomainKit.Root`'s `theme`, `marks`, `icons`,\n`colorScheme`, and `portalContainer` props and the `./styles.css` export. The package no longer\ndepends on `@base-ui/react`.\n\n`DomainKit.Root` is a context provider that renders no element, taking `transport`, `messages`,\n`navigate`, `onEvent`, `readOnly`, and `revision`. `Domain.useFlow({ domain, requirements, connect,\nonApplied, onCleaned, returnTo, readOnly })` replaces `Domain.Flow` and returns `state`,\n`connection`, `provisioning`, `cleanup`, `verification`, `plan`, `readiness`, `capabilities`,\n`requirements`, and `invitation`. Read-only is a fact on `FlowState.readOnly`, so a surface says who\nmay connect rather than rendering nothing.\n\n`Connect` gains `describeMethods`, `rejectedField`, `attempted`, `reusableConnections`, `reconnect`,\n`providerOf`, `displayName`, and `useDomainField`, which carries the combobox semantics as\n`inputProps`, `listboxProps`, and `optionProps`. `Outcome` is `describe(error, catalog)` and\n`useDescribe()`. `Provision` and `Cleanup` export `pendingPlan` and `planOf`; `Verify` exports\n`valuesOf`; `Records` keeps `statusOf`, `useCopy`, `toZoneFile`, and `downloadZoneFile`.\n\nThe styled composition is the DomainKit shadcn registry: `domain-flow` over `provider-row`,\n`records-table`, `plan-action`, `connect-dialog`, `disconnect-dialog`, `domain-field`, and\n`outcome`, written against the host's own kit on the Base UI idiom.\n"
-    filename: react-headless-and-registry.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Adding a domain is one input\n\n`Connect.DomainField` loads the zones every connected account reaches, filters them as the customer\ntypes, completes the highlighted one on Tab or Enter while keeping whatever subdomain was typed in\nfront of it, and says in its footer where the records will go: the account that serves the zone,\n\"Not in a connected account.\" for a domain outside all of them, an offer to prove an account the\nprovider turned down, or the providers to connect when the workspace holds none. Arrow keys move the\nhighlight and Escape closes the list; the input stays a plain text field for a domain no account\nreaches. Parts: `domain-field`, `domain-input`, `domain-suggestions`, `domain-suggestion`,\n`domain-field-footer`.\n\n`Connect.useZones({ provider? })` reads the listing. `Connect.useAccounts({ returnTo })` adds the\none command that grows it: connect a provider with no domain attached, by redirect for a\nclick-through method and through a token dialog for a provider that offers nothing else.\n"
-    filename: react-domain-field.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## The records table is the plan\n\nOnce a plan exists the page has one button, \"Add N records\", in the records header; each row reports\n\"Will add\", \"Already there\", or \"In the way\"; and a conflict explains itself and says what to fix in\na row under the record it blocks. No review dialog opens.\n\n`Domain.Flow` plans whenever the domain is attached with nothing applied to it yet, on load and on\nevery connection that lands, and hands `plan` and `provisioning` to the records slot. The `review`\nprop and the `actions` slot are gone; `Provision.Dialog` stays exported for a host that wants the\nstandalone surface, and the flow never opens it.\n\n`Records.Table` takes `plan` and `actions` and renders a header over the rows.\n`Records.statusOf(record, { plan, readiness })` answers with the operation a pending plan holds or\nthe readiness last observed, for a host with its own table. `Provision.Action` approves and applies\nin one press, says \"Adding records…\" while it runs, is disabled beside what to fix when every record\nis blocked, and reports the outcome under the header.\n"
-    filename: react-plan-in-the-table.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## The flow state names the account\n\n`Domain.FlowState.label` carries the account the records go to, as the provider labelled the zone\nwhen the domain was attached, and `null` until there is an attachment. It reaches a host through\nthe part's data attributes, its `className` and `style` callbacks, and `onState`, like every other\nfield. A host writing its own summary line, \"3 records · Cloudflare · acme-dns\", now builds it from\n`provider` and `label` instead of reaching into the connection slot for the snapshot.\n"
-    filename: react-flow-state-label.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: minor\n---\n\n## A second domain on a connected account never sees Connect again\n\n`Connect.useController` attaches on sight: when it settles `Disconnected` with a `Resolved`\ndiscovery on a surface that is not read-only, it attaches the domain to that connection and zone\nstraight away, and `established` grows so the flow plans. Each domain, connection, and zone is tried\nonce, so an attach that failed and a detach the customer chose both stand. Two connections that both\nreach the zone stay a decision, and `SelectionRequired` keeps the prompt.\n\nThe prompt statement says what was found, `messages.hostDetected` (\"Cloudflare DNS detected\"), and\nthe connected card reads \"{Provider} · {attachment.label}\" with \"N added\" from the domain's apply\nreceipt, under the parts `connected-label` and `connected-applied`. The controller reads that\nreceipt once per receipt id and keeps it.\n"
-    filename: react-attach-on-sight.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/capsuledb\":\n    type: minor\n---\n\n## The attachments table remembers the zone's label\n\n`domainkit_attachments` carries `label`, the provider's name for the zone at the moment the domain\nwas attached. A host that has already deployed picks the column up from the emitted migration; a\nsurface reading it names the account without a provider call.\n"
-    filename: capsuledb-attachment-label.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Reconnecting keeps the connection it is about\n\n`Connect.reconnect({ connectionId, method })` and `POST /connections/:connectionId/reconnections`\nput a fresh credential behind the authorization a connection already points at. The connection\nkeeps its id and every domain stays attached to it, which is what a customer means when a provider\nturns a credential down. Starting again could only mint a second account and then fail on the first\ndomain, because that domain is attached to the connection the provider rejected. The provider is\nthe connection's own; the zone check on every session still catches a credential that can no longer\nreach a zone.\n"
-    filename: domainkit-reconnect-a-connection.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## The account is the unit of consent\n\n`Server.StartPayload.domain` is optional. A start without one connects the account and attaches\nnothing, and `Started.Connected` carries the connection it made: `connectionId`, `provider`, the\n`label` the customer reads, and `snapshot` only when a domain was given.\n\n`Connect.zones({ provider? })` and `GET /zones` list every zone the principal's connections reach\nthrough `Provider.Session.listTargets`, ordered by zone, each with the connection that serves it\nand the label the provider gave it. A connection whose credential the provider turned down is\nreported once in the sibling `connections` array as `reconnect` and contributes no zones, so one\ndead account never costs the customer the others. The reply also carries the provider catalog, so a\npicker offers a new account without a second call.\n\n`Storage.Attachment.label` holds the zone's label at attach time, across memory and Postgres\nstorage, and `Snapshot.attachment` replaces `attachmentId` with `{ id, label }`, so a surface names\nthe account the records go to without asking the provider again. `Transport.provisioning.receipt`\nreads one apply receipt by id.\n"
-    filename: domainkit-accounts-zones-and-labels.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: patch\n---\n\n## A domain that lost its records is offered them again\n\n`Domain.useFlow` plans again when an observation made after the apply reads one of a domain's\nrecords back missing or wrong, so a customer whose records were deleted at the provider gets \"Add N\nrecords\" instead of a count of what once landed. Every observation reporting the same drift is one\nreason to plan, an apply observes the domain again to read back what it wrote, and a removal the\nflow is carrying out is not drift.\n"
+    filename: react-replan-after-drift.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
-  - changelogIds:
-      - react-reconnect-in-place.md
-      - react-headless-and-registry.md
-      - react-domain-field.md
-      - react-plan-in-the-table.md
-      - react-flow-state-label.md
-      - react-attach-on-sight.md
-    id: npm:@domainkit/react
+  - id: npm:@domainkit/capsuledb
     updated: true
   - changelogIds:
-      - capsuledb-attachment-label.md
-    id: npm:@domainkit/capsuledb
+      - react-replan-after-drift.md
+    id: npm:@domainkit/react
     updated: true
   - id: npm:@domainkit/docs
     updated: false
-  - changelogIds:
-      - domainkit-reconnect-a-connection.md
-      - domainkit-accounts-zones-and-labels.md
-    id: npm:domainkit
+  - id: npm:domainkit
     updated: true
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
-  - id: npm:@domainkit/react
   - id: npm:@domainkit/capsuledb
+  - id: npm:@domainkit/react
   - id: npm:@domainkit/docs
   - id: npm:domainkit
