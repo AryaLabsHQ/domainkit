@@ -114,14 +114,23 @@ const flowState = (input: {
 });
 
 /**
+ * A removal this flow is carrying out, at whatever step it reached. A cleanup that failed halfway
+ * has taken records away, and offering them back would contradict what the customer asked for, so
+ * the intent stands until the plan is declined or the flow is mounted again.
+ */
+const removing = (cleanup: Cleanup.State): boolean =>
+  cleanup._tag !== "Idle" && cleanup._tag !== "Rejecting" && cleanup._tag !== "Rejected";
+
+/**
  * Which records an applied domain lost, keyed by the records themselves rather than by when they
  * were read, so every observation that reports the same drift is one reason to plan. `null` when
  * there is nothing to add back:
  *
- * - the observation is older than the receipt, so it is evidence about a zone from before the
- *   apply wrote to it rather than about records that went missing since;
- * - this flow is the one taking the records away, because a cleanup the customer asked for must
- *   not turn into an offer to put them back;
+ * - the observation was stored before the apply, so it is evidence about a zone from before the
+ *   records were written rather than about records that went missing since. An observation that
+ *   read the zone before the apply and stored after it is interrupted instead: the apply starts a
+ *   new one, and the runner drops whatever it replaced;
+ * - this flow is the one taking the records away;
  * - every requirement was found.
  */
 const driftKey = (
@@ -131,9 +140,7 @@ const driftKey = (
 ): string | null => {
   if (readiness === null || receipt === null) return null;
   if (DateTime.isLessThan(readiness.checkedAt, receipt.appliedAt)) return null;
-  if (cleanup._tag === "Approving" || cleanup._tag === "Applying" || cleanup._tag === "Applied") {
-    return null;
-  }
+  if (removing(cleanup)) return null;
   const drifted = readiness.requirements
     .filter(({ status }) => status === "missing" || status === "mismatch")
     .map(({ record, status }) => `${identity(record)} ${status}`)
@@ -161,20 +168,25 @@ export function useFlow({
     ...(returnTo === undefined ? {} : { returnTo }),
   });
   const refresh = connection.refresh;
+  // The flow knows what it asked for, so a domain with no attachment can still be verified.
+  const verification = Verify.useController({ domain, requirements });
+  const observe = verification.observe;
   const provisioning = Provision.useController({
     domain,
     readOnly: surfaceReadOnly,
     onApplied: useCallback(
       (receipt: Receipt.Model) => {
         refresh();
+        // The zone holds records it did not a moment ago, so the flow reads it again rather than
+        // waiting for the next poll. Observing also interrupts an observation that overlapped the
+        // apply, whose evidence is about the zone as it was before the writes landed.
+        observe();
         onApplied?.(receipt);
       },
-      [onApplied, refresh],
+      [observe, onApplied, refresh],
     ),
     requirements,
   });
-  // The flow knows what it asked for, so a domain with no attachment can still be verified.
-  const verification = Verify.useController({ domain, requirements });
   const receiptId = connection.snapshot?.lastReceiptId ?? null;
   const cleanup = Cleanup.useController({
     domain,

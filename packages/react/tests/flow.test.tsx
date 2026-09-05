@@ -1,6 +1,7 @@
 import { act, render } from "@testing-library/react";
-import { DnsRecord, Plan, type Receipt } from "domainkit";
+import { DnsRecord, DomainKit as Core, Plan, Reason, type Receipt } from "domainkit";
 import { Transport } from "domainkit/client";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import { Connect, Domain, DomainKit, Records, Testing } from "../src/index.ts";
@@ -61,6 +62,49 @@ const checkNow = async (flow: () => Domain.Flow): Promise<void> => {
   const previous = flow().readiness;
   await run(() => flow().verification.observe());
   await until(() => expect(flow().readiness).not.toBe(previous));
+};
+
+/**
+ * A transport whose observations carry a `checkedAt` from five minutes before they were stored,
+ * which is evidence about the zone as it was before an apply wrote to it.
+ */
+const observingStale = (transport: Testing.RecordingTransport): Transport.Interface => {
+  const verification = transport.verification;
+  if (verification === undefined) throw new Error("The fake transport has no verification group");
+  return {
+    ...transport,
+    verification: {
+      ...verification,
+      observe: (domain, options) =>
+        Effect.map(verification.observe(domain, options), (readiness) => ({
+          ...readiness,
+          checkedAt: DateTime.subtract(readiness.checkedAt, { minutes: 5 }),
+        })),
+    },
+  };
+};
+
+/** A transport whose cleanup deletes the records and then fails, stopping halfway. */
+const failingCleanup = (transport: Testing.RecordingTransport): Transport.Interface => {
+  const cleanup = transport.cleanup;
+  if (cleanup === undefined) throw new Error("The fake transport has no cleanup group");
+  return {
+    ...transport,
+    cleanup: {
+      ...cleanup,
+      apply: (approvalId) =>
+        Effect.flatMap(cleanup.apply(approvalId), () =>
+          Effect.fail(
+            new Core.Error({
+              reason: new Reason.ProviderUnavailable({
+                message: "the fake provider stopped halfway",
+                provider: "fake",
+              }),
+            }),
+          ),
+        ),
+    },
+  };
 };
 
 /** The receipt a flow's latest apply produced, once the surface can read it. */
@@ -187,18 +231,56 @@ describe("Domain.useFlow", () => {
     const flow = () => view.result.current;
     await connect(flow);
     await until(() => expect(flow().plan).not.toBeNull());
+    const observations = called(transport, "verification.observe");
     await addRecords(flow());
     await receiptOf(flow);
     const plans = called(transport, "provisioning.plan");
-    // The observation on screen was read before the apply, so it reports the records missing
-    // because they were. Evidence older than the receipt is no reason to plan again.
-    expect(flow().readiness?.overall).toBe("pending");
-    expect(flow().plan).toBeNull();
-    expect(called(transport, "provisioning.plan")).toBe(plans);
-    // The check that follows an apply reads every record back, so there is nothing to add.
-    await checkNow(flow);
+    // The apply reads the zone again rather than waiting for the next poll, and finds every
+    // record it wrote, so there is nothing to add.
+    expect(called(transport, "verification.observe")).toBeGreaterThan(observations);
     await until(() => expect(flow().readiness?.overall).toBe("ready"));
     view.rerender();
+    expect(called(transport, "provisioning.plan")).toBe(plans);
+    expect(flow().plan).toBeNull();
+  });
+
+  it("does not plan from an observation stored before the apply", async () => {
+    const { domain, requirements, transport } = scenario();
+    const view = mount(observingStale(transport), () => Domain.useFlow({ domain, requirements }));
+    const flow = () => view.result.current;
+    await connect(flow);
+    await until(() => expect(flow().plan).not.toBeNull());
+    await addRecords(flow());
+    const receiptId = await receiptOf(flow);
+    const plans = called(transport, "provisioning.plan");
+
+    // Every observation this transport answers reports the zone as it was before the apply, so
+    // the records it calls missing say nothing about what the apply wrote.
+    await deleteAtProvider(transport, receiptId);
+    await checkNow(flow);
+    await until(() => expect(flow().readiness?.overall).toBe("pending"));
+    expect(called(transport, "provisioning.plan")).toBe(plans);
+    expect(flow().plan).toBeNull();
+  });
+
+  it("does not offer the records back when a cleanup failed halfway", async () => {
+    const { domain, requirements, transport } = scenario();
+    const view = mount(failingCleanup(transport), () => Domain.useFlow({ domain, requirements }));
+    const flow = () => view.result.current;
+    await connect(flow);
+    await until(() => expect(flow().plan).not.toBeNull());
+    await addRecords(flow());
+    await receiptOf(flow);
+    await run(() => flow().cleanup.plan());
+    await until(() => expect(flow().cleanup.state._tag).toBe("Planned"));
+    await run(() => flow().cleanup.approve());
+    await until(() => expect(flow().cleanup.state._tag).toBe("Failure"));
+
+    // The records are gone and the removal is unfinished. The customer's next step is the
+    // cleanup, not an offer to put back what they asked to take away.
+    const plans = called(transport, "provisioning.plan");
+    await checkNow(flow);
+    await until(() => expect(flow().readiness?.overall).toBe("pending"));
     expect(called(transport, "provisioning.plan")).toBe(plans);
     expect(flow().plan).toBeNull();
   });
@@ -211,7 +293,6 @@ describe("Domain.useFlow", () => {
     await until(() => expect(flow().plan).not.toBeNull());
     await addRecords(flow());
     const receiptId = await receiptOf(flow);
-    await checkNow(flow);
     await until(() => expect(flow().readiness?.overall).toBe("ready"));
     const plans = called(transport, "provisioning.plan");
 

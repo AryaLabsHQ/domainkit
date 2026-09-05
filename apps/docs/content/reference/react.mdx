@@ -64,9 +64,9 @@ own; the styled composition is the [registry](/components/registry).
 
 `Domain.useFlow({ domain, requirements, connect?, onApplied?, onCleaned?, returnTo?, readOnly? })`
 runs the four controllers together, attaches nothing the customer has not granted, and plans as soon
-as the domain is attached with nothing applied. An applied domain plans again once an observation
-made after the apply reads a record back missing or wrong, so records deleted at the provider are
-offered again.
+as the domain is attached with nothing applied. An apply observes the domain again, and an applied
+domain plans again once an observation made after the apply reads a record back missing or wrong, so
+records deleted at the provider are offered again.
 
 | Field                     | Carries                                                              |
 | ------------------------- | -------------------------------------------------------------------- |
