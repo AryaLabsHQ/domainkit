@@ -339,14 +339,20 @@ export function DomainField({
   const showing = open && suggestions.length > 0;
 
   // The host is told what the value resolved to, not every keystroke that left it where it was.
+  const placement = found?.placement ?? null;
+  const connectionId = placement?.connectionId ?? null;
+  const placedIn = placement?.zone ?? null;
   const announced = useRef<string | null>(null);
   useEffect(() => {
-    const placement = found?.placement ?? null;
-    const signature = `${value}|${placement?.connectionId ?? ""}|${placement?.zone ?? ""}`;
+    const signature = `${value}|${connectionId ?? ""}|${placedIn ?? ""}`;
     if (announced.current === signature) return;
     announced.current = signature;
-    onResolve?.({ connection: placement, domain: value });
-  }, [found, onResolve, value]);
+    onResolve?.({
+      connection:
+        connectionId === null || placedIn === null ? null : { connectionId, zone: placedIn },
+      domain: value,
+    });
+  }, [connectionId, onResolve, placedIn, value]);
 
   const complete = (zone: Zone) => {
     onChange(completionOf(value, zone));
@@ -429,21 +435,21 @@ export function DomainField({
             id={listId}
             role="listbox"
           >
-            {suggestions.map((zone) => (
+            {suggestions.map((suggestion) => (
               <li
-                aria-selected={zone === highlighted}
+                aria-selected={suggestion === highlighted}
                 data-domainkit-part="domain-suggestion"
-                id={optionId(listId, zone)}
-                key={`${zone.connectionId}:${zone.zone}`}
+                id={optionId(listId, suggestion)}
+                key={`${suggestion.connectionId}:${suggestion.zone}`}
                 onMouseDown={(event) => {
                   // The press must not take focus off the input before the completion lands.
                   event.preventDefault();
-                  complete(zone);
+                  complete(suggestion);
                 }}
                 role="option"
               >
-                <span data-domainkit-part="domain-suggestion-zone">{zone.zone}</span>
-                <span data-domainkit-part="domain-suggestion-account">{zone.label}</span>
+                <span data-domainkit-part="domain-suggestion-zone">{suggestion.zone}</span>
+                <span data-domainkit-part="domain-suggestion-account">{suggestion.label}</span>
               </li>
             ))}
           </ul>

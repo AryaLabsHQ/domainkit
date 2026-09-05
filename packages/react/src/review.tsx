@@ -150,7 +150,8 @@ export function Actions({ controller, kind, ...props }: ActionsProps): ReactElem
   const plan = state._tag === "Planned" ? state.plan : null;
   const running = busy(state._tag);
   const writes = addable(plan);
-  const blocked = plan !== null && writes.length === 0;
+  // Every record blocked says what to fix; every record already in place needs no action at all.
+  const blocked = writes.length === 0 && plan !== null && Plan.conflicts(plan).length > 0;
   const element = usePart(
     "div",
     props,

@@ -91,7 +91,11 @@ export function Action({ controller, ...props }: ActionProps): ReactElement | nu
   // Only a create or a delete is approvable: a conflict blocks and a record already in place is
   // nothing to write, and naming either id in an approval is refused.
   const writes = plan === null ? [] : Plan.writes(plan);
-  const blocked = plan !== null && writes.length === 0;
+  // Nothing to add is two different things: every record blocked, which says what to fix, and
+  // every record already in place, which needs no action at all.
+  const conflicts = plan === null ? [] : Plan.conflicts(plan);
+  const blocked = writes.length === 0 && conflicts.length > 0;
+  const settled = plan !== null && writes.length === 0 && conflicts.length === 0;
   const element = usePart(
     "div",
     props,
@@ -129,7 +133,8 @@ export function Action({ controller, ...props }: ActionProps): ReactElement | nu
   // cannot make: nothing renders until there is a plan to act on or an outcome to report.
   if (readOnly) return null;
   const reporting = state._tag === "Applied" || state._tag === "Failure";
-  return plan === null && !running && !reporting ? null : element;
+  if (reporting || running) return element;
+  return plan === null || settled ? null : element;
 }
 
 export interface OutcomeProps extends Omit<Review.OutcomeProps, "kind"> {}

@@ -775,6 +775,36 @@ describe("Domain.Flow one-click onboarding", () => {
     await waitFor(() => expect(applied).toHaveLength(1), patient);
   });
 
+  it("offers no action when every record is already in place", async () => {
+    const zone = `settled${(cases += 1)}.example`;
+    const domain = `app.${zone}`;
+    const present = DnsRecord.cname({
+      name: domain,
+      purpose: "Serve your site",
+      target: "edge.example.com",
+    });
+    const transport = Testing.transport({
+      provider: {
+        nameserverSuffixes: [zone],
+        records: [{ record: present, zone }],
+        zones: [zone],
+      },
+    });
+    render(
+      <DomainKit.Root transport={transport}>
+        <Domain.Flow domain={domain} requirements={[present]} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await user.type(await screen.findByLabelText(/Token/), "tok");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
+    await waitFor(() => expect(rowStatus(domain)).toBe("Already there"), patient);
+    // Nothing to add is not something to fix: no action, and nothing telling the customer to go
+    // and resolve a record that is doing exactly what it should.
+    expect(planAction()).toBeNull();
+    expect(document.querySelector("[data-domainkit-part='plan-blocked']")).toBeNull();
+  });
+
   it("says what to fix when every record is in the way", async () => {
     const zone = `blocked${(cases += 1)}.example`;
     const domain = `app.${zone}`;
