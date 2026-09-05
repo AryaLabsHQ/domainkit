@@ -1,6 +1,6 @@
 ---
 packages:
-  "@domainkit/react": major
+  "@domainkit/react": minor
 ---
 
 ## Headless hooks, and the registry as the styled path
