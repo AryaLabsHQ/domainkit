@@ -72,6 +72,8 @@ export interface FlowOptions {
 
 export interface Flow {
   readonly domain: string;
+  /** What the host asked for, as the surface renders it row by row. */
+  readonly requirements: ReadonlyArray<DnsRecord.Model>;
   readonly state: FlowState;
   readonly connection: Connect.Controller;
   readonly provisioning: Provision.Controller;
@@ -177,6 +179,7 @@ export function useFlow({
     plan: Provision.pendingPlan(provisioning.state),
     provisioning,
     readiness: verification.readiness,
+    requirements,
     state: flowState({
       connected,
       label: connection.snapshot?.attachment?.label ?? null,

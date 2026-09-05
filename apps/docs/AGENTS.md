@@ -32,8 +32,9 @@ render it:
 ```
 
 `components/snippets.ts` reads only those two trees, so every sample on the site compiles in CI.
-`<ReactExample story="..." />` pairs a live preview with the matching region of
-`examples/react/catalog.tsx`.
+`<Component path="registry/domain-flow" />` renders `apps/docs/examples/registry/domain-flow.tsx`
+live in its own frame. Every registry preview mounts `lib/preview-flow.tsx`, which builds a
+`Testing.transport` in that frame, so clicking through a preview runs the real lifecycle.
 
 ## Accuracy rules
 
@@ -43,6 +44,8 @@ render it:
   Connect successor. Do not claim unpublished worktree APIs are in the released package.
 - Keep the homepage promise focused on building domain setup into SaaS; reviewable plans are the
   proof mechanism. Effect and React are delivery layers, not the product category.
+- The registry is the one styled path. `@domainkit/react` renders no element, so no page describes a
+  packaged component, a part, a theme token, or a marks map.
 - Generate inventories from `packages/domainkit/src/index.ts`, `src/entry/server.ts`,
   `src/entry/client.ts`, `src/entry/testing.ts`, `packages/react/src/index.ts`, and
   `packages/capsuledb/src/index.ts`. Hand-author semantics; never list an internal module as public.
@@ -50,18 +53,22 @@ render it:
 
 ## Checks
 
-From this directory: `bun run reference:check`, `bun run typecheck`, `bun run test:preview`,
+From this directory: `bun run reference:check`, `bun run typecheck`, `bun run test`,
 `bun run build`, `./node_modules/.bin/blume validate --strict`, `bun run audit --strict`, and
 `bun run registry:check`. From the repository root: `bun run typecheck:examples`. Inspect the
 rendered primary journeys when navigation or UI changes.
 
-`bun run test` runs both docs checks. `test:snippets` pins the reader that slices the samples:
-region names match whole, because eight names in the gallery are prefixes of another
-(`connect` and `connect-token`, `token` and `token-only`). `test:preview` pins the component
-previews' remount key. Each preview runs the real lifecycle
-against a fake server built from its dial values, so a value the key misses leaves a controller
-holding a connection, a plan, or readiness the replacement server never issued. Add a case there
-before adding a dial.
+`bun run test` runs the snippet reader and the browser spec. `test:snippets` pins the reader that
+slices the samples: region names match whole, because several names in the gallery are prefixes of
+another. `test:browser` drives the registry block in Chrome over `Testing.transport`, through
+`tests/browser/app`, a Vite fixture with no Tailwind build: the few positional rules the utility
+classes would have supplied live in `tests/browser/app/fixture.css`, and everything else is
+deliberately unstyled, because that run is about behaviour, focus, and portals.
+
+`registry:check` installs every built item into a scratch shadcn project on the `base-nova` style,
+against tarballs packed from this branch, then typechecks and builds it. The display items are also
+scanned for a managed-runtime import: `dns-table`, `dns-operation`, `dns-status`, `provider-mark`,
+`copy-value`, and `async-state` must import no `domainkit`, Effect, or transport.
 
 `audit --strict` fails on warnings, so a page needs a 110–160 character `description`, a rendered
 title of 60 columns or fewer, and at least one link to it from another page's body.
