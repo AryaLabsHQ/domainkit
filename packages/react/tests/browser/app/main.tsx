@@ -58,7 +58,7 @@ const hosted = parameters.get("host") !== "none";
 const transport = Testing.transport({
   provider: {
     id: "meridian",
-    name: "Meridian DNS",
+    name: "Meridian",
     ...(hosted ? { nameserverSuffixes: [zone] } : {}),
     oauth: true,
     zones: [zone],
@@ -74,7 +74,7 @@ const transport = Testing.transport({
 const twoProviders = (): Transport.Interface => {
   const serves = CoreTesting.provider({
     id: "meridian",
-    name: "Meridian DNS",
+    name: "Meridian",
     ...(hosted ? { nameserverSuffixes: [zone] } : {}),
     oauth: true,
     zones: [zone],

@@ -82,6 +82,8 @@ export interface ProvisioningGroup {
   readonly apply: (approvalId: Approval.ApprovalId) => Fx<Receipt.Model>;
   /** The stored plan with its status, approval, receipt, and rejection. */
   readonly attempt: (planId: Plan.PlanId) => Fx<Attempt>;
+  /** What one apply landed, by receipt id, for a surface that holds the id and not the attempt. */
+  readonly receipt: (receiptId: Receipt.ReceiptId) => Fx<Receipt.Model>;
 }
 
 export interface VerificationGroup {
@@ -295,6 +297,12 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Interfac
         method: "GET",
         path: `/plans/${encodeURIComponent(planId)}`,
         success: Server.Attempt,
+      }),
+    receipt: (receiptId) =>
+      request({
+        method: "GET",
+        path: `/receipts/${encodeURIComponent(receiptId)}`,
+        success: Receipt.Model,
       }),
   };
 

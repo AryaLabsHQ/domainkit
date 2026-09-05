@@ -1784,18 +1784,26 @@
     grid-row: 1 / -1;
   }
 
-  [data-domainkit-part="host-name"] {
+  [data-domainkit-part="connected-label"] {
     font-size: var(--domainkit-identity-name);
     font-weight: 600;
     grid-column: 2;
     line-height: var(--domainkit-identity-leading);
   }
 
+  [data-domainkit-part="connected-applied"],
   [data-domainkit-part="host-statement"] {
     color: var(--domainkit-muted);
     font-size: var(--domainkit-identity-line);
     grid-column: 2;
     line-height: var(--domainkit-identity-leading);
+  }
+
+  /* The prompt's identity is one line and it names the provider, so it carries the weight. */
+  [data-domainkit-part="host-identity"] > [data-domainkit-part="host-statement"] {
+    color: inherit;
+    font-size: var(--domainkit-identity-name);
+    font-weight: 600;
   }
 
   button[data-domainkit-part="provider-heading"] {

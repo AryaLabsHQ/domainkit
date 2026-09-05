@@ -36,8 +36,10 @@ export interface Catalog {
   readonly useTokenInstead: string;
   /** Returns from one method's form to the provider's methods. */
   readonly back: string;
-  /** The connected card's own line, beside the provider's name. */
-  readonly connected: string;
+  /** The connected card's identity: who holds the connection and which account it reaches. */
+  readonly connectedAccount: (provider: string, account: string) => string;
+  /** How many records this domain's apply receipt proves DomainKit added. */
+  readonly recordsAdded: (count: number) => string;
   readonly needsReconnect: string;
   /** The disconnect dialog's scope question, when the connection serves other domains too. */
   readonly disconnectScope: string;
@@ -70,7 +72,7 @@ export interface Catalog {
   /** The dialog heading, and the trigger, when no provider is named yet. */
   readonly connectAnyTitle: string;
   /** What the disconnected prompt says about the provider whose nameservers serve the domain. */
-  readonly hostOwnsZone: string;
+  readonly hostDetected: (provider: string) => string;
   readonly connectDescription: (domain: string) => string;
   readonly connectedTo: (provider: string) => string;
   /** Shown where a connect control would be when the customer may not connect. */
@@ -263,7 +265,8 @@ export const english: Catalog = {
   useAnotherProvider: "Use a different provider",
   useTokenInstead: "Use an API token instead",
   back: "Back",
-  connected: "Connected",
+  connectedAccount: (provider, account) => `${provider} · ${account}`,
+  recordsAdded: (count) => (count === 1 ? "1 added" : `${count} added`),
   needsReconnect: "Needs reconnecting",
   disconnectScope: "This connection serves other domains.",
   disconnectThisDomain: "Only this domain",
@@ -291,7 +294,7 @@ export const english: Catalog = {
 
   connectTitle: (provider) => `Connect ${provider}`,
   connectAnyTitle: "Connect a DNS provider",
-  hostOwnsZone: "Owns DNS for this domain.",
+  hostDetected: (provider) => `${provider} DNS detected`,
   connectDescription: (domain) => `Authorize DNS changes for ${domain}.`,
   connectedTo: (provider) => `${provider} connected`,
   notConnected: "No DNS provider is connected.",

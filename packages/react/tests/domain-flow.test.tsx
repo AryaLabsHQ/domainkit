@@ -62,6 +62,11 @@ const reviewing = async (): Promise<HTMLElement> => {
   return found as unknown as HTMLElement;
 };
 
+/** The connected card, which is what a domain that holds a connection renders. */
+const connectedCard = () => document.querySelector("[data-domainkit-part='connected-card']");
+
+const untilConnected = () => waitFor(() => expect(connectedCard()).not.toBeNull());
+
 /** Close the plan that opened itself, the way a customer who is not ready would. */
 const setAside = async () => {
   const dialog = await reviewing();
@@ -83,7 +88,7 @@ const connect = async () => {
   await click("Connect");
   await user.type(await screen.findByLabelText(/Token/), "tok");
   await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-  await screen.findByText("Connected");
+  await untilConnected();
   // The plan opens itself on a connection; a test that wants it says so.
   await setAside();
 };
@@ -292,7 +297,7 @@ describe("Domain.Flow disconnect", () => {
     expect(option.textContent).toBe("");
     expect(within(dialog).getByText(/Remove the \d+ records? DomainKit added/)).toBeDefined();
     await user.click(within(dialog).getByRole("button", { name: "Disconnect" }));
-    await screen.findByText("Owns DNS for this domain.");
+    await screen.findByText("Fake fake DNS detected");
     expect(methods(transport)).toEqual(
       expect.arrayContaining(["cleanup.plan", "cleanup.approve", "cleanup.apply"]),
     );
@@ -316,7 +321,7 @@ describe("Domain.Flow disconnect", () => {
     ).toBe("off");
     expect(within(dialog).getByText(/Records stay in/)).toBeDefined();
     await user.click(within(dialog).getByRole("button", { name: "Disconnect" }));
-    await screen.findByText("Owns DNS for this domain.");
+    await screen.findByText("Fake fake DNS detected");
     expect(methods(transport)).toContain("connection.disconnect");
     // The dialog planned to show what it would remove, and stopped there: nothing was approved.
     expect(methods(transport)).toContain("cleanup.plan");
@@ -332,10 +337,10 @@ describe("Domain.Flow disconnect", () => {
       </DomainKit.Root>,
     );
     await connect();
-    const card = document.querySelector("[data-domainkit-part='connected-card']");
-    expect(card?.querySelector("[data-domainkit-part='host-name']")?.textContent).toBe("Fake fake");
-    expect(card?.querySelector("[data-domainkit-part='host-statement']")?.textContent).toBe(
-      "Connected",
+    const card = connectedCard();
+    // The account the records go to, named from the attachment rather than a provider call.
+    expect(card?.querySelector("[data-domainkit-part='connected-label']")?.textContent).toBe(
+      `Fake fake · ${domain.slice(4)}`,
     );
     // The provider id never reaches the customer, and detaching is a choice inside the dialog.
     expect(card?.textContent).not.toContain("fake connected");
@@ -363,10 +368,8 @@ describe("Domain.Flow disconnect", () => {
         <Domain.Flow domain={sibling} requirements={requirements} />
       </DomainKit.Root>,
     );
-    await click("Connect a DNS provider");
-    // The connection discovery already found for the zone, rather than a second one for it.
-    await click(new RegExp(`^Use ${scenarioed.zone}$`));
-    await screen.findByText("Connected");
+    // Discovery resolves to the connection this owner already holds, so it attaches on sight.
+    await untilConnected();
     // Attaching a connection this owner already has lands one too, so the plan opens here as well.
     await setAside();
     await click("Disconnect");
@@ -402,9 +405,7 @@ describe("Domain.Flow disconnect", () => {
         <Domain.Flow domain={sibling} requirements={requirements} />
       </DomainKit.Root>,
     );
-    await click("Connect a DNS provider");
-    await click(new RegExp(`^Use ${scenarioed.zone}$`));
-    await screen.findByText("Connected");
+    await untilConnected();
     // Attaching a connection this owner already has lands one too, so the plan opens here as well.
     await setAside();
     await click("Disconnect");
@@ -604,7 +605,7 @@ describe("Domain.Flow one-click onboarding", () => {
 
     // A reload after the fact is a page view, not a return: nothing opens itself.
     render(harness(transport));
-    await screen.findByText("Connected");
+    await untilConnected();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -645,7 +646,7 @@ describe("Domain.Flow one-click onboarding", () => {
 
     // The customer abandoned the consent screen, so the load that comes back finds nothing.
     const back = render(harness(transport));
-    await screen.findByText("Owns DNS for this domain.");
+    await screen.findByText("Fake fake DNS detected");
     expect(sessionStorage.getItem("domainkit.returning")).toBeNull();
     back.unmount();
 
@@ -658,7 +659,7 @@ describe("Domain.Flow one-click onboarding", () => {
       }),
     );
     render(harness(transport));
-    await screen.findByText("Connected");
+    await untilConnected();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -695,7 +696,7 @@ describe("Domain.Flow one-click onboarding", () => {
     await click("Connect");
     await user.type(await screen.findByLabelText(/Token/), "tok");
     await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-    await screen.findByText("Connected");
+    await untilConnected();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("button", { name: "Review changes" })).toBeDefined();
   });
@@ -889,7 +890,7 @@ describe("Domain.Flow state", () => {
     );
     await screen.findByText("No DNS provider is connected.");
     expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
-    expect(screen.queryByText("Owns DNS for this domain.")).toBeNull();
+    expect(screen.queryByText("Fake fake DNS detected")).toBeNull();
     view.unmount();
 
     // The same domain, connected: the status and the disconnect stay whatever the invitation says.
@@ -904,7 +905,7 @@ describe("Domain.Flow state", () => {
         <Domain.Flow connect="never" domain={domain} requirements={requirements} />
       </DomainKit.Root>,
     );
-    await screen.findByText("Connected");
+    await untilConnected();
     expect(screen.getByRole("button", { name: "Disconnect" })).toBeDefined();
   });
 });
@@ -932,7 +933,7 @@ describe("Domain.Flow read-only", () => {
       </DomainKit.Root>,
     );
     // The state a member may see.
-    await screen.findByText("Connected");
+    await untilConnected();
     expect(screen.getByRole("columnheader", { name: "Type" })).toBeDefined();
     expect(screen.getByRole("cell", { name: "CNAME" })).toBeDefined();
     // The writes they may not start.
@@ -956,7 +957,7 @@ describe("Domain.Flow read-only", () => {
         <Domain.Flow domain={domain} requirements={requirements} />
       </DomainKit.Root>,
     );
-    await screen.findByText("Owns DNS for this domain.");
+    await screen.findByText("Fake fake DNS detected");
     expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
   });
 
@@ -983,7 +984,7 @@ describe("Domain.Flow read-only", () => {
         <Domain.Flow domain={domain} readOnly requirements={requirements} />
       </DomainKit.Root>,
     );
-    await screen.findByText("Connected");
+    await untilConnected();
     expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Detach domain" })).toBeNull();
   });

@@ -80,6 +80,11 @@ export interface ConnectInput {
 export interface Controller {
   readonly domain: string;
   /**
+   * What this domain's last apply landed, read once per receipt id and held here. `null` until
+   * the snapshot names a receipt, or when the transport carries no provisioning group.
+   */
+  readonly receipt: Receipt.Model | null;
+  /**
    * How many times a connection has been established for this domain on this surface: a token
    * connect that landed, or a load that followed this library's own redirect back. It only ever
    * grows, so a flow acts on a change rather than on a state that would fire again every render.
@@ -176,6 +181,7 @@ export function useController({ domain, returnTo }: Options): Controller {
   const { emit, navigate, revision, transport } = useDomainKit();
   const readOnly = useReadOnly();
   const connection = transport.connection;
+  const provisioning = transport.provisioning;
   const runner = useRunner();
   const [state, setState] = useState<State>(State.Loading({ snapshot: null }));
 
@@ -401,6 +407,42 @@ export function useController({ domain, returnTo }: Options): Controller {
     else command.run();
   }, [domain, load, readOnly]);
 
+  // One connection of this owner already serves the zone, so the customer has nothing left to
+  // decide: the account they granted covers this domain too. Attaching here is what keeps a second
+  // domain from meeting the connect dialog again. Each (domain, connection, zone) is tried once,
+  // so an attach that failed, or one the customer undid with a detach, is not started over.
+  const sighted = useRef<string | null>(null);
+  useEffect(() => {
+    if (readOnly || state._tag !== "Disconnected") return;
+    const discovery = state.discovery;
+    if (discovery === null || discovery._tag !== "Resolved") return;
+    const sight = `${domain}|${discovery.connectionId}|${discovery.zone}`;
+    if (sighted.current === sight) return;
+    sighted.current = sight;
+    reuse({ connectionId: discovery.connectionId, zone: discovery.zone });
+  }, [domain, readOnly, reuse, state]);
+
+  // The card names how many records this domain holds, which only the receipt knows. One read per
+  // receipt id: the id changes when an apply lands, and nothing else moves it.
+  const [receipt, setReceipt] = useState<Receipt.Model | null>(null);
+  const receiptId = snapshotOf(state)?.lastReceiptId ?? null;
+  const readReceipt = useRef<string | null>(null);
+  useEffect(() => {
+    if (receiptId === null) {
+      readReceipt.current = null;
+      setReceipt(null);
+      return;
+    }
+    if (provisioning === undefined || readReceipt.current === receiptId) return;
+    readReceipt.current = receiptId;
+    runner.run(provisioning.receipt(Receipt.ReceiptId.make(receiptId)), {
+      // A receipt the surface cannot read is one line of copy missing, not a failure the
+      // customer has to answer, so the card renders without it.
+      onFailure: () => setReceipt(null),
+      onSuccess: (value) => setReceipt(value.id === receiptId ? value : null),
+    });
+  }, [provisioning, receiptId, runner]);
+
   return {
     connect,
     detach,
@@ -412,6 +454,7 @@ export function useController({ domain, returnTo }: Options): Controller {
         ? state.discovery
         : null,
     providers: snapshotOf(state)?.providers ?? [],
+    receipt: receipt?.id === receiptId ? receipt : null,
     refresh: load,
     retry,
     reuse,
@@ -1246,8 +1289,8 @@ export function Prompt({
           {host === null ? null : (
             <div data-domainkit-part="host-identity">
               <Provider.Mark provider={host} />
-              <span data-domainkit-part="host-name">{host.name}</span>
-              <span data-domainkit-part="host-statement">{messages.hostOwnsZone}</span>
+              {/* The statement names the provider itself, so nothing repeats it beside the mark. */}
+              <span data-domainkit-part="host-statement">{messages.hostDetected(host.name)}</span>
             </div>
           )}
           <Dialog controller={controller} />
@@ -1496,8 +1539,10 @@ export interface CardProps extends PartProps<"div", RootState> {
 }
 
 /**
- * A connected domain, with the prompt card's anatomy: the provider's mark, the name the customer
- * knows it by, where the connection stands, and the one action that ends it.
+ * A connected domain: the provider's mark, the account the records go to, how many this domain
+ * holds, and the one action that ends it. The account comes off the attachment, so naming it costs
+ * no provider call, and the count comes off the apply receipt, which is the only thing that proves
+ * DomainKit wrote anything here.
  */
 export function Card({ controller, onCleaned, ...props }: CardProps): ReactElement {
   const { messages } = useDomainKit();
@@ -1505,7 +1550,9 @@ export function Card({ controller, onCleaned, ...props }: CardProps): ReactEleme
   const state = controller.state;
   const snapshot = controller.snapshot;
   const provider = controller.providers.find((entry) => entry.id === snapshot?.provider);
-  const standing = state._tag === "Reconnect" ? messages.needsReconnect : messages.connected;
+  const named = provider?.name ?? snapshot?.provider ?? "";
+  const account = snapshot?.attachment?.label ?? null;
+  const applied = controller.receipt === null ? null : Receipt.applied(controller.receipt).length;
   return usePart(
     "div",
     props,
@@ -1515,10 +1562,15 @@ export function Card({ controller, onCleaned, ...props }: CardProps): ReactEleme
         <>
           <div data-domainkit-part="connected-identity">
             {provider === undefined ? null : <Provider.Mark provider={provider} />}
-            <span data-domainkit-part="host-name">
-              {provider?.name ?? snapshot?.provider ?? ""}
+            <span data-domainkit-part="connected-label">
+              {account === null ? named : messages.connectedAccount(named, account)}
             </span>
-            <span data-domainkit-part="host-statement">{standing}</span>
+            {applied === null ? null : (
+              <span data-domainkit-part="connected-applied">{messages.recordsAdded(applied)}</span>
+            )}
+            {state._tag === "Reconnect" ? (
+              <span data-domainkit-part="host-statement">{messages.needsReconnect}</span>
+            ) : null}
           </div>
           {readOnly ? null : (
             <div data-domainkit-part="connected-actions">

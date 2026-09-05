@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DnsRecord, DomainKit as Kit, Reason } from "domainkit";
-import type { Transport } from "domainkit/client";
+import { Transport } from "domainkit/client";
 import * as Effect from "effect/Effect";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -37,6 +37,11 @@ const wrap = (transport: Transport.Interface) =>
 /** No inter-event delay: every keystroke re-renders the whole flow. */
 const user = userEvent.setup({ delay: null });
 
+/** The connected card, which is what a domain that holds a connection renders. */
+const connectedCard = () => document.querySelector("[data-domainkit-part='connected-card']");
+
+const untilConnected = () => waitFor(() => expect(connectedCard()).not.toBeNull());
+
 /** A button that exists is not always ready: the review actions render disabled while planning. */
 const click = async (name: string | RegExp) => {
   const button = await screen.findByRole("button", { name });
@@ -55,7 +60,7 @@ const connectDomain = async (transport: Transport.Interface, domain: string) => 
   await user.click(screen.getByRole("button", { name: "Connect" }));
   await user.type(await screen.findByLabelText(/Token/), "tok");
   await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-  await waitFor(() => expect(screen.getByText("Connected")).toBeDefined());
+  await untilConnected();
   view.unmount();
 };
 
@@ -131,7 +136,7 @@ describe("Connect.useController", () => {
     expect(field.getAttribute("name")).toBe("token");
     await user.type(field, "tok");
     await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
-    await waitFor(() => expect(screen.getByText("Connected")).toBeDefined());
+    await untilConnected();
     const start = transport.calls.find((call) => call.method === "connection.start");
     expect(start?.input).toMatchObject({
       domain,
@@ -228,20 +233,105 @@ describe("Connect.useController", () => {
     expect(screen.queryByRole("button", { name: /^Connect/ })).toBeNull();
   });
 
-  it("preselects a connection discovery already found for the zone", async () => {
+  it("attaches a second domain to the connection that already serves its zone", async () => {
     const { domain, sibling, transport, zone } = scenario();
     await connectDomain(transport, domain);
+    const before = transport.calls.length;
     render(
       <DomainKit.Root transport={transport}>
         <Connect.Flow domain={sibling} />
       </DomainKit.Root>,
     );
-    // Discovery resolved a connection rather than naming a host, so the trigger says what it opens.
-    await click("Connect a DNS provider");
-    await screen.findByText(`${zone} already serves this domain`);
-    await user.click(screen.getByRole("button", { name: `Use ${zone}` }));
-    await waitFor(() => expect(screen.getByText("Connected")).toBeDefined());
-    expect(transport.calls.some((call) => call.method === "connection.discover")).toBe(true);
+    await untilConnected();
+    const attaches = transport.calls
+      .slice(before)
+      .filter((call) => call.method === "connection.attach");
+    expect(attaches).toHaveLength(1);
+    expect(attaches[0]?.input).toMatchObject({ domain: sibling, zone });
+    // The account was granted once; a second domain on it is not another decision to take.
+    expect(screen.queryByRole("button", { name: /^Connect/ })).toBeNull();
+  });
+
+  it("leaves a read-only surface disconnected rather than attaching for the customer", async () => {
+    const { domain, sibling, transport } = scenario();
+    await connectDomain(transport, domain);
+    const before = transport.calls.length;
+    render(
+      <DomainKit.Root readOnly transport={transport}>
+        <Connect.Flow domain={sibling} />
+      </DomainKit.Root>,
+    );
+    await waitFor(() =>
+      expect(
+        transport.calls.slice(before).some((call) => call.method === "connection.discover"),
+      ).toBe(true),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(transport.calls.slice(before).some((call) => call.method === "connection.attach")).toBe(
+      false,
+    );
+    expect(connectedCard()).toBeNull();
+  });
+
+  it("keeps the prompt when two of this owner's connections both serve the zone", async () => {
+    const { domain, sibling, transport } = scenario();
+    await connectDomain(transport, domain);
+    // A second account on the same provider, connected without a domain of its own.
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    await Effect.runPromise(
+      connection.start({ method: Transport.Method.token("tok"), provider: "fake" }),
+    );
+    const before = transport.calls.length;
+    render(
+      <DomainKit.Root transport={transport}>
+        <Connect.Flow domain={sibling} />
+      </DomainKit.Root>,
+    );
+    // Two connections reach the zone, so which account the records go to is a real decision.
+    await screen.findByRole("button", { name: /^Connect/ });
+    expect(transport.calls.slice(before).some((call) => call.method === "connection.attach")).toBe(
+      false,
+    );
+    expect(connectedCard()).toBeNull();
+  });
+
+  it("names the account on the card, and how many records this domain holds", async () => {
+    const { domain, requirements, transport, zone } = scenario();
+    await connectDomain(transport, domain);
+    const first = render(
+      <DomainKit.Root transport={transport}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await untilConnected();
+    const label = () => connectedCard()?.querySelector("[data-domainkit-part='connected-label']");
+    await waitFor(() => expect(label()?.textContent).toBe(`Fake fake · ${zone}`));
+    // Nothing has been applied here yet, so the card claims no records.
+    expect(connectedCard()?.querySelector("[data-domainkit-part='connected-applied']")).toBeNull();
+    first.unmount();
+
+    const applying = render(
+      <DomainKit.Root transport={transport}>
+        <Provision.Flow domain={domain} requirements={requirements} />
+      </DomainKit.Root>,
+    );
+    await click("Review changes");
+    await click(/^Add \d+ records?$/);
+    await screen.findByText("DNS records added.");
+    applying.unmount();
+
+    render(
+      <DomainKit.Root transport={transport}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await untilConnected();
+    const applied = () =>
+      connectedCard()?.querySelector("[data-domainkit-part='connected-applied']");
+    await waitFor(() => expect(applied()?.textContent).toBe("1 added"));
   });
 });
 
