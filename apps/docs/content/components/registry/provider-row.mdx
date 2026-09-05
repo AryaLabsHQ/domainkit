@@ -34,6 +34,5 @@ sit beside it.
 | `marks`  | `ProviderArtwork` | no       | Your artwork per provider id.         |
 | `action` | `ReactNode`       | no       | Replaces the one action on the right. |
 
-`marks` is keyed by provider id and takes a node or a function of the provider descriptor. Whatever
-you pass is the mark: nothing wraps it in a tile, so a circular logo stays a circle and a square one
-stays square. Without an entry the mark is the provider's initial, and nothing is fetched at render.
+`marks` comes from [provider artwork](/components/registry/provider-artwork), which the row, the
+connect dialog, and the domain field all draw through, so a host supplies its logos once.

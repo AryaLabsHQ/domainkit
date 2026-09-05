@@ -116,8 +116,10 @@ reaches for, the `highlighted` one, the `found` placement, `complete(zone)`, and
 ## Read-only
 
 `readOnly` refuses every command that changes the domain: connect, attach, detach, disconnect,
-approve, decline, cleanup, and every `retry`. Re-inspecting and observing stay, because both only
-read.
+plan, approve, decline, apply, and every `retry`. Re-inspecting and observing stay, because both
+only read. The refusal is in the controller, not in the markup, so a control a host renders anyway
+cannot reach the transport. Every controller takes `readOnly` as an option, which is how
+`Domain.useFlow` passes its own flag to the four it runs.
 
 | Export                  | Answers                                                          |
 | ----------------------- | ---------------------------------------------------------------- |

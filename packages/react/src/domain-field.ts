@@ -315,7 +315,11 @@ export interface DomainFieldOptions {
   readonly zones: ReadonlyArray<Zone>;
   readonly value: string;
   readonly onChange: (value: string) => void;
-  /** Fires whenever the value's account changes, so a host submits the two together. */
+  /**
+   * Fires when the value or the account it resolves to changes, so a host holds the two together
+   * and submits them together. It reports the value as typed, not only the placement, because a
+   * form needs the name the customer is on as well as where its records would go.
+   */
   readonly onResolve?: (input: {
     readonly domain: string;
     readonly connection: Placement | null;
@@ -395,7 +399,7 @@ export function useDomainField({
   const found = placementOf(value, zones, chosen);
   const showing = open && suggestions.length > 0;
 
-  // The host is told what the value resolved to, not every keystroke that left it where it was.
+  // One report per value and placement: a re-render that changes neither says nothing.
   const placement = found?.placement ?? null;
   const connectionId = placement?.connectionId ?? null;
   const placedIn = placement?.zone ?? null;

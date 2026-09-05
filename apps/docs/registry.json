@@ -83,6 +83,21 @@
       ]
     },
     {
+      "name": "provider-artwork",
+      "type": "registry:component",
+      "title": "Provider Artwork",
+      "description": "Your logo per provider id, drawn as the mark itself with no tile around it.",
+      "dependencies": ["@domainkit/react"],
+      "registryDependencies": ["https://domain-kit.dev/r/provider-mark.json"],
+      "files": [
+        {
+          "path": "registry/domainkit/provider-artwork.tsx",
+          "type": "registry:component",
+          "target": "components/domainkit/provider-artwork.tsx"
+        }
+      ]
+    },
+    {
       "name": "outcome",
       "type": "registry:component",
       "title": "Outcome",
@@ -165,7 +180,7 @@
         "input",
         "label",
         "https://domain-kit.dev/r/outcome.json",
-        "https://domain-kit.dev/r/provider-row.json"
+        "https://domain-kit.dev/r/provider-artwork.json"
       ],
       "files": [
         {
@@ -184,7 +199,7 @@
       "registryDependencies": [
         "button",
         "dropdown-menu",
-        "https://domain-kit.dev/r/provider-mark.json",
+        "https://domain-kit.dev/r/provider-artwork.json",
         "https://domain-kit.dev/r/connect-dialog.json",
         "https://domain-kit.dev/r/disconnect-dialog.json",
         "https://domain-kit.dev/r/plan-action.json"
@@ -203,7 +218,7 @@
       "title": "Domain Field",
       "description": "One input over every zone your customer's connected accounts reach.",
       "dependencies": ["@domainkit/react"],
-      "registryDependencies": ["button", "input", "https://domain-kit.dev/r/provider-row.json"],
+      "registryDependencies": ["button", "input", "https://domain-kit.dev/r/provider-artwork.json"],
       "files": [
         {
           "path": "registry/domainkit/domain-field.tsx",

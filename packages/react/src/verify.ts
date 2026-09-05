@@ -81,6 +81,10 @@ export function useController({ domain, polling = true, requirements }: Options)
   const [observed, setObserved] = useState(domain);
   if (observed !== domain) {
     setObserved(domain);
+    // Interrupting while rendering, not one effect later, is what keeps the previous domain's
+    // observation from landing in between and restoring its evidence under the new one.
+    runner.cancel();
+    clearTimeout(timer.current);
     setState(State.Idle());
   }
 

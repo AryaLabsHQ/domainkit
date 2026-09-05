@@ -64,8 +64,9 @@ clicks through and the ones that ask for credentials, so a surface asks for one 
 ## Read-only
 
 `readOnly` on `DomainKit.Root`, or on one `Domain.useFlow`, refuses every command that would change
-the domain and reports itself on `flow.state.readOnly`. A surface reads it and says who may connect
-rather than rendering an empty row.
+the domain, in the controller rather than in your markup, and reports itself on
+`flow.state.readOnly`. A surface reads it and says who may connect rather than rendering an empty
+row.
 
 <Snippet file="examples/react/read-only.tsx" region="hook" title="A surface that knows the mode" />
 

@@ -27,15 +27,16 @@ turned down is offered as a reconnect rather than as a second account.
 
 ## API
 
-| Prop          | Type                                      | Required | Description                             |
-| ------------- | ----------------------------------------- | -------- | --------------------------------------- |
-| `value`       | `string`                                  | yes      | The value your form holds.              |
-| `onChange`    | `(value: string) => void`                 | yes      | Fires on every keystroke.               |
-| `onResolve`   | `(input: { domain, connection }) => void` | no       | Fires when the value's account changes. |
-| `marks`       | `ProviderArtwork`                         | no       | Your artwork per provider id.           |
-| `placeholder` | `string`                                  | no       | The input's placeholder.                |
+| Prop          | Type                                      | Required | Description                                  |
+| ------------- | ----------------------------------------- | -------- | -------------------------------------------- |
+| `value`       | `string`                                  | yes      | The value your form holds.                   |
+| `onChange`    | `(value: string) => void`                 | yes      | Fires on every keystroke.                    |
+| `onResolve`   | `(input: { domain, connection }) => void` | no       | Fires when the value or its account changes. |
+| `marks`       | `ProviderArtwork`                         | no       | Your artwork per provider id.                |
+| `placeholder` | `string`                                  | no       | The input's placeholder.                     |
 
 ## Boundary
 
 The field lists what the transport reports and writes nothing. Creating the domain in your product
-is your own submit; `onResolve` gives it the connection to submit alongside the name.
+is your own submit; `onResolve` gives it the name and the connection to submit together, and fires
+whenever either changes.

@@ -14,13 +14,15 @@ export interface Options {
   /** Which apply to undo. Without it, the domain's latest provisioning receipt. */
   readonly receiptId?: Receipt.ReceiptId;
   readonly onCleaned?: (receipt: Receipt.Model) => void;
+  /** Refuse every step. Defaults to the surrounding `readOnly`. */
+  readonly readOnly?: boolean;
 }
 
 /**
  * Cleanup is bound to a receipt: it removes only what an apply proved DomainKit created. When the
  * host does not name one, the controller reads the domain's latest from the snapshot.
  */
-export function useController({ domain, onCleaned, receiptId }: Options): Controller {
+export function useController({ domain, onCleaned, readOnly, receiptId }: Options): Controller {
   const { transport } = useDomainKit();
   const group = transport.cleanup;
   const connection = transport.connection;
@@ -30,6 +32,7 @@ export function useController({ domain, onCleaned, receiptId }: Options): Contro
     done: (receipt) => Event.Cleaned({ domain, receipt }),
     group,
     onDone: onCleaned,
+    readOnly,
     plan: useCallback(() => {
       if (group === undefined) return null;
       if (receiptId !== undefined) return group.plan(receiptId);

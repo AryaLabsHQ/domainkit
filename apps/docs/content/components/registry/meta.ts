@@ -11,6 +11,7 @@ export default defineMeta({
     "disconnect-dialog",
     "domain-field",
     "outcome",
+    "provider-artwork",
     "dns-table",
     "dns-operation",
     "dns-status",

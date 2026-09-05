@@ -4,7 +4,7 @@ import { DomainKit, Testing } from "@domainkit/react";
 import * as Effect from "effect/Effect";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-import type { ProviderArtwork } from "@/components/domainkit/provider-row";
+import type { ProviderArtwork } from "@/components/domainkit/provider-artwork";
 
 export const previewZone = "northwind.app";
 export const previewDomain = `mail.${previewZone}`;

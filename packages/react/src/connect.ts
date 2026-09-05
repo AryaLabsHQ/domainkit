@@ -116,6 +116,11 @@ export interface Options {
    * pass `null` to send none and let the server's `defaultReturnTo` decide.
    */
   readonly returnTo?: string | null;
+  /**
+   * Refuse every command that changes the connection. Defaults to the surrounding `readOnly`,
+   * which is `DomainKit.Root`'s unless a `DomainKit.ReadOnly` narrows it.
+   */
+  readonly readOnly?: boolean;
 }
 
 /**
@@ -179,9 +184,12 @@ const settled = (snapshot: Snapshot, discovery: Discovery | null): State => {
  * transport declares it and the domain has no connection yet; a discovery failure is not the
  * customer's problem, so the provider list still renders.
  */
-export function useController({ domain, returnTo }: Options): Controller {
+export function useController({ domain, readOnly: refused, returnTo }: Options): Controller {
   const { emit, navigate, revision, transport } = useDomainKit();
-  const readOnly = useReadOnly();
+  const inherited = useReadOnly();
+  // The surface is the host's now, so a control it renders anyway must not reach the transport:
+  // every command that changes the connection is refused here rather than hidden up there.
+  const readOnly = refused ?? inherited;
   const connection = transport.connection;
   const provisioning = transport.provisioning;
   const runner = useRunner();
@@ -325,7 +333,7 @@ export function useController({ domain, returnTo }: Options): Controller {
 
   const connect = useCallback(
     (input: ConnectInput) => {
-      if (connection === undefined) return;
+      if (connection === undefined || readOnly) return;
       const destination = input.returnTo ?? (returnTo === undefined ? currentUrl() : returnTo);
       const interactive = destination === null ? {} : { returnTo: destination };
       const method =
@@ -349,12 +357,12 @@ export function useController({ domain, returnTo }: Options): Controller {
         { method: input.method, provider: input.provider },
       );
     },
-    [connection, domain, returnTo, submit],
+    [connection, domain, readOnly, returnTo, submit],
   );
 
   const reuse = useCallback(
     (input: { readonly connectionId: string; readonly zone?: string }) => {
-      if (connection === undefined) return;
+      if (connection === undefined || readOnly) return;
       submit(
         connection.attach({
           connectionId: input.connectionId,
@@ -364,7 +372,7 @@ export function useController({ domain, returnTo }: Options): Controller {
         null,
       );
     },
-    [connection, domain, submit],
+    [connection, domain, readOnly, submit],
   );
 
   const select = useCallback(
@@ -402,15 +410,17 @@ export function useController({ domain, returnTo }: Options): Controller {
 
   const detach = useCallback(() => {
     const attachmentId = held.current.snapshot?.attachment?.id;
-    if (connection === undefined || attachmentId == null || held.current.domain !== domain) return;
+    if (readOnly || connection === undefined || attachmentId == null) return;
+    if (held.current.domain !== domain) return;
     release(connection.detach(attachmentId), Event.Detached({ domain }));
-  }, [connection, domain, release]);
+  }, [connection, domain, readOnly, release]);
 
   const disconnect = useCallback(() => {
     const connectionId = held.current.snapshot?.connectionId;
-    if (connection === undefined || connectionId == null || held.current.domain !== domain) return;
+    if (readOnly || connection === undefined || connectionId == null) return;
+    if (held.current.domain !== domain) return;
     release(connection.disconnect(connectionId), Event.Disconnected({ connectionId, domain }));
-  }, [connection, domain, release]);
+  }, [connection, domain, readOnly, release]);
 
   const retry = useCallback(() => {
     const command = lastCommand.current;

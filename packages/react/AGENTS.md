@@ -24,11 +24,13 @@ product verification policy.
   plans as soon as the domain is attached with nothing applied. Attaching to a connection discovery
   already resolved belongs to `Connect.useController`, so a surface built on the controller alone
   gets it too.
-- `readOnly` on `DomainKit.Root` or `Domain.useFlow` reports the state without the commands that
-  change it, for authorization a transport cannot express. It is a fact on `FlowState.readOnly`, so
-  a surface can say why rather than leaving a customer in front of an empty page. Observation stays
-  available: checking DNS reads the world rather than changing the domain. A retry is a write too,
-  so `retry` re-inspects instead of resending the last command.
+- `readOnly` refuses every command that changes the domain, at the controller rather than in the
+  markup: the surface is the host's now, so a control it renders anyway must not reach the
+  transport. `DomainKit.Root` sets it for the page, `DomainKit.ReadOnly` narrows a subtree, and
+  every controller takes it as an option, which is how `Domain.useFlow` passes its own flag down.
+  Connect, attach, detach, disconnect, plan, approve, decline, apply, and every `retry` are
+  refused; observing and re-inspecting stay, because both only read. It is also a fact on
+  `FlowState.readOnly`, so a surface can say who may connect rather than rendering nothing.
 - `Verify.useController` and `Domain.useFlow` pass the flow's requirements to `observe`, so a domain
   with no attachment verifies against what the host asked for rather than a receipt it has not
   earned yet. The requirement set is keyed by content, never array identity.

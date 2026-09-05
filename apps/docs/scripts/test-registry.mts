@@ -18,6 +18,7 @@ const display = [
 
 /** The flow items, which are written against `@domainkit/react` and the host's own kit. */
 const flow = [
+  "provider-artwork",
   "outcome",
   "plan-action",
   "records-table",
@@ -44,6 +45,39 @@ await Promise.all(
     }
   }),
 );
+
+/**
+ * A published item is installed on its own, so the graph its `registryDependencies` name has to
+ * resolve without the CLI walking in a circle. Every DomainKit dependency names a published item,
+ * and no item reaches itself.
+ */
+const home = "https://domain-kit.dev/r/";
+const graph = new Map<string, ReadonlyArray<string>>();
+await Promise.all(
+  [...display, ...flow].map(async (name) => {
+    const item = JSON.parse(await readFile(join(output, `${name}.json`), "utf8")) as {
+      registryDependencies?: ReadonlyArray<string>;
+    };
+    graph.set(
+      name,
+      (item.registryDependencies ?? [])
+        .filter((entry) => entry.startsWith(home))
+        .map((entry) => entry.slice(home.length).replace(/\.json$/, "")),
+    );
+  }),
+);
+for (const [name, dependencies] of graph) {
+  for (const dependency of dependencies) {
+    if (!graph.has(dependency)) {
+      throw new Error(`${name} depends on ${dependency}, which the registry does not publish`);
+    }
+  }
+}
+const walk = (name: string, seen: ReadonlyArray<string>): void => {
+  if (seen.includes(name)) throw new Error(`Registry cycle: ${[...seen, name].join(" -> ")}`);
+  for (const dependency of graph.get(name) ?? []) walk(dependency, [...seen, name]);
+};
+for (const name of graph.keys()) walk(name, []);
 
 const fixture = await mkdtemp(join(tmpdir(), "domainkit-registry-"));
 const run = async (...command: string[]) => {
@@ -176,6 +210,7 @@ import { DnsTable } from "@/components/ui/dns-table";
 import { ProviderMark } from "@/components/ui/provider-mark";
 import { DomainField } from "@/components/domainkit/domain-field";
 import { DomainFlow } from "@/components/domainkit/domain-flow";
+import { Mark } from "@/components/domainkit/provider-artwork";
 
 const record = { id: "cname", name: "app.example.com", type: "CNAME", value: "edge.acme.dev" };
 const requirements = [
@@ -195,6 +230,7 @@ createRoot(document.getElementById("root")!).render(
     <DomainKit.Root transport={transport}>
       <DomainFlow domain="app.example.com" requirements={requirements} />
       <DomainField onChange={() => {}} value="" />
+      <Mark provider={{ id: "fake", methods: [], name: "Fake" }} />
     </DomainKit.Root>
   </main>,
 );

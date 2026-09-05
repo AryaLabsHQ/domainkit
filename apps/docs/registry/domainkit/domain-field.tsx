@@ -3,7 +3,7 @@
 import { Connect, DomainKit } from "@domainkit/react";
 import { useState, type ComponentProps } from "react";
 
-import { Mark, type ProviderArtwork } from "@/components/domainkit/provider-row";
+import { Mark, type ProviderArtwork } from "@/components/domainkit/provider-artwork";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 export interface DomainFieldProps extends Omit<ComponentProps<"div">, "children" | "onChange"> {
   readonly value: string;
   readonly onChange: (value: string) => void;
-  /** Fires whenever the value's account changes, so a host submits the two together. */
+  /** Fires when the value or the account it resolves to changes, for a form that holds both. */
   readonly onResolve?: Connect.DomainFieldOptions["onResolve"];
   readonly marks?: ProviderArtwork;
   readonly id?: string;

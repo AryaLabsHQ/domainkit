@@ -5,7 +5,7 @@ import { ChevronDownIcon, ExternalLinkIcon } from "lucide-react";
 import { useId, useState, type ReactElement } from "react";
 
 import { Outcome } from "@/components/domainkit/outcome";
-import { Mark, type ProviderArtwork } from "@/components/domainkit/provider-row";
+import { Mark, type ProviderArtwork } from "@/components/domainkit/provider-artwork";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

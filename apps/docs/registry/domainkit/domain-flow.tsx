@@ -5,7 +5,8 @@ import type { DnsRecord, Receipt } from "domainkit";
 import type { ComponentProps } from "react";
 
 import { Outcome } from "@/components/domainkit/outcome";
-import { ProviderRow, type ProviderArtwork } from "@/components/domainkit/provider-row";
+import { type ProviderArtwork } from "@/components/domainkit/provider-artwork";
+import { ProviderRow } from "@/components/domainkit/provider-row";
 import { RecordsTable } from "@/components/domainkit/records-table";
 import { cn } from "@/lib/utils";
 

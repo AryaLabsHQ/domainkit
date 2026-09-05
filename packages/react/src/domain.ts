@@ -123,13 +123,17 @@ export function useFlow({
   const { capabilities } = useDomainKit();
   const inherited = useReadOnly();
   const surfaceReadOnly = readOnly ?? inherited;
+  // The flow's own flag reaches its controllers, so a read-only domain among writable ones
+  // refuses commands rather than only reporting that it should.
   const connection = Connect.useController({
     domain,
+    readOnly: surfaceReadOnly,
     ...(returnTo === undefined ? {} : { returnTo }),
   });
   const refresh = connection.refresh;
   const provisioning = Provision.useController({
     domain,
+    readOnly: surfaceReadOnly,
     onApplied: useCallback(
       (receipt: Receipt.Model) => {
         refresh();
@@ -144,6 +148,7 @@ export function useFlow({
   const receiptId = connection.snapshot?.lastReceiptId ?? null;
   const cleanup = Cleanup.useController({
     domain,
+    readOnly: surfaceReadOnly,
     ...(onCleaned === undefined ? {} : { onCleaned }),
     ...(receiptId === null ? {} : { receiptId: Receipt.ReceiptId.make(receiptId) }),
   });
@@ -160,7 +165,13 @@ export function useFlow({
   const planned = useRef<string | null>(null);
   const buildPlan = provisioning.plan;
   useEffect(() => {
-    if (signature === null || planned.current === signature) return;
+    // A flow that cannot plan forgets what it planned, so pointing it back at a domain it once
+    // planned for builds a plan again rather than leaving that domain with none.
+    if (signature === null) {
+      planned.current = null;
+      return;
+    }
+    if (planned.current === signature) return;
     planned.current = signature;
     buildPlan();
   }, [buildPlan, signature]);

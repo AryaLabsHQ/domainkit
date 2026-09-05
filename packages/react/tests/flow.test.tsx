@@ -309,7 +309,65 @@ describe("Domain.useFlow", () => {
     const view = mount(transport, () => Domain.useFlow({ domain, readOnly: true, requirements }));
     await until(() => expect(view.result.current.state.connection).toBe("Disconnected"));
     expect(view.result.current.state.readOnly).toBe(true);
+    // The flag reaches the controllers, so a command a host renders anyway is refused rather
+    // than hidden: the markup is the host's, and the refusal cannot live in it.
+    await run(() =>
+      view.result.current.connection.connect({
+        method: "token",
+        provider: "fake",
+        values: { token: "tok" },
+      }),
+    );
+    await run(() => view.result.current.provisioning.plan());
+    await run(() => view.result.current.cleanup.plan());
+    expect(transport.calls.map((call) => call.method)).toEqual(
+      expect.not.arrayContaining(["connection.start", "provisioning.plan", "cleanup.plan"]),
+    );
     expect(DomainKit).toBeDefined();
+  });
+
+  it("refuses every command that changes a read-only domain", async () => {
+    const { domain, requirements, transport } = scenario();
+    await attach(transport, domain);
+    const view = mount(transport, () => Domain.useFlow({ domain, requirements }), {
+      readOnly: true,
+    });
+    await until(() => expect(view.result.current.state.connected).toBe(true));
+    const before = transport.calls.length;
+    await run(() => view.result.current.connection.detach());
+    await run(() => view.result.current.connection.disconnect());
+    await run(() =>
+      view.result.current.connection.reuse({ connectionId: "whatever", zone: "whatever" }),
+    );
+    await run(() => view.result.current.provisioning.approve());
+    await run(() => view.result.current.provisioning.reject("no"));
+    await run(() => view.result.current.provisioning.apply());
+    expect(transport.calls.slice(before)).toEqual([]);
+    // Observing is a read, so it stays available to a customer who may only look.
+    await until(() => expect(view.result.current.readiness).not.toBeNull());
+  });
+
+  it("plans again for a domain it planned for before the flow moved away", async () => {
+    const { domain, requirements, transport } = scenario();
+    await attach(transport, domain);
+    // A domain in nobody's zone: no host, no attachment, so there is nothing to plan for it.
+    const elsewhere = "app.unserved.example";
+    const view = mount(
+      transport,
+      ({ target }: { readonly target: string }) => Domain.useFlow({ domain: target, requirements }),
+      { initialProps: { target: domain } },
+    );
+    await until(() => expect(view.result.current.plan).not.toBeNull());
+    const plans = () =>
+      transport.calls.filter((call) => call.method === "provisioning.plan").length;
+    const first = plans();
+    act(() => view.rerender({ target: elsewhere }));
+    await until(() => expect(view.result.current.state.connection).toBe("Disconnected"));
+    expect(view.result.current.plan).toBeNull();
+    // Coming back must not leave the attached domain idle with nothing to add.
+    act(() => view.rerender({ target: domain }));
+    await until(() => expect(plans()).toBeGreaterThan(first));
+    await until(() => expect(view.result.current.plan).not.toBeNull());
   });
 
   it("spends the return marker on the load that came back, however it went", async () => {

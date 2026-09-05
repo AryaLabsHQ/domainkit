@@ -13,6 +13,8 @@ export interface Options {
   readonly domain: string;
   readonly requirements: ReadonlyArray<DnsRecord.Model>;
   readonly onApplied?: (receipt: Receipt.Model) => void;
+  /** Refuse every step. Defaults to the surrounding `readOnly`. */
+  readonly readOnly?: boolean;
 }
 
 /**
@@ -23,7 +25,7 @@ export interface Options {
 const keyOf = (domain: string, requirements: ReadonlyArray<DnsRecord.Model>): string =>
   [domain, requirementsKey(requirements)].join("|");
 
-export function useController({ domain, onApplied, requirements }: Options): Controller {
+export function useController({ domain, onApplied, readOnly, requirements }: Options): Controller {
   const { transport } = useDomainKit();
   const group = transport.provisioning;
   return useAttempt({
@@ -32,6 +34,7 @@ export function useController({ domain, onApplied, requirements }: Options): Con
     done: (receipt) => Event.Applied({ domain, receipt }),
     group,
     onDone: onApplied,
+    readOnly,
     plan: useCallback(
       () => (group === undefined ? null : group.plan({ domain, requirements })),
       [domain, group, requirements],

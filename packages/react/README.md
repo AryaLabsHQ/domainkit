@@ -132,8 +132,9 @@ const field = Connect.useDomainField({ zones, value, onChange: setValue, onResol
 
 ## The member view
 
-A customer who may read a domain but not change it gets `readOnly`. State still reports; the
-commands that would start a write refuse to run.
+A customer who may read a domain but not change it gets `readOnly`. State still reports; every
+command that would change the domain refuses to run, at the controller rather than in your markup,
+so a control you render anyway cannot reach the transport.
 
 ```tsx
 <DomainKit.Root transport={transport} readOnly>
