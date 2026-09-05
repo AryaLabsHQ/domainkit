@@ -77,6 +77,24 @@ describe("Connect.useAccounts", () => {
     ).not.toHaveProperty("domain");
   });
 
+  it("refuses to grant an account for a customer who may only read", async () => {
+    const { transport } = scenario();
+    const view = mount(transport, () => Connect.useAccounts(), {
+      navigate: () => {},
+      readOnly: true,
+    });
+    await until(() => expect(view.result.current.state._tag).toBe("Ready"));
+    await run(() =>
+      view.result.current.connect({
+        method: "token",
+        provider: "fake",
+        values: { token: "tok" },
+      }),
+    );
+    // Granting an account is a write, so the hook refuses it rather than trusting the markup.
+    expect(transport.calls.some((call) => call.method === "connection.start")).toBe(false);
+  });
+
   it("re-credits an account the provider turned down rather than adding a second", async () => {
     const { transport } = scenario();
     await connectAccount(transport);

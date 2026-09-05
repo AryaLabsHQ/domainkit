@@ -24,7 +24,7 @@ import {
 } from "react";
 
 import type { Descriptor } from "./connect.ts";
-import { useDomainKit, useMessages } from "./domain-kit.tsx";
+import { useDomainKit, useMessages, useReadOnly } from "./domain-kit.tsx";
 import { useRunner } from "./task.ts";
 
 export type Zone = Transport.Zone;
@@ -148,6 +148,8 @@ export interface AccountsController {
 export interface AccountsOptions {
   /** Where an interactive method returns the customer. Defaults to the page they started from. */
   readonly returnTo?: string | null;
+  /** Refuse the commands that grant an account. Defaults to the surrounding `readOnly`. */
+  readonly readOnly?: boolean;
 }
 
 const currentUrl = (): string | null =>
@@ -158,8 +160,15 @@ const currentUrl = (): string | null =>
  * a domain. A token method finishes in place; an interactive one redirects and comes back through
  * the library's own callback, which lands on `returnTo`.
  */
-export function useAccounts({ returnTo }: AccountsOptions = {}): AccountsController {
+export function useAccounts({
+  readOnly: refused,
+  returnTo,
+}: AccountsOptions = {}): AccountsController {
   const { navigate, transport } = useDomainKit();
+  const inherited = useReadOnly();
+  // Granting an account is a write like any other, so the refusal lives here rather than in the
+  // markup a host wrote.
+  const readOnly = refused ?? inherited;
   const connection = transport.connection;
   const runner = useRunner();
   const listing = useZones();
@@ -168,7 +177,7 @@ export function useAccounts({ returnTo }: AccountsOptions = {}): AccountsControl
   const refresh = listing.refresh;
   const submit = useCallback(
     (input: ConnectAccountInput & { readonly connectionId?: string }) => {
-      if (connection === undefined) return;
+      if (connection === undefined || readOnly) return;
       const destination = returnTo === undefined ? currentUrl() : returnTo;
       const interactive = destination === null ? {} : { returnTo: destination };
       const method =
@@ -196,7 +205,7 @@ export function useAccounts({ returnTo }: AccountsOptions = {}): AccountsControl
         },
       });
     },
-    [connection, navigate, refresh, returnTo, runner],
+    [connection, navigate, readOnly, refresh, returnTo, runner],
   );
   const connect = useCallback((input: ConnectAccountInput) => submit(input), [submit]);
   const reconnect = useCallback(
