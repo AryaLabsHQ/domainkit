@@ -2,7 +2,7 @@
 
 import { Connect, DomainKit, type Domain } from "@domainkit/react";
 import { ChevronDownIcon, ExternalLinkIcon } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type ReactElement } from "react";
 
 import { Outcome } from "@/components/domainkit/outcome";
 import { Mark, type ProviderArtwork } from "@/components/domainkit/provider-row";
@@ -147,8 +147,8 @@ function TokenForm({
 export interface ConnectDialogProps {
   readonly flow: Domain.Flow;
   readonly marks?: ProviderArtwork;
-  /** Replaces the trigger. Omit it for the short "Connect" the row carries. */
-  readonly trigger?: ReactNode;
+  /** Replaces the trigger element. Omit it for the short "Connect" the row carries. */
+  readonly trigger?: ReactElement;
 }
 
 /**
@@ -188,9 +188,7 @@ export function ConnectDialog({ flow, marks, trigger }: ConnectDialogProps) {
       }}
       open={open}
     >
-      <DialogTrigger render={trigger === undefined ? <Button size="sm" /> : undefined}>
-        {trigger ?? messages.connect}
-      </DialogTrigger>
+      <DialogTrigger render={trigger ?? <Button size="sm" />}>{messages.connect}</DialogTrigger>
       <DialogContent className="gap-5" showCloseButton={!busy}>
         <DialogHeader className="flex-row items-start gap-3">
           {narrowed === null ? null : <Mark marks={marks} provider={narrowed} />}

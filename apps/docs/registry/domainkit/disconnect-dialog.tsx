@@ -1,7 +1,7 @@
 "use client";
 
 import { Cleanup, Connect, DomainKit, type Domain } from "@domainkit/react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 
 import { Outcome } from "@/components/domainkit/outcome";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,9 @@ import { cn } from "@/lib/utils";
 
 export interface DisconnectDialogProps {
   readonly flow: Domain.Flow;
-  /** Replaces the trigger. Omit both this and `open` for a plain "Disconnect" button. */
-  readonly trigger?: ReactNode;
+  /** Replaces the trigger element. Ignored when the host drives `open` itself. */
+  readonly trigger?: ReactElement;
+  /** Drive the dialog from your own state, from a menu item that closes as the dialog opens. */
   readonly open?: boolean;
   readonly onOpenChange?: (open: boolean) => void;
 }
@@ -95,9 +96,11 @@ export function DisconnectDialog({
       }}
       open={open}
     >
-      <DialogTrigger render={trigger === undefined ? <Button variant="outline" /> : undefined}>
-        {trigger ?? messages.disconnect}
-      </DialogTrigger>
+      {controlled === undefined ? (
+        <DialogTrigger render={trigger ?? <Button variant="outline" />}>
+          {messages.disconnect}
+        </DialogTrigger>
+      ) : null}
       <DialogContent
         className={cn("gap-5", choosable ? "sm:max-w-xl" : undefined)}
         showCloseButton={!busy}
