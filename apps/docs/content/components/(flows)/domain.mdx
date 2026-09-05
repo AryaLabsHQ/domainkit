@@ -3,8 +3,13 @@ title: Domain flow
 description: The whole custom-domain lifecycle for one domain, from connecting a provider through reviewing the plan, applying it, observing DNS, and cleaning up.
 ---
 
-`Domain.Flow` is the complete flow. It composes the four controllers, renders four slots with
+`Domain.Flow` is the complete flow. It composes the four controllers, renders three slots with
 defaults, and shows only the capability groups the transport declares.
+
+Once the domain is attached with nothing applied to it yet, the flow plans, and the plan lands in
+the records table: every row says whether it will be added, is already there, or is in the way, and
+the header carries the one action that adds them. No review dialog opens. `Provision.Dialog` stays
+exported for a host that wants the standalone surface.
 
 <ReactExample story="domain-flow" />
 

@@ -14,17 +14,26 @@ The records namespace renders the requirements your product supplies, plus the r
 
 ## Table
 
-`Records.Table` renders one row per requirement: type, name, value, purpose, and a status column
-when `readiness` is present. Values carry a copy action.
+`Records.Table` renders one row per requirement: type, name, value, purpose, and a status column.
+Values carry a copy action.
 
-| Prop        | Type                             | Required | Means                     |
-| ----------- | -------------------------------- | -------- | ------------------------- |
-| `records`   | `ReadonlyArray<DnsRecord.Model>` | yes      | The requirements to show  |
-| `readiness` | `Verify.Readiness \| null`       | no       | Adds the status column    |
-| `caption`   | `string`                         | no       | A caption above the table |
+| Prop        | Type                             | Required | Means                                      |
+| ----------- | -------------------------------- | -------- | ------------------------------------------ |
+| `records`   | `ReadonlyArray<DnsRecord.Model>` | yes      | The requirements to show                   |
+| `plan`      | `Plan.Model \| null`             | no       | A plan awaiting its apply; drives the rows |
+| `readiness` | `Verify.Readiness \| null`       | no       | What the last observation read back        |
+| `caption`   | `string`                         | no       | Names the table, in the header above it    |
+| `actions`   | `ReactNode`                      | no       | Rendered in the header beside the caption  |
 
-The table's leaf parts (`Header`, `Body`, `Row`, `Head`, `Cell`, `Caption`, `Value`, `Purpose`) are
-exported, so a host can assemble its own table from the same parts and keep the styling hooks.
+The status column reads the plan while one is pending: "Will add" for a record the plan will
+create, "Already there" for one it found in place, and "In the way" for one a conflict blocks, with
+a `record-conflict` row under it saying what is wrong and what to fix. With no plan the column
+reports the readiness the last observation found instead.
+
+The header holds the caption and `records-actions`, which is where `Provision.Action` renders "Add
+N records". The table's leaf parts (`Columns`, `Body`, `Row`, `Head`, `Cell`, `Caption`, `Actions`,
+`Value`, `Purpose`) are exported, so a host can assemble its own table from the same parts and keep
+the styling hooks.
 
 ## Zone file
 
@@ -37,7 +46,7 @@ the download; both run only from a user action, so the component renders on the 
 | Helper                     | Returns                                                   |
 | -------------------------- | --------------------------------------------------------- |
 | `Records.identity(record)` | A stable key for a requirement: type, name, and data      |
-| `Records.statusOf`         | One requirement's status out of a readiness row           |
+| `Records.statusOf`         | One row's standing out of `{ plan, readiness }`           |
 | `Records.useCopy(value)`   | A copy controller with a `copied` flag that resets itself |
 
 ## Accessibility

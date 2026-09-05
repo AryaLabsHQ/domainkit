@@ -14,23 +14,22 @@ else, and the flow adds no layout container around a slot's output.
 
 ## Slots
 
-| Slot           | Receives                                        | Default                                                    |
-| -------------- | ----------------------------------------------- | ---------------------------------------------------------- |
-| `connection`   | `{ controller, domain, connect }`               | `Connect.Card` once connected, `Connect.Prompt` until then |
-| `records`      | `{ records, readiness, controller, domain }`    | `Records.Table`                                            |
-| `verification` | `{ controller, domain }`                        | `Verify.Status`                                            |
-| `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline                           |
+| Slot           | Receives                                                         | Default                                                    |
+| -------------- | ---------------------------------------------------------------- | ---------------------------------------------------------- |
+| `connection`   | `{ controller, domain, connect }`                                | `Connect.Card` once connected, `Connect.Prompt` until then |
+| `records`      | `{ records, readiness, plan, provisioning, controller, domain }` | `Records.Table` with the plan and `Provision.Action`       |
+| `verification` | `{ controller, domain }`                                         | `Verify.Status`                                            |
 
 ## Your own layout
 
 <Snippet file="examples/react/slots.tsx" region="layout" title="Placing the slots" />
 
-## Your own actions
+## Your own action
 
 <Snippet
   file="examples/react/slots.tsx"
   region="actions"
-  title="Driving the flow from your buttons"
+  title="Driving the flow from your button"
 />
 
 Read [composition](/docs/react/composition) for parts, `render`, and state-aware `className`.

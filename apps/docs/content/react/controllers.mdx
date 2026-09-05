@@ -44,6 +44,27 @@ started from, read when they connect rather than when the controller renders, so
 one screen and used on another still returns to the right place. Pass `null` to send none and leave
 the server's `defaultReturnTo` in charge; a per-call `connect({ returnTo })` still wins.
 
+The controller attaches on sight: when it settles `Disconnected` with a `Resolved` discovery on a
+surface that is not read-only, it calls `reuse` for that connection and zone straight away, so a
+second domain on an account the workspace already holds never meets the connect dialog. Two
+connections that both reach the zone stay a decision, and `SelectionRequired` keeps the prompt.
+Each domain, connection, and zone is tried once, so an attach that failed and a detach the customer
+chose both stand.
+
+`receipt` carries what this domain's last apply landed, read once per receipt id, so the connected
+card can say how many records it holds without another call.
+
+## Zones and accounts
+
+`Connect.useZones({ provider? })` lists every zone the owner's connections reach. Its state is
+`Loading`, `Ready { zones, connections, providers }`, or `Failure`; a connection whose credential
+the provider turned down appears in `connections` as `reconnect` and contributes no zones.
+
+`Connect.useAccounts({ returnTo })` reads the same listing and adds one command,
+`connect({ provider, method, values? })`, which starts a provider with no domain attached. A token
+method finishes in place; an interactive one redirects and returns through the library's own
+callback. `Connect.DomainField` is the default surface over both.
+
 ## Provisioning and cleanup
 
 `Provision.useController({ domain, requirements, onApplied? })` and

@@ -7,15 +7,14 @@ seo:
   title: Compose the DomainKit React flow
 ---
 
-`Domain.Flow` renders four slots, and every one has a default. Replacing a slot changes that part
+`Domain.Flow` renders three slots, and every one has a default. Replacing a slot changes that part
 and nothing else.
 
-| Slot           | Receives                                        | Default                                                    |
-| -------------- | ----------------------------------------------- | ---------------------------------------------------------- |
-| `connection`   | `{ controller, domain, connect }`               | `Connect.Card` once connected, `Connect.Prompt` until then |
-| `records`      | `{ records, readiness, controller, domain }`    | `Records.Table`                                            |
-| `verification` | `{ controller, domain }`                        | `Verify.Status` with per-requirement evidence              |
-| `actions`      | `{ connection, provisioning, cleanup, domain }` | Review changes, Approve, Decline                           |
+| Slot           | Receives                                                         | Default                                                    |
+| -------------- | ---------------------------------------------------------------- | ---------------------------------------------------------- |
+| `connection`   | `{ controller, domain, connect }`                                | `Connect.Card` once connected, `Connect.Prompt` until then |
+| `records`      | `{ records, readiness, plan, provisioning, controller, domain }` | `Records.Table` with the plan and `Provision.Action`       |
+| `verification` | `{ controller, domain }`                                         | `Verify.Status` with per-requirement evidence              |
 
 ## One slot
 
@@ -30,16 +29,17 @@ and nothing else.
 `Domain.Flow` adds no layout container around a slot: its output is a direct child of the flow root,
 so a grid on the flow places the slots directly without `display: contents`.
 
-## Your own actions
+## Your own action
 
 <Snippet
   file="examples/react/slots.tsx"
   region="actions"
-  title="Driving the flow from your buttons"
+  title="Driving the flow from your button"
 />
 
-The actions slot receives all three controllers, so the buttons can live in a toolbar somewhere else
-in your screen while the flow keeps the state.
+The records slot receives the pending plan and the provisioning controller, so the one action can
+live in a toolbar somewhere else in your screen while the flow keeps the state.
+`provisioning.approve()` authorizes the plan and applies it in the same call.
 
 ## Parts
 

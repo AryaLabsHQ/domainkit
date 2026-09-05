@@ -21,7 +21,7 @@ import { Server } from "domainkit/server";
 
 ## Endpoints
 
-`Server.group` is one `HttpApiGroup` with fifteen endpoints. It declares no prefix of its own, so
+`Server.group` is one `HttpApiGroup` with sixteen endpoints. It declares no prefix of its own, so
 `Server.group.prefix("/internal/dns")` or a router mount moves every route at once and the OAuth
 callback URL follows the mount.
 
@@ -29,6 +29,7 @@ callback URL follows the mount.
 | -------- | ---------------------------------------- | ------------- | ------------------------ |
 | `GET`    | `/domains/:domain`                       | `inspect`     | `Snapshot`               |
 | `GET`    | `/domains/:domain/discovery`             | `discover`    | `Discovery`              |
+| `GET`    | `/zones`                                 | `zones`       | `Zones`                  |
 | `POST`   | `/connections`                           | `start`       | `Started`                |
 | `GET`    | `/callback/:provider`                    | `callback`    | `302` to the return path |
 | `POST`   | `/connections/:connectionId/attachments` | `attach`      | `Started`                |
@@ -44,6 +45,12 @@ callback URL follows the mount.
 | `POST`   | `/receipts/:receiptId/cleanup-plans`     | `cleanupPlan` | `Plan.Model`             |
 
 Approve, reject, and apply serve both provisioning and cleanup: the stored attempt knows its kind.
+
+`start` takes an optional `domain`. Without one it connects the account alone and answers
+`Connected` with the connection it made and no snapshot, which is how a customer grants an account
+before they have named a domain in it. `zones` lists every zone those accounts reach, ordered by
+zone, and marks a connection whose credential the provider turned down as `reconnect` beside the
+zones that did come back. `?provider=` narrows it to one provider's connections.
 
 ## Identity
 
@@ -90,6 +97,8 @@ The client and `@domainkit/react` decode these, so the three cannot drift.
 | Schema             | Shape                                                                                    |
 | ------------------ | ---------------------------------------------------------------------------------------- |
 | `Snapshot`         | Domain, attachment, connection, provider, status, reusable connections, provider catalog |
+| `Attachment`       | The attachment's `id` and the zone `label` the provider gave when it was created         |
+| `Zones`            | Every zone the principal's connections reach, how each connection stands, the catalog    |
 | `Started`          | `Connected`, `Redirect`, or `SelectionRequired`                                          |
 | `Discovery`        | `DiscoveryResolved`, `DiscoverySelectionRequired`, or `DiscoveryNotFound`                |
 | `Method`           | `Token`, `OAuth`, or `Integration`                                                       |

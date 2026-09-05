@@ -54,8 +54,12 @@ principal reaches every route.
 
 <Snippet file="examples/server/mount.ts" region="mount" title="Adding the group to your API" />
 
-`Server.group` covers the whole lifecycle in fifteen endpoints. It declares no path of its own, so
+`Server.group` covers the whole lifecycle in sixteen endpoints. It declares no path of its own, so
 one prefix moves every route and the callback URL follows it.
+
+`GET /zones` is the read a picker needs: every zone the principal's connections reach, how each
+connection stands, and the provider catalog. Members add domains, so it belongs with the reads in
+`authorize`; `start` stays a write.
 
 <Snippet file="examples/server/mount.ts" region="prefix" title="Mounting elsewhere" />
 

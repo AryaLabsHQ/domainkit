@@ -80,7 +80,7 @@ export const run = async () => {
     return {
       ...lifecycleResult,
       wired: wired._tag,
-      snapshot: wired.snapshot.status,
+      snapshot: wired.snapshot?.status ?? null,
       capabilities: Transport.capabilities(transport),
     };
   } finally {
@@ -184,6 +184,7 @@ export const connectionOnly: Transport.Interface = {
   connection: {
     inspect: () => Effect.die("unused"),
     discover: () => Effect.die("unused"),
+    zones: () => Effect.die("unused"),
     start: () => Effect.die("unused"),
     attach: () => Effect.die("unused"),
     detach: () => Effect.die("unused"),

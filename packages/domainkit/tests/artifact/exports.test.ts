@@ -85,6 +85,7 @@ describe("public namespaces", () => {
     assert.deepStrictEqual(Object.keys(Server).sort(), [
       "ApprovePayload",
       "AttachPayload",
+      "Attachment",
       "Attempt",
       "Candidate",
       "Connected",
@@ -109,6 +110,8 @@ describe("public namespaces", () => {
       "StartPayload",
       "Started",
       "Token",
+      "Zone",
+      "Zones",
       "api",
       "group",
       "layer",
