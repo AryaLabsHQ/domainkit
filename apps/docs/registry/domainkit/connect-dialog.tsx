@@ -196,19 +196,18 @@ export function ConnectDialog({ flow, marks, trigger }: ConnectDialogProps) {
             {alternatives.length === 0 ? (
               <DialogTitle>{heading}</DialogTitle>
             ) : (
+              // The heading is also the control that moves the dialog to another provider. The
+              // title stays the element that names the dialog; the trigger sits inside it.
               <DropdownMenu>
-                <DropdownMenuTrigger
-                  disabled={busy}
-                  render={
-                    <DialogTitle
-                      className="inline-flex cursor-pointer items-center gap-1"
-                      render={<button type="button" />}
-                    />
-                  }
-                >
-                  {heading}
-                  <ChevronDownIcon aria-hidden="true" className="size-4" />
-                </DropdownMenuTrigger>
+                <DialogTitle render={<div />}>
+                  <DropdownMenuTrigger
+                    disabled={busy}
+                    render={<Button className="-mx-2 h-auto py-1 text-lg" variant="ghost" />}
+                  >
+                    {heading}
+                    <ChevronDownIcon aria-hidden="true" className="size-4" />
+                  </DropdownMenuTrigger>
+                </DialogTitle>
                 <DropdownMenuContent align="start" aria-label={messages.useAnotherProvider}>
                   {alternatives.map((entry) => (
                     <DropdownMenuItem key={entry.id} onClick={() => setChosen(entry.id)}>
