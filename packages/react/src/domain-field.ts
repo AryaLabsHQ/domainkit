@@ -1,28 +1,35 @@
 /**
  * Adding a domain is one input. The zones every connected account reaches load when the field
  * mounts, typing filters them, Tab completes the highlighted one while keeping whatever subdomain
- * was typed in front of it, and the footer names the account the records will go to — or offers
- * the providers to connect when there is no account yet.
+ * was typed in front of it, and the surface names the account the records will go to.
  *
- * The listbox is built here rather than on Base UI's Combobox because the completion rule is not
- * Combobox's selection model: a suggestion never replaces what the customer typed, it finishes it,
- * and a domain outside every zone leaves the input a plain text field.
+ * The listbox is built here rather than on a combobox primitive because the completion rule is not
+ * a selection model: a suggestion never replaces what the customer typed, it finishes it, and a
+ * domain outside every zone leaves the input a plain text field.
  */
-import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import type { DomainKit } from "domainkit";
 import { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
-import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type AriaAttributes,
+  type FocusEventHandler,
+  type FormEventHandler,
+  type KeyboardEventHandler,
+  type MouseEventHandler,
+} from "react";
 
-import type { PartProps } from "./composition.tsx";
-import { usePart } from "./composition.tsx";
-import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
-import * as Provider from "./provider.tsx";
+import type { Descriptor } from "./connect.ts";
+import { useDomainKit, useMessages } from "./domain-kit.tsx";
 import { useRunner } from "./task.ts";
 
 export type Zone = Transport.Zone;
 export type Account = Transport.Zones["connections"][number];
-export type AuthMethod = Provider.Descriptor["methods"][number];
+export type AuthMethod = Descriptor["methods"][number];
 
 /** Where a domain's records would go: the connection that serves it, and in which zone. */
 export interface Placement {
@@ -39,7 +46,7 @@ export type ZonesState = Data.TaggedEnum<{
   Ready: {
     readonly zones: ReadonlyArray<Zone>;
     readonly connections: ReadonlyArray<Account>;
-    readonly providers: ReadonlyArray<Provider.Descriptor>;
+    readonly providers: ReadonlyArray<Descriptor>;
   };
   Failure: { readonly error: DomainKit.Error };
 }>;
@@ -49,7 +56,7 @@ export interface ZonesController {
   readonly state: ZonesState;
   readonly zones: ReadonlyArray<Zone>;
   readonly connections: ReadonlyArray<Account>;
-  readonly providers: ReadonlyArray<Provider.Descriptor>;
+  readonly providers: ReadonlyArray<Descriptor>;
   readonly refresh: () => void;
 }
 
@@ -60,7 +67,7 @@ export interface ZonesOptions {
 
 const nothing = {
   connections: [] as ReadonlyArray<Account>,
-  providers: [] as ReadonlyArray<Provider.Descriptor>,
+  providers: [] as ReadonlyArray<Descriptor>,
   zones: [] as ReadonlyArray<Zone>,
 };
 
@@ -127,7 +134,7 @@ export interface AccountsController {
   readonly state: AccountsState;
   readonly zones: ReadonlyArray<Zone>;
   readonly connections: ReadonlyArray<Account>;
-  readonly providers: ReadonlyArray<Provider.Descriptor>;
+  readonly providers: ReadonlyArray<Descriptor>;
   /** Connect a provider with no domain attached. The account is what the customer is granting. */
   readonly connect: (input: ConnectAccountInput) => void;
   /**
@@ -297,18 +304,15 @@ export const completionOf = (value: string, zone: Zone): string => {
 };
 
 // ---------------------------------------------------------------------------------------------
-// DomainField
+// useDomainField
 // ---------------------------------------------------------------------------------------------
 
-export interface DomainFieldState extends Record<string, unknown> {
-  readonly open: boolean;
-  readonly resolved: boolean;
-}
+const optionId = (listId: string, zone: Zone): string =>
+  `${listId}-${zone.connectionId}-${zone.zone}`;
 
-export interface DomainFieldProps extends Omit<
-  PartProps<"div", DomainFieldState>,
-  "children" | "onChange"
-> {
+export interface DomainFieldOptions {
+  /** Every zone the surface offers, which `useZones` or `useAccounts` already holds. */
+  readonly zones: ReadonlyArray<Zone>;
   readonly value: string;
   readonly onChange: (value: string) => void;
   /** Fires whenever the value's account changes, so a host submits the two together. */
@@ -316,30 +320,66 @@ export interface DomainFieldProps extends Omit<
     readonly domain: string;
     readonly connection: Placement | null;
   }) => void;
-  /** Where an interactive connect offer returns the customer. Defaults to the current page. */
-  readonly returnTo?: string | null;
+  /** The input's id. The listbox and its options are named from it; one is generated otherwise. */
   readonly id?: string;
-  readonly placeholder?: string;
-  readonly autoFocus?: boolean;
+}
+
+/** The props one suggestion carries, so the option is a listbox option to a screen reader. */
+export interface OptionProps {
+  readonly "aria-selected": boolean;
+  readonly id: string;
+  readonly onMouseDown: MouseEventHandler<Element>;
+  readonly role: "option";
+}
+
+export interface DomainFieldController {
+  /** Whether the listbox is showing: the customer opened it and there is something in it. */
+  readonly open: boolean;
+  /** The zones the typed value is reaching for, in the order they were listed. */
+  readonly suggestions: ReadonlyArray<Zone>;
+  /** The suggestion Tab and Enter would complete, or `null` when the list is empty. */
+  readonly highlighted: Zone | null;
+  /** The zone the value already sits in, with the account its records would go to. */
+  readonly found: { readonly zone: Zone; readonly placement: Placement } | null;
+  /** Finish the name from one suggestion, keeping whatever subdomain was typed in front of it. */
+  readonly complete: (zone: Zone) => void;
+  readonly close: () => void;
+  readonly inputProps: {
+    readonly "aria-activedescendant": AriaAttributes["aria-activedescendant"];
+    readonly "aria-autocomplete": "list";
+    readonly "aria-controls": string;
+    readonly "aria-expanded": boolean;
+    readonly autoComplete: "off";
+    readonly id: string;
+    readonly onChange: FormEventHandler<HTMLInputElement>;
+    readonly onFocus: FocusEventHandler<HTMLInputElement>;
+    readonly onKeyDown: KeyboardEventHandler<HTMLInputElement>;
+    readonly role: "combobox";
+    readonly type: "text";
+    readonly value: string;
+  };
+  readonly listboxProps: {
+    readonly "aria-label": string;
+    readonly hidden: boolean;
+    readonly id: string;
+    readonly role: "listbox";
+  };
+  readonly optionProps: (zone: Zone) => OptionProps;
 }
 
 /**
- * One input over every zone the workspace's accounts reach. Arrow keys move the highlight, Tab or
- * Enter completes it, Escape closes the list, and the footer says where the records will go.
+ * One input over every zone the workspace's accounts reach, as props rather than markup. Arrow
+ * keys move the highlight, Tab or Enter completes it, Escape closes the list, and `found` says
+ * where the records will go.
  */
-export function DomainField({
-  autoFocus,
+export function useDomainField({
   id,
   onChange,
   onResolve,
-  placeholder,
-  returnTo,
   value,
-  ...props
-}: DomainFieldProps): ReactElement {
-  const { messages } = useDomainKit();
-  const readOnly = useReadOnly();
-  const accounts = useAccounts(returnTo === undefined ? {} : { returnTo });
+  zones,
+}: DomainFieldOptions): DomainFieldController {
+  const messages = useMessages();
   const generated = useId();
   const inputId = id ?? generated;
   const listId = `${inputId}-suggestions`;
@@ -350,9 +390,9 @@ export function DomainField({
   // only while the value still sits in that zone, so a value that moves — whether the customer
   // typed it or the host set it — loses the preference by the same rule.
   const [chosen, setChosen] = useState<Placement | null>(null);
-  const suggestions = suggestionsFor(value, accounts.zones);
+  const suggestions = suggestionsFor(value, zones);
   const highlighted = suggestions[Math.min(active, Math.max(suggestions.length - 1, 0))] ?? null;
-  const found = placementOf(value, accounts.zones, chosen);
+  const found = placementOf(value, zones, chosen);
   const showing = open && suggestions.length > 0;
 
   // The host is told what the value resolved to, not every keystroke that left it where it was.
@@ -378,273 +418,71 @@ export function DomainField({
     setActive(0);
   };
 
-  return usePart(
-    "div",
-    props,
-    { open: showing, resolved: found !== null },
-    {
-      children: (
-        <>
-          <input
-            aria-activedescendant={
-              showing && highlighted !== null ? optionId(listId, highlighted) : undefined
-            }
-            aria-autocomplete="list"
-            aria-controls={listId}
-            aria-expanded={showing}
-            autoComplete="off"
-            autoFocus={autoFocus}
-            data-domainkit-part="domain-input"
-            id={inputId}
-            onChange={(event) => {
-              onChange(event.target.value);
-              setActive(0);
-              setOpen(true);
-            }}
-            onFocus={() => setOpen(true)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                setOpen(false);
-                return;
-              }
-              if (suggestions.length === 0) return;
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                setOpen(true);
-                setActive((index) => (index + 1) % suggestions.length);
-                return;
-              }
-              if (event.key === "ArrowUp") {
-                event.preventDefault();
-                setOpen(true);
-                setActive((index) => (index + suggestions.length - 1) % suggestions.length);
-                return;
-              }
-              // Tab and Enter finish the name rather than choosing one: what the customer typed
-              // in front of the zone stays in front of it.
-              if (
-                (event.key === "Tab" || event.key === "Enter") &&
-                showing &&
-                highlighted !== null
-              ) {
-                event.preventDefault();
-                complete(highlighted);
-              }
-            }}
-            placeholder={placeholder}
-            role="combobox"
-            type="text"
-            value={value}
-          />
-          <ul
-            aria-label={messages.zoneSuggestions}
-            data-domainkit-part="domain-suggestions"
-            hidden={!showing}
-            id={listId}
-            role="listbox"
-          >
-            {suggestions.map((suggestion) => (
-              <li
-                aria-selected={suggestion === highlighted}
-                data-domainkit-part="domain-suggestion"
-                id={optionId(listId, suggestion)}
-                key={`${suggestion.connectionId}:${suggestion.zone}`}
-                onMouseDown={(event) => {
-                  // The press must not take focus off the input before the completion lands.
-                  event.preventDefault();
-                  complete(suggestion);
-                }}
-                role="option"
-              >
-                <span data-domainkit-part="domain-suggestion-zone">{suggestion.zone}</span>
-                <span data-domainkit-part="domain-suggestion-account">{suggestion.label}</span>
-              </li>
-            ))}
-          </ul>
-          <Footer
-            accounts={accounts}
-            found={found?.zone ?? null}
-            readOnly={readOnly}
-            value={value}
-          />
-        </>
-      ),
-      "data-domainkit-part": "domain-field",
+  return {
+    close: () => setOpen(false),
+    complete,
+    found,
+    highlighted,
+    inputProps: {
+      "aria-activedescendant":
+        showing && highlighted !== null ? optionId(listId, highlighted) : undefined,
+      "aria-autocomplete": "list",
+      "aria-controls": listId,
+      "aria-expanded": showing,
+      autoComplete: "off",
+      id: inputId,
+      onChange: (event) => {
+        onChange((event.target as HTMLInputElement).value);
+        setActive(0);
+        setOpen(true);
+      },
+      onFocus: () => setOpen(true),
+      onKeyDown: (event) => {
+        if (event.key === "Escape") {
+          setOpen(false);
+          return;
+        }
+        if (suggestions.length === 0) return;
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          setOpen(true);
+          setActive((index) => (index + 1) % suggestions.length);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          setOpen(true);
+          setActive((index) => (index + suggestions.length - 1) % suggestions.length);
+          return;
+        }
+        // Tab and Enter finish the name rather than choosing one: what the customer typed in
+        // front of the zone stays in front of it.
+        if ((event.key === "Tab" || event.key === "Enter") && showing && highlighted !== null) {
+          event.preventDefault();
+          complete(highlighted);
+        }
+      },
+      role: "combobox",
+      type: "text",
+      value,
     },
-  );
-}
-
-const optionId = (listId: string, zone: Zone): string =>
-  `${listId}-${zone.connectionId}-${zone.zone}`;
-
-interface FooterProps {
-  readonly accounts: AccountsController;
-  readonly found: Zone | null;
-  readonly readOnly: boolean;
-  readonly value: string;
-}
-
-/**
- * Where the records will go, or how to make somewhere for them to go. A held account the provider
- * turned down is offered as a reconnect rather than as a second account.
- */
-function Footer({ accounts, found, readOnly, value }: FooterProps): ReactElement | null {
-  const { messages } = useDomainKit();
-  const named = (provider: string) =>
-    accounts.providers.find((entry) => entry.id === provider)?.name ?? provider;
-  const stale = accounts.connections.filter((entry) => entry.status === "reconnect");
-  const offering = accounts.connections.length === 0;
-  const busy = accounts.state._tag === "Submitting" || accounts.state._tag === "Redirecting";
-  const line =
-    found !== null ? (
-      <span data-domainkit-part="domain-field-account">
-        {messages.recordsGoTo(named(found.provider), found.label)}
-      </span>
-    ) : value.trim() !== "" ? (
-      <span data-domainkit-part="domain-field-account">{messages.notInConnectedAccount}</span>
-    ) : null;
-  const offers =
-    !offering || readOnly
-      ? null
-      : accounts.providers.map((provider) => (
-          <Offer busy={busy} connect={accounts.connect} key={provider.id} provider={provider} />
-        ));
-  // Proving the account again re-credits the connection the workspace already holds, so the
-  // domains on it stay where they are; a second account beside the rejected one would help nobody.
-  const reconnects =
-    readOnly || stale.length === 0
-      ? null
-      : stale.map((entry) => {
-          const provider = accounts.providers.find((held) => held.id === entry.provider);
-          return provider === undefined ? null : (
-            <Offer
-              busy={busy}
-              connect={(input) =>
-                accounts.reconnect({ ...input, connectionId: entry.connectionId })
-              }
-              connectionId={entry.connectionId}
-              key={entry.connectionId}
-              label={messages.reconnectAccount(named(entry.provider))}
-              part="domain-field-reconnect"
-              provider={provider}
-            />
-          );
-        });
-  if (line === null && offers === null && reconnects === null) return null;
-  return (
-    <div data-domainkit-part="domain-field-footer">
-      {line}
-      {offers}
-      {reconnects}
-    </div>
-  );
-}
-
-interface OfferProps {
-  readonly busy: boolean;
-  readonly connect: AccountsController["connect"];
-  /** The connection this offer re-credits, when it is a reconnect rather than a new account. */
-  readonly connectionId?: string;
-  readonly label?: string;
-  readonly part?: string;
-  readonly provider: Provider.Descriptor;
-}
-
-/**
- * One provider to connect, with its mark. A method the customer clicks through starts on the
- * press; a token method asks for the values it declares first, because there is nowhere else on
- * this surface to type them.
- */
-function Offer({
-  busy,
-  connect,
-  connectionId,
-  label,
-  part = "domain-field-connect",
-  provider,
-}: OfferProps): ReactElement {
-  const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
-  const [open, setOpen] = useState(false);
-  const [values, setValues] = useState<Readonly<Record<string, string>>>({});
-  const interactive = provider.methods.find((method) => method.fields === null);
-  const typed = provider.methods.find((method) => method.fields !== null);
-  const name = label ?? messages.connectTitle(provider.name);
-  if (interactive !== undefined || typed === undefined) {
-    return (
-      <button
-        data-connection-id={connectionId}
-        data-domainkit-part={part}
-        data-provider={provider.id}
-        disabled={busy}
-        onClick={() => connect({ method: interactive?.kind ?? "token", provider: provider.id })}
-        type="button"
-      >
-        <Provider.Mark provider={provider} />
-        {name}
-      </button>
-    );
-  }
-  const fields = typed.fields ?? [];
-  return (
-    <BaseDialog.Root onOpenChange={setOpen} open={open}>
-      <BaseDialog.Trigger
-        data-connection-id={connectionId}
-        data-domainkit-part={part}
-        data-provider={provider.id}
-        disabled={busy}
-      >
-        <Provider.Mark provider={provider} />
-        {name}
-      </BaseDialog.Trigger>
-      <BaseDialog.Portal container={portalContainer}>
-        <BaseDialog.Backdrop
-          data-color-scheme={colorScheme}
-          data-domainkit-part="dialog-backdrop"
-          data-domainkit-root=""
-          style={themeStyle}
-        />
-        <BaseDialog.Popup
-          data-color-scheme={colorScheme}
-          data-domainkit-part="connection-dialog"
-          data-domainkit-root=""
-          style={themeStyle}
-        >
-          <div data-domainkit-part="dialog-header">
-            <div data-domainkit-part="dialog-heading">
-              <BaseDialog.Title data-domainkit-part="dialog-title">{name}</BaseDialog.Title>
-            </div>
-          </div>
-          <form
-            data-domainkit-part="token-connect"
-            data-provider={provider.id}
-            onSubmit={(event) => {
-              event.preventDefault();
-              setOpen(false);
-              connect({ method: "token", provider: provider.id, values });
-            }}
-          >
-            {fields.map((field) => (
-              <label data-domainkit-part="field" key={field.name}>
-                <span data-domainkit-part="field-label">{messages.fieldLabel(field.name)}</span>
-                <input
-                  autoComplete="off"
-                  data-domainkit-part="field-input"
-                  name={field.name}
-                  onChange={(event) =>
-                    setValues((held) => ({ ...held, [field.name]: event.target.value }))
-                  }
-                  required={field.required}
-                  type={field.secret ? "password" : "text"}
-                  value={values[field.name] ?? ""}
-                />
-              </label>
-            ))}
-            <button data-domainkit-part="token-submit" type="submit">
-              {messages.methodToken}
-            </button>
-          </form>
-        </BaseDialog.Popup>
-      </BaseDialog.Portal>
-    </BaseDialog.Root>
-  );
+    listboxProps: {
+      "aria-label": messages.zoneSuggestions,
+      hidden: !showing,
+      id: listId,
+      role: "listbox",
+    },
+    open: showing,
+    optionProps: (zone) => ({
+      "aria-selected": zone === highlighted,
+      id: optionId(listId, zone),
+      // The press must not take focus off the input before the completion lands.
+      onMouseDown: (event) => {
+        event.preventDefault();
+        complete(zone);
+      },
+      role: "option",
+    }),
+    suggestions,
+  };
 }

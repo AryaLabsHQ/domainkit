@@ -76,6 +76,43 @@ const needsNewPlan = (error: DomainKit.Error): boolean =>
   error.reason._tag === "Expired" ||
   error.reason._tag === "Conflict";
 
+/** The plan an attempt holds, whatever step it is on; `null` before there is one. */
+export const planOf = (state: State): Plan.Model | null => {
+  switch (state._tag) {
+    case "Planned":
+    case "Approving":
+    case "Applying":
+    case "Rejecting":
+    case "Rejected":
+    case "Applied":
+      return state.plan;
+    case "Idle":
+    case "Planning":
+    case "Failure":
+      return null;
+  }
+};
+
+/**
+ * The plan still awaiting its apply, which is what a row of records reports; `null` once one has
+ * landed, because from then on an observation answers instead.
+ */
+export const pendingPlan = (state: State): Plan.Model | null => {
+  switch (state._tag) {
+    case "Planned":
+    case "Approving":
+    case "Applying":
+      return state.plan;
+    case "Idle":
+    case "Planning":
+    case "Applied":
+    case "Rejecting":
+    case "Rejected":
+    case "Failure":
+      return null;
+  }
+};
+
 export function useAttempt(options: Options): Controller {
   const { domain, done, group, key, onDone } = options;
   const { emit } = useDomainKit();

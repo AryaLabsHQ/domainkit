@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,10 +17,10 @@ describe("packed React package", () => {
     expect(packageJson.peerDependencies.react).toBe(">=19.0.0 <20.0.0");
     expect(packageJson.peerDependencies["react-dom"]).toBe(">=19.0.0 <20.0.0");
     expect(packageJson.peerDependencies.effect).toBe(">=4.0.0-rc.112 <5.0.0");
-    expect(packageJson.exports["./styles.css"]).toBe("./dist/styles.css");
     expect(packageJson.exports["."].types).toBe("./dist/index.d.mts");
-    expect(packageJson.sideEffects).toEqual(["./dist/styles.css"]);
-    expect(Object.keys(packageJson.dependencies).sort()).toEqual(["@base-ui/react", "domainkit"]);
+    // Nothing in the package runs for its side effects, and there is no stylesheet to keep.
+    expect(packageJson.sideEffects).toBe(false);
+    expect(Object.keys(packageJson.dependencies).sort()).toEqual(["domainkit"]);
 
     const { stdout } = await execFileAsync("npm", ["pack", "--dry-run", "--json"], {
       cwd: process.cwd(),
@@ -37,7 +38,6 @@ describe("packed React package", () => {
       "dist/index.d.mts",
       "dist/index.mjs",
       "dist/index.mjs.map",
-      "dist/styles.css",
       "package.json",
     ]);
     expect(
@@ -45,18 +45,13 @@ describe("packed React package", () => {
         (path) => !allowed.has(path) && !/^dist\/rolldown-runtime-[\w-]+\.mjs$/.test(path),
       ),
     ).toEqual([]);
-    expect(files).toContain("dist/styles.css");
   });
 
-  it("ships every rule inside the domainkit cascade layer", async () => {
-    const styles = await readFile("dist/styles.css", "utf8");
-    // Comments aside, the layer is the only thing at the top level: a host's own rules outrank
-    // every part selector without having to out-specify it.
-    const outside = styles.replaceAll(/\/\*[\s\S]*?\*\//g, "").trim();
-    expect(outside.startsWith("@layer domainkit {")).toBe(true);
-    expect(outside.endsWith("}")).toBe(true);
-    expect(outside.slice("@layer domainkit {".length, -1)).not.toContain("@layer");
-    expect(styles).toContain("[data-domainkit-part=");
+  it("ships hooks alone: no stylesheet, and no element vocabulary to style", async () => {
+    const bundle = await readFile("dist/index.mjs", "utf8");
+    expect(bundle).not.toContain("data-domainkit-part");
+    expect(bundle).not.toContain("--domainkit-");
+    expect(existsSync("dist/styles.css")).toBe(false);
   });
 
   it("declares a compatible packed DomainKit runtime", async () => {
