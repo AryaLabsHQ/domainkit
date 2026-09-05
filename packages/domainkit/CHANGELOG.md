@@ -1,3 +1,33 @@
+## domainkit@0.12.0
+
+### Reconnecting keeps the connection it is about
+
+`Connect.reconnect({ connectionId, method })` and `POST /connections/:connectionId/reconnections`
+put a fresh credential behind the authorization a connection already points at. The connection
+keeps its id and every domain stays attached to it, which is what a customer means when a provider
+turns a credential down. Starting again could only mint a second account and then fail on the first
+domain, because that domain is attached to the connection the provider rejected. The provider is
+the connection's own; the zone check on every session still catches a credential that can no longer
+reach a zone.
+
+### The account is the unit of consent
+
+`Server.StartPayload.domain` is optional. A start without one connects the account and attaches
+nothing, and `Started.Connected` carries the connection it made: `connectionId`, `provider`, the
+`label` the customer reads, and `snapshot` only when a domain was given.
+
+`Connect.zones({ provider? })` and `GET /zones` list every zone the principal's connections reach
+through `Provider.Session.listTargets`, ordered by zone, each with the connection that serves it
+and the label the provider gave it. A connection whose credential the provider turned down is
+reported once in the sibling `connections` array as `reconnect` and contributes no zones, so one
+dead account never costs the customer the others. The reply also carries the provider catalog, so a
+picker offers a new account without a second call.
+
+`Storage.Attachment.label` holds the zone's label at attach time, across memory and Postgres
+storage, and `Snapshot.attachment` replaces `attachmentId` with `{ id, label }`, so a surface names
+the account the records go to without asking the provider again. `Transport.provisioning.receipt`
+reads one apply receipt by id.
+
 ## domainkit@0.11.0
 
 ### A fake can read like a real provider

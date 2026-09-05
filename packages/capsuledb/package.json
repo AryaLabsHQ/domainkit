@@ -1,6 +1,6 @@
 {
   "name": "@domainkit/capsuledb",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "DomainKit Storage on PostgreSQL, as one declarative CapsuleDB capsule",
   "keywords": [
     "dns",
@@ -45,7 +45,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "domainkit": "workspace:^0.11.0"
+    "domainkit": "workspace:^0.12.0"
   },
   "devDependencies": {
     "@effect/sql-pg": "4.0.0-rc.112",

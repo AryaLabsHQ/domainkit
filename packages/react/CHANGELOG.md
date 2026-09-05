@@ -1,3 +1,90 @@
+## @domainkit/react@0.12.0
+
+### Connecting a domain that needs reconnecting re-credits what it has
+
+`Connect.useController`'s `connect` proves the same provider again for a connection the provider
+turned down, rather than starting a second one, so the domains on it stay where they are. The
+domain field's footer offers the same for an account its listing reports as `reconnect`, through
+`Connect.useAccounts`'s new `reconnect` command.
+
+### Headless hooks, and the registry as the styled path
+
+`@domainkit/react` keeps behaviour and loses paint. `usePart`, `leafPart`, `PartProps`, every
+component, the `data-domainkit-part` vocabulary, `styles.css`, `Theme`, `icons`, the `marks` map,
+and `Provider.Mark` are gone, along with `DomainKit.Root`'s `theme`, `marks`, `icons`,
+`colorScheme`, and `portalContainer` props and the `./styles.css` export. The package no longer
+depends on `@base-ui/react`.
+
+`DomainKit.Root` is a context provider that renders no element, taking `transport`, `messages`,
+`navigate`, `onEvent`, `readOnly`, and `revision`. `Domain.useFlow({ domain, requirements, connect,
+onApplied, onCleaned, returnTo, readOnly })` replaces `Domain.Flow` and returns `state`,
+`connection`, `provisioning`, `cleanup`, `verification`, `plan`, `readiness`, `capabilities`,
+`requirements`, and `invitation`. Read-only is a fact on `FlowState.readOnly`, so a surface says who
+may connect rather than rendering nothing.
+
+`Connect` gains `describeMethods`, `rejectedField`, `attempted`, `reusableConnections`, `reconnect`,
+`providerOf`, `displayName`, and `useDomainField`, which carries the combobox semantics as
+`inputProps`, `listboxProps`, and `optionProps`. `Outcome` is `describe(error, catalog)` and
+`useDescribe()`. `Provision` and `Cleanup` export `pendingPlan` and `planOf`; `Verify` exports
+`valuesOf`; `Records` keeps `statusOf`, `useCopy`, `toZoneFile`, and `downloadZoneFile`.
+
+The styled composition is the DomainKit shadcn registry: `domain-flow` over `provider-row`,
+`records-table`, `plan-action`, `connect-dialog`, `disconnect-dialog`, `domain-field`, and
+`outcome`, written against the host's own kit on the Base UI idiom.
+
+### Adding a domain is one input
+
+`Connect.DomainField` loads the zones every connected account reaches, filters them as the customer
+types, completes the highlighted one on Tab or Enter while keeping whatever subdomain was typed in
+front of it, and says in its footer where the records will go: the account that serves the zone,
+"Not in a connected account." for a domain outside all of them, an offer to prove an account the
+provider turned down, or the providers to connect when the workspace holds none. Arrow keys move the
+highlight and Escape closes the list; the input stays a plain text field for a domain no account
+reaches. Parts: `domain-field`, `domain-input`, `domain-suggestions`, `domain-suggestion`,
+`domain-field-footer`.
+
+`Connect.useZones({ provider? })` reads the listing. `Connect.useAccounts({ returnTo })` adds the
+one command that grows it: connect a provider with no domain attached, by redirect for a
+click-through method and through a token dialog for a provider that offers nothing else.
+
+### The records table is the plan
+
+Once a plan exists the page has one button, "Add N records", in the records header; each row reports
+"Will add", "Already there", or "In the way"; and a conflict explains itself and says what to fix in
+a row under the record it blocks. No review dialog opens.
+
+`Domain.Flow` plans whenever the domain is attached with nothing applied to it yet, on load and on
+every connection that lands, and hands `plan` and `provisioning` to the records slot. The `review`
+prop and the `actions` slot are gone; `Provision.Dialog` stays exported for a host that wants the
+standalone surface, and the flow never opens it.
+
+`Records.Table` takes `plan` and `actions` and renders a header over the rows.
+`Records.statusOf(record, { plan, readiness })` answers with the operation a pending plan holds or
+the readiness last observed, for a host with its own table. `Provision.Action` approves and applies
+in one press, says "Adding records…" while it runs, is disabled beside what to fix when every record
+is blocked, and reports the outcome under the header.
+
+### The flow state names the account
+
+`Domain.FlowState.label` carries the account the records go to, as the provider labelled the zone
+when the domain was attached, and `null` until there is an attachment. It reaches a host through
+the part's data attributes, its `className` and `style` callbacks, and `onState`, like every other
+field. A host writing its own summary line, "3 records · Cloudflare · acme-dns", now builds it from
+`provider` and `label` instead of reaching into the connection slot for the snapshot.
+
+### A second domain on a connected account never sees Connect again
+
+`Connect.useController` attaches on sight: when it settles `Disconnected` with a `Resolved`
+discovery on a surface that is not read-only, it attaches the domain to that connection and zone
+straight away, and `established` grows so the flow plans. Each domain, connection, and zone is tried
+once, so an attach that failed and a detach the customer chose both stand. Two connections that both
+reach the zone stay a decision, and `SelectionRequired` keeps the prompt.
+
+The prompt statement says what was found, `messages.hostDetected` ("Cloudflare DNS detected"), and
+the connected card reads "{Provider} · {attachment.label}" with "N added" from the domain's apply
+receipt, under the parts `connected-label` and `connected-applied`. The controller reads that
+receipt once per receipt id and keeps it.
+
 ## @domainkit/react@0.11.0
 
 ### The cards read alike, and the flow says what it knows

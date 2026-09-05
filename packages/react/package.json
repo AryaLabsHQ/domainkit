@@ -1,6 +1,6 @@
 {
   "name": "@domainkit/react",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Headless React hooks for custom-domain setup",
   "keywords": [
     "custom-domains",
@@ -43,7 +43,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "domainkit": "workspace:^0.11.0"
+    "domainkit": "workspace:^0.12.0"
   },
   "devDependencies": {
     "@testing-library/react": "16.3.1",
