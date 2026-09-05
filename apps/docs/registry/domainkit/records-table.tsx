@@ -23,13 +23,6 @@ const operationTones: Record<Plan.Operation["_tag"], DnsStatusTone> = {
   Noop: "success",
 };
 
-const requirementTones: Record<Records.RequirementStatus, DnsStatusTone> = {
-  mismatch: "danger",
-  missing: "warning",
-  satisfied: "success",
-  unknown: "neutral",
-};
-
 /** What a pending plan will do to one record, or what the last observation read back. */
 function Standing({ standing }: { readonly standing: Records.Standing | null }) {
   const messages = DomainKit.useMessages();
@@ -39,9 +32,8 @@ function Standing({ standing }: { readonly standing: Records.Standing | null }) 
       {messages.planStatus(standing.operation)}
     </DnsStatus>
   ) : (
-    <DnsStatus status={standing.status} tone={requirementTones[standing.status]}>
-      {messages.requirementStatus(standing.status)}
-    </DnsStatus>
+    // `dns-status` already picks the tone from the status; the words come from the catalog.
+    <DnsStatus status={standing.status}>{messages.requirementStatus(standing.status)}</DnsStatus>
   );
 }
 
