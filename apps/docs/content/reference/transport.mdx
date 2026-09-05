@@ -24,16 +24,18 @@ import { Transport } from "domainkit/client";
 Every group on `Transport.Interface` is optional, so a host that mounts part of the route group gets
 a transport that typechecks and a UI that renders only what the server can serve.
 
-| Group          | Methods                                                                   |
-| -------------- | ------------------------------------------------------------------------- |
-| `connection`   | `inspect`, `discover`, `zones`, `start`, `attach`, `detach`, `disconnect` |
-| `provisioning` | `plan`, `approve`, `reject`, `apply`, `attempt`, `receipt`                |
-| `verification` | `observe`                                                                 |
-| `cleanup`      | `plan`, `approve`, `reject`, `apply`                                      |
+| Group          | Methods                                                                                |
+| -------------- | -------------------------------------------------------------------------------------- |
+| `connection`   | `inspect`, `discover`, `zones`, `start`, `reconnect`, `attach`, `detach`, `disconnect` |
+| `provisioning` | `plan`, `approve`, `reject`, `apply`, `attempt`, `receipt`                             |
+| `verification` | `observe`                                                                              |
+| `cleanup`      | `plan`, `approve`, `reject`, `apply`                                                   |
 
 `connection.zones(filter?)` answers with every zone this owner's connections reach, how each
 connection stands, and the provider catalog, so a picker builds itself from one call.
 `connection.start` takes an optional `domain`: without one it connects the account alone.
+`connection.reconnect({ connectionId, method })` replaces the credential behind a connection the
+owner already holds, keeping its domains.
 `provisioning.receipt(receiptId)` reads what one apply landed, for a surface holding the id rather
 than the attempt.
 

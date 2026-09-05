@@ -29,6 +29,46 @@ const layerFor = (...definitions: ReadonlyArray<Testing.FakeProvider>) =>
 const withPrincipal = Effect.provideService(Principal.Service, Testing.principal);
 
 describe("Connect", () => {
+  it.effect("re-credits a connection in place, keeping its domains and its id", () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    return Effect.gen(function* () {
+      const started = yield* Connect.start({
+        provider: "fake",
+        method: Connect.Method.token("first"),
+        domain: "app.example.com",
+      });
+      if (started._tag !== "Connected") throw new Error("expected a connection");
+      const again = yield* Connect.reconnect({
+        connectionId: started.connection.id,
+        method: Connect.Method.token("second"),
+      });
+      assert.strictEqual(again._tag, "Connected");
+      if (again._tag !== "Connected") return;
+      // The same connection, so the domain on it is untouched and nothing was attached twice.
+      assert.strictEqual(again.connection.id, started.connection.id);
+      const snapshot = yield* Connect.inspect("app.example.com");
+      assert.strictEqual(snapshot.connection?.id, started.connection.id);
+      assert.strictEqual(snapshot.attachment?.id, started.attachment?.id);
+      assert.strictEqual(snapshot.authorization?.revocation, "active");
+      // The new credential is the live one, so the zones the connection reaches still list.
+      const zones = yield* Connect.zones();
+      assert.deepStrictEqual(
+        zones.connections.map(({ status }) => status),
+        ["connected"],
+      );
+    }).pipe(withPrincipal, Effect.provide(layerFor(fake)));
+  });
+
+  it.effect("refuses to re-credit a connection this owner does not have", () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    return Effect.gen(function* () {
+      const outcome = yield* Effect.flip(
+        Connect.reconnect({ connectionId: "conn_missing", method: Connect.Method.token("t") }),
+      );
+      assert.strictEqual(outcome.reason._tag, "NotFound");
+    }).pipe(withPrincipal, Effect.provide(layerFor(fake)));
+  });
+
   it.effect("connects with a token, attaches the domain, and reports it through inspect", () => {
     const fake = Testing.provider({ zones: ["example.com"] });
     return Effect.gen(function* () {

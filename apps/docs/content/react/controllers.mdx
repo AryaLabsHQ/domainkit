@@ -27,13 +27,13 @@ Every part of the flow is a hook. Each takes one options object and returns a co
 | `SelectionRequired` | The credential reaches several matching zones                                             |
 | `Failure`           | Carries the `DomainKit.Error`                                                             |
 
-| Command                                             | Does                                                      |
-| --------------------------------------------------- | --------------------------------------------------------- |
-| `connect({ provider, method, values?, returnTo? })` | Starts a connection                                       |
-| `reuse({ connectionId, zone? })`                    | Attaches the domain to a connection the owner already has |
-| `select(zone)`                                      | Answers `SelectionRequired`                               |
-| `detach()` / `disconnect()`                         | Releases the domain, or the whole connection              |
-| `refresh()` / `retry()`                             | Re-inspects, or re-runs the step that failed              |
+| Command                                             | Does                                                                                            |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `connect({ provider, method, values?, returnTo? })` | Starts a connection, or proves the same provider again for a connection that needs reconnecting |
+| `reuse({ connectionId, zone? })`                    | Attaches the domain to a connection the owner already has                                       |
+| `select(zone)`                                      | Answers `SelectionRequired`                                                                     |
+| `detach()` / `disconnect()`                         | Releases the domain, or the whole connection                                                    |
+| `refresh()` / `retry()`                             | Re-inspects, or re-runs the step that failed                                                    |
 
 Discovery runs on mount whenever the transport declares it and the domain has no connection yet. A
 discovery failure leaves `discovery` null and the provider list still renders: discovery is an
@@ -60,8 +60,10 @@ card can say how many records it holds without another call.
 `Loading`, `Ready { zones, connections, providers }`, or `Failure`; a connection whose credential
 the provider turned down appears in `connections` as `reconnect` and contributes no zones.
 
-`Connect.useAccounts({ returnTo })` reads the same listing and adds one command,
-`connect({ provider, method, values? })`, which starts a provider with no domain attached. A token
+`Connect.useAccounts({ returnTo })` reads the same listing and adds two commands:
+`connect({ provider, method, values? })` starts a provider with no domain attached, and
+`reconnect({ connectionId, provider, method, values? })` replaces the credential behind a
+connection the owner already holds, keeping its domains. A token
 method finishes in place; an interactive one redirects and returns through the library's own
 callback. `Connect.DomainField` is the default surface over both.
 

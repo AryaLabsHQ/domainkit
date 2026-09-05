@@ -110,7 +110,14 @@ single-flights through the storage lock so two requests never refresh at once. I
 
 An access token expiring is not the authorization expiring: a credential with a refresh token stays
 usable. A credential the provider will no longer refresh surfaces as the `Reconnect` reason, and the
-host asks the customer to connect again.
+host asks the customer to prove the account again.
+
+`Connect.reconnect({ connectionId, method })` is what answers that. It puts a fresh credential
+behind the authorization the connection already points at, so the connection keeps its id and every
+domain on it stays attached. Starting again would create a second account and fail on the first
+domain, which is already attached to the connection the provider turned down. The zone check on
+every session still applies, so a credential for a different account fails `NotFound` on a zone it
+cannot reach rather than writing somewhere else.
 
 `Connect.Policy` sets `refreshBeforeMs`, the continuation lifetime, and `allowReuse`, which decides
 whether one of an owner's connections may serve a given domain.

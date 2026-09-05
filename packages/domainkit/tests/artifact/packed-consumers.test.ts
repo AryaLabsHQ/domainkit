@@ -186,6 +186,7 @@ export const connectionOnly: Transport.Interface = {
     discover: () => Effect.die("unused"),
     zones: () => Effect.die("unused"),
     start: () => Effect.die("unused"),
+    reconnect: () => Effect.die("unused"),
     attach: () => Effect.die("unused"),
     detach: () => Effect.die("unused"),
     disconnect: () => Effect.die("unused"),

@@ -163,6 +163,18 @@ export interface Interface {
     readonly domain?: string;
     readonly callbackUrl?: string;
   }) => Fx<Started>;
+  /**
+   * Replace the credential behind a connection the owner already holds, keeping the connection and
+   * every domain attached to it. This is what a customer means by reconnecting: starting again
+   * would mint a second account and leave the domains on the one the provider turned down. The
+   * provider is the connection's own; a credential for a different account is the customer's
+   * choice, and the zone check on every session catches a zone it can no longer reach.
+   */
+  readonly reconnect: (input: {
+    readonly connectionId: string;
+    readonly method: Method;
+    readonly callbackUrl?: string;
+  }) => Fx<Started>;
   /** Finish an interactive connection from the provider callback (the full callback URL). */
   readonly complete: (input: {
     readonly continuationId: string;
@@ -216,6 +228,8 @@ const Payload = Schema.Struct({
   codeVerifier: Schema.NullOr(Schema.String),
   callbackUrl: Schema.String,
   domain: Schema.NullOr(Schema.String),
+  /** Set when the flow is re-crediting a connection rather than making one. */
+  connectionId: Schema.NullOr(Schema.String),
 });
 
 const Target = Schema.Struct({
@@ -404,6 +418,47 @@ export const make: Effect.Effect<
       });
       const connection = yield* storage.connections.create(authorization.id);
       return { connection, session };
+    });
+
+  /**
+   * Put a fresh credential behind an authorization the owner already has. The row keeps its id, so
+   * every connection over it, and every domain on those connections, stays exactly where it is.
+   */
+  const replaceWith = (input: {
+    readonly definition: Provider.Definition;
+    readonly authorizationId: string;
+    readonly method: Storage.AuthMethod;
+    readonly issued: Provider.IssuedCredential;
+    readonly requiredCapabilities: ReadonlyArray<Storage.Capability>;
+  }): Fx<void> =>
+    Effect.gen(function* () {
+      const principal = yield* Principal.Service;
+      const session = input.definition.session(input.issued);
+      const held = yield* session.capabilities();
+      const missing = input.requiredCapabilities.filter((capability) => !held.includes(capability));
+      if (missing.length > 0) {
+        return yield* Errors.fail(
+          new Reason.Forbidden({
+            message: `${input.definition.name} credential lacks ${missing.join(", ")}`,
+          }),
+        );
+      }
+      const authorization = new Storage.Authorization({
+        id: input.authorizationId,
+        ownerId: principal.ownerId,
+        provider: input.definition.id,
+        method: input.method,
+        capabilities: held,
+        context: yield* Provider.encodeContext(input.definition, input.issued.context),
+        revocation: "active",
+        createdBy: principal.actorId,
+        createdAt: yield* DateTime.now,
+      });
+      yield* storage.authorizations.upsert({
+        authorization,
+        credential: yield* seal(input.issued),
+        expectedId: input.authorizationId,
+      });
     });
 
   const attachWith = (input: {
@@ -628,8 +683,6 @@ export const make: Effect.Effect<
   const start: Interface["start"] = (input) =>
     Effect.gen(function* () {
       yield* recover;
-      const principal = yield* Principal.Service;
-      const policy = yield* Policy;
       const definition = yield* providers.get(input.provider);
       if (input.domain !== undefined) yield* DomainName.decode(input.domain);
       switch (input.method._tag) {
@@ -652,55 +705,109 @@ export const make: Effect.Effect<
           return started(connection, attached);
         }
         case "OAuth":
-        case "Integration": {
-          const interactive =
-            input.method._tag === "OAuth" ? definition.auth.oauth : definition.auth.integration;
-          if (interactive === undefined) {
-            return yield* invalid(
-              `${definition.name} does not offer ${input.method._tag.toLowerCase()} connections`,
-              "method",
-            );
-          }
-          if (input.callbackUrl === undefined) {
-            return yield* invalid("Interactive connections need a callbackUrl", "callbackUrl");
-          }
-          const continuationId = yield* fresh("cont");
-          const pkce = input.method._tag === "OAuth" ? yield* OAuth.pkce() : null;
-          const redirect =
-            input.method._tag === "OAuth"
-              ? yield* (interactive as Provider.OAuthAuth).start({
-                  state: continuationId,
-                  callbackUrl: input.callbackUrl,
-                  codeChallenge: pkce?.codeChallenge ?? "",
-                })
-              : yield* (interactive as Provider.IntegrationAuth).start({
-                  state: continuationId,
-                  callbackUrl: input.callbackUrl,
-                });
-          yield* storage.continuations.put(
-            new Storage.Continuation({
-              id: continuationId,
-              ownerId: principal.ownerId,
-              actorId: principal.actorId,
-              provider: definition.id,
-              payload: Schema.encodeSync(Payload)({
-                method: input.method._tag === "OAuth" ? "oauth" : "integration",
-                codeVerifier: pkce?.codeVerifier ?? null,
-                callbackUrl: input.callbackUrl,
-                domain: input.domain ?? null,
-              }),
-              returnTo: input.method.returnTo ?? null,
-              expiresAt: DateTime.addDuration(
-                yield* DateTime.now,
-                Duration.millis(policy.continuationTtlMs),
-              ),
-            }),
-          );
-          return Started.Redirect({
-            authorizationUrl: redirect.authorizationUrl,
-            continuationId,
+        case "Integration":
+          return yield* redirectFor({
+            definition,
+            method: input.method,
+            callbackUrl: input.callbackUrl,
+            domain: input.domain ?? null,
+            connectionId: null,
           });
+      }
+    });
+
+  /** The redirect an interactive method answers with, and the continuation that finishes it. */
+  const redirectFor = (input: {
+    readonly definition: Provider.Definition;
+    readonly method: Extract<Method, { readonly _tag: "OAuth" | "Integration" }>;
+    readonly callbackUrl: string | undefined;
+    readonly domain: string | null;
+    readonly connectionId: string | null;
+  }): Fx<Started> =>
+    Effect.gen(function* () {
+      const principal = yield* Principal.Service;
+      const policy = yield* Policy;
+      const interactive =
+        input.method._tag === "OAuth"
+          ? input.definition.auth.oauth
+          : input.definition.auth.integration;
+      if (interactive === undefined) {
+        return yield* invalid(
+          `${input.definition.name} does not offer ${input.method._tag.toLowerCase()} connections`,
+          "method",
+        );
+      }
+      if (input.callbackUrl === undefined) {
+        return yield* invalid("Interactive connections need a callbackUrl", "callbackUrl");
+      }
+      const callbackUrl = input.callbackUrl;
+      const continuationId = yield* fresh("cont");
+      const pkce = input.method._tag === "OAuth" ? yield* OAuth.pkce() : null;
+      const redirect =
+        input.method._tag === "OAuth"
+          ? yield* (interactive as Provider.OAuthAuth).start({
+              state: continuationId,
+              callbackUrl,
+              codeChallenge: pkce?.codeChallenge ?? "",
+            })
+          : yield* (interactive as Provider.IntegrationAuth).start({
+              state: continuationId,
+              callbackUrl,
+            });
+      yield* storage.continuations.put(
+        new Storage.Continuation({
+          id: continuationId,
+          ownerId: principal.ownerId,
+          actorId: principal.actorId,
+          provider: input.definition.id,
+          payload: Schema.encodeSync(Payload)({
+            method: input.method._tag === "OAuth" ? "oauth" : "integration",
+            codeVerifier: pkce?.codeVerifier ?? null,
+            callbackUrl,
+            domain: input.domain,
+            connectionId: input.connectionId,
+          }),
+          returnTo: input.method.returnTo ?? null,
+          expiresAt: DateTime.addDuration(
+            yield* DateTime.now,
+            Duration.millis(policy.continuationTtlMs),
+          ),
+        }),
+      );
+      return Started.Redirect({ authorizationUrl: redirect.authorizationUrl, continuationId });
+    });
+
+  const reconnect: Interface["reconnect"] = (input) =>
+    Effect.gen(function* () {
+      yield* recover;
+      const connection = yield* storage.connections.get(input.connectionId);
+      const existing = yield* storage.authorizations.get(connection.authorizationId);
+      const definition = yield* providers.get(existing.provider);
+      switch (input.method._tag) {
+        case "Token": {
+          const token = definition.auth.token;
+          if (token === undefined) {
+            return yield* invalid(`${definition.name} does not accept tokens`, "method");
+          }
+          const issued = yield* token.authenticate(input.method.values);
+          yield* replaceWith({
+            definition,
+            authorizationId: existing.id,
+            method: "token",
+            issued,
+            requiredCapabilities: token.requiredCapabilities,
+          });
+          return Started.Connected({ connection, attachment: null });
         }
+        case "OAuth":
+        case "Integration":
+          return yield* redirectFor({
+            definition,
+            method: input.method,
+            callbackUrl: input.callbackUrl,
+            domain: null,
+            connectionId: connection.id,
+          });
       }
     });
 
@@ -769,6 +876,19 @@ export const make: Effect.Effect<
                     params,
                   });
                 });
+          if (payload.connectionId !== null) {
+            const held = yield* storage.connections.get(payload.connectionId);
+            const existing = yield* storage.authorizations.get(held.authorizationId);
+            yield* replaceWith({
+              definition,
+              authorizationId: existing.id,
+              method: payload.method,
+              issued,
+              requiredCapabilities: [],
+            });
+            yield* storage.continuations.consume(input.continuationId).pipe(Effect.ignore);
+            return Started.Connected({ connection: held, attachment: null });
+          }
           const { connection, session } = yield* connectWith({
             definition,
             method: payload.method,
@@ -845,6 +965,7 @@ export const make: Effect.Effect<
     zones,
     discover,
     start,
+    reconnect,
     complete,
     attach,
     detach: (attachmentId) => storage.attachments.remove(attachmentId),
@@ -871,6 +992,7 @@ export const inspect = accessor((service) => service.inspect);
 export const zones = accessor((service) => service.zones);
 export const discover = accessor((service) => service.discover);
 export const start = accessor((service) => service.start);
+export const reconnect = accessor((service) => service.reconnect);
 export const complete = accessor((service) => service.complete);
 export const attach = accessor((service) => service.attach);
 export const detach = accessor((service) => service.detach);

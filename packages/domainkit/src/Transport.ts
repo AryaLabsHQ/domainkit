@@ -56,6 +56,11 @@ export interface ConnectionGroup {
     readonly provider: string;
     readonly method: Method;
   }) => Fx<Started>;
+  /** Prove an account again for a connection this owner holds, keeping its domains. */
+  readonly reconnect: (input: {
+    readonly connectionId: string;
+    readonly method: Method;
+  }) => Fx<Started>;
   readonly attach: (input: {
     readonly connectionId: string;
     readonly domain: string;
@@ -254,6 +259,13 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Interfac
             ? { provider: input.provider, method: input.method }
             : { domain: input.domain, provider: input.provider, method: input.method },
         ),
+        success: Server.Started,
+      }),
+    reconnect: (input) =>
+      request({
+        method: "POST",
+        path: `/connections/${encodeURIComponent(input.connectionId)}/reconnections`,
+        body: Schema.encodeSync(Server.ReconnectPayload)({ method: input.method }),
         success: Server.Started,
       }),
     attach: (input) =>

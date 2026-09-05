@@ -24,12 +24,12 @@ narrow import: see [entry points](/docs/reference/entry-points#one-subpath-per-n
 Each one is a `Service` tag, an `Interface`, a `layer`, and free accessors that read the service
 from context (`Provision.plan(...)`). `Policy` values are `Context.Reference`s with defaults.
 
-| Namespace   | Owns                                                                                                        |
-| ----------- | ----------------------------------------------------------------------------------------------------------- |
-| `Connect`   | `inspect`, `discover`, `zones`, `start`, `complete`, `attach`, `detach`, `disconnect`, `refresh`, `session` |
-| `Provision` | `plan`, `approve`, `reject`, `apply`, `get`, `latest` over durable attempts                                 |
-| `Cleanup`   | The same verbs over a plan built from an apply receipt                                                      |
-| `Verify`    | `observe`, `attachEvidence`, `latest`, and the evidence classes they produce                                |
+| Namespace   | Owns                                                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `Connect`   | `inspect`, `discover`, `zones`, `start`, `reconnect`, `complete`, `attach`, `detach`, `disconnect`, `refresh`, `session` |
+| `Provision` | `plan`, `approve`, `reject`, `apply`, `get`, `latest` over durable attempts                                              |
+| `Cleanup`   | The same verbs over a plan built from an apply receipt                                                                   |
+| `Verify`    | `observe`, `attachEvidence`, `latest`, and the evidence classes they produce                                             |
 
 ## Host seams
 

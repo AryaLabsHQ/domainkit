@@ -71,8 +71,9 @@ Each namespace exports a `Flow` of its own when only one step belongs in a scree
 
 `readOnly` on `DomainKit.Root`, or on one `Domain.Flow`, removes every slot's write surface rather
 than disabling it. The connection slot states who serves the zone, or the catalog's `notConnected`
-sentence when nothing does, in place of a connect control; the actions slot renders nothing; and the
-records and verification slots are untouched.
+sentence when nothing does, in place of a connect control; the records table keeps its rows and
+drops the action over them, and nothing plans, because planning is a write; the verification slot
+is untouched.
 
 A slot of your own asks which mode it is in through `DomainKit.useReadOnly()`, and
 `DomainKit.ReadOnly` narrows a subtree.

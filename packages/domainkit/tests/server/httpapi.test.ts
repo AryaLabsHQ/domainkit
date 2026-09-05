@@ -718,7 +718,7 @@ describe("Server.api", () => {
   it("generates an OpenAPI document covering every route", () => {
     const spec = OpenApi.fromApi(Server.api);
     const operations = Object.values(spec.paths).flatMap((item) => Object.values(item));
-    assert.strictEqual(operations.length, 16);
+    assert.strictEqual(operations.length, 17);
     assert.deepStrictEqual(
       operations
         .map((operation) => (operation as { readonly operationId: string }).operationId)
@@ -737,6 +737,7 @@ describe("Server.api", () => {
         "domainkit.observe",
         "domainkit.plan",
         "domainkit.receipt",
+        "domainkit.reconnect",
         "domainkit.reject",
         "domainkit.start",
         "domainkit.zones",

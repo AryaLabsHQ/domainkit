@@ -260,13 +260,18 @@ describe("Connect.DomainField", () => {
       },
     };
     render(<Harness transport={failing} />);
-    // Reconnecting is the connection's own surface: starting a provider here would add a second
-    // account beside the rejected one, so the field says which account needs it and stops there.
+    // Proving the account again re-credits the connection the workspace already holds rather than
+    // adding a second one beside it, so the field asks for the credential and reconnects.
+    await user.click(await screen.findByRole("button", { name: /Reconnect Fake fake/ }));
+    await user.type(await screen.findByLabelText(/Token/), "tok");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
     await waitFor(() =>
-      expect(
-        document.querySelector("[data-domainkit-part='domain-field-reconnect']")?.textContent,
-      ).toBe("Reconnect Fake fake"),
+      expect(transport.calls.some((call) => call.method === "connection.reconnect")).toBe(true),
     );
-    expect(screen.queryByRole("button", { name: /Reconnect/ })).toBeNull();
+    const call = transport.calls.find((entry) => entry.method === "connection.reconnect");
+    expect(call?.input).toMatchObject({
+      connectionId: listing.connections[0]?.connectionId,
+      method: { _tag: "Token", values: { token: "tok" } },
+    });
   });
 });

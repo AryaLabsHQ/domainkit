@@ -130,6 +130,11 @@ export interface AccountsController {
   readonly providers: ReadonlyArray<Provider.Descriptor>;
   /** Connect a provider with no domain attached. The account is what the customer is granting. */
   readonly connect: (input: ConnectAccountInput) => void;
+  /**
+   * Prove an account again for a connection the owner already holds. The connection and its
+   * domains stay; only the credential behind it is replaced.
+   */
+  readonly reconnect: (input: ConnectAccountInput & { readonly connectionId: string }) => void;
   readonly refresh: () => void;
 }
 
@@ -154,8 +159,8 @@ export function useAccounts({ returnTo }: AccountsOptions = {}): AccountsControl
   const [command, setCommand] = useState<AccountsState | null>(null);
 
   const refresh = listing.refresh;
-  const connect = useCallback(
-    (input: ConnectAccountInput) => {
+  const submit = useCallback(
+    (input: ConnectAccountInput & { readonly connectionId?: string }) => {
       if (connection === undefined) return;
       const destination = returnTo === undefined ? currentUrl() : returnTo;
       const interactive = destination === null ? {} : { returnTo: destination };
@@ -166,7 +171,11 @@ export function useAccounts({ returnTo }: AccountsOptions = {}): AccountsControl
             ? Transport.Method.oauth(interactive)
             : Transport.Method.integration(interactive);
       setCommand(AccountsState.Submitting({ provider: input.provider }));
-      runner.run(connection.start({ method, provider: input.provider }), {
+      const granting =
+        input.connectionId === undefined
+          ? connection.start({ method, provider: input.provider })
+          : connection.reconnect({ connectionId: input.connectionId, method });
+      runner.run(granting, {
         onFailure: (error) => setCommand(AccountsState.Failure({ error })),
         onSuccess: (started) => {
           if (started._tag === "Redirect") {
@@ -182,6 +191,11 @@ export function useAccounts({ returnTo }: AccountsOptions = {}): AccountsControl
     },
     [connection, navigate, refresh, returnTo, runner],
   );
+  const connect = useCallback((input: ConnectAccountInput) => submit(input), [submit]);
+  const reconnect = useCallback(
+    (input: ConnectAccountInput & { readonly connectionId: string }) => submit(input),
+    [submit],
+  );
 
   const state =
     command ??
@@ -193,6 +207,7 @@ export function useAccounts({ returnTo }: AccountsOptions = {}): AccountsControl
 
   return {
     connect,
+    reconnect,
     connections: listing.connections,
     providers: listing.providers,
     refresh,
@@ -494,20 +509,27 @@ function Footer({ accounts, found, readOnly, value }: FooterProps): ReactElement
       : accounts.providers.map((provider) => (
           <Offer busy={busy} connect={accounts.connect} key={provider.id} provider={provider} />
         ));
-  // Reconnecting is the connection's own surface: starting a provider from here would leave the
-  // rejected connection where it is and add a second one beside it, so this only says so.
+  // Proving the account again re-credits the connection the workspace already holds, so the
+  // domains on it stay where they are; a second account beside the rejected one would help nobody.
   const reconnects =
-    stale.length === 0
+    readOnly || stale.length === 0
       ? null
-      : stale.map((entry) => (
-          <span
-            data-connection-id={entry.connectionId}
-            data-domainkit-part="domain-field-reconnect"
-            key={entry.connectionId}
-          >
-            {messages.reconnectAccount(named(entry.provider))}
-          </span>
-        ));
+      : stale.map((entry) => {
+          const provider = accounts.providers.find((held) => held.id === entry.provider);
+          return provider === undefined ? null : (
+            <Offer
+              busy={busy}
+              connect={(input) =>
+                accounts.reconnect({ ...input, connectionId: entry.connectionId })
+              }
+              connectionId={entry.connectionId}
+              key={entry.connectionId}
+              label={messages.reconnectAccount(named(entry.provider))}
+              part="domain-field-reconnect"
+              provider={provider}
+            />
+          );
+        });
   if (line === null && offers === null && reconnects === null) return null;
   return (
     <div data-domainkit-part="domain-field-footer">
@@ -521,6 +543,10 @@ function Footer({ accounts, found, readOnly, value }: FooterProps): ReactElement
 interface OfferProps {
   readonly busy: boolean;
   readonly connect: AccountsController["connect"];
+  /** The connection this offer re-credits, when it is a reconnect rather than a new account. */
+  readonly connectionId?: string;
+  readonly label?: string;
+  readonly part?: string;
   readonly provider: Provider.Descriptor;
 }
 
@@ -529,17 +555,25 @@ interface OfferProps {
  * press; a token method asks for the values it declares first, because there is nowhere else on
  * this surface to type them.
  */
-function Offer({ busy, connect, provider }: OfferProps): ReactElement {
+function Offer({
+  busy,
+  connect,
+  connectionId,
+  label,
+  part = "domain-field-connect",
+  provider,
+}: OfferProps): ReactElement {
   const { colorScheme, messages, portalContainer, themeStyle } = useDomainKit();
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<Readonly<Record<string, string>>>({});
   const interactive = provider.methods.find((method) => method.fields === null);
   const typed = provider.methods.find((method) => method.fields !== null);
-  const name = messages.connectTitle(provider.name);
+  const name = label ?? messages.connectTitle(provider.name);
   if (interactive !== undefined || typed === undefined) {
     return (
       <button
-        data-domainkit-part="domain-field-connect"
+        data-connection-id={connectionId}
+        data-domainkit-part={part}
         data-provider={provider.id}
         disabled={busy}
         onClick={() => connect({ method: interactive?.kind ?? "token", provider: provider.id })}
@@ -554,7 +588,8 @@ function Offer({ busy, connect, provider }: OfferProps): ReactElement {
   return (
     <BaseDialog.Root onOpenChange={setOpen} open={open}>
       <BaseDialog.Trigger
-        data-domainkit-part="domain-field-connect"
+        data-connection-id={connectionId}
+        data-domainkit-part={part}
         data-provider={provider.id}
         disabled={busy}
       >
@@ -576,9 +611,7 @@ function Offer({ busy, connect, provider }: OfferProps): ReactElement {
         >
           <div data-domainkit-part="dialog-header">
             <div data-domainkit-part="dialog-heading">
-              <BaseDialog.Title data-domainkit-part="dialog-title">
-                {messages.connectTitle(provider.name)}
-              </BaseDialog.Title>
+              <BaseDialog.Title data-domainkit-part="dialog-title">{name}</BaseDialog.Title>
             </div>
           </div>
           <form

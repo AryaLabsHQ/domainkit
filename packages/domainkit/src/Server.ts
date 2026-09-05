@@ -140,6 +140,10 @@ export const StartPayload = Schema.Struct({
 });
 export type StartPayload = typeof StartPayload.Type;
 
+/** How the customer proves the account again. The provider is the connection's own. */
+export const ReconnectPayload = Schema.Struct({ method: Method });
+export type ReconnectPayload = typeof ReconnectPayload.Type;
+
 /** A zone the connection can serve, named for a customer to pick from. */
 export class Candidate extends Schema.Class<Candidate>("@domainkit/server/Candidate")({
   zone: Schema.String,
@@ -353,6 +357,14 @@ export const group = HttpApiGroup.make("domainkit")
     }),
   )
   .add(
+    HttpApiEndpoint.post("reconnect", "/connections/:connectionId/reconnections", {
+      params: { connectionId: Schema.String },
+      payload: ReconnectPayload,
+      success: Started,
+      error: errors,
+    }),
+  )
+  .add(
     HttpApiEndpoint.post("attach", "/connections/:connectionId/attachments", {
       params: { connectionId: Schema.String },
       payload: AttachPayload,
@@ -466,6 +478,8 @@ export type Services =
 // ---------------------------------------------------------------------------------------------
 
 const START_ROUTE = "/connections";
+const reconnectRoute = (connectionId: string) =>
+  `/connections/${encodeURIComponent(connectionId)}/reconnections`;
 const callbackRoute = (provider: string) => `/callback/${encodeURIComponent(provider)}`;
 
 const invalid = (message: string, field?: string) =>
@@ -782,6 +796,31 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                 ...(callbackUrl === undefined ? {} : { callbackUrl }),
               });
               return yield* startedOf(started, payload.domain);
+            }),
+          ),
+        )
+        .handle("reconnect", ({ params, payload, request }) =>
+          as(
+            "reconnect",
+            request,
+            Effect.gen(function* () {
+              const connection = yield* storage.connections.get(params.connectionId);
+              const authorization = yield* storage.authorizations.get(connection.authorizationId);
+              const callbackUrl =
+                payload.method._tag === "Token"
+                  ? undefined
+                  : (yield* callbackUrlFor({
+                      request,
+                      provider: authorization.provider,
+                      options,
+                      route: reconnectRoute(params.connectionId),
+                    })).toString();
+              const started = yield* connect.reconnect({
+                connectionId: params.connectionId,
+                method: methodOf(payload.method),
+                ...(callbackUrl === undefined ? {} : { callbackUrl }),
+              });
+              return yield* startedOf(started, undefined);
             }),
           ),
         )

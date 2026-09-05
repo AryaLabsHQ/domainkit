@@ -103,6 +103,7 @@ describe("public namespaces", () => {
       "ObservePayload",
       "PlanPayload",
       "Readiness",
+      "ReconnectPayload",
       "Redirect",
       "RejectPayload",
       "SelectionRequired",

@@ -298,6 +298,44 @@ describe("Connect.useController", () => {
     expect(connectedCard()).toBeNull();
   });
 
+  it("re-credits the connection it holds rather than starting a second account", async () => {
+    const { domain, transport } = scenario();
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("The fake transport has no connection group");
+    await connectDomain(transport, domain);
+    const snapshot = await Effect.runPromise(connection.inspect(domain));
+    // The provider turned the credential down, which is what a customer reconnects from.
+    const stale: Transport.Interface = {
+      ...transport,
+      connection: {
+        ...connection,
+        inspect: (target) =>
+          Effect.map(connection.inspect(target), (read) => ({
+            ...read,
+            status: "reconnect" as const,
+          })),
+      },
+    };
+    render(
+      <DomainKit.Root transport={stale}>
+        <Connect.Flow domain={domain} />
+      </DomainKit.Root>,
+    );
+    await click("Connect");
+    await user.type(await screen.findByLabelText(/Token/), "again");
+    await user.click(screen.getByRole("button", { name: "Connect with an API token" }));
+    await waitFor(() =>
+      expect(transport.calls.some((call) => call.method === "connection.reconnect")).toBe(true),
+    );
+    const call = transport.calls.find((entry) => entry.method === "connection.reconnect");
+    expect(call?.input).toMatchObject({
+      connectionId: snapshot.connectionId,
+      method: { _tag: "Token", values: { token: "again" } },
+    });
+    // Starting instead would mint a second account and then fail, because the domain is attached.
+    expect(transport.calls.filter((entry) => entry.method === "connection.start")).toHaveLength(1);
+  });
+
   it("names the account on the card, and how many records this domain holds", async () => {
     const { domain, requirements, transport, zone } = scenario();
     await connectDomain(transport, domain);

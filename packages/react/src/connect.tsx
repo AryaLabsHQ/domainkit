@@ -353,10 +353,20 @@ export function useController({ domain, returnTo }: Options): Controller {
           : input.method === "oauth"
             ? Transport.Method.oauth(interactive)
             : Transport.Method.integration(interactive);
-      submit(connection.start({ domain, method, provider: input.provider }), {
-        method: input.method,
-        provider: input.provider,
-      });
+      // A domain whose connection the provider turned down is not asking for a second account:
+      // proving the same provider again re-credits the connection it already has, and the domains
+      // on it stay where they are. Starting instead would fail, because the domain is attached.
+      const snapshot = held.current.snapshot;
+      const stale =
+        snapshot?.status === "reconnect" &&
+        snapshot.provider === input.provider &&
+        snapshot.connectionId !== null;
+      submit(
+        stale && snapshot?.connectionId != null
+          ? connection.reconnect({ connectionId: snapshot.connectionId, method })
+          : connection.start({ domain, method, provider: input.provider }),
+        { method: input.method, provider: input.provider },
+      );
     },
     [connection, domain, returnTo, submit],
   );
