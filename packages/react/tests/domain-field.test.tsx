@@ -174,6 +174,28 @@ describe("Connect.DomainField", () => {
     expect(second.id).toContain(last?.connection?.connectionId ?? "nothing");
   });
 
+  it("drops the account it was completed from once the value leaves that zone", async () => {
+    const { transport, zones } = scenario();
+    await connectAccount(transport);
+    const resolved: Array<{
+      readonly domain: string;
+      readonly connection: Connect.Placement | null;
+    }> = [];
+    render(<Harness onResolve={(reported) => resolved.push(reported)} transport={transport} />);
+    const [first] = [...zones].sort();
+    if (first === undefined) throw new Error("the scenario has no zones");
+    await user.click(input());
+    await user.type(input(), first.slice(0, 12));
+    await waitFor(() => expect(options()).toHaveLength(1));
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(resolved.at(-1)?.connection?.zone).toBe(first));
+    // The preference is a rule about the value, not a flag the field holds: a value that moves out
+    // of the zone loses it however it moved.
+    await user.clear(input());
+    await user.type(input(), "app.elsewhere.test");
+    await waitFor(() => expect(resolved.at(-1)?.connection).toBeNull());
+  });
+
   it("says a domain outside every connected zone is one the customer adds by hand", async () => {
     const { transport } = scenario();
     await connectAccount(transport);

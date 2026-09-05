@@ -331,7 +331,9 @@ export function DomainField({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   // Which account the customer completed from, so a zone two accounts both serve stays the one
-  // they picked rather than whichever the listing happens to hold first.
+  // they picked rather than whichever the listing happens to hold first. `placementOf` honours it
+  // only while the value still sits in that zone, so a value that moves — whether the customer
+  // typed it or the host set it — loses the preference by the same rule.
   const [chosen, setChosen] = useState<Placement | null>(null);
   const suggestions = suggestionsFor(value, accounts.zones);
   const highlighted = suggestions[Math.min(active, Math.max(suggestions.length - 1, 0))] ?? null;
@@ -381,15 +383,6 @@ export function DomainField({
             id={inputId}
             onChange={(event) => {
               onChange(event.target.value);
-              // Typing on is a new choice: the account only stands while the value it was picked
-              // for still sits in that zone.
-              setChosen((held) =>
-                held === null ||
-                placementOf(event.target.value, accounts.zones, held)?.placement.connectionId !==
-                  held.connectionId
-                  ? null
-                  : held,
-              );
               setActive(0);
               setOpen(true);
             }}

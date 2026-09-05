@@ -267,7 +267,7 @@ export const english: Catalog = {
   approve: "Approve",
   addRecords: (count) => (count === 1 ? "Add 1 record" : `Add ${count} records`),
   decline: "Decline",
-  everyRecordConflicts: "Resolve the records above at your provider, then review again.",
+  everyRecordConflicts: "Resolve the records above at your provider, then check again.",
   reviewChanges: "Review changes",
   cleanUp: "Remove records",
   checkDns: "Check DNS",

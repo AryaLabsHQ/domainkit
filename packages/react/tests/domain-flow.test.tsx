@@ -836,7 +836,7 @@ describe("Domain.Flow one-click onboarding", () => {
     await waitFor(() => expect(planAction()).not.toBeNull(), patient);
     expect(planAction()?.hasAttribute("disabled")).toBe(true);
     expect(document.querySelector("[data-domainkit-part='plan-blocked']")?.textContent).toBe(
-      "Resolve the records above at your provider, then review again.",
+      "Resolve the records above at your provider, then check again.",
     );
   });
 });
