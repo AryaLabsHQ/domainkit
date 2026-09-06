@@ -28,6 +28,15 @@ Use the `integrations.sh` endpoint for provider artwork, or pass an asset hosted
 </ProviderMark>
 ```
 
+The mark is 32px. Pass `size-4` through `className` for the compact marks a picker or a domain row
+uses. The corner radius is a share of the size, so every size clips its artwork to the same shape.
+
+```tsx
+<ProviderMark className="size-4" label="Cloudflare">
+  <img alt="" src="https://integrations.sh/logo/cloudflare.com?sz=64" />
+</ProviderMark>
+```
+
 ## API
 
 | Prop       | Type        | Required | Description                                   |
