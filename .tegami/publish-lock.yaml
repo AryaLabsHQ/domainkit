@@ -1,26 +1,26 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: patch\n---\n\n## A domain that lost its records is offered them again\n\n`Domain.useFlow` plans again when an observation made after the apply reads one of a domain's\nrecords back missing or wrong, so a customer whose records were deleted at the provider gets \"Add N\nrecords\" instead of a count of what once landed. Every observation reporting the same drift is one\nreason to plan, an apply observes the domain again to read back what it wrote, and a removal the\nflow is carrying out is not drift.\n"
-    filename: react-replan-after-drift.md
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Support Cloudflare public OAuth clients\n\n`Cloudflare.Options.oauth` accepts PKCE-only public clients with `clientAuth: \"none\"` and no\nclient secret, while confidential clients require `clientSecret` and default to\n`client_secret_basic`. Cloudflare's default scopes use the current `zone.read`, `dns.read`, and\n`dns.write` scope ids, with `offline_access` retained for refresh.\n"
+    filename: domainkit-cloudflare-oauth-public-clients.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
-  - id: npm:@domainkit/capsuledb
-    updated: true
   - changelogIds:
-      - react-replan-after-drift.md
-    id: npm:@domainkit/react
+      - domainkit-cloudflare-oauth-public-clients.md
+    id: npm:domainkit
     updated: true
   - id: npm:@domainkit/docs
     updated: false
-  - id: npm:domainkit
+  - id: npm:@domainkit/capsuledb
+    updated: true
+  - id: npm:@domainkit/react
     updated: true
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
+  - id: npm:domainkit
+  - id: npm:@domainkit/docs
   - id: npm:@domainkit/capsuledb
   - id: npm:@domainkit/react
-  - id: npm:@domainkit/docs
-  - id: npm:domainkit
