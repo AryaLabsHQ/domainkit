@@ -31,38 +31,52 @@ export type AccountContext = typeof AccountContext.Type;
 
 export interface Options {
   /** Omit to offer tokens only. */
-  readonly oauth?: {
-    readonly clientId: string | Config.Config<string>;
-    readonly clientSecret: Redacted.Redacted<string> | Config.Config<Redacted.Redacted<string>>;
-    /** Scope ids assigned to the OAuth client. Default: `zone:read`, `dns_records:edit`, `offline_access`. */
-    readonly scopes?: ReadonlyArray<string>;
-    /** Default `client_secret_basic`. */
-    readonly clientAuth?: OAuth.ClientAuth;
-    /**
-     * Origin for consent, token exchange, and revocation, which Cloudflare serves at
-     * `/oauth2/auth`, `/oauth2/token`, and `/oauth2/revoke` beneath it. Default
-     * `https://dash.cloudflare.com`; a stage points it at an emulator that mounts the same three
-     * paths. It stays separate from `baseUrl` because in production these are different hosts:
-     * `dash.cloudflare.com` for OAuth, `api.cloudflare.com/client/v4` for the REST API.
-     */
-    readonly issuer?: string;
-    /**
-     * Where the server reaches the OAuth endpoints when that differs from where the browser does,
-     * for example an API in a container reaching an emulator through `host.docker.internal`.
-     * Defaults to `issuer`.
-     */
-    readonly serverOrigin?: string;
-    /**
-     * Permit `http:` for these endpoints when they are not loopback, such as an emulator reached
-     * through `host.docker.internal`. Development only: the client secret, the code, and the tokens
-     * cross the network in the clear, and a name resolves wherever the machine has been told to.
-     * Loopback needs no flag.
-     */
-    readonly allowPlaintext?: boolean;
-  };
+  readonly oauth?: OAuthOptions;
   readonly fetch?: Fetch;
   readonly baseUrl?: string;
 }
+
+interface OAuthOptionsBase {
+  readonly clientId: string | Config.Config<string>;
+  /** Scope ids assigned to the OAuth client. Default: `zone.read`, `dns.write`, `offline_access`. */
+  readonly scopes?: ReadonlyArray<string>;
+  /**
+   * Origin for consent, token exchange, and revocation, which Cloudflare serves at
+   * `/oauth2/auth`, `/oauth2/token`, and `/oauth2/revoke` beneath it. Default
+   * `https://dash.cloudflare.com`; a stage points it at an emulator that mounts the same three
+   * paths. It stays separate from `baseUrl` because in production these are different hosts:
+   * `dash.cloudflare.com` for OAuth, `api.cloudflare.com/client/v4` for the REST API.
+   */
+  readonly issuer?: string;
+  /**
+   * Where the server reaches the OAuth endpoints when that differs from where the browser does,
+   * for example an API in a container reaching an emulator through `host.docker.internal`.
+   * Defaults to `issuer`.
+   */
+  readonly serverOrigin?: string;
+  /**
+   * Permit `http:` for these endpoints when they are not loopback, such as an emulator reached
+   * through `host.docker.internal`. Development only: the client secret, the code, and the tokens
+   * cross the network in the clear, and a name resolves wherever the machine has been told to.
+   * Loopback needs no flag.
+   */
+  readonly allowPlaintext?: boolean;
+}
+
+/** A public OAuth client uses PKCE and has no client secret. */
+export interface PublicOAuthOptions extends OAuthOptionsBase {
+  readonly clientAuth: "none";
+  readonly clientSecret?: never;
+}
+
+/** A confidential OAuth client authenticates with a required client secret. */
+export interface ConfidentialOAuthOptions extends OAuthOptionsBase {
+  /** Defaults to `client_secret_basic`. */
+  readonly clientAuth?: "client_secret_basic" | "client_secret_post";
+  readonly clientSecret: Redacted.Redacted<string> | Config.Config<Redacted.Redacted<string>>;
+}
+
+export type OAuthOptions = PublicOAuthOptions | ConfidentialOAuthOptions;
 
 const defaultIssuer = "https://dash.cloudflare.com";
 
@@ -90,7 +104,7 @@ export const server: OAuth.Server = endpointsOf({
   server: defaultIssuer,
 });
 
-const defaultScopes = ["zone:read", "dns_records:edit", "offline_access"];
+const defaultScopes = ["zone.read", "dns.write", "offline_access"];
 const capabilities = ["dns:read", "dns:write"] as const;
 
 /** OAuth credentials pack both tokens into `secret`; token credentials are the token itself. */
@@ -138,6 +152,9 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
   const oauthClient = (oauth: NonNullable<Options["oauth"]>) =>
     Effect.gen(function* () {
       const clientId = yield* resolve(oauth.clientId, "oauth.clientId");
+      if (oauth.clientAuth === "none") {
+        return { clientId, clientSecret: null, clientAuth: "none" } satisfies OAuth.Client;
+      }
       const clientSecret = yield* resolve(oauth.clientSecret, "oauth.clientSecret");
       return {
         clientId,

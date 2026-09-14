@@ -14,9 +14,10 @@ several accounts. An **account-owned token** cannot be verified without naming i
 token method declares an optional `accountId` field and verification runs against that account.
 
 OAuth uses the authorization code flow against `dash.cloudflare.com`. The scope ids come from the
-host's registered OAuth client; the default set is `zone:read`, `dns_records:edit`, and
-`offline_access`. The credential packs the access and refresh tokens together, so refresh and
-revocation need nothing from the host.
+host's registered OAuth client; the default set is `zone.read`, `dns.write`, and `offline_access`.
+The credential packs the access and refresh tokens together, so refresh and revocation need
+nothing from the host. A public client sets `clientAuth: "none"` and uses PKCE without a secret;
+confidential clients require `clientSecret` and default to `client_secret_basic`.
 
 `oauth.issuer` names the origin those three endpoints hang off, `/oauth2/auth`, `/oauth2/token`,
 and `/oauth2/revoke`, so a stage points consent at an emulator that mounts the same paths and runs
@@ -35,8 +36,8 @@ name anywhere and the name alone proves nothing. That flag is for a development 
 client secret, the code, and the tokens cross the network in the clear.
 
 Cloudflare's token verification does not enumerate DNS permissions, so the capability claim records
-what the definition requires rather than what the token proves. A token without `dns_records:edit`
-verifies and fails at the first write with `Forbidden`.
+what the definition requires rather than what the token proves. A token without `dns.write` verifies
+and fails at the first write with `Forbidden`.
 
 Targets carry the Cloudflare zone id and the nameservers Cloudflare reports. A target with no zone
 id cannot hold records and fails `Unsupported`. Existing proxied records are readable; every record

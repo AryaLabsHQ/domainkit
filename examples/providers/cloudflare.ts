@@ -9,7 +9,7 @@ export const tokensOnly = Cloudflare.provider();
 // #region oauth
 /**
  * Adding OAuth adds one method to the same definition. Scope ids come from the OAuth client you
- * registered with Cloudflare; the default set is `zone:read`, `dns_records:edit`, `offline_access`.
+ * registered with Cloudflare; the default set is `zone.read`, `dns.write`, `offline_access`.
  */
 export const withOAuth = Cloudflare.provider({
   oauth: {
@@ -18,6 +18,16 @@ export const withOAuth = Cloudflare.provider({
   },
 });
 // #endregion oauth
+
+// #region public-oauth
+/** Public clients use PKCE and do not carry a client secret. */
+export const withPublicOAuth = Cloudflare.provider({
+  oauth: {
+    clientId: Config.string("CF_CLIENT_ID"),
+    clientAuth: "none",
+  },
+});
+// #endregion public-oauth
 
 // #region connect-token
 /**
