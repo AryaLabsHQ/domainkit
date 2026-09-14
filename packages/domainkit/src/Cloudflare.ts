@@ -38,7 +38,7 @@ export interface Options {
 
 interface OAuthOptionsBase {
   readonly clientId: string | Config.Config<string>;
-  /** Scope ids assigned to the OAuth client. Default: `zone.read`, `dns.write`, `offline_access`. */
+  /** Scope ids assigned to the OAuth client. Default: `zone.read`, `dns.read`, `dns.write`, `offline_access`. */
   readonly scopes?: ReadonlyArray<string>;
   /**
    * Origin for consent, token exchange, and revocation, which Cloudflare serves at
@@ -104,7 +104,7 @@ export const server: OAuth.Server = endpointsOf({
   server: defaultIssuer,
 });
 
-const defaultScopes = ["zone.read", "dns.write", "offline_access"];
+const defaultScopes = ["zone.read", "dns.read", "dns.write", "offline_access"];
 const capabilities = ["dns:read", "dns:write"] as const;
 
 /** OAuth credentials pack both tokens into `secret`; token credentials are the token itself. */

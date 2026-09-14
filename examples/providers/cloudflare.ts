@@ -9,7 +9,8 @@ export const tokensOnly = Cloudflare.provider();
 // #region oauth
 /**
  * Adding OAuth adds one method to the same definition. Scope ids come from the OAuth client you
- * registered with Cloudflare; the default set is `zone.read`, `dns.write`, `offline_access`.
+ * registered with Cloudflare; the default set is `zone.read`, `dns.read`, `dns.write`,
+ * `offline_access`.
  */
 export const withOAuth = Cloudflare.provider({
   oauth: {

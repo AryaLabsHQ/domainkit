@@ -14,7 +14,8 @@ several accounts. An **account-owned token** cannot be verified without naming i
 token method declares an optional `accountId` field and verification runs against that account.
 
 OAuth uses the authorization code flow against `dash.cloudflare.com`. The scope ids come from the
-host's registered OAuth client; the default set is `zone.read`, `dns.write`, and `offline_access`.
+host's registered OAuth client; the default set is `zone.read`, `dns.read`, `dns.write`, and
+`offline_access`.
 The credential packs the access and refresh tokens together, so refresh and revocation need
 nothing from the host. A public client sets `clientAuth: "none"` and uses PKCE without a secret;
 confidential clients require `clientSecret` and default to `client_secret_basic`.

@@ -26,9 +26,9 @@ registered client. Both end at the same connection, and both keep the credential
 
 `clientId` takes a value or a `Config`. Confidential clients also require `clientSecret`, which can
 stay in the config provider your app already uses. Public clients set `clientAuth: "none"` and omit
-the secret; PKCE remains required for that flow. `scopes` defaults to `zone.read`, `dns.write`, and
-`offline_access`; they are the scope ids assigned to your OAuth client, not something DomainKit
-invents. Confidential `clientAuth` defaults to `client_secret_basic`.
+the secret; PKCE remains required for that flow. `scopes` defaults to `zone.read`, `dns.read`,
+`dns.write`, and `offline_access`; they are the scope ids assigned to your OAuth client, not
+something DomainKit invents. Confidential `clientAuth` defaults to `client_secret_basic`.
 
 The OAuth endpoints DomainKit uses are `dash.cloudflare.com/oauth2/auth`, `/token`, and `/revoke`.
 Register the callback URL your routes are mounted at, ending in `/callback/cloudflare`.

@@ -404,7 +404,10 @@ describe("Cloudflare.provider", () => {
       const url = new URL(started.authorizationUrl);
       assert.strictEqual(url.searchParams.get("code_challenge"), "chal");
       assert.strictEqual(url.searchParams.get("code_challenge_method"), "S256");
-      assert.strictEqual(url.searchParams.get("scope"), "zone.read dns.write offline_access");
+      assert.strictEqual(
+        url.searchParams.get("scope"),
+        "zone.read dns.read dns.write offline_access",
+      );
       const issued = yield* oauth.complete({
         code: "code-1",
         callbackUrl: "https://app.example/cb",
