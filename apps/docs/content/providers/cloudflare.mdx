@@ -18,10 +18,17 @@ registered client. Both end at the same connection, and both keep the credential
 
 <Snippet file="examples/providers/cloudflare.ts" region="oauth" title="Tokens and OAuth" />
 
-`clientId` and `clientSecret` take a value or a `Config`, so the secret can stay in the config
-provider your app already uses. `scopes` defaults to `zone:read`, `dns_records:edit`, and
-`offline_access`; they are the scope ids assigned to your OAuth client, not something DomainKit
-invents. `clientAuth` defaults to `client_secret_basic`.
+<Snippet
+  file="examples/providers/cloudflare.ts"
+  region="public-oauth"
+  title="A public PKCE client"
+/>
+
+`clientId` takes a value or a `Config`. Confidential clients also require `clientSecret`, which can
+stay in the config provider your app already uses. Public clients set `clientAuth: "none"` and omit
+the secret; PKCE remains required for that flow. `scopes` defaults to `zone.read`, `dns.read`,
+`dns.write`, and `offline_access`; they are the scope ids assigned to your OAuth client, not
+something DomainKit invents. Confidential `clientAuth` defaults to `client_secret_basic`.
 
 The OAuth endpoints DomainKit uses are `dash.cloudflare.com/oauth2/auth`, `/token`, and `/revoke`.
 Register the callback URL your routes are mounted at, ending in `/callback/cloudflare`.
@@ -62,13 +69,13 @@ customer disconnects.
 ## Capabilities
 
 DomainKit needs `dns:read` and `dns:write`. Cloudflare's token verification does not enumerate DNS
-permissions, so a token missing `dns_records:edit` verifies here and fails at the first write with
+permissions, so a token missing `dns.write` verifies here and fails at the first write with
 `Forbidden`.
 
 A token Cloudflare rejects while connecting fails `Unauthenticated` with Cloudflare's own message,
 whether Cloudflare answers HTTP 400 with code 6003 or 6111 (malformed token), 401, or 403 from the
 verify endpoint. The server answers 401, so a connect form offers a retry on the same field. A 403
-while listing zones is a missing `zone:read` permission and stays `Forbidden`.
+while listing zones is a missing `zone.read` permission and stays `Forbidden`.
 
 ## Zones and targets
 

@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Redacted } from "effect";
+import { Config, ConfigProvider, Effect, Redacted } from "effect";
 
 import { Cloudflare, DnsRecord, Provider } from "../../../src/index.ts";
 import { bail, recordedFetch } from "../recorded-fetch.ts";
@@ -361,10 +361,134 @@ describe("Cloudflare.provider", () => {
       const tokenRequest = new URLSearchParams(String(recording.requests[0]?.init?.body));
       assert.strictEqual(tokenRequest.get("grant_type"), "authorization_code");
       assert.strictEqual(tokenRequest.get("code_verifier"), "verifier");
+      assert.strictEqual(tokenRequest.get("client_secret"), null);
+      const authorization = new Headers(recording.requests[0]?.init?.headers).get("authorization");
+      assert.ok(authorization?.startsWith("Basic "));
+      assert.strictEqual(atob(authorization?.slice("Basic ".length) ?? ""), "client%2D1:secret");
       assert.strictEqual(
         new Headers(recording.requests[1]?.init?.headers).get("authorization"),
         "Bearer access-1",
       );
+    });
+  });
+
+  it.effect("runs a public PKCE client without client authentication", () => {
+    const recording = recordedFetch([
+      {
+        body: {
+          access_token: "access-1",
+          refresh_token: "refresh-1",
+          expires_in: 3_600,
+          token_type: "bearer",
+        },
+        expect: { method: "POST", pathname: "/oauth2/token" },
+      },
+      { body: page([zone]), expect: { pathname: "/client/v4/zones" } },
+      {
+        body: { access_token: "access-2", token_type: "bearer" },
+        expect: { method: "POST", pathname: "/oauth2/token" },
+      },
+      { body: {}, expect: { method: "POST", pathname: "/oauth2/revoke" } },
+    ]);
+    const definition = Cloudflare.provider({
+      fetch: recording.fetch,
+      oauth: { clientId: "public-client", clientAuth: "none" },
+    });
+    return Effect.gen(function* () {
+      const oauth = definition.auth.oauth ?? bail("oauth");
+      const started = yield* oauth.start({
+        state: "state-1",
+        callbackUrl: "https://app.example/cb",
+        codeChallenge: "chal",
+      });
+      const url = new URL(started.authorizationUrl);
+      assert.strictEqual(url.searchParams.get("code_challenge"), "chal");
+      assert.strictEqual(url.searchParams.get("code_challenge_method"), "S256");
+      assert.strictEqual(
+        url.searchParams.get("scope"),
+        "zone.read dns.read dns.write offline_access",
+      );
+      const issued = yield* oauth.complete({
+        code: "code-1",
+        callbackUrl: "https://app.example/cb",
+        codeVerifier: "verifier",
+        params: { state: "state-1", code: "code-1" },
+      });
+      const exchangeHeaders = new Headers(recording.requests[0]?.init?.headers);
+      const exchangeBody = new URLSearchParams(String(recording.requests[0]?.init?.body));
+      assert.strictEqual(exchangeHeaders.get("authorization"), null);
+      assert.strictEqual(exchangeBody.get("client_id"), "public-client");
+      assert.strictEqual(exchangeBody.get("client_secret"), null);
+      assert.strictEqual(exchangeBody.get("code_verifier"), "verifier");
+
+      const refreshed = yield* oauth.refresh(issued);
+      const refreshHeaders = new Headers(recording.requests[2]?.init?.headers);
+      const refreshBody = new URLSearchParams(String(recording.requests[2]?.init?.body));
+      assert.strictEqual(refreshHeaders.get("authorization"), null);
+      assert.strictEqual(refreshBody.get("client_id"), "public-client");
+      assert.strictEqual(refreshBody.get("client_secret"), null);
+      assert.strictEqual(refreshBody.get("refresh_token"), "refresh-1");
+
+      yield* (oauth.revoke ?? bail("revoke"))(refreshed);
+      const revokeHeaders = new Headers(recording.requests[3]?.init?.headers);
+      const revokeBody = new URLSearchParams(String(recording.requests[3]?.init?.body));
+      assert.strictEqual(revokeHeaders.get("authorization"), null);
+      assert.strictEqual(revokeBody.get("client_id"), "public-client");
+      assert.strictEqual(revokeBody.get("client_secret"), null);
+      assert.strictEqual(revokeBody.get("token"), "access-2");
+    });
+  });
+
+  it.effect("sends a confidential client secret in the POST body when configured", () => {
+    const recording = recordedFetch([
+      {
+        body: { access_token: "access-1", refresh_token: "refresh-1", token_type: "bearer" },
+        expect: { method: "POST", pathname: "/oauth2/token" },
+      },
+      { body: page([zone]), expect: { pathname: "/client/v4/zones" } },
+    ]);
+    const definition = Cloudflare.provider({
+      fetch: recording.fetch,
+      oauth: {
+        clientId: "client-1",
+        clientSecret: Redacted.make("secret"),
+        clientAuth: "client_secret_post",
+      },
+    });
+    return Effect.gen(function* () {
+      const oauth = definition.auth.oauth ?? bail("oauth");
+      yield* oauth.complete({
+        code: "code-1",
+        callbackUrl: "https://app.example/cb",
+        codeVerifier: "verifier",
+        params: { state: "state-1", code: "code-1" },
+      });
+      const headers = new Headers(recording.requests[0]?.init?.headers);
+      const body = new URLSearchParams(String(recording.requests[0]?.init?.body));
+      assert.strictEqual(headers.get("authorization"), null);
+      assert.strictEqual(body.get("client_id"), "client-1");
+      assert.strictEqual(body.get("client_secret"), "secret");
+      assert.strictEqual(body.get("code_verifier"), "verifier");
+    });
+  });
+
+  it.effect("keeps confidential client configuration failures typed", () => {
+    const recording = recordedFetch([]);
+    const missingSecret = Config.fail(
+      new ConfigProvider.SourceError({ message: "client secret unavailable" }),
+    ) as Config.Config<Redacted.Redacted<string>>;
+    const definition = Cloudflare.provider({
+      fetch: recording.fetch,
+      oauth: { clientId: "client-1", clientSecret: missingSecret },
+    });
+    return Effect.gen(function* () {
+      const error = yield* (definition.auth.oauth ?? bail("oauth"))
+        .start({ state: "state-1", callbackUrl: "https://app.example/cb", codeChallenge: "chal" })
+        .pipe(Effect.flip);
+      assert.strictEqual(error.reason._tag, "InvalidInput");
+      if (error.reason._tag === "InvalidInput")
+        assert.strictEqual(error.reason.field, "oauth.clientSecret");
+      assert.deepStrictEqual(recording.requests, []);
     });
   });
 
@@ -414,6 +538,18 @@ describe("Cloudflare.provider", () => {
       assert.strictEqual(
         recording.requests[2]?.url,
         "http://localhost:8788/cloudflare/oauth2/revoke",
+      );
+      const revokeAuthorization = new Headers(recording.requests[2]?.init?.headers).get(
+        "authorization",
+      );
+      assert.ok(revokeAuthorization?.startsWith("Basic "));
+      assert.strictEqual(
+        atob(revokeAuthorization?.slice("Basic ".length) ?? ""),
+        "client%2D1:secret",
+      );
+      assert.strictEqual(
+        new URLSearchParams(String(recording.requests[2]?.init?.body)).get("client_secret"),
+        null,
       );
     });
   });
@@ -576,6 +712,18 @@ describe("Cloudflare.provider", () => {
       assert.strictEqual(
         new URLSearchParams(String(recording.requests[0]?.init?.body)).get("grant_type"),
         "refresh_token",
+      );
+      const refreshAuthorization = new Headers(recording.requests[0]?.init?.headers).get(
+        "authorization",
+      );
+      assert.ok(refreshAuthorization?.startsWith("Basic "));
+      assert.strictEqual(
+        atob(refreshAuthorization?.slice("Basic ".length) ?? ""),
+        "client%2D1:secret",
+      );
+      assert.strictEqual(
+        new URLSearchParams(String(recording.requests[0]?.init?.body)).get("client_secret"),
+        null,
       );
       const second = yield* oauth.refresh(stored);
       assert.deepStrictEqual(JSON.parse(Redacted.value(second.secret)), {
