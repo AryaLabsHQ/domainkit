@@ -33,7 +33,7 @@ The layer needs only your `SqlClient`, and it never opens, replaces, or closes i
 The six tables and their keys are on the
 [`@domainkit/capsuledb` reference](/docs/reference/capsuledb). Every one carries `owner_id`, and
 every query filters by the request's `Principal`, so a row belonging to another tenant reads as
-absent rather than forbidden.
+absent rather than forbidden. `continuations.header` is the single exception, described below.
 
 ## Or run the migrations yourself
 
@@ -59,6 +59,21 @@ folder against the current capsule in CI.
 The prefix is part of the physical layout: it changes the rendered DDL and the migration checksum.
 Fix it before the first deploy and never change it after.
 
+## The one read without a principal
+
+`Storage.continuations.header(id)` answers with a flow's `ownerId`, `actorId`, `provider`, and
+`expiresAt`, and takes no `Principal`. Writing your own implementation means writing this one
+without an owner filter, on purpose: a provider callback arrives as a top-level navigation carrying
+a `state` and a session cookie, so `domainkit/server` has to learn whose flow it is finishing before
+it can name a principal to scope by. It then holds the host's answer against that record.
+
+Two properties make the exception safe, and an implementation has to keep both. It returns those
+four fields and never `payload`, which holds the PKCE `codeVerifier` and stays behind the
+owner-scoped `get`. And it enforces the TTL exactly as `get` does, so a stale id never reaches a
+host. It is a read: the row survives for `consume` to spend once the provider exchange succeeds.
+`get` and `consume` keep their owner filters regardless, so a host that resolves the wrong
+principal still fails closed.
+
 ## Custody
 
 There is no plaintext mode. `Connect` seals every credential through `Custody` before it reaches a
@@ -74,8 +89,8 @@ credentials; until then `open` fails with `CryptoFailed`.
 
 <Snippet file="examples/storage/postgres.ts" region="memory" title="One layer for a playground" />
 
-`Testing.conformance.storage` checks tenant isolation, apply leases, exactly-once continuations,
-revocation recovery, and lock semantics against any implementation.
+`Testing.conformance.storage` checks tenant isolation and the unscoped header read, apply leases,
+exactly-once continuations, revocation recovery, and lock semantics against any implementation.
 
 <Snippet file="examples/testing/conformance.ts" region="storage" title="Checking your own" />
 
