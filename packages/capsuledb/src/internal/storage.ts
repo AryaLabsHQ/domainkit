@@ -87,6 +87,7 @@ const authorizationCodec = codec(Storage.Authorization, "authorization");
 const connectionCodec = codec(Storage.Connection, "connection");
 const attachmentCodec = codec(Storage.Attachment, "attachment");
 const continuationCodec = codec(Storage.Continuation, "continuation");
+const continuationHeaderCodec = codec(Storage.ContinuationHeader, "continuation header");
 const attemptCodec = codec(Storage.Attempt, "attempt");
 const readinessCodec = codec(Storage.Readiness, "readiness");
 const credentialCodec = codec(Storage.Credential, "credential");
@@ -248,6 +249,19 @@ const continuationOf = (row: ContinuationRow) =>
     provider: row.provider,
     payload: fromJson(row.payload),
     returnTo: row.return_to,
+    expiresAt: iso(row.expires_at),
+  });
+
+type ContinuationHeaderRow = Pick<
+  ContinuationRow,
+  "owner_id" | "actor_id" | "provider" | "expires_at"
+>;
+
+const continuationHeaderOf = (row: ContinuationHeaderRow) =>
+  continuationHeaderCodec.read({
+    ownerId: row.owner_id,
+    actorId: row.actor_id,
+    provider: row.provider,
     expiresAt: iso(row.expires_at),
   });
 
@@ -714,6 +728,23 @@ export const make = (
                 : continuation;
             }),
           ).pipe(guard("continuations.get")),
+        header: (id) =>
+          Effect.gen(function* () {
+            // No owner filter, unlike everything else in this module: the provider callback has to
+            // learn whose flow it is finishing before it can resolve a principal to scope by. The
+            // projection is the enforcement — `payload` is never selected, so the PKCE verifier
+            // stays behind the owner-scoped `get`.
+            const rows = yield* sql<ContinuationHeaderRow>`
+              SELECT owner_id, actor_id, provider, expires_at
+              FROM ${continuations} WHERE id = ${id}
+            `;
+            if (rows[0] === undefined) return yield* notFound("continuation", id);
+            const header = yield* continuationHeaderOf(rows[0]);
+            const instant = yield* DateTime.now;
+            return DateTime.toEpochMillis(header.expiresAt) <= DateTime.toEpochMillis(instant)
+              ? yield* fail(new Reason.Expired({ entity: "continuation", id }))
+              : header;
+          }).pipe(guard("continuations.header")),
         consume: (id) =>
           Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {
