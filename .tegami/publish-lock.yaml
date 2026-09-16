@@ -1,26 +1,26 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Support Cloudflare public OAuth clients\n\n`Cloudflare.Options.oauth` accepts PKCE-only public clients with `clientAuth: \"none\"` and no\nclient secret, while confidential clients require `clientSecret` and default to\n`client_secret_basic`. Cloudflare's default scopes use the current `zone.read`, `dns.read`, and\n`dns.write` scope ids, with `offline_access` retained for refresh.\n"
-    filename: domainkit-cloudflare-oauth-public-clients.md
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Security: the provider callback binds to the flow that started it\n\n`GET /callback/:provider` now establishes whose connection it is finishing from the continuation\nDomainKit recorded, and refuses a callback presented by anyone other than the session that started\nit.\n\nBefore, the callback resolved `Identity.principal` first and then read the continuation through the\nowner-scoped `Storage.continuations.get`, which checks the owner and nothing else. Within one\norganization, any administrator whose browser followed the provider's redirect completed the\nconnection, and the resulting authorization was recorded as theirs. That is latent in every released\n`0.12.x`. There is no known external consumer and no advisory or CVE is being filed, but a host that\nsees new refusals after upgrading is seeing this check.\n\nNow the handler reads the flow's header before it resolves identity, and the resolved principal must\nmatch the recorded `ownerId` **and** `actorId`, with the recorded provider matching the route. A\ncallback that names no flow, one that has expired, one presented at another provider's route, and\none presented by a session that did not start it are all the same `InvalidInput` refusal with the\nsame text, and the host authenticates before any of them, so nothing distinguishes \"no such flow\"\nfrom \"not your flow\". The refusal leaves the flow unspent, so the person who started it can still\nfinish it.\n\n### `Identity.principal` takes an optional second argument\n\n`Server.IdentityContext` carries the endpoint being served and the continuation header, and arrives\non the callback alone. A host that takes one argument keeps compiling and keeps being checked; a\nhost whose session can hold several tenants reads `context.continuation.ownerId` to land the\ncallback on the right one. The doctrine is unchanged: the request still does not name its own owner,\nDomainKit's durable record does, and the `state` only points at it.\n\n### `Storage.continuations.header` is a new required method\n\n`header(id)` returns a flow's `ownerId`, `actorId`, `provider`, and `expiresAt` and takes no\n`Principal` — the one read in the interface that is not tenant-scoped, and the reason for the minor\nbump. It never returns `payload`, which holds the PKCE `codeVerifier`, and it enforces the TTL\nexactly as `get` does. It is a read, not a spend, so a leaked `state` cannot burn the flow it names.\n`get` and `consume` keep their owner filters, so a host that resolves a wrong principal still fails\nclosed. Implemented in `Storage.layerMemory` and `@domainkit/capsuledb`; a host on\n`Storage.layerFromAsync` implements it too, and `Testing.conformance.storage` covers it.\n"
+    filename: domainkit-callback-identity-binding.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
-  - changelogIds:
-      - domainkit-cloudflare-oauth-public-clients.md
-    id: npm:domainkit
-    updated: true
-  - id: npm:@domainkit/docs
-    updated: false
   - id: npm:@domainkit/capsuledb
     updated: true
   - id: npm:@domainkit/react
+    updated: true
+  - id: npm:@domainkit/docs
+    updated: false
+  - changelogIds:
+      - domainkit-callback-identity-binding.md
+    id: npm:domainkit
     updated: true
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
-  - id: npm:domainkit
-  - id: npm:@domainkit/docs
   - id: npm:@domainkit/capsuledb
   - id: npm:@domainkit/react
+  - id: npm:@domainkit/docs
+  - id: npm:domainkit
