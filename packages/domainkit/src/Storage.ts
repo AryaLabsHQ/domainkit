@@ -85,6 +85,19 @@ export class Continuation extends Schema.Class<Continuation>("@domainkit/Storage
   expiresAt: Schema.DateTimeUtcFromString,
 }) {}
 
+/**
+ * Who a continuation belongs to, without the continuation itself. `payload` has no place here: it
+ * carries the PKCE `codeVerifier`, which only the owner-scoped read may reach.
+ */
+export class ContinuationHeader extends Schema.Class<ContinuationHeader>(
+  "@domainkit/Storage/ContinuationHeader",
+)({
+  ownerId: Schema.String,
+  actorId: Schema.String,
+  provider: Schema.String,
+  expiresAt: Schema.DateTimeUtcFromString,
+}) {}
+
 export const AttemptStatus = Schema.Literals([
   "planned",
   "approved",
@@ -213,6 +226,16 @@ export interface Interface {
     readonly put: (continuation: Continuation) => Fx<void>;
     /** Read without spending; a late read fails `Expired`. */
     readonly get: (id: string) => Fx<Continuation>;
+    /**
+     * The flow's owner, actor, provider, and expiry, without a principal and without spending the
+     * row. The one read in this interface that is not tenant-scoped, because `domainkit/server`
+     * has to learn whose flow a provider callback finishes before it can resolve the principal to
+     * scope by; the callback carries a continuation id and a session cookie and nothing else.
+     *
+     * A missing row fails `NotFound` and a stale one fails `Expired`, exactly as `get` does, so an
+     * expired id never reaches a host. `payload` is out of reach here by construction.
+     */
+    readonly header: (id: string) => Effect.Effect<ContinuationHeader, Errors.DomainKitError>;
     /** Exactly-once: the second consume of the same id fails `NotFound`; a late one fails `Expired`. */
     readonly consume: (id: string) => Fx<Continuation>;
   };
@@ -352,6 +375,8 @@ export interface AsyncInterface {
   readonly continuations: {
     readonly put: (principal: Principal.Interface, continuation: Continuation) => Promise<void>;
     readonly get: (principal: Principal.Interface, id: string) => Promise<Continuation>;
+    /** Takes no principal: see `Interface.continuations.header`. Never returns `payload`. */
+    readonly header: (id: string) => Promise<ContinuationHeader>;
     readonly consume: (principal: Principal.Interface, id: string) => Promise<Continuation>;
   };
   readonly attempts: {
@@ -488,6 +513,11 @@ export const fromAsync = (service: AsyncInterface): Interface => {
       put: (continuation) =>
         call("continuations.put", (p) => service.continuations.put(p, continuation)),
       get: (id) => call("continuations.get", (p) => service.continuations.get(p, id)),
+      header: (id) =>
+        Effect.tryPromise({
+          try: () => service.continuations.header(id),
+          catch: storageFailed("continuations.header"),
+        }),
       consume: (id) => call("continuations.consume", (p) => service.continuations.consume(p, id)),
     },
     attempts: {

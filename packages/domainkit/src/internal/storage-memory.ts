@@ -299,6 +299,24 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Interfa
             return row;
           }),
         ),
+      header: (id) =>
+        Effect.gen(function* () {
+          // Unscoped on purpose, unlike every other read here: the provider callback has to learn
+          // whose flow it is finishing before it can resolve a principal to scope by. Header
+          // fields only; `payload` stays behind `get`.
+          const row = state.continuations.get(id);
+          if (row === undefined) return yield* notFound("continuation", id);
+          const now = yield* DateTime.now;
+          if (DateTime.toEpochMillis(row.expiresAt) <= DateTime.toEpochMillis(now)) {
+            return yield* Errors.fail(new Reason.Expired({ entity: "continuation", id }));
+          }
+          return new Storage.ContinuationHeader({
+            ownerId: row.ownerId,
+            actorId: row.actorId,
+            provider: row.provider,
+            expiresAt: row.expiresAt,
+          });
+        }),
       consume: (id) =>
         write((principal) =>
           Effect.gen(function* () {

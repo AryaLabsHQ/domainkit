@@ -35,10 +35,30 @@ import * as Receipt from "./Receipt.ts";
 import * as Storage from "./Storage.ts";
 import * as Verify from "./Verify.ts";
 
+/**
+ * What DomainKit already knows about the request when it asks the host who is making it. Only
+ * `/callback/:provider` passes one, because it is the only route that points at a flow DomainKit
+ * recorded earlier; every other route calls `principal` with the request alone.
+ */
+export interface IdentityContext {
+  /** The route being served. */
+  readonly endpoint: EndpointName;
+  /** The flow this callback claims to finish, as DomainKit recorded it when the flow started. */
+  readonly continuation: Storage.ContinuationHeader;
+}
+
 /** The only service a host must implement for the server. */
 export interface IdentityService {
+  /**
+   * `context` is present only on the callback, where a host that keeps per-request tenancy can use
+   * `context.continuation.ownerId` to pick the right tenant out of a session that holds several.
+   * Ignoring it is safe everywhere: DomainKit checks the principal against the recorded flow on
+   * that route regardless, so a host that answers with the wrong one is refused rather than
+   * trusted.
+   */
   readonly principal: (
     request: HttpServerRequest.HttpServerRequest,
+    context?: IdentityContext,
   ) => Effect.Effect<Principal.Interface, Errors.DomainKitError>;
   /**
    * Which routes this principal may reach, checked after `principal` on every request. Fail with
@@ -536,6 +556,19 @@ const callbackUrlFor = (input: {
     });
   });
 
+/**
+ * One refusal for every way a callback can fail to match a flow: no such `state`, one that has
+ * expired, one presented at another provider's route, and one presented by a session that did not
+ * start it. The text is constant on purpose — a caller holding a leaked `state` must not be able
+ * to tell "no such flow" from "not your flow".
+ */
+const noSuchFlow = Errors.fail(
+  new Reason.InvalidInput({
+    message: "This callback does not match a connection you started",
+    field: "state",
+  }),
+);
+
 const callbackConfigurationError = (message: string) =>
   new Errors.DomainKitError({
     reason: new Reason.InvalidInput({ message, field: "callbackBaseUrl" }),
@@ -631,8 +664,9 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         endpoint: EndpointName,
         request: HttpServerRequest.HttpServerRequest,
         effect: Effect.Effect<A, Errors.DomainKitError, Principal.Service>,
+        context?: IdentityContext,
       ): Effect.Effect<A, Errors.DomainKitError> =>
-        Effect.flatMap(identity.principal(request), (principal) =>
+        Effect.flatMap(identity.principal(request, context), (principal) =>
           Effect.flatMap(identity.authorize?.(principal, endpoint) ?? Effect.void, () =>
             Effect.provideService(effect, Principal.Service, principal),
           ),
@@ -825,44 +859,93 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
           ),
         )
         .handle("callback", ({ params, query, request }) =>
-          as(
-            "callback",
-            request,
-            Effect.gen(function* () {
-              const url = yield* absoluteUrl(request);
-              // Resolve the destination against the callback's public base, not the request: a
-              // proxy that rewrites `Host` leaves the request on an origin the browser never sees.
-              const base = yield* callbackUrlFor({
-                request,
-                provider: params.provider,
-                options,
-                route: callbackRoute(params.provider),
-              });
-              // Where the customer lands comes from the continuation this owner started, never
-              // from the provider's query string, and it is resolved before the callback is spent:
-              // a server with nowhere to send them must not connect the provider and then fail.
-              const continuation = yield* storage.continuations.get(query.state);
-              const requested = continuation.returnTo ?? options.defaultReturnTo;
-              if (requested === undefined) {
-                return yield* invalid(
-                  "The flow carried no returnTo and the server has no defaultReturnTo",
-                  "returnTo",
-                );
-              }
-              const destination = sameOrigin(requested, base);
-              if (destination === null) {
-                return yield* invalid(`${requested} leaves this application`, "returnTo");
-              }
-              yield* connect.complete({
-                continuationId: query.state,
-                callbackUrl: url.toString(),
-              });
-              return HttpApiSchema.withHeaders({
-                body: undefined as void,
-                headers: { location: destination },
-              });
-            }),
-          ),
+          Effect.gen(function* () {
+            // The one route that establishes its identity from something other than the request.
+            // A provider callback is a top-level navigation carrying a `state` the provider echoed
+            // back and whatever credential the browser attaches by itself, so the flow DomainKit
+            // recorded is the only authority on whose it is. Read its header first — a read, never
+            // a spend, so a leaked `state` cannot burn the flow it names — tell the host which
+            // flow is being finished, and then hold the host's answer against the record.
+            const header = yield* storage.continuations
+              .header(query.state)
+              .pipe(
+                Effect.catch((error) =>
+                  error.reason._tag === "NotFound" || error.reason._tag === "Expired"
+                    ? Effect.succeed(null)
+                    : Effect.fail(error),
+                ),
+              );
+            const continuation =
+              header !== null && header.provider === params.provider ? header : null;
+            // The host authenticates even when there is nothing to finish, so the status cannot
+            // tell a caller whether the `state` it holds names a flow at all.
+            return yield* as(
+              "callback",
+              request,
+              Effect.gen(function* () {
+                // The owner comes from the record and the actor from the host's own session;
+                // nothing in the query string contributes either. The scoped `get` below keeps
+                // its owner filter, so a host that answers with the wrong principal still fails
+                // closed even if this check were ever removed.
+                const principal = yield* Principal.Service;
+                if (
+                  continuation === null ||
+                  principal.ownerId !== continuation.ownerId ||
+                  principal.actorId !== continuation.actorId
+                ) {
+                  return yield* noSuchFlow;
+                }
+                const url = yield* absoluteUrl(request);
+                // Resolve the destination against the callback's public base, not the request: a
+                // proxy that rewrites `Host` leaves the request on an origin the browser never
+                // sees.
+                const base = yield* callbackUrlFor({
+                  request,
+                  provider: params.provider,
+                  options,
+                  route: callbackRoute(params.provider),
+                });
+                // Where the customer lands comes from the continuation this owner started, never
+                // from the provider's query string, and it is resolved before the callback is
+                // spent: a server with nowhere to send them must not connect the provider and
+                // then fail.
+                // The host's authentication sits between the header read and this one, so the
+                // flow can expire or be spent in that window. It refuses the same way it would
+                // have a moment earlier, rather than changing shape because of when it happened.
+                // This is also where the owner filter fails closed when a host resolves the wrong
+                // principal, and that refusal must look like every other one.
+                const flow = yield* storage.continuations
+                  .get(query.state)
+                  .pipe(
+                    Effect.catch((error) =>
+                      error.reason._tag === "NotFound" || error.reason._tag === "Expired"
+                        ? noSuchFlow
+                        : Effect.fail(error),
+                    ),
+                  );
+                const requested = flow.returnTo ?? options.defaultReturnTo;
+                if (requested === undefined) {
+                  return yield* invalid(
+                    "The flow carried no returnTo and the server has no defaultReturnTo",
+                    "returnTo",
+                  );
+                }
+                const destination = sameOrigin(requested, base);
+                if (destination === null) {
+                  return yield* invalid(`${requested} leaves this application`, "returnTo");
+                }
+                yield* connect.complete({
+                  continuationId: query.state,
+                  callbackUrl: url.toString(),
+                });
+                return HttpApiSchema.withHeaders({
+                  body: undefined as void,
+                  headers: { location: destination },
+                });
+              }),
+              continuation === null ? undefined : { endpoint: "callback", continuation },
+            );
+          }),
         )
         .handle("attach", ({ params, payload, request }) =>
           as(

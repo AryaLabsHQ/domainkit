@@ -46,7 +46,10 @@ never handles plaintext.
 | `domainkit_readiness`      | `(owner_id, domain)`              | Latest observation, per-requirement evidence, backoff             |
 
 Every table carries `owner_id` and every query filters by the request's `Principal`, so a row
-belonging to another tenant reads as absent. The package declares no foreign keys, to host tables
+belonging to another tenant reads as absent. The one exception is
+`Storage.continuations.header`, which reads a flow's owner, actor, provider, and expiry with no
+principal and never selects `payload`, because the provider callback has to learn whose flow it is
+finishing before it can name a principal to scope by. The package declares no foreign keys, to host tables
 or between its own.
 
 ## Emitting the SQL

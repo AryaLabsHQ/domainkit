@@ -77,6 +77,45 @@ with the `Forbidden` reason for the 403 a UI expects.
 `Server.EndpointName` is derived from the group, so it is exactly the endpoint identifiers in the
 table above and a new route is a type error in an exhaustive host check rather than a silent gap.
 
+### The callback resolves identity the other way round
+
+`/callback/:provider` is the one route that knows something about the request before it knows who
+made it. It is a top-level navigation the provider sends the browser on, carrying a `state` the
+provider echoed back and whatever credential the browser attaches by itself, so ambient host state
+is the wrong authority on whose connection it finishes.
+
+So the handler reads the flow's own record first — owner, actor, provider, and expiry, never the
+payload, and a read rather than a spend — and passes it to `principal` as a second argument:
+
+```ts
+interface IdentityContext {
+  readonly endpoint: EndpointName;
+  readonly continuation: Storage.ContinuationHeader;
+}
+```
+
+`context` is optional and present on the callback alone, so a host that takes one argument keeps
+compiling. Take it when one session holds several tenants and the callback has to land on the one
+the flow belongs to.
+
+<Snippet
+  file="examples/server/mount.ts"
+  region="callback-identity"
+  title="Identity on the callback"
+/>
+
+The doctrine that a request never names its own `ownerId` is intact. `context.continuation` is
+DomainKit's durable record of the flow, written when the connection started, and the `state` in the
+query string only points at it.
+
+DomainKit then checks the principal you return against that record itself, rather than trusting you
+to: the owner and the actor must both match the session that started the flow, and the recorded
+provider must match the route. A callback that matches no flow, one that has expired, one presented
+at another provider's route, and one presented by a session that did not start it are all the same
+`InvalidInput` refusal with the same text, and the host authenticates before any of them, so
+neither the status nor the message tells a caller holding a leaked `state` whether it names a live
+flow. The flow is left unspent, so the person who started it can still finish it.
+
 ## Mounting
 
 <Snippet file="examples/server/mount.ts" region="mount" title="Mounting the group" />

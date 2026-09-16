@@ -323,6 +323,62 @@ export const cases = (layer: Layer.Layer<Storage.Service, unknown>): ReadonlyArr
       ),
     },
     {
+      name: "reads a continuation header under any principal and still refuses an expired one",
+      run: run(
+        Effect.gen(function* () {
+          const storage = yield* Storage.Service;
+          const now = yield* DateTime.now;
+          const continuation = new Storage.Continuation({
+            id: "cont-header-1",
+            ownerId: owner.ownerId,
+            actorId: owner.actorId,
+            provider: "fake",
+            payload: { codeVerifier: "v" },
+            returnTo: null,
+            expiresAt: DateTime.add(now, { minutes: 15 }),
+          });
+          yield* storage.continuations.put(continuation);
+          // The deliberate exception to the tenant isolation every other case here enforces, and
+          // not a bug. A provider callback is a top-level navigation carrying a continuation id
+          // and a session cookie, so the route has to learn whose flow it is before it can name a
+          // principal to scope by. The read therefore takes no principal at all — that is a type
+          // constraint, and providing a foreign one below changes nothing — and it answers with
+          // header fields only. `payload` holds the PKCE verifier and stays behind the
+          // owner-scoped `get`. Binding the caller to the flow is the reader's job, and
+          // `domainkit/server` does it on the callback route.
+          const foreign = yield* storage.continuations
+            .header("cont-header-1")
+            .pipe(Effect.provideService(Principal.Service, other));
+          yield* expect(
+            foreign.ownerId === owner.ownerId && foreign.actorId === owner.actorId,
+            "header did not report the recorded owner and actor",
+          );
+          yield* expect(foreign.provider === "fake", "header did not report the provider");
+          yield* expect(!("payload" in foreign), "header exposed the continuation payload");
+          // A read, never a claim: the flow is still there to be spent.
+          const still = yield* storage.continuations.get("cont-header-1");
+          yield* expect(still.id === "cont-header-1", "the header read spent the continuation");
+          yield* expectReason(
+            storage.continuations.header("cont-header-missing"),
+            "NotFound",
+            "header of an unknown continuation",
+          );
+          yield* storage.continuations.put(
+            new Storage.Continuation({
+              ...continuation,
+              id: "cont-header-2",
+              expiresAt: DateTime.subtract(now, { minutes: 1 }),
+            }),
+          );
+          yield* expectReason(
+            storage.continuations.header("cont-header-2"),
+            "Expired",
+            "header of an expired continuation",
+          );
+        }).pipe(Effect.provideService(Principal.Service, owner)),
+      ),
+    },
+    {
       name: "moves attempts through planned, approved, applying, and complete with leases",
       run: run(
         Effect.gen(function* () {

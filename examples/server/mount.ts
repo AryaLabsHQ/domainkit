@@ -14,7 +14,9 @@ declare const sessions: {
 // #region identity
 /**
  * The one service you write. Verify a credential you issued and look the tenant up yourself: a
- * request never names its own `ownerId`, and one you cannot attribute fails closed.
+ * request never names its own `ownerId`, and one you cannot attribute fails closed. The provider
+ * callback is the one route where something else names it, and that something is DomainKit's own
+ * record of the flow rather than the request; `CallbackAwareIdentity` below takes it.
  *
  * Read it from a cookie. `/callback/:provider` is a top-level navigation the provider sends the
  * browser on, so only what the browser attaches by itself arrives with it; a header-only scheme
@@ -35,6 +37,28 @@ export const IdentityLive = Layer.succeed(Server.Identity)({
     }),
 });
 // #endregion identity
+
+// #region callback-identity
+/**
+ * `context` arrives on `/callback/:provider` and nowhere else. It carries the flow DomainKit
+ * recorded when the connection started, so the doctrine above still holds: the request does not
+ * name its own owner. DomainKit's durable record does, and the `state` the provider echoed back
+ * only points at it.
+ *
+ * Ignore the argument and nothing breaks. Reach for it when one session holds several tenants and
+ * the callback has to land on the one the flow belongs to, which no cookie can tell you. Either
+ * way DomainKit checks the principal you return against the recorded owner and actor and refuses a
+ * mismatch, so a wrong answer is a refusal rather than a cross-tenant write.
+ */
+export const CallbackAwareIdentity = Layer.succeed(Server.Identity)({
+  principal: (request, context) =>
+    Effect.gen(function* () {
+      const session = yield* Effect.orDie(sessions.principal(request.cookies.session ?? ""));
+      const ownerId = context?.continuation.ownerId ?? session.ownerId;
+      return { ownerId, actorId: session.actorId };
+    }),
+});
+// #endregion callback-identity
 
 // #region authorize
 /**
