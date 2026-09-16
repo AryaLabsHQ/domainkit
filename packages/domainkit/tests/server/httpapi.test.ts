@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { HttpApi, OpenApi } from "effect/unstable/httpapi";
 
-import { DnsRecord, DomainKit, Plan, Reason } from "../../src/index.ts";
+import { Connect, DnsRecord, DomainKit, Plan, type Principal, Reason } from "../../src/index.ts";
 import { Server } from "../../src/entry/server.ts";
 import { Testing } from "../../src/entry/testing.ts";
 
@@ -675,6 +675,229 @@ describe("Server.group over the lifecycle", () => {
     } finally {
       await dispose();
     }
+  });
+
+  describe("the callback binds to the flow that started it", () => {
+    /**
+     * A server whose identity answers with whatever the test last set, so the callback can arrive
+     * under a different session from the one that started the flow. That is the whole attack: the
+     * provider's redirect is a top-level navigation, so whoever's browser follows it is who the
+     * host authenticates.
+     */
+    const bound = (policy: Partial<Connect.PolicyShape> = {}) => {
+      const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+      let current: Principal.Interface = Testing.principal;
+      const shifting = Layer.succeed(Server.Identity)({
+        principal: () => Effect.succeed(current),
+      });
+      const { handler, dispose } = Server.toWebHandler(
+        DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() }).pipe(
+          Layer.merge(shifting),
+          Layer.merge(Layer.succeed(Connect.Policy)({ ...Connect.defaults, ...policy })),
+        ),
+        { defaultReturnTo: "/dashboard" },
+      );
+      const start = async () => {
+        const started = await handler(
+          new Request(`${host}/connections`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              domain: "app.example.com",
+              provider: fake.id,
+              method: { _tag: "OAuth", returnTo: "/settings/domains" },
+            }),
+          }),
+        );
+        assert.strictEqual(started.status, 200);
+        const { authorizationUrl } = (await started.json()) as {
+          readonly authorizationUrl: string;
+        };
+        return new URL(authorizationUrl);
+      };
+      return {
+        fake,
+        start,
+        as: (principal: Principal.Interface) => {
+          current = principal;
+        },
+        callback: (url: URL) => handler(new Request(url, { redirect: "manual" })),
+        dispose,
+      };
+    };
+
+    const refusal = async (response: Response) => {
+      const body = JSON.parse(await response.text()) as {
+        readonly reason: { readonly _tag: string; readonly message: string };
+      };
+      return body.reason;
+    };
+
+    it("completes for the session that started the flow", async () => {
+      const { start, callback, dispose } = bound();
+      try {
+        const response = await callback(await start());
+        assert.strictEqual(response.status, 302);
+        assert.strictEqual(response.headers.get("location"), `${host}/settings/domains`);
+      } finally {
+        await dispose();
+      }
+    });
+
+    it("refuses a state that names no flow", async () => {
+      const { fake, callback, dispose } = bound();
+      try {
+        const response = await callback(
+          new URL(`${host}/callback/${fake.id}?state=cont_nothing&code=abc`),
+        );
+        assert.strictEqual(response.status, 400);
+        assert.strictEqual(response.headers.get("location"), null);
+      } finally {
+        await dispose();
+      }
+    });
+
+    it("refuses an expired flow", async () => {
+      const { start, callback, dispose } = bound({ continuationTtlMs: 0 });
+      try {
+        const response = await callback(await start());
+        assert.strictEqual(response.status, 400);
+        assert.strictEqual(response.headers.get("location"), null);
+      } finally {
+        await dispose();
+      }
+    });
+
+    it("refuses a callback completed by another actor in the same organization", async () => {
+      const { start, as, callback, dispose } = bound();
+      try {
+        const url = await start();
+        // Same tenant, different administrator. The owner-scoped read cannot see the difference.
+        as({ ownerId: Testing.principal.ownerId, actorId: "user_colleague" });
+        const response = await callback(url);
+        assert.strictEqual(response.status, 400);
+        assert.strictEqual(response.headers.get("location"), null);
+      } finally {
+        await dispose();
+      }
+    });
+
+    it("refuses a callback completed under another organization", async () => {
+      const { start, as, callback, dispose } = bound();
+      try {
+        const url = await start();
+        as({ ownerId: "org_other", actorId: "user_other" });
+        const response = await callback(url);
+        assert.strictEqual(response.status, 400);
+        assert.strictEqual(response.headers.get("location"), null);
+      } finally {
+        await dispose();
+      }
+    });
+
+    it("answers every refusal with the same text", async () => {
+      // A caller holding a leaked `state` must not be able to tell "no such flow" from "not your
+      // flow" from "too late"; every one of them is the same sentence.
+      const unknown = bound();
+      const expired = bound({ continuationTtlMs: 0 });
+      const foreign = bound();
+      try {
+        const reasons = [
+          await refusal(
+            await unknown.callback(
+              new URL(`${host}/callback/${unknown.fake.id}?state=cont_nothing&code=abc`),
+            ),
+          ),
+          await refusal(await expired.callback(await expired.start())),
+          await (async () => {
+            const url = await foreign.start();
+            foreign.as({ ownerId: "org_other", actorId: "user_other" });
+            return refusal(await foreign.callback(url));
+          })(),
+        ];
+        assert.deepStrictEqual(reasons[1], reasons[0]);
+        assert.deepStrictEqual(reasons[2], reasons[0]);
+      } finally {
+        await Promise.all([unknown.dispose(), expired.dispose(), foreign.dispose()]);
+      }
+    });
+
+    it("authenticates before it decides, so the status is no oracle on a state", async () => {
+      const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+      const cookieIdentity = Layer.succeed(Server.Identity)({
+        principal: (request) =>
+          request.cookies.session === "s3cret"
+            ? Effect.succeed(Testing.principal)
+            : Effect.fail(
+                new DomainKit.Error({
+                  reason: new Reason.Unauthenticated({ message: "No session" }),
+                }),
+              ),
+      });
+      const { handler, dispose } = Server.toWebHandler(
+        DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() }).pipe(
+          Layer.merge(cookieIdentity),
+        ),
+        { defaultReturnTo: "/dashboard" },
+      );
+      try {
+        const started = await handler(
+          new Request(`${host}/connections`, {
+            method: "POST",
+            headers: { cookie: "session=s3cret", "content-type": "application/json" },
+            body: JSON.stringify({
+              domain: "app.example.com",
+              provider: fake.id,
+              method: { _tag: "OAuth", returnTo: "/settings/domains" },
+            }),
+          }),
+        );
+        const { authorizationUrl } = (await started.json()) as {
+          readonly authorizationUrl: string;
+        };
+        // Neither request carries the cookie: one names a live flow, the other names nothing.
+        const live = await handler(new Request(authorizationUrl, { redirect: "manual" }));
+        const invented = await handler(
+          new Request(`${host}/callback/${fake.id}?state=cont_nothing&code=abc`, {
+            redirect: "manual",
+          }),
+        );
+        assert.strictEqual(live.status, 401);
+        assert.strictEqual(invented.status, live.status);
+      } finally {
+        await dispose();
+      }
+    });
+
+    it("refuses a flow presented at another provider's callback", async () => {
+      const { start, callback, dispose } = bound();
+      try {
+        const url = await start();
+        const elsewhere = new URL(`${host}/callback/other${url.search}`);
+        const response = await callback(elsewhere);
+        assert.strictEqual(response.status, 400);
+        assert.strictEqual(response.headers.get("location"), null);
+      } finally {
+        await dispose();
+      }
+    });
+
+    it("leaves the flow unspent when it refuses", async () => {
+      // The pre-identity read is a read. Spending before authentication would let anyone holding a
+      // leaked `state` burn the flow the rightful owner is still in the middle of.
+      const { start, as, callback, dispose } = bound();
+      try {
+        const url = await start();
+        as({ ownerId: Testing.principal.ownerId, actorId: "user_colleague" });
+        assert.strictEqual((await callback(url)).status, 400);
+        as(Testing.principal);
+        const completed = await callback(url);
+        assert.strictEqual(completed.status, 302);
+        assert.strictEqual(completed.headers.get("location"), `${host}/settings/domains`);
+      } finally {
+        await dispose();
+      }
+    });
   });
 
   it("resolves every route under any mount prefix", async () => {
