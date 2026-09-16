@@ -2,7 +2,15 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { HttpApi, OpenApi } from "effect/unstable/httpapi";
 
-import { Connect, DnsRecord, DomainKit, Plan, type Principal, Reason } from "../../src/index.ts";
+import {
+  Connect,
+  DnsRecord,
+  DomainKit,
+  Plan,
+  Principal,
+  Reason,
+  Storage,
+} from "../../src/index.ts";
 import { Server } from "../../src/entry/server.ts";
 import { Testing } from "../../src/entry/testing.ts";
 
@@ -864,6 +872,56 @@ describe("Server.group over the lifecycle", () => {
         );
         assert.strictEqual(live.status, 401);
         assert.strictEqual(invented.status, live.status);
+      } finally {
+        await dispose();
+      }
+    });
+
+    it("keeps the refusal constant when the flow disappears mid-request", async () => {
+      // The host's authentication sits between the header read and the scoped read, so the flow
+      // can expire or be spent in that window. The identity layer below spends it there on
+      // purpose, which is the race made deterministic.
+      const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+      const base = DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() });
+      let spend: string | null = null;
+      const racing = Layer.effect(Server.Identity)(
+        Effect.map(Storage.Service, (storage): Server.IdentityService => ({
+          principal: (_request, context) =>
+            Effect.gen(function* () {
+              if (context !== undefined && spend !== null) {
+                yield* storage.continuations
+                  .consume(spend)
+                  .pipe(Effect.provideService(Principal.Service, Testing.principal), Effect.ignore);
+              }
+              return Testing.principal;
+            }),
+        })),
+      );
+      const { handler, dispose } = Server.toWebHandler(
+        Layer.merge(base, racing.pipe(Layer.provide(base))),
+        { defaultReturnTo: "/dashboard" },
+      );
+      try {
+        const started = await handler(
+          new Request(`${host}/connections`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              domain: "app.example.com",
+              provider: fake.id,
+              method: { _tag: "OAuth", returnTo: "/settings/domains" },
+            }),
+          }),
+        );
+        const { authorizationUrl } = (await started.json()) as {
+          readonly authorizationUrl: string;
+        };
+        const url = new URL(authorizationUrl);
+        spend = url.searchParams.get("state");
+        const response = await handler(new Request(url, { redirect: "manual" }));
+        assert.strictEqual(response.status, 400);
+        assert.strictEqual(response.headers.get("location"), null);
+        assert.strictEqual((await refusal(response))._tag, "InvalidInput");
       } finally {
         await dispose();
       }

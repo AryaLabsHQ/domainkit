@@ -909,7 +909,20 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                 // from the provider's query string, and it is resolved before the callback is
                 // spent: a server with nowhere to send them must not connect the provider and
                 // then fail.
-                const flow = yield* storage.continuations.get(query.state);
+                // The host's authentication sits between the header read and this one, so the
+                // flow can expire or be spent in that window. It refuses the same way it would
+                // have a moment earlier, rather than changing shape because of when it happened.
+                // This is also where the owner filter fails closed when a host resolves the wrong
+                // principal, and that refusal must look like every other one.
+                const flow = yield* storage.continuations
+                  .get(query.state)
+                  .pipe(
+                    Effect.catch((error) =>
+                      error.reason._tag === "NotFound" || error.reason._tag === "Expired"
+                        ? noSuchFlow
+                        : Effect.fail(error),
+                    ),
+                  );
                 const requested = flow.returnTo ?? options.defaultReturnTo;
                 if (requested === undefined) {
                   return yield* invalid(
