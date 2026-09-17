@@ -14,8 +14,8 @@ export const tokensOnly = Cloudflare.provider();
  */
 export const withOAuth = Cloudflare.provider({
   oauth: {
-    clientId: Config.string("CF_CLIENT_ID"),
-    clientSecret: Config.redacted("CF_CLIENT_SECRET"),
+    clientId: Config.String("CF_CLIENT_ID"),
+    clientSecret: Config.Redacted("CF_CLIENT_SECRET"),
   },
 });
 // #endregion oauth
@@ -24,7 +24,7 @@ export const withOAuth = Cloudflare.provider({
 /** Public clients use PKCE and do not carry a client secret. */
 export const withPublicOAuth = Cloudflare.provider({
   oauth: {
-    clientId: Config.string("CF_CLIENT_ID"),
+    clientId: Config.String("CF_CLIENT_ID"),
     clientAuth: "none",
   },
 });

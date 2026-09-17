@@ -55,7 +55,7 @@ export const layerConfig = (
 ): Layer.Layer<Service, Errors.DomainKitError> =>
   Layer.effect(Service)(
     Effect.gen(function* () {
-      const key = yield* (options.key ?? Config.redacted("DOMAINKIT_CUSTODY_KEY")).pipe(
+      const key = yield* (options.key ?? Config.Redacted("DOMAINKIT_CUSTODY_KEY")).pipe(
         Effect.mapError(
           (cause) =>
             new Errors.DomainKitError({

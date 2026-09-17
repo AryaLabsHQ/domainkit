@@ -74,7 +74,7 @@ describe("packed Vite consumer on React 19", () => {
           dependencies: {
             "@domainkit/react": `file:${reactTarball}`,
             domainkit: `file:${coreTarball}`,
-            effect: "4.0.0-rc.112",
+            effect: "4.0.0-rc.115",
             react: "19.2.4",
             "react-dom": "19.2.4",
             vite: "7.1.12",
@@ -122,7 +122,7 @@ describe("packed Next.js consumer", () => {
           dependencies: {
             "@domainkit/react": `file:${reactTarball}`,
             domainkit: `file:${coreTarball}`,
-            effect: "4.0.0-rc.112",
+            effect: "4.0.0-rc.115",
             next: "15.5.7",
             react: "19.2.4",
             "react-dom": "19.2.4",

@@ -1,20 +1,15 @@
-import { execFile } from "node:child_process";
-import { createRequire } from "node:module";
-import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { promisify } from "node:util";
+import { join } from "node:path";
 
 import { Storage } from "domainkit";
+import { Emit, Manifest } from "capsuledb";
 import { Context, Effect, Layer } from "effect";
 import { afterAll, assert, beforeAll, describe, it } from "@effect/vitest";
 
 import { PgStorage } from "../src/index.ts";
 import { capsule } from "../src/capsule.ts";
 import { type Postgres, start } from "./postgres.ts";
-
-const execFileAsync = promisify(execFile);
-const packageRoot = join(import.meta.dirname, "..");
 
 interface EmitIndex {
   readonly files: ReadonlyArray<{ readonly path: string; readonly checksum: string }>;
@@ -44,31 +39,19 @@ let directory: string | undefined;
 beforeAll(async () => {
   postgres = await start(4);
   directory = await mkdtemp(join(tmpdir(), "domainkit-capsuledb-emit-"));
-  // The CLI guards on argv[1] resolving to its own module, so it needs its real path rather than a
-  // bin shim, which a workspace install may hoist or omit.
-  const cli = await realpath(
-    join(
-      dirname(createRequire(import.meta.url).resolve("capsuledb/package.json")),
-      "dist",
-      "cli.mjs",
-    ),
+  const out = directory;
+  const manifest = await Effect.runPromise(Manifest.buildManifest({ capsules: [capsule] }));
+  const files = await Effect.runPromise(Emit.emit(manifest, { dialect: "postgres" }));
+  await Promise.all(
+    files.map(async (file) => {
+      const path = join(out, file.path);
+      await mkdir(join(path, ".."), { recursive: true });
+      await writeFile(path, file.contents);
+    }),
   );
-  await execFileAsync(
-    "node",
-    [
-      cli,
-      "emit",
-      "--module",
-      join(packageRoot, "src", "capsule.ts"),
-      "--export",
-      "capsule",
-      "--dialect",
-      "postgres",
-      "--out",
-      directory,
-    ],
-    { cwd: packageRoot },
-  );
+  const index = Emit.indexOf(files);
+  if (index === undefined) throw new Error("CapsuleDB did not produce an emit index");
+  await writeFile(join(out, "capsuledb.emit.json"), JSON.stringify(index));
 }, 180_000);
 
 afterAll(async () => {

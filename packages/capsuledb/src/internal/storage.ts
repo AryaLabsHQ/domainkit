@@ -97,8 +97,16 @@ const credentialCodec = codec(Storage.Credential, "credential");
 // ---------------------------------------------------------------------------------------------
 
 /** A `TIMESTAMPTZ` column as the ISO string every DomainKit timestamp schema encodes to. */
-const iso = (value: unknown): string =>
-  value instanceof Date ? value.toISOString() : String(value);
+const iso = (value: unknown): string => {
+  if (value instanceof Date) return value.toISOString();
+  if (DateTime.isDateTime(value)) return DateTime.toDateUtc(value).toISOString();
+  if (typeof value === "number") return new Date(value).toISOString();
+  if (typeof value === "string") {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) return date.toISOString();
+  }
+  return String(value);
+};
 
 const isoOrNull = (value: unknown): string | null => (value === null ? null : iso(value));
 
