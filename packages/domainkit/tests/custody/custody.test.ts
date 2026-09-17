@@ -77,7 +77,7 @@ describe("Custody", () => {
     ),
   );
 
-  it("exposes Config.redacted as the key option", () => {
-    assert.ok(Config.isConfig(Config.redacted("X")));
+  it("exposes Config.Redacted as the key option", () => {
+    assert.ok(Config.isConfig(Config.Redacted("X")));
   });
 });

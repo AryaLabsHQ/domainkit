@@ -13,8 +13,8 @@ export const tokensOnly = Vercel.provider();
  */
 export const withIntegration = Vercel.provider({
   integration: {
-    clientId: Config.string("VERCEL_CLIENT_ID"),
-    clientSecret: Config.redacted("VERCEL_CLIENT_SECRET"),
+    clientId: Config.String("VERCEL_CLIENT_ID"),
+    clientSecret: Config.Redacted("VERCEL_CLIENT_SECRET"),
     slug: "acme-domains",
   },
 });
