@@ -70,6 +70,14 @@ export interface FlowOptions {
   readonly returnTo?: string | null;
   /** Report this domain's state without the controls that change it. Defaults to the root's. */
   readonly readOnly?: boolean;
+  /**
+   * Take readiness from the host instead of observing. A host that observes on its own clock — a
+   * cron, a durable job, a server render that already read `Verify.latest` — supplies the stored
+   * fact, and the flow makes no observation on mount and sets no timer. `flow.verification.observe`
+   * and `retry` call the host's `observe`, or do nothing when it supplies none. Drift replanning
+   * runs off the supplied readiness exactly as it does off an observed one.
+   */
+  readonly verification?: Verify.Supplied;
 }
 
 export interface Flow {
@@ -156,6 +164,7 @@ export function useFlow({
   readOnly,
   requirements,
   returnTo,
+  verification: supplied,
 }: FlowOptions): Flow {
   const { capabilities } = useDomainKit();
   const inherited = useReadOnly();
@@ -169,7 +178,11 @@ export function useFlow({
   });
   const refresh = connection.refresh;
   // The flow knows what it asked for, so a domain with no attachment can still be verified.
-  const verification = Verify.useController({ domain, requirements });
+  const verification = Verify.useController({
+    domain,
+    requirements,
+    ...(supplied === undefined ? {} : { supplied }),
+  });
   const observe = verification.observe;
   const provisioning = Provision.useController({
     domain,
