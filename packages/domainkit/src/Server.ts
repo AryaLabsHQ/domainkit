@@ -460,6 +460,16 @@ export const group = HttpApiGroup.make("domainkit")
     }),
   )
   .add(
+    // The stored observation, or `null` when nothing has been observed for the domain yet. A
+    // domain with no readiness is not a missing route, so it answers 200 with a null body and
+    // leaves 404 to name a domain this owner cannot reach.
+    HttpApiEndpoint.get("readiness", "/domains/:domain/readiness", {
+      params: { domain: Schema.String },
+      success: Schema.NullOr(Readiness),
+      error: errors,
+    }),
+  )
+  .add(
     HttpApiEndpoint.post("cleanupPlan", "/receipts/:receiptId/cleanup-plans", {
       params: { receiptId: Receipt.ReceiptId },
       success: Plan.Model,
@@ -1040,6 +1050,9 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
               ...(payload.requirements === undefined ? {} : { requirements: payload.requirements }),
             }),
           ),
+        )
+        .handle("readiness", ({ params, request }) =>
+          as("readiness", request, verify.latest(params.domain)),
         )
         .handle("cleanupPlan", ({ params, request }) =>
           as("cleanupPlan", request, cleanup.plan({ receiptId: params.receiptId })),

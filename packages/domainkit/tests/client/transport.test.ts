@@ -174,6 +174,9 @@ describe("Transport.fromFetch", () => {
       assert.strictEqual(readiness.overall, "ready");
       assert.strictEqual(readiness.requirements.length, 2);
       assert.strictEqual(readiness.nextCheckAt, null);
+      assert.deepStrictEqual(yield* verification.latest("app.example.com"), readiness);
+      assert.strictEqual(yield* verification.latest("nobody.example.com"), null);
+
       const standalone = yield* verification.observe("nobody.example.com", {
         requirements: [DnsRecord.txt({ name: "_acme.nobody.example.com", value: "acme-verify=1" })],
       });
