@@ -27,6 +27,11 @@ the observation. The default does nothing; provide one with
 observed. `Transport.VerificationGroup.latest(domain)` reads it, so a browser surface can render the
 last stored observation without making one of its own.
 
+`latest` is a required method on `VerificationGroup`, not an optional one, so a host that hand-writes
+a verification group rather than building it with `Transport.fromFetch` adds it. A transport that
+exposes no stored-readiness read declares no `verification` capability at all: the group is the unit
+of what a host mounts, and a half-present group would make every caller of `latest` test for it.
+
 ### `Verify.summary` and `Requirement.key`
 
 `Verify.summary(readiness)` is a pure function over a readiness or `null`, returning

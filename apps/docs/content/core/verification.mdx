@@ -102,6 +102,10 @@ swallowed, because the observation is already durable and losing it to a broken 
 make the stored fact depend on the host's side effects; work that has to survive belongs on a
 durable queue the observer enqueues to.
 
+Events for one domain are not ordered against each other. Two observations that overlap both store,
+the later write wins in `Storage`, and their callbacks can finish in either order, so a projection
+compares `readiness.checkedAt` and keeps the later one. `Verify.latest` is the authority.
+
 <Snippet file="examples/core/host-observation.ts" region="observer" title="Wiring the observer" />
 
 <Snippet

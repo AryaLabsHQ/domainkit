@@ -180,6 +180,11 @@ export interface ObserverShape {
    * Called once per stored readiness, after the write. A host that projects readiness onto its own
    * rows, wakes a durable job at `nextCheckAt`, or notifies a customer hangs it here instead of
    * mirroring the fact at every call site.
+   *
+   * Events for one domain are not ordered against each other: two observations that overlap both
+   * store, last write wins in `Storage`, and their callbacks can finish in either order. A
+   * projection compares `readiness.checkedAt`, which is the moment the row was written, and keeps
+   * the later one; `latest` remains the authority.
    */
   readonly readinessChanged: (event: ReadinessChanged) => Effect.Effect<void, unknown>;
 }

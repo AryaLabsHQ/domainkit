@@ -125,6 +125,24 @@ describe("Verify.useController with host-supplied readiness", () => {
     expect(methodsCalled(transport)).not.toContain("verification.observe");
   });
 
+  it("discards a supplied readiness that belongs to another domain", async () => {
+    const { domain, requirements, sibling, transport } = scenario();
+    await attach(transport, domain);
+    const readiness = await readStored(transport, domain, requirements);
+    const view = mount(
+      transport,
+      ({ target }: { readonly target: string }) =>
+        Verify.useController({ domain: target, requirements, supplied: { readiness } }),
+      { initialProps: { target: domain } },
+    );
+    await until(() => expect(view.result.current.readiness?.domain).toBe(domain));
+    // The host moved the surface before its own read landed. The previous domain's evidence does
+    // not travel with it, so nothing plans from drift that was never about this domain.
+    act(() => view.rerender({ target: sibling }));
+    expect(view.result.current.readiness).toBeNull();
+    expect(view.result.current.state._tag).toBe("Idle");
+  });
+
   it("does nothing when the host supplies no observe", async () => {
     const { domain, requirements, transport } = scenario();
     await attach(transport, domain);
