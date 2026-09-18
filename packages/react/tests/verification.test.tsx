@@ -172,6 +172,23 @@ describe("Verify.useController with host-supplied readiness", () => {
     expect(asked).toBe(0);
   });
 
+  it("accepts the host's own spelling of the same name", async () => {
+    const { domain, requirements, transport } = scenario();
+    await attach(transport, domain);
+    const readiness = await readStored(transport, domain, requirements);
+    // A trailing dot and upper case are the same name to `DomainName`, which is what stored the
+    // readiness, so the controller keeps it rather than inventing a stricter rule.
+    const view = mount(transport, () =>
+      Verify.useController({
+        domain: `${domain.toUpperCase()}.`,
+        requirements,
+        supplied: { readiness },
+      }),
+    );
+    expect(view.result.current.readiness).toEqual(readiness);
+    expect(view.result.current.state._tag).toBe("Observed");
+  });
+
   it("does nothing when the host supplies no observe", async () => {
     const { domain, requirements, transport } = scenario();
     await attach(transport, domain);

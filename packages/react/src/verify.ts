@@ -1,7 +1,8 @@
-import { DnsRecord, Verify, type DomainKit } from "domainkit";
+import { DnsRecord, DomainName, Verify, type DomainKit } from "domainkit";
 import type { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
+import * as Option from "effect/Option";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useDomainKit } from "./domain-kit.tsx";
@@ -80,9 +81,16 @@ export interface Options {
   readonly supplied?: Supplied | undefined;
 }
 
-/** Two spellings of one name: readiness is stored under the normalised domain. */
-const sameDomain = (one: string, other: string): boolean =>
-  one.replace(/\.$/, "").toLowerCase() === other.replace(/\.$/, "").toLowerCase();
+/**
+ * One name, however the host spelled it. Readiness is stored under `DomainName`'s normalised form,
+ * so the comparison runs through the same boundary rather than a second spelling rule of its own.
+ * A value that boundary rejects is compared as written, which is the strictest thing left to do.
+ */
+const sameDomain = (one: string, other: string): boolean => {
+  const left = DomainName.fromString(one);
+  const right = DomainName.fromString(other);
+  return Option.isSome(left) && Option.isSome(right) ? left.value === right.value : one === other;
+};
 
 /**
  * Observe once on mount, then follow the readiness's own `nextCheckAt` while polling is on — or,
