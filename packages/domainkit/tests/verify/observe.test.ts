@@ -370,6 +370,47 @@ describe("Verify", () => {
     );
   });
 
+  it.effect("keys every requirement by its record and counts the set", () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    return Effect.gen(function* () {
+      yield* connectAndApply;
+      const readiness = yield* Verify.observe({ domain: "app.example.com" });
+      assert.deepStrictEqual(
+        readiness.requirements.map(({ key }) => key),
+        requirements.map((record) => Verify.requirementKey(record)),
+      );
+      assert.deepStrictEqual(
+        readiness.requirements.map(({ key }) => key),
+        ["CNAME:app.example.com:edge.acme.dev", "TXT:_acme.app.example.com:acme-verify=7f3a"],
+      );
+      // The key survives the round trip through storage, because it is derived from the record.
+      const stored = yield* Verify.latest("app.example.com");
+      assert.deepStrictEqual(
+        stored?.requirements.map(({ key }) => key),
+        readiness.requirements.map(({ key }) => key),
+      );
+      assert.deepStrictEqual(Verify.summary(readiness), {
+        observed: true,
+        total: 2,
+        satisfied: 2,
+        missing: 0,
+        mismatch: 0,
+        unknown: 0,
+      });
+      assert.deepStrictEqual(Verify.summary(null), {
+        observed: false,
+        total: 0,
+        satisfied: 0,
+        missing: 0,
+        mismatch: 0,
+        unknown: 0,
+      });
+    }).pipe(
+      withPrincipal,
+      Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
+    );
+  });
+
   it.effect("requires every resolver under the all quorum", () => {
     const fake = Testing.provider({ zones: ["example.com"] });
     return Effect.gen(function* () {

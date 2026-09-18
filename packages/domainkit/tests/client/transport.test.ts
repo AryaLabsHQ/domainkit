@@ -174,6 +174,10 @@ describe("Transport.fromFetch", () => {
       assert.strictEqual(readiness.overall, "ready");
       assert.strictEqual(readiness.requirements.length, 2);
       assert.strictEqual(readiness.nextCheckAt, null);
+      assert.deepStrictEqual(
+        readiness.requirements.map(({ key }) => key),
+        ["CNAME:app.example.com:edge.acme.dev", "TXT:_acme.app.example.com:acme-verify=7f3a"],
+      );
       assert.deepStrictEqual(yield* verification.latest("app.example.com"), readiness);
       assert.strictEqual(yield* verification.latest("nobody.example.com"), null);
 

@@ -60,6 +60,8 @@ export const Evidence = Schema.Union([ProviderEvidence, PublicDnsEvidence, HostE
 export type Evidence = typeof Evidence.Type;
 
 export interface Requirement {
+  /** `requirementKey(record)`: what a host pairs its own row against, by content. */
+  readonly key: string;
   readonly operationId: Plan.OperationId | null;
   readonly record: DnsRecord.Model;
   readonly status: Storage.RequirementStatus;
@@ -101,6 +103,47 @@ export interface Interface {
 }
 
 export class Service extends Context.Service<Service, Interface>()("@domainkit/Verify") {}
+
+/**
+ * A requirement's identity: the record's type, name, and data, and nothing else. It is what a host
+ * pairs its own rows against readiness by, instead of trusting the order of the array.
+ * `@domainkit/react`'s `Records.identity` is this function.
+ */
+export const requirementKey = (record: DnsRecord.Model): string =>
+  [record._tag, record.name, DnsRecord.data(record)].join(":");
+
+/** Counts across a readiness's requirements. `observed` is false when there is no readiness yet. */
+export interface Summary {
+  readonly observed: boolean;
+  readonly total: number;
+  readonly satisfied: number;
+  readonly missing: number;
+  readonly mismatch: number;
+  readonly unknown: number;
+}
+
+/** The least a value has to carry to be summarised: core `Readiness` and the wire shape both do. */
+export interface Summarisable {
+  readonly requirements: ReadonlyArray<{ readonly status: Storage.RequirementStatus }>;
+}
+
+/**
+ * How a readiness stands, as counts. Pure and total: a host renders "3 of 4 found" from the stored
+ * fact without deciding what an absent readiness means, because `observed` says so.
+ */
+export const summary = (readiness: Summarisable | null): Summary => {
+  const statuses = readiness?.requirements.map(({ status }) => status) ?? [];
+  const count = (status: Storage.RequirementStatus): number =>
+    statuses.filter((candidate) => candidate === status).length;
+  return {
+    observed: readiness !== null,
+    total: statuses.length,
+    satisfied: count("satisfied"),
+    missing: count("missing"),
+    mismatch: count("mismatch"),
+    unknown: count("unknown"),
+  };
+};
 
 export interface PolicyShape {
   /** Delay before the next check, given time since the first pending observation. Default ladder: 15s, 1m, 5m, 30m. */
@@ -246,7 +289,7 @@ const overallOf = (
 };
 
 /** The identity of a requirement set: type, name, data, and policy, independent of labels and order. */
-const requirementKey = (requirements: ReadonlyArray<{ readonly record: DnsRecord.Model }>) =>
+const requirementSetKey = (requirements: ReadonlyArray<{ readonly record: DnsRecord.Model }>) =>
   requirements
     .map(({ record }) => `${record._tag} ${record.name} ${DnsRecord.data(record)} ${record.policy}`)
     .sort()
@@ -278,6 +321,7 @@ export const make: Effect.Effect<
       const requirements = yield* Effect.forEach(row.requirements, (requirement) =>
         Errors.decode(StoredEvidence, requirement.evidence, "evidence").pipe(
           Effect.map((evidence): Requirement => ({
+            key: requirementKey(requirement.record),
             operationId: requirement.operationId,
             record: requirement.record,
             status: requirement.status,
@@ -314,7 +358,8 @@ export const make: Effect.Effect<
       const overall = overallOf(input.requirements, input.host);
       const sameRequirements =
         Option.isSome(input.previous) &&
-        requirementKey(input.previous.value.requirements) === requirementKey(input.requirements);
+        requirementSetKey(input.previous.value.requirements) ===
+          requirementSetKey(input.requirements);
       const pendingSince =
         overall === "ready"
           ? null
@@ -479,6 +524,7 @@ export const make: Effect.Effect<
               publicStatus,
             ]);
             return {
+              key: requirementKey(record),
               operationId,
               record,
               status,

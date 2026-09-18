@@ -1,4 +1,4 @@
-import { DnsRecord, type DomainKit } from "domainkit";
+import { DnsRecord, Verify, type DomainKit } from "domainkit";
 import type { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
@@ -13,6 +13,10 @@ export type Readiness = Transport.Readiness;
 export type HostEvidence = Readiness["host"][number];
 export type Requirement = Readiness["requirements"][number];
 export type Evidence = Requirement["evidence"][number];
+
+/** Counts across a readiness's requirements, from the core package. Pure, and total over `null`. */
+export const summary = Verify.summary;
+export type Summary = Verify.Summary;
 
 /**
  * What the observer read back for the requirement's name, or `null` when it read nothing back at

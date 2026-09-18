@@ -2,7 +2,7 @@
  * What a domain's requirements are, as data: the zone file they spell, the clipboard control a
  * value needs, and the standing one row reports. The table itself is the host's.
  */
-import { DnsRecord, type Plan } from "domainkit";
+import { DnsRecord, Verify, type Plan } from "domainkit";
 import type { Transport } from "domainkit/client";
 import { useEffect, useRef, useState } from "react";
 
@@ -156,9 +156,12 @@ export const standingOf = (record: DnsRecord.Model, sources: Sources): Standing 
     ) ?? null,
 });
 
-/** A stable React key for a requirement: type, name, and data identify a record. */
-export const identity = (record: DnsRecord.Model): string =>
-  [rrType(record), record.name, DnsRecord.data(record)].join(":");
+/**
+ * A stable React key for a requirement: type, name, and data identify a record. It is
+ * `Verify.requirementKey` from the core package, which is the `key` every readiness requirement
+ * carries, so a row and the observation about it are paired by the same string.
+ */
+export const identity = Verify.requirementKey;
 
 /**
  * A requirement set keyed by everything it carries, for memos that decide whether to re-send it.

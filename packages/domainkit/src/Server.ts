@@ -304,6 +304,8 @@ export const Readiness = Schema.Struct({
   overall: Storage.Overall,
   requirements: Schema.Array(
     Schema.Struct({
+      /** `Verify.requirementKey(record)`, so a client pairs rows by content, not by position. */
+      key: Schema.String,
       operationId: Schema.NullOr(Plan.OperationId),
       record: DnsRecord.Model,
       status: Storage.RequirementStatus,
