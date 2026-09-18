@@ -4,7 +4,7 @@ import { Transport } from "domainkit/client";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
-import { Connect, Domain, DomainKit, Records, Testing } from "../src/index.ts";
+import { Connect, Domain, DomainKit, Records, Testing, type Verify } from "../src/index.ts";
 import { attach, mount, run, scenario, until } from "./harness.tsx";
 
 /** The one press the surface offers: approve every write in the plan and apply it. */
@@ -27,9 +27,9 @@ const connect = async (flow: () => Domain.Flow): Promise<void> => {
   await until(() => expect(flow().state.connected).toBe(true));
 };
 
-/** What one row reports, which is the plan while one is pending and the observation after it. */
+/** Both facts one row carries: the pending plan's operation, and the stored observation. */
 const standing = (flow: Domain.Flow, record: DnsRecord.Model) =>
-  Records.statusOf(record, { plan: flow.plan, readiness: flow.readiness });
+  Records.standingOf(record, { plan: flow.plan, readiness: flow.readiness });
 
 /** How many times the transport was asked for one method, which is how a plan is counted. */
 const called = (transport: Testing.RecordingTransport, method: string): number =>
@@ -136,7 +136,7 @@ describe("Domain.useFlow", () => {
     await until(() => expect(flow().plan?.operations).toHaveLength(2));
     const [first] = requirements;
     if (first === undefined) throw new Error("The scenario asked for no records");
-    expect(standing(flow(), first)).toMatchObject({ _tag: "Operation" });
+    expect(standing(flow(), first).planned?._tag).toBe("Create");
     await addRecords(flow());
     await until(() => expect(applied).toHaveLength(1));
     expect(applied[0]?.status).toBe("complete");
@@ -285,6 +285,53 @@ describe("Domain.useFlow", () => {
     expect(flow().plan).toBeNull();
   });
 
+  it("leaves the clock to a host that supplies readiness, and still plans off the drift in it", async () => {
+    const { domain, requirements, transport } = scenario();
+    const verification = transport.verification;
+    if (verification === undefined) throw new Error("The fake transport has no verification group");
+    // The host's own reading, made on its clock rather than the surface's.
+    const read = () =>
+      Effect.runPromise(
+        Effect.flatMap(verification.observe(domain, { requirements }), () =>
+          verification.latest(domain),
+        ),
+      );
+    let supplied: Verify.Readiness | null = null;
+    let asked = 0;
+    const view = mount(transport, () =>
+      Domain.useFlow({
+        domain,
+        requirements,
+        verification: { readiness: supplied, observe: () => (asked += 1) },
+      }),
+    );
+    const flow = () => view.result.current;
+    await connect(flow);
+    await until(() => expect(flow().plan).not.toBeNull());
+    await addRecords(flow());
+    const receiptId = await receiptOf(flow);
+
+    // Nothing the flow did observed for itself, including the apply's own re-read: it asked the
+    // host instead.
+    expect(called(transport, "verification.observe")).toBe(0);
+    expect(asked).toBeGreaterThan(0);
+    expect(flow().verification.polling).toBe(false);
+    expect(flow().readiness).toBeNull();
+
+    supplied = await read();
+    act(() => view.rerender());
+    await until(() => expect(flow().readiness?.overall).toBe("ready"));
+    const plans = called(transport, "provisioning.plan");
+
+    // Drift the host reads is drift the flow plans from, exactly as an observed one would be.
+    await deleteAtProvider(transport, receiptId);
+    supplied = await read();
+    act(() => view.rerender());
+    await until(() => expect(flow().plan?.operations).toHaveLength(2));
+    expect(called(transport, "provisioning.plan")).toBe(plans + 1);
+    expect(flow().state.applied).toBe(true);
+  });
+
   it("plans again when the records an apply landed are deleted at the provider", async () => {
     const { domain, requirements, transport } = scenario();
     const view = mount(transport, () => Domain.useFlow({ domain, requirements }));
@@ -306,7 +353,10 @@ describe("Domain.useFlow", () => {
     expect(called(transport, "provisioning.plan")).toBe(plans + 1);
     const [first] = requirements;
     if (first === undefined) throw new Error("The scenario asked for no records");
-    expect(standing(flow(), first)).toMatchObject({ _tag: "Operation" });
+    // The plan and the observation are both on the row: the plan says the record will be added
+    // back, the observation still says it is gone.
+    expect(standing(flow(), first).planned?._tag).toBe("Create");
+    expect(standing(flow(), first).observed?.status).toBe("missing");
     // The receipt is still the proof of what was applied, so cleanup keeps its offer.
     expect(flow().state.applied).toBe(true);
 
@@ -387,9 +437,7 @@ describe("Domain.useFlow", () => {
     expect(Plan.writes(plan)).toHaveLength(1);
     expect(Plan.conflicts(plan)).toHaveLength(1);
     const held = standing(flow(), blocked);
-    expect(held?._tag).toBe("Operation");
-    if (held?._tag !== "Operation") throw new Error("The blocked record reported no operation");
-    expect(held.operation._tag).toBe("Conflict");
+    expect(held.planned?._tag).toBe("Conflict");
     await addRecords(flow());
     await until(() => expect(flow().state.applied).toBe(true));
   });

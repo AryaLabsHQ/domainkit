@@ -2,7 +2,7 @@
  * What a domain's requirements are, as data: the zone file they spell, the clipboard control a
  * value needs, and the standing one row reports. The table itself is the host's.
  */
-import { DnsRecord, type Plan } from "domainkit";
+import { DnsRecord, Verify, type Plan } from "domainkit";
 import type { Transport } from "domainkit/client";
 import { useEffect, useRef, useState } from "react";
 
@@ -129,12 +129,17 @@ export function useCopy(value: string, resetAfter = 2000): CopyController {
 }
 
 /**
- * What a row has to say about one record: while a plan is pending it is what the plan will do to
- * it, and otherwise what the last observation read back.
+ * What a row has to say about one record: the operation a plan still awaiting its apply holds for
+ * it, and the requirement the last observation stored for it. They are two facts, not one — a
+ * pending plan says what will be written, an observation says what is there — so a surface renders
+ * whichever of them its column is about rather than being handed a winner.
  */
-export type Standing =
-  | { readonly _tag: "Operation"; readonly operation: Plan.Operation }
-  | { readonly _tag: "Readiness"; readonly status: RequirementStatus };
+export interface Standing {
+  /** The pending plan's operation for this record, or `null` when no plan covers it. */
+  readonly planned: Plan.Operation | null;
+  /** The stored requirement, evidence included, or `null` when no observation covers it. */
+  readonly observed: Readiness["requirements"][number] | null;
+}
 
 export interface Sources {
   /** A plan still awaiting its apply. Pass `null` once one has landed; readiness answers then. */
@@ -142,21 +147,21 @@ export interface Sources {
   readonly readiness?: Readiness | null | undefined;
 }
 
-/** The row's standing, or `null` when neither a plan nor an observation covers the record. */
-export const statusOf = (record: DnsRecord.Model, sources: Sources): Standing | null => {
-  const operation = sources.plan?.operations.find((entry) =>
-    DnsRecord.equals(entry.record, record),
-  );
-  if (operation !== undefined) return { _tag: "Operation", operation };
-  const status = sources.readiness?.requirements.find((requirement) =>
-    DnsRecord.equals(requirement.record, record),
-  )?.status;
-  return status === undefined ? null : { _tag: "Readiness", status };
-};
+/** Both facts a row can carry about one record, each `null` when nothing covers it. */
+export const standingOf = (record: DnsRecord.Model, sources: Sources): Standing => ({
+  planned: sources.plan?.operations.find((entry) => DnsRecord.equals(entry.record, record)) ?? null,
+  observed:
+    sources.readiness?.requirements.find((requirement) =>
+      DnsRecord.equals(requirement.record, record),
+    ) ?? null,
+});
 
-/** A stable React key for a requirement: type, name, and data identify a record. */
-export const identity = (record: DnsRecord.Model): string =>
-  [rrType(record), record.name, DnsRecord.data(record)].join(":");
+/**
+ * A stable React key for a requirement: type, name, and data identify a record. It is
+ * `Verify.requirementKey` from the core package, which is the `key` every readiness requirement
+ * carries, so a row and the observation about it are paired by the same string.
+ */
+export const identity = Verify.requirementKey;
 
 /**
  * A requirement set keyed by everything it carries, for memos that decide whether to re-send it.

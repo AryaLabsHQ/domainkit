@@ -1,7 +1,8 @@
-import { DnsRecord, type DomainKit } from "domainkit";
+import { DnsRecord, DomainName, Verify, type DomainKit } from "domainkit";
 import type { Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
+import * as Option from "effect/Option";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useDomainKit } from "./domain-kit.tsx";
@@ -13,6 +14,10 @@ export type Readiness = Transport.Readiness;
 export type HostEvidence = Readiness["host"][number];
 export type Requirement = Readiness["requirements"][number];
 export type Evidence = Requirement["evidence"][number];
+
+/** Counts across a readiness's requirements, from the core package. Pure, and total over `null`. */
+export const summary = Verify.summary;
+export type Summary = Verify.Summary;
 
 /**
  * What the observer read back for the requirement's name, or `null` when it read nothing back at
@@ -48,6 +53,18 @@ export interface Controller {
   readonly polling: boolean;
 }
 
+/**
+ * Readiness the host already holds, and how to ask it for a fresh one. A host that observes on its
+ * own clock — a cron, a durable job, a server render — supplies the stored fact rather than letting
+ * every mounted surface make an observation of its own.
+ */
+export interface Supplied {
+  /** Readiness for this controller's domain; one read for another domain is discarded. */
+  readonly readiness: Readiness | null;
+  /** What `observe` and `retry` call. Absent means the surface cannot ask, and both do nothing. */
+  readonly observe?: (() => void) | undefined;
+}
+
 export interface Options {
   readonly domain: string;
   /**
@@ -57,10 +74,34 @@ export interface Options {
   readonly requirements?: ReadonlyArray<DnsRecord.Model>;
   /** Re-observe at each `nextCheckAt` while mounted. Default true. */
   readonly polling?: boolean;
+  /**
+   * Take readiness from the host instead of observing. The controller then makes no observation on
+   * mount, sets no timer, and reports `polling: false`; `observe` and `retry` call the host's.
+   */
+  readonly supplied?: Supplied | undefined;
 }
 
-/** Observe once on mount, then follow the readiness's own `nextCheckAt` while polling is on. */
-export function useController({ domain, polling = true, requirements }: Options): Controller {
+/**
+ * One name, however the host spelled it. Readiness is stored under `DomainName`'s normalised form,
+ * so the comparison runs through the same boundary rather than a second spelling rule of its own.
+ * A value that boundary rejects is compared as written, which is the strictest thing left to do.
+ */
+const sameDomain = (one: string, other: string): boolean => {
+  const left = DomainName.fromString(one);
+  const right = DomainName.fromString(other);
+  return Option.isSome(left) && Option.isSome(right) ? left.value === right.value : one === other;
+};
+
+/**
+ * Observe once on mount, then follow the readiness's own `nextCheckAt` while polling is on — or,
+ * given `supplied`, report the host's readiness and leave the clock to it.
+ */
+export function useController({
+  domain,
+  polling = true,
+  requirements,
+  supplied,
+}: Options): Controller {
   const { emit, revision, transport } = useDomainKit();
   const verification = transport.verification;
   const runner = useRunner();
@@ -88,7 +129,22 @@ export function useController({ domain, polling = true, requirements }: Options)
     setState(State.Idle());
   }
 
+  // The option's identity is the host's to churn, so the callbacks depend on the two facts in it
+  // rather than on the object: whether the host owns the clock, and what it wants called.
+  const hostOwned = supplied !== undefined;
+  const hostObserve = supplied?.observe;
+  // Readiness belongs to the domain it was read for, exactly as an observed one does. A host that
+  // re-renders with a new domain before its own read lands would otherwise hang the previous
+  // domain's evidence under the new name, and `Domain.useFlow` would plan from its drift.
+  const offered = supplied?.readiness ?? null;
+  const hostReadiness = offered !== null && sameDomain(offered.domain, domain) ? offered : null;
+
   const observe = useCallback(() => {
+    // The host owns the clock, so asking for a new reading is asking the host for one.
+    if (hostOwned) {
+      hostObserve?.();
+      return;
+    }
     if (verification === undefined) return;
     clearTimeout(timer.current);
     setState((previous) => State.Observing({ readiness: readinessOf(previous) }));
@@ -108,28 +164,39 @@ export function useController({ domain, polling = true, requirements }: Options)
         },
       },
     );
-  }, [domain, emit, requested, runner, verification]);
+  }, [domain, emit, hostObserve, hostOwned, requested, runner, verification]);
 
   useEffect(() => {
+    if (hostOwned) return;
     observe();
-  }, [observe, revision]);
+  }, [hostOwned, observe, revision]);
 
   useEffect(() => {
-    if (!polling || state._tag !== "Observed") return;
+    // A controller that observed for itself and is then handed a supplied readiness stops here:
+    // its last observation's `nextCheckAt` is not a schedule the host asked for, and the cleanup
+    // of the previous run clears the timer that observation already set.
+    if (hostOwned || !polling || state._tag !== "Observed") return;
     const next = state.readiness.nextCheckAt;
     if (next === null) return;
     const delay = Math.max(0, DateTime.toEpochMillis(next) - Date.now());
     timer.current = setTimeout(observe, delay);
     return () => clearTimeout(timer.current);
-  }, [observe, polling, state]);
+  }, [hostOwned, observe, polling, state]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  // A supplied readiness is a fact, not a state machine: the host has either read one or not.
+  // The internal state stays `Idle` under it, which is what keeps the timer effect asleep.
+  const suppliedState = useMemo(
+    () => (hostReadiness === null ? State.Idle() : State.Observed({ readiness: hostReadiness })),
+    [hostReadiness],
+  );
+
   return {
     observe,
-    polling,
-    readiness: readinessOf(state),
+    polling: !hostOwned && polling,
+    readiness: hostOwned ? hostReadiness : readinessOf(state),
     retry: observe,
-    state,
+    state: hostOwned ? suppliedState : state,
   };
 }

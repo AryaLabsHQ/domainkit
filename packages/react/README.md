@@ -156,6 +156,11 @@ member of an organisation who reaches the same routes.
 Verification does not wait for a connection: the flow observes the requirements it was given, so a
 domain with no provider attached still reports which records are in place.
 
+A host that observes on its own clock passes the readiness it holds as
+`Domain.useFlow({ verification: { readiness, observe } })`, or as `supplied` on
+`Verify.useController`. The hook then observes nothing on mount, sets no timer, and routes `observe`
+and `retry` to the host's own, while drift replanning runs off the supplied value.
+
 Observation stays available in read-only, because checking DNS reads the world rather than changing
 the domain. Retrying is not: a flow that becomes read-only after a write failed keeps the failure
 and re-inspects instead of resending the command.
@@ -173,10 +178,11 @@ const words = describe(error, { provider: "Cloudflare" });
 
 ## Records
 
-`Records.statusOf` answers what one row has to say: the operation a pending plan holds for it, or
-the status the last observation read back. `Records.useCopy` is the clipboard control a value
-needs, and `Records.toZoneFile` and `Records.downloadZoneFile` spell the whole requirement set for a
-customer who edits DNS by hand.
+`Records.standingOf` answers both facts one row carries: `planned`, the operation a pending plan
+holds for that record, and `observed`, the requirement the last observation stored for it, evidence
+included. Either can be `null`. `Records.useCopy` is the clipboard control a value needs, and
+`Records.toZoneFile` and `Records.downloadZoneFile` spell the whole requirement set for a customer
+who edits DNS by hand.
 
 ## Next.js
 

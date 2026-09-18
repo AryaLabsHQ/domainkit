@@ -163,6 +163,13 @@ describe("Server.group over the lifecycle", () => {
       assert.strictEqual(readiness.overall, "ready");
       assert.strictEqual(readiness.requirements.length, 2);
 
+      const stored = await call("GET", "/domains/app.example.com/readiness");
+      assert.strictEqual(stored.status, 200);
+      assert.deepStrictEqual(stored.body, observed.body);
+      const never = await call("GET", "/domains/nobody.example.com/readiness");
+      assert.strictEqual(never.status, 200);
+      assert.strictEqual(never.body, null);
+
       const unattached = await call("POST", "/domains/nobody.example.com/observations", {
         requirements: [
           {
@@ -999,7 +1006,7 @@ describe("Server.api", () => {
   it("generates an OpenAPI document covering every route", () => {
     const spec = OpenApi.fromApi(Server.api);
     const operations = Object.values(spec.paths).flatMap((item) => Object.values(item));
-    assert.strictEqual(operations.length, 17);
+    assert.strictEqual(operations.length, 18);
     assert.deepStrictEqual(
       operations
         .map((operation) => (operation as { readonly operationId: string }).operationId)
@@ -1017,6 +1024,7 @@ describe("Server.api", () => {
         "domainkit.inspect",
         "domainkit.observe",
         "domainkit.plan",
+        "domainkit.readiness",
         "domainkit.receipt",
         "domainkit.reconnect",
         "domainkit.reject",

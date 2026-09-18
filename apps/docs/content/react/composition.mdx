@@ -26,9 +26,10 @@ shadcn; this page is the shape of writing another.
 
 ## One row's standing
 
-`Records.statusOf` answers what a row has to say without the surface deciding: while a plan is
-pending it is the operation the plan holds for that record, and once an apply has landed it is the
-status the observers read back.
+`Records.standingOf` answers both facts a row carries about one record, and leaves the surface to
+choose which of them its column is about: `planned` is the operation a plan still awaiting its apply
+holds for that record, and `observed` is the requirement the last observation stored for it. Either
+is `null` when nothing covers the record.
 
 <Snippet file="examples/react/controllers.tsx" region="hooks" title="A surface over the hooks" />
 
@@ -60,6 +61,25 @@ domain and its connection together.
 Connecting an account names no domain: what the customer grants is the account itself.
 `Connect.describeMethods` arranges one provider's methods into the interactive ones a customer
 clicks through and the ones that ask for credentials, so a surface asks for one decision at a time.
+
+## Readiness the host holds
+
+By default the flow observes on mount and re-observes at each `nextCheckAt`, which is what a host
+with no clock of its own wants. A host that already observes — a cron, a durable job, a server
+render that read `Verify.latest` — passes what it holds as `verification` instead. The flow then
+makes no observation and sets no timer, `flow.readiness` is the supplied value, and
+`flow.verification.observe` and `retry` call the host's own. Drift replanning runs off it exactly as
+it does off an observation the flow made.
+
+<Snippet
+  file="examples/react/host-readiness.tsx"
+  region="host-readiness"
+  title="A surface the host feeds"
+/>
+
+`Verify.useController` takes the same thing as `supplied`, for a surface built on that controller
+alone. `Verify.summary` counts a readiness, or `null`, into `{ observed, total, satisfied, missing,
+mismatch, unknown }`.
 
 ## Read-only
 

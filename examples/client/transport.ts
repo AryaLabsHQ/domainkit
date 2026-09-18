@@ -52,6 +52,18 @@ export const readiness = Effect.gen(function* () {
 });
 // #endregion observe
 
+// #region latest
+/**
+ * `latest` reads the stored readiness without observing, for a surface whose host owns the clock.
+ * It is `null` until the domain has been observed once.
+ */
+export const stored = Effect.gen(function* () {
+  const verification = transport.verification;
+  if (verification === undefined) return null;
+  return yield* verification.latest("app.example.com");
+});
+// #endregion latest
+
 // #region promises
 /** The same transport in Promises, for a component tree that does not run Effect. */
 export const api = Transport.toAsync(transport);

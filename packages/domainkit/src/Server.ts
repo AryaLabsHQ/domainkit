@@ -304,6 +304,8 @@ export const Readiness = Schema.Struct({
   overall: Storage.Overall,
   requirements: Schema.Array(
     Schema.Struct({
+      /** `Verify.requirementKey(record)`, so a client pairs rows by content, not by position. */
+      key: Schema.String,
       operationId: Schema.NullOr(Plan.OperationId),
       record: DnsRecord.Model,
       status: Storage.RequirementStatus,
@@ -456,6 +458,16 @@ export const group = HttpApiGroup.make("domainkit")
       params: { domain: Schema.String },
       payload: ObservePayload,
       success: Readiness,
+      error: errors,
+    }),
+  )
+  .add(
+    // The stored observation, or `null` when nothing has been observed for the domain yet. A
+    // domain with no readiness is not a missing route, so it answers 200 with a null body and
+    // leaves 404 to name a domain this owner cannot reach.
+    HttpApiEndpoint.get("readiness", "/domains/:domain/readiness", {
+      params: { domain: Schema.String },
+      success: Schema.NullOr(Readiness),
       error: errors,
     }),
   )
@@ -1040,6 +1052,9 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
               ...(payload.requirements === undefined ? {} : { requirements: payload.requirements }),
             }),
           ),
+        )
+        .handle("readiness", ({ params, request }) =>
+          as("readiness", request, verify.latest(params.domain)),
         )
         .handle("cleanupPlan", ({ params, request }) =>
           as("cleanupPlan", request, cleanup.plan({ receiptId: params.receiptId })),

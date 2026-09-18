@@ -100,6 +100,8 @@ export interface VerificationGroup {
     domain: string,
     options?: { readonly requirements?: ReadonlyArray<DnsRecord.Model> },
   ) => Fx<Readiness>;
+  /** The stored readiness, without observing. `null` until the domain has been observed once. */
+  readonly latest: (domain: string) => Fx<Readiness | null>;
 }
 
 export interface CleanupGroup {
@@ -327,6 +329,12 @@ export const fromFetch = (baseUrl: string, options: FetchOptions = {}): Interfac
           input?.requirements === undefined ? {} : { requirements: input.requirements },
         ),
         success: Server.Readiness,
+      }),
+    latest: (domain) =>
+      request({
+        method: "GET",
+        path: `/domains/${encodeURIComponent(domain)}/readiness`,
+        success: Schema.NullOr(Server.Readiness),
       }),
   };
 

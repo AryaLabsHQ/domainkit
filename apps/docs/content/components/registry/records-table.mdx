@@ -16,9 +16,10 @@ npx shadcn@latest add https://domain-kit.dev/r/records-table.json
 
 ## What a row says
 
-While a plan is pending, the status column is what the plan will do: add it, leave it, or nothing
-while it is blocked. Once an apply has landed it is what the observers read back. `Records.statusOf`
-answers which of the two a row is on, so the table never decides.
+A plan still awaiting its apply gets a column of its own saying what it will do: add the record,
+leave it, or nothing while it is blocked. The status column beside it is always what the observers
+read back. `Records.standingOf` hands the row both facts, so the table renders each column from the
+one that is about it.
 
 A blocked record gets a second row under it naming what is in the way and what to do about it, both
 from the message catalog.

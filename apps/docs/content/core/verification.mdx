@@ -89,3 +89,50 @@ minimum. A mismatch at any resolver outranks agreement elsewhere.
 measured from when the current pending streak began. The streak restarts when the requirement set
 changes and clears when the domain is ready, so a worker sleeps on the readiness row instead of
 polling on a timer of its own.
+
+## Host-owned observation
+
+The stored readiness is the single fact about a domain. A host that runs its own clock observes
+where it decides to, reads the stored fact back everywhere else, and never keeps a copy of it.
+
+`Verify.Observer` is where a host learns that DomainKit wrote readiness. It fires once per stored
+readiness, after the write and outside any transaction, with the readiness and whether an
+observation or merged host evidence caused it. A failure or defect in the observer is logged and
+swallowed, because the observation is already durable and losing it to a broken projection would
+make the stored fact depend on the host's side effects; work that has to survive belongs on a
+durable queue the observer enqueues to.
+
+Events for one domain are not ordered against each other. Two observations that overlap both store,
+the later write wins in `Storage`, and their callbacks can finish in either order, so a projection
+compares `readiness.checkedAt` and keeps the later one. `Verify.latest` is the authority.
+
+<Snippet file="examples/core/host-observation.ts" region="observer" title="Wiring the observer" />
+
+<Snippet
+  file="examples/core/host-observation.ts"
+  region="job"
+  title="Observing on your own clock"
+/>
+
+`Verify.latest` reads the stored readiness without observing, and `Verify.summary` counts it into
+`{ observed, total, satisfied, missing, mismatch, unknown }`, so an API or a page answers from the
+one fact rather than deciding again. Every requirement carries `key`, its record's type, name, and
+data, which is what a host pairs its own rows against instead of trusting array position.
+
+<Snippet
+  file="examples/core/host-observation.ts"
+  region="snapshot"
+  title="Answering from the stored fact"
+/>
+
+The same readiness reaches the browser. `GET /domains/:domain/readiness` and
+`Transport.verification.latest` return it or `null`, and `Domain.useFlow({ verification })` renders
+what the host supplies: no observation on mount, no timer, and the surface's "check again" calling
+the host's. A surface given no `verification` observes and polls on its own, which is the right
+default for a host with no clock of its own.
+
+<Snippet
+  file="examples/react/host-readiness.tsx"
+  region="host-readiness"
+  title="A surface the host feeds"
+/>

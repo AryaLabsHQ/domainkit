@@ -1,6 +1,6 @@
 ---
 title: domainkit/server
-description: The mountable route group and its seventeen endpoints, the Identity service a host implements, the wire schemas, the options, and the Web handler.
+description: The mountable route group and its eighteen endpoints, the Identity service a host implements, the wire schemas, the options, and the Web handler.
 sidebar:
   label: domainkit/server
 seo:
@@ -21,7 +21,7 @@ import { Server } from "domainkit/server";
 
 ## Endpoints
 
-`Server.group` is one `HttpApiGroup` with seventeen endpoints. It declares no prefix of its own, so
+`Server.group` is one `HttpApiGroup` with eighteen endpoints. It declares no prefix of its own, so
 `Server.group.prefix("/internal/dns")` or a router mount moves every route at once and the OAuth
 callback URL follows the mount.
 
@@ -43,6 +43,7 @@ callback URL follows the mount.
 | `GET`    | `/plans/:planId`                           | `plan`        | `Attempt`                |
 | `GET`    | `/receipts/:receiptId`                     | `receipt`     | `Receipt.Model`          |
 | `POST`   | `/domains/:domain/observations`            | `observe`     | `Readiness`              |
+| `GET`    | `/domains/:domain/readiness`               | `readiness`   | `Readiness \| null`      |
 | `POST`   | `/receipts/:receiptId/cleanup-plans`       | `cleanupPlan` | `Plan.Model`             |
 
 Approve, reject, and apply serve both provisioning and cleanup: the stored attempt knows its kind.
@@ -148,7 +149,7 @@ The client and `@domainkit/react` decode these, so the three cannot drift.
 | `MethodDescriptor` | A method's `kind`, `label`, `docsUrl`, and token `Field` list                            |
 | `Attempt`          | `plan`, `status`, `approval`, `receipt`, `rejection`                                     |
 | `ObservePayload`   | The `requirements` to observe, or nothing to use the attachment's receipt                |
-| `Readiness`        | `Verify.Readiness` with timestamps as ISO strings                                        |
+| `Readiness`        | `Verify.Readiness` with timestamps as ISO strings; each requirement carries its `key`    |
 
 ## Failures
 
