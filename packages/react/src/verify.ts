@@ -164,13 +164,16 @@ export function useController({
   }, [hostOwned, observe, revision]);
 
   useEffect(() => {
-    if (!polling || state._tag !== "Observed") return;
+    // A controller that observed for itself and is then handed a supplied readiness stops here:
+    // its last observation's `nextCheckAt` is not a schedule the host asked for, and the cleanup
+    // of the previous run clears the timer that observation already set.
+    if (hostOwned || !polling || state._tag !== "Observed") return;
     const next = state.readiness.nextCheckAt;
     if (next === null) return;
     const delay = Math.max(0, DateTime.toEpochMillis(next) - Date.now());
     timer.current = setTimeout(observe, delay);
     return () => clearTimeout(timer.current);
-  }, [observe, polling, state]);
+  }, [hostOwned, observe, polling, state]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 

@@ -143,6 +143,35 @@ describe("Verify.useController with host-supplied readiness", () => {
     expect(view.result.current.state._tag).toBe("Idle");
   });
 
+  it("stops its own timer when the host takes the clock mid-mount", async () => {
+    const { domain, requirements, transport } = scenario();
+    await attach(transport, domain);
+    let asked = 0;
+    const view = mount(
+      transport,
+      ({ supplied }: { readonly supplied: Verify.Supplied | undefined }) =>
+        Verify.useController({
+          domain,
+          requirements,
+          ...(supplied === undefined ? {} : { supplied }),
+        }),
+      { initialProps: { supplied: undefined as Verify.Supplied | undefined } },
+    );
+    await until(() => expect(view.result.current.state._tag).toBe("Observed"));
+    const observations = () =>
+      methodsCalled(transport).filter((method) => method === "verification.observe").length;
+    const before = observations();
+
+    // The host takes over. The schedule the controller's own observation left behind is not one
+    // the host asked for, so nothing fires against it.
+    act(() => view.rerender({ supplied: { readiness: null, observe: () => (asked += 1) } }));
+    expect(view.result.current.polling).toBe(false);
+    expect(view.result.current.state._tag).toBe("Idle");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(observations()).toBe(before);
+    expect(asked).toBe(0);
+  });
+
   it("does nothing when the host supplies no observe", async () => {
     const { domain, requirements, transport } = scenario();
     await attach(transport, domain);
