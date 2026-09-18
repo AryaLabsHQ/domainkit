@@ -26,8 +26,8 @@ export const DomainKitLive = DomainKit.layer({
   providers: [
     Cloudflare.provider({
       oauth: {
-        clientId: Config.string("CF_CLIENT_ID"),
-        clientSecret: Config.redacted("CF_CLIENT_SECRET"),
+        clientId: Config.String("CF_CLIENT_ID"),
+        clientSecret: Config.Redacted("CF_CLIENT_SECRET"),
       },
     }),
     Vercel.provider(),
@@ -36,7 +36,7 @@ export const DomainKitLive = DomainKit.layer({
   // `provideMerge`, not `provide`: `domainkit/server`'s handlers read attempts and receipts
   // straight from Storage, so the layer they are given has to still carry it.
   Layer.provideMerge(Layer.mergeAll(PgStorage.layer(), Custody.layerConfig())),
-  Layer.provide(PgClient.layerConfig({ url: Config.redacted("DATABASE_URL") })),
+  Layer.provide(PgClient.layerConfig({ url: Config.Redacted("DATABASE_URL") })),
 );
 ```
 
