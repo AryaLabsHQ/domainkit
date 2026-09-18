@@ -1,4 +1,4 @@
-import { Verify as CoreVerify } from "domainkit";
+import type { DnsRecord } from "domainkit";
 import { Transport } from "domainkit/client";
 import { Domain, DomainKit, Verify } from "@domainkit/react";
 import { useCallback, useEffect, useState } from "react";
@@ -7,7 +7,7 @@ const transport = Transport.fromFetch("/api/domainkit");
 /** The same transport in Promises, which is how a component reads outside Effect. */
 const api = Transport.toAsync(transport);
 
-declare const requirements: Parameters<typeof Domain.useFlow>[0]["requirements"];
+declare const requirements: ReadonlyArray<DnsRecord.Model>;
 
 // #region host-readiness
 /**
@@ -27,7 +27,7 @@ function HostObservedSetup({ domain }: { readonly domain: string }) {
     requirements,
     verification: { readiness, observe: refresh },
   });
-  const counts = CoreVerify.summary(flow.readiness);
+  const counts = Verify.summary(flow.readiness);
   return (
     <section>
       <p>{counts.observed ? `${counts.satisfied} of ${counts.total} found` : "Not checked yet"}</p>
