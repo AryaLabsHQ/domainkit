@@ -28,7 +28,7 @@ a transport that typechecks and a UI that renders only what the server can serve
 | -------------- | -------------------------------------------------------------------------------------- |
 | `connection`   | `inspect`, `discover`, `zones`, `start`, `reconnect`, `attach`, `detach`, `disconnect` |
 | `provisioning` | `plan`, `approve`, `reject`, `apply`, `attempt`, `receipt`                             |
-| `verification` | `observe`                                                                              |
+| `verification` | `observe`, `latest`                                                                    |
 | `cleanup`      | `plan`, `approve`, `reject`, `apply`                                                   |
 
 `connection.zones(filter?)` answers with every zone this owner's connections reach, how each
@@ -41,7 +41,8 @@ than the attempt.
 
 `verification.observe(domain, options?)` takes an optional `requirements` array. Supplied
 requirements win; without them the server uses the attachment's latest provisioning receipt, and a
-domain with neither answers `InvalidInput`.
+domain with neither answers `InvalidInput`. `verification.latest(domain)` reads the stored readiness
+without observing, and answers `null` until the domain has been observed once.
 
 <Snippet file="examples/client/transport.ts" region="capabilities" title="Declaring capabilities" />
 
@@ -61,6 +62,8 @@ Every method returns `Effect<A, DomainKit.Error>` with no requirements.
 <Snippet file="examples/client/transport.ts" region="call" title="From Effect" />
 
 <Snippet file="examples/client/transport.ts" region="observe" title="Observing a requirement set" />
+
+<Snippet file="examples/client/transport.ts" region="latest" title="Reading the stored readiness" />
 
 <Snippet file="examples/client/transport.ts" region="promises" title="From Promises" />
 

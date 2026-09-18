@@ -156,6 +156,11 @@ member of an organisation who reaches the same routes.
 Verification does not wait for a connection: the flow observes the requirements it was given, so a
 domain with no provider attached still reports which records are in place.
 
+A host that observes on its own clock passes the readiness it holds as
+`Domain.useFlow({ verification: { readiness, observe } })`, or as `supplied` on
+`Verify.useController`. The hook then observes nothing on mount, sets no timer, and routes `observe`
+and `retry` to the host's own, while drift replanning runs off the supplied value.
+
 Observation stays available in read-only, because checking DNS reads the world rather than changing
 the domain. Retrying is not: a flow that becomes read-only after a write failed keeps the failure
 and re-inspects instead of resending the command.

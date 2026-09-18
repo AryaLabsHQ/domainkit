@@ -62,6 +62,25 @@ Connecting an account names no domain: what the customer grants is the account i
 `Connect.describeMethods` arranges one provider's methods into the interactive ones a customer
 clicks through and the ones that ask for credentials, so a surface asks for one decision at a time.
 
+## Readiness the host holds
+
+By default the flow observes on mount and re-observes at each `nextCheckAt`, which is what a host
+with no clock of its own wants. A host that already observes — a cron, a durable job, a server
+render that read `Verify.latest` — passes what it holds as `verification` instead. The flow then
+makes no observation and sets no timer, `flow.readiness` is the supplied value, and
+`flow.verification.observe` and `retry` call the host's own. Drift replanning runs off it exactly as
+it does off an observation the flow made.
+
+<Snippet
+  file="examples/react/host-readiness.tsx"
+  region="host-readiness"
+  title="A surface the host feeds"
+/>
+
+`Verify.useController` takes the same thing as `supplied`, for a surface built on that controller
+alone. `Verify.summary` counts a readiness, or `null`, into `{ observed, total, satisfied, missing,
+mismatch, unknown }`.
+
 ## Read-only
 
 `readOnly` on `DomainKit.Root`, or on one `Domain.useFlow`, refuses every command that would change
