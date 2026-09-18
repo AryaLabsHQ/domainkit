@@ -23,18 +23,21 @@ const operationTones: Record<Plan.Operation["_tag"], DnsStatusTone> = {
   Noop: "success",
 };
 
-/** What a pending plan will do to one record, or what the last observation read back. */
-function Standing({ standing }: { readonly standing: Records.Standing | null }) {
+/** What a pending plan will do to one record. */
+function Planned({ operation }: { readonly operation: Plan.Operation | null }) {
   const messages = DomainKit.useMessages();
-  if (standing === null) return null;
-  return standing._tag === "Operation" ? (
-    <DnsStatus tone={operationTones[standing.operation._tag]}>
-      {messages.planStatus(standing.operation)}
-    </DnsStatus>
-  ) : (
-    // `dns-status` already picks the tone from the status; the words come from the catalog.
-    <DnsStatus status={standing.status}>{messages.requirementStatus(standing.status)}</DnsStatus>
+  if (operation === null) return null;
+  return (
+    <DnsStatus tone={operationTones[operation._tag]}>{messages.planStatus(operation)}</DnsStatus>
   );
+}
+
+/** What the last observation read back for one record. */
+function Observed({ status }: { readonly status: Records.RequirementStatus | null }) {
+  const messages = DomainKit.useMessages();
+  if (status === null) return null;
+  // `dns-status` already picks the tone from the status; the words come from the catalog.
+  return <DnsStatus status={status}>{messages.requirementStatus(status)}</DnsStatus>;
 }
 
 export interface RecordsTableProps extends Omit<ComponentProps<"div">, "children"> {
@@ -44,14 +47,17 @@ export interface RecordsTableProps extends Omit<ComponentProps<"div">, "children
 }
 
 /**
- * What the customer has to add, and where each record stands. While a plan is pending the status
- * column is what the plan will do; once an apply has landed it is what the observers read back.
- * A blocked record says what is in the way and what to do about it, on its own row under the one
- * it explains.
+ * What the customer has to add, and where each record stands. A plan still awaiting its apply gets
+ * a column of its own saying what it will do, beside the status column, which is always what the
+ * observers read back. A blocked record says what is in the way and what to do about it, on its own
+ * row under the one it explains.
  */
 export function RecordsTable({ className, flow, header, ...props }: RecordsTableProps) {
   const messages = DomainKit.useMessages();
   const requirements = flow.requirements;
+  // The plan column exists only while a plan is pending, so a settled table is the observation
+  // alone rather than a column of blanks.
+  const plan = flow.plan;
   return (
     <div
       className={cn("overflow-hidden rounded-xl border border-border bg-card", className)}
@@ -64,6 +70,7 @@ export function RecordsTable({ className, flow, header, ...props }: RecordsTable
         <TableHeader>
           <TableRow>
             <TableHead className="w-24">{messages.headingType}</TableHead>
+            {plan === null ? null : <TableHead className="w-32">{messages.headingPlan}</TableHead>}
             <TableHead className="w-36">{messages.headingStatus}</TableHead>
             <TableHead>{messages.headingName}</TableHead>
             <TableHead className="w-full max-w-0">{messages.headingValue}</TableHead>
@@ -71,20 +78,19 @@ export function RecordsTable({ className, flow, header, ...props }: RecordsTable
         </TableHeader>
         <TableBody>
           {requirements.map((record) => {
-            const standing = Records.statusOf(record, {
-              plan: flow.plan,
-              readiness: flow.readiness,
-            });
-            const conflict =
-              standing?._tag === "Operation" && standing.operation._tag === "Conflict"
-                ? standing.operation
-                : null;
+            const standing = Records.standingOf(record, { plan, readiness: flow.readiness });
+            const conflict = standing.planned?._tag === "Conflict" ? standing.planned : null;
             return (
               <Fragment key={Records.identity(record)}>
                 <TableRow className={conflict === null ? undefined : "border-b-0"}>
                   <TableCell className="font-mono text-xs">{record._tag}</TableCell>
+                  {plan === null ? null : (
+                    <TableCell>
+                      <Planned operation={standing.planned} />
+                    </TableCell>
+                  )}
                   <TableCell>
-                    <Standing standing={standing} />
+                    <Observed status={standing.observed?.status ?? null} />
                   </TableCell>
                   <TableCell className="font-mono text-xs">{record.name}</TableCell>
                   <TableCell className="w-full max-w-0">
@@ -98,7 +104,10 @@ export function RecordsTable({ className, flow, header, ...props }: RecordsTable
                 </TableRow>
                 {conflict === null ? null : (
                   <TableRow data-slot="records-conflict">
-                    <TableCell className="pt-0 text-xs text-muted-foreground" colSpan={4}>
+                    <TableCell
+                      className="pt-0 text-xs text-muted-foreground"
+                      colSpan={plan === null ? 4 : 5}
+                    >
                       {messages.conflictReason(conflict.reason)}{" "}
                       {messages.conflictAdvice(conflict.reason)}
                     </TableCell>

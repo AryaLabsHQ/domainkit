@@ -27,9 +27,9 @@ const connect = async (flow: () => Domain.Flow): Promise<void> => {
   await until(() => expect(flow().state.connected).toBe(true));
 };
 
-/** What one row reports, which is the plan while one is pending and the observation after it. */
+/** Both facts one row carries: the pending plan's operation, and the stored observation. */
 const standing = (flow: Domain.Flow, record: DnsRecord.Model) =>
-  Records.statusOf(record, { plan: flow.plan, readiness: flow.readiness });
+  Records.standingOf(record, { plan: flow.plan, readiness: flow.readiness });
 
 /** How many times the transport was asked for one method, which is how a plan is counted. */
 const called = (transport: Testing.RecordingTransport, method: string): number =>
@@ -136,7 +136,7 @@ describe("Domain.useFlow", () => {
     await until(() => expect(flow().plan?.operations).toHaveLength(2));
     const [first] = requirements;
     if (first === undefined) throw new Error("The scenario asked for no records");
-    expect(standing(flow(), first)).toMatchObject({ _tag: "Operation" });
+    expect(standing(flow(), first).planned?._tag).toBe("Create");
     await addRecords(flow());
     await until(() => expect(applied).toHaveLength(1));
     expect(applied[0]?.status).toBe("complete");
@@ -306,7 +306,10 @@ describe("Domain.useFlow", () => {
     expect(called(transport, "provisioning.plan")).toBe(plans + 1);
     const [first] = requirements;
     if (first === undefined) throw new Error("The scenario asked for no records");
-    expect(standing(flow(), first)).toMatchObject({ _tag: "Operation" });
+    // The plan and the observation are both on the row: the plan says the record will be added
+    // back, the observation still says it is gone.
+    expect(standing(flow(), first).planned?._tag).toBe("Create");
+    expect(standing(flow(), first).observed?.status).toBe("missing");
     // The receipt is still the proof of what was applied, so cleanup keeps its offer.
     expect(flow().state.applied).toBe(true);
 
@@ -387,9 +390,7 @@ describe("Domain.useFlow", () => {
     expect(Plan.writes(plan)).toHaveLength(1);
     expect(Plan.conflicts(plan)).toHaveLength(1);
     const held = standing(flow(), blocked);
-    expect(held?._tag).toBe("Operation");
-    if (held?._tag !== "Operation") throw new Error("The blocked record reported no operation");
-    expect(held.operation._tag).toBe("Conflict");
+    expect(held.planned?._tag).toBe("Conflict");
     await addRecords(flow());
     await until(() => expect(flow().state.applied).toBe(true));
   });

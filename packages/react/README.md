@@ -173,10 +173,11 @@ const words = describe(error, { provider: "Cloudflare" });
 
 ## Records
 
-`Records.statusOf` answers what one row has to say: the operation a pending plan holds for it, or
-the status the last observation read back. `Records.useCopy` is the clipboard control a value
-needs, and `Records.toZoneFile` and `Records.downloadZoneFile` spell the whole requirement set for a
-customer who edits DNS by hand.
+`Records.standingOf` answers both facts one row carries: `planned`, the operation a pending plan
+holds for that record, and `observed`, the requirement the last observation stored for it, evidence
+included. Either can be `null`. `Records.useCopy` is the clipboard control a value needs, and
+`Records.toZoneFile` and `Records.downloadZoneFile` spell the whole requirement set for a customer
+who edits DNS by hand.
 
 ## Next.js
 

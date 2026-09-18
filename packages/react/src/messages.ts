@@ -138,6 +138,8 @@ export interface Catalog {
   readonly headingName: string;
   readonly headingValue: string;
   readonly headingStatus: string;
+  /** The column that says what a pending plan will do, rendered only while one is pending. */
+  readonly headingPlan: string;
   readonly headingPurpose: string;
   readonly priority: (priority: number) => string;
   readonly ttl: (seconds: number) => string;
@@ -429,6 +431,7 @@ export const english: Catalog = {
   headingName: "Name",
   headingValue: "Value",
   headingStatus: "Status",
+  headingPlan: "Plan",
   headingPurpose: "Purpose",
   priority: (priority) => `Priority ${priority}`,
   ttl: (seconds) => `TTL ${seconds}s`,
