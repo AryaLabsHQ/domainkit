@@ -123,6 +123,39 @@ export class Policy extends Context.Reference<PolicyShape>("@domainkit/Verify/Po
   defaultValue: () => defaults,
 }) {}
 
+/** Why readiness was written: a DNS observation, or host evidence merged into the stored row. */
+export type Cause = "observe" | "evidence";
+
+export interface ReadinessChanged {
+  readonly domain: string;
+  readonly readiness: Readiness;
+  readonly cause: Cause;
+}
+
+export interface ObserverShape {
+  /**
+   * Called once per stored readiness, after the write. A host that projects readiness onto its own
+   * rows, wakes a durable job at `nextCheckAt`, or notifies a customer hangs it here instead of
+   * mirroring the fact at every call site.
+   */
+  readonly readinessChanged: (event: ReadinessChanged) => Effect.Effect<void, unknown>;
+}
+
+/**
+ * The host seam for "DomainKit wrote readiness". The default does nothing; provide one with
+ * `Effect.provideService(Verify.Observer, ...)` or `Layer.succeed(Verify.Observer, ...)` over
+ * `DomainKit.layer`, the same way `Policy` is overridden.
+ *
+ * It runs after `storage.readiness.put` returns, outside any transaction, because `Storage`
+ * exposes none. A failure or defect in the observer is logged and swallowed: the observation is
+ * already durable, and losing it because a projection failed would make the stored fact depend on
+ * the host's side effects. A host that needs the projection to be reliable enqueues durable work
+ * here rather than doing the work inline.
+ */
+export class Observer extends Context.Reference<ObserverShape>("@domainkit/Verify/Observer", {
+  defaultValue: (): ObserverShape => ({ readinessChanged: () => Effect.void }),
+}) {}
+
 // ---------------------------------------------------------------------------------------------
 // Implementation
 // ---------------------------------------------------------------------------------------------
@@ -271,10 +304,12 @@ export const make: Effect.Effect<
     readonly requirements: ReadonlyArray<Requirement>;
     readonly host: ReadonlyArray<HostEvidence>;
     readonly previous: Option.Option<Storage.Readiness>;
+    readonly cause: Cause;
   }): Fx<Readiness> =>
     Effect.gen(function* () {
       const principal = yield* Principal.Service;
       const policy = yield* Policy;
+      const observer = yield* Observer;
       const now = yield* DateTime.now;
       const overall = overallOf(input.requirements, input.host);
       const sameRequirements =
@@ -314,7 +349,7 @@ export const make: Effect.Effect<
         nextCheckAt,
       });
       yield* storage.readiness.put(row);
-      return {
+      const readiness: Readiness = {
         domain: row.domain,
         attachmentId: row.attachmentId,
         overall,
@@ -323,6 +358,14 @@ export const make: Effect.Effect<
         checkedAt: now,
         nextCheckAt,
       };
+      yield* observer
+        .readinessChanged({ domain: row.domain, readiness, cause: input.cause })
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning(`Verify.Observer failed for ${row.domain}`, cause),
+          ),
+        );
+      return readiness;
     });
 
   const defaultRequirements = (
@@ -448,7 +491,14 @@ export const make: Effect.Effect<
       const host = Option.isSome(previous)
         ? yield* Errors.decode(StoredHost, previous.value.host, "host")
         : [];
-      return yield* store({ domain, attachment, requirements: observed, host, previous });
+      return yield* store({
+        domain,
+        attachment,
+        requirements: observed,
+        host,
+        previous,
+        cause: "observe",
+      });
     });
 
   const attachEvidence: Interface["attachEvidence"] = (input) =>
@@ -469,6 +519,7 @@ export const make: Effect.Effect<
         requirements: current.requirements,
         host: [...bySource.values()],
         previous,
+        cause: "evidence",
       });
     });
 
