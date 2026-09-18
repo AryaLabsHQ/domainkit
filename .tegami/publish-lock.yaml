@@ -1,26 +1,28 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Security: the provider callback binds to the flow that started it\n\n`GET /callback/:provider` now establishes whose connection it is finishing from the continuation\nDomainKit recorded, and refuses a callback presented by anyone other than the session that started\nit.\n\nBefore, the callback resolved `Identity.principal` first and then read the continuation through the\nowner-scoped `Storage.continuations.get`, which checks the owner and nothing else. Within one\norganization, any administrator whose browser followed the provider's redirect completed the\nconnection, and the resulting authorization was recorded as theirs. That is latent in every released\n`0.12.x`. There is no known external consumer and no advisory or CVE is being filed, but a host that\nsees new refusals after upgrading is seeing this check.\n\nNow the handler reads the flow's header before it resolves identity, and the resolved principal must\nmatch the recorded `ownerId` **and** `actorId`, with the recorded provider matching the route. A\ncallback that names no flow, one that has expired, one presented at another provider's route, and\none presented by a session that did not start it are all the same `InvalidInput` refusal with the\nsame text, and the host authenticates before any of them, so nothing distinguishes \"no such flow\"\nfrom \"not your flow\". The refusal leaves the flow unspent, so the person who started it can still\nfinish it.\n\n### `Identity.principal` takes an optional second argument\n\n`Server.IdentityContext` carries the endpoint being served and the continuation header, and arrives\non the callback alone. A host that takes one argument keeps compiling and keeps being checked; a\nhost whose session can hold several tenants reads `context.continuation.ownerId` to land the\ncallback on the right one. The doctrine is unchanged: the request still does not name its own owner,\nDomainKit's durable record does, and the `state` only points at it.\n\n### `Storage.continuations.header` is a new required method\n\n`header(id)` returns a flow's `ownerId`, `actorId`, `provider`, and `expiresAt` and takes no\n`Principal` — the one read in the interface that is not tenant-scoped, and the reason for the minor\nbump. It never returns `payload`, which holds the PKCE `codeVerifier`, and it enforces the TTL\nexactly as `get` does. It is a read, not a spend, so a leaked `state` cannot burn the flow it names.\n`get` and `consume` keep their owner filters, so a host that resolves a wrong principal still fails\nclosed. Implemented in `Storage.layerMemory` and `@domainkit/capsuledb`; a host on\n`Storage.layerFromAsync` implements it too, and `Testing.conformance.storage` covers it.\n"
-    filename: domainkit-callback-identity-binding.md
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Stored readiness is the single fact; the host owns the clock and the projection\n\nDomainKit's stored readiness is the one place a domain's observed state lives. The host decides when\nto observe, reads the stored fact back, and projects it wherever its own surfaces need it.\n\n### `Verify.Observer` tells the host when readiness was written\n\n`Verify.Observer` is a reference-shaped seam with one method,\n`readinessChanged({ domain, readiness, cause })`, where `cause` is `\"observe\"` or `\"evidence\"`. It\nfires once per stored readiness, after the `Storage` write returns and outside any transaction. A\nfailure or defect in the observer is logged and swallowed, so a projection that breaks never costs\nthe observation. The default does nothing; provide one with\n`Effect.provideService(Verify.Observer, ...)` or `Layer.succeed(Verify.Observer, ...)` over\n`DomainKit.layer`.\n\n### `Verify.latest` crosses the wire\n\n`GET /domains/:domain/readiness` returns the stored readiness, or `null` when nothing has been\nobserved. `Transport.VerificationGroup.latest(domain)` reads it, so a browser surface can render the\nlast stored observation without making one of its own.\n\n`latest` is a required method on `VerificationGroup`, not an optional one, so a host that hand-writes\na verification group rather than building it with `Transport.fromFetch` adds it. A transport that\nexposes no stored-readiness read declares no `verification` capability at all: the group is the unit\nof what a host mounts, and a half-present group would make every caller of `latest` test for it.\n\n### `Verify.summary` and `Requirement.key`\n\n`Verify.summary(readiness)` is a pure function over a readiness or `null`, returning\n`{ observed, total, satisfied, missing, mismatch, unknown }`. Every requirement carries `key`, the\nrecord's type, name, and data, which is the same string `@domainkit/react`'s `Records.identity`\nproduces, so a host pairs its own rows against readiness by content rather than by position.\n\n### `Records.standingOf` replaces `Records.statusOf`\n\n`Records.standingOf(record, { plan, readiness })` returns `{ planned, observed }`: the pending plan's\noperation for that record, and the readiness requirement that covers it, evidence included. The two\nfacts no longer collapse into one, so a surface can show what a plan will do and what the observers\nread back at the same time. The registry's records table renders a plan column only while a plan is\npending and takes its status column from the observation.\n\n### `Domain.useFlow` and `Verify.useController` take host-supplied readiness\n\n`verification: { readiness, observe? }` hands the flow a readiness the host already holds. The hook\nthen creates no observation on mount and sets no timer; `flow.verification.observe` and `retry` call\nthe host's `observe`, and drift replanning runs off the supplied value. Without the option both\nhooks observe and poll exactly as before.\n"
+    filename: readiness-single-source.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
+  - changelogIds:
+      - readiness-single-source.md
+    id: npm:@domainkit/react
+    updated: true
   - id: npm:@domainkit/capsuledb
     updated: true
-  - id: npm:@domainkit/react
+  - changelogIds:
+      - readiness-single-source.md
+    id: npm:domainkit
     updated: true
   - id: npm:@domainkit/docs
     updated: false
-  - changelogIds:
-      - domainkit-callback-identity-binding.md
-    id: npm:domainkit
-    updated: true
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
-  - id: npm:@domainkit/capsuledb
   - id: npm:@domainkit/react
-  - id: npm:@domainkit/docs
+  - id: npm:@domainkit/capsuledb
   - id: npm:domainkit
+  - id: npm:@domainkit/docs
