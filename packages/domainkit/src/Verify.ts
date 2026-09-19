@@ -122,16 +122,17 @@ export interface Summary {
   readonly unknown: number;
 }
 
-/** The least a value has to carry to be summarised: core `Readiness` and the wire shape both do. */
-export interface Summarisable {
-  readonly requirements: ReadonlyArray<{ readonly status: Storage.RequirementStatus }>;
-}
-
 /**
  * How a readiness stands, as counts. Pure and total: a host renders "3 of 4 found" from the stored
- * fact without deciding what an absent readiness means, because `observed` says so.
+ * fact without deciding what an absent readiness means, because `observed` says so. The parameter
+ * is the least a value has to carry to be summarised, so core `Readiness` and the wire shape both
+ * pass without naming a type between them.
  */
-export const summary = (readiness: Summarisable | null): Summary => {
+export const summary = (
+  readiness: {
+    readonly requirements: ReadonlyArray<{ readonly status: Storage.RequirementStatus }>;
+  } | null,
+): Summary => {
   const statuses = readiness?.requirements.map(({ status }) => status) ?? [];
   const count = (status: Storage.RequirementStatus): number =>
     statuses.filter((candidate) => candidate === status).length;
@@ -170,6 +171,8 @@ export class Policy extends Context.Reference<PolicyShape>("@domainkit/Verify/Po
 export type Cause = "observe" | "evidence";
 
 export interface ReadinessChanged {
+  /** The tenant the row was written under, from the `Principal` the write ran as. */
+  readonly ownerId: string;
   readonly domain: string;
   readonly readiness: Readiness;
   readonly cause: Cause;
@@ -180,6 +183,11 @@ export interface ObserverShape {
    * Called once per stored readiness, after the write. A host that projects readiness onto its own
    * rows, wakes a durable job at `nextCheckAt`, or notifies a customer hangs it here instead of
    * mirroring the fact at every call site.
+   *
+   * Readiness is stored per owner and domain, and an observer provided over `DomainKit.layer` is
+   * scoped to the layer rather than to one request, so a host that serves more than one tenant
+   * keys its projection by `ownerId` and `domain`: the same domain name can be attached in two
+   * tenants at once.
    *
    * Events for one domain are not ordered against each other: two observations that overlap both
    * store, last write wins in `Storage`, and their callbacks can finish in either order. A
@@ -409,7 +417,12 @@ export const make: Effect.Effect<
         nextCheckAt,
       };
       yield* observer
-        .readinessChanged({ domain: row.domain, readiness, cause: input.cause })
+        .readinessChanged({
+          ownerId: principal.ownerId,
+          domain: row.domain,
+          readiness,
+          cause: input.cause,
+        })
         .pipe(
           Effect.catchCause((cause) =>
             Effect.logWarning(`Verify.Observer failed for ${row.domain}`, cause),

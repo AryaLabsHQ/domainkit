@@ -96,9 +96,11 @@ The stored readiness is the single fact about a domain. A host that runs its own
 where it decides to, reads the stored fact back everywhere else, and never keeps a copy of it.
 
 `Verify.Observer` is where a host learns that DomainKit wrote readiness. It fires once per stored
-readiness, after the write and outside any transaction, with the readiness and whether an
-observation or merged host evidence caused it. A failure or defect in the observer is logged and
-swallowed, because the observation is already durable and losing it to a broken projection would
+readiness, after the write and outside any transaction, with the readiness, the `ownerId` it was
+stored under, and whether an observation or merged host evidence caused it. The observer is bound
+to the layer, not to one request, so a host that serves more than one tenant keys its projection by
+`ownerId` and `domain`: the same domain name can be attached in two tenants at once. A failure or
+defect in the observer is logged and swallowed, because the observation is already durable and losing it to a broken projection would
 make the stored fact depend on the host's side effects; work that has to survive belongs on a
 durable queue the observer enqueues to.
 

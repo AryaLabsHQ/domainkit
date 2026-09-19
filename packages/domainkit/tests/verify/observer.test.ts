@@ -26,11 +26,12 @@ const live = () =>
 
 describe("Verify.Observer", () => {
   it.effect("fires after every stored readiness, with the cause that wrote it", () => {
-    const seen: Array<{ domain: string; cause: Verify.Cause; overall: string }> = [];
+    const seen: Array<{ ownerId: string; domain: string; cause: Verify.Cause; overall: string }> =
+      [];
     const observer: Verify.ObserverShape = {
-      readinessChanged: ({ cause, domain, readiness }) =>
+      readinessChanged: ({ cause, domain, ownerId, readiness }) =>
         Effect.sync(() => {
-          seen.push({ cause, domain, overall: readiness.overall });
+          seen.push({ ownerId, cause, domain, overall: readiness.overall });
         }),
     };
     return Effect.gen(function* () {
@@ -50,8 +51,18 @@ describe("Verify.Observer", () => {
         ],
       });
       assert.deepStrictEqual(seen, [
-        { cause: "observe", domain: "app.example.com", overall: observed.overall },
-        { cause: "evidence", domain: "app.example.com", overall: "pending" },
+        {
+          ownerId: Testing.principal.ownerId,
+          cause: "observe",
+          domain: "app.example.com",
+          overall: observed.overall,
+        },
+        {
+          ownerId: Testing.principal.ownerId,
+          cause: "evidence",
+          domain: "app.example.com",
+          overall: "pending",
+        },
       ]);
     }).pipe(
       withPrincipal,
@@ -72,6 +83,7 @@ describe("Verify.Observer", () => {
       yield* connectAndApply;
       const readiness = yield* Verify.observe({ domain: "app.example.com" });
       assert.deepStrictEqual(event, {
+        ownerId: Testing.principal.ownerId,
         cause: "observe",
         domain: "app.example.com",
         readiness,
@@ -81,6 +93,31 @@ describe("Verify.Observer", () => {
       Effect.provideService(Verify.Observer, observer),
       Effect.provide(live()),
     );
+  });
+
+  it.effect("names the tenant, so one observer tells two owners of the same domain apart", () => {
+    const seen: Array<{ ownerId: string; domain: string }> = [];
+    const observer: Verify.ObserverShape = {
+      readinessChanged: ({ domain, ownerId }) =>
+        Effect.sync(() => {
+          seen.push({ ownerId, domain });
+        }),
+    };
+    const forOwner = (ownerId: string) =>
+      Effect.gen(function* () {
+        yield* connectAndApply;
+        yield* Verify.observe({ domain: "app.example.com" });
+      }).pipe(
+        Effect.provideService(Principal.Service, Principal.make({ ownerId, actorId: "user_test" })),
+      );
+    return Effect.gen(function* () {
+      yield* forOwner("org_one");
+      yield* forOwner("org_two");
+      assert.deepStrictEqual(seen, [
+        { ownerId: "org_one", domain: "app.example.com" },
+        { ownerId: "org_two", domain: "app.example.com" },
+      ]);
+    }).pipe(Effect.provideService(Verify.Observer, observer), Effect.provide(live()));
   });
 
   it.effect("keeps the observation when the observer fails or dies", () => {
