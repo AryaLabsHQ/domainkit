@@ -34,6 +34,12 @@ export const make = (prefix: string): Tables => ({
       method: Schema.text(),
       capabilities: Schema.json(),
       context: Schema.json(),
+      /**
+       * What the provider called the account when the credential was issued, so a UI names the
+       * connection offline. Null names no account, which is also what rows written before the
+       * column existed carry.
+       */
+      label: Schema.text({ nullable: true }),
       revocation: Schema.text(),
       created_by: Schema.text(),
       created_at: Schema.timestamp(),

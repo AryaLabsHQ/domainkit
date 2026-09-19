@@ -34,6 +34,8 @@ export interface FakeProviderOptions {
   readonly zones?: ReadonlyArray<string>;
   /** The label each zone carries, keyed by zone. Default: the zone name. */
   readonly labels?: Readonly<Record<string, string>>;
+  /** What the fake calls the account it issues credentials for. Default: none, so the label is `null`. */
+  readonly accountLabel?: string;
   /** Pre-existing records, to produce `Noop` and `Conflict` operations. */
   readonly records?: ReadonlyArray<{ readonly zone: string; readonly record: DnsRecord.Observed }>;
   /** Offer OAuth in addition to tokens; the fake redirects to `callbackUrl` immediately. */
@@ -102,7 +104,12 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
   const issue = (prefix: string): Provider.IssuedCredential => {
     const secret = `${prefix}-${issued.length + 1}`;
     issued.push(secret);
-    return { secret: Redacted.make(secret), context: { account: id }, expiresAt: null };
+    return {
+      secret: Redacted.make(secret),
+      context: { account: id },
+      label: options.accountLabel ?? null,
+      expiresAt: null,
+    };
   };
 
   const zoneOf = (target: Provider.Target) =>
@@ -169,7 +176,12 @@ export const provider = (options: FakeProviderOptions = {}): FakeProvider => {
                   message: "fake provider rejected an empty token",
                 }),
               )
-            : Effect.succeed({ secret: token, context: { account: id }, expiresAt: null }),
+            : Effect.succeed({
+                secret: token,
+                context: { account: id },
+                label: options.accountLabel ?? null,
+                expiresAt: null,
+              }),
       }),
       ...(options.oauth === true ? { oauth } : {}),
     },

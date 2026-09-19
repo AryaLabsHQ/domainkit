@@ -47,6 +47,13 @@ sees them.
 
 <Snippet file="packages/domainkit/examples/effect/provider.ts" title="A token-only provider" />
 
+## Naming the account
+
+Every method answers with an `IssuedCredential`: the sealed `secret`, the account `context`, an
+`expiresAt`, and an optional `label`. The label is what the provider calls the account the
+credential reaches, stored at connect time so a UI names a connection without a provider call. A
+credential that spans several accounts names none, and answers `null`.
+
 ## Portable record types
 
 Both first-party adapters support `A`, `AAAA`, `CAA`, `CNAME`, `MX`, `NS`, `SRV`, and `TXT`. A

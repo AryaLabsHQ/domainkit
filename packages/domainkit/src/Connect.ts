@@ -55,7 +55,7 @@ export interface Snapshot {
   readonly connection: Storage.Connection | null;
   readonly authorization: Pick<
     Storage.Authorization,
-    "id" | "provider" | "method" | "capabilities" | "revocation"
+    "id" | "provider" | "method" | "capabilities" | "revocation" | "label"
   > | null;
   readonly lastReceiptId: string | null;
   /** How many domains this domain's connection serves, including this one; `0` without one. */
@@ -130,6 +130,8 @@ export interface Zone {
 export interface ZoneConnection {
   readonly connectionId: string;
   readonly provider: string;
+  /** What the provider called the account at connect time; `null` when it named none. */
+  readonly label: string | null;
   readonly status: "connected" | "reconnect";
 }
 
@@ -408,6 +410,7 @@ export const make: Effect.Effect<
         method: input.method,
         capabilities: held,
         context: yield* Provider.encodeContext(input.definition, input.issued.context),
+        label: input.issued.label ?? null,
         revocation: "active",
         createdBy: principal.actorId,
         createdAt: yield* DateTime.now,
@@ -450,6 +453,7 @@ export const make: Effect.Effect<
         method: input.method,
         capabilities: held,
         context: yield* Provider.encodeContext(input.definition, input.issued.context),
+        label: input.issued.label ?? null,
         revocation: "active",
         createdBy: principal.actorId,
         createdAt: yield* DateTime.now,
@@ -602,6 +606,7 @@ export const make: Effect.Effect<
         connections.push({
           connectionId: connection.id,
           provider: authorization.provider,
+          label: authorization.label,
           status: Option.isNone(targets) ? "reconnect" : "connected",
         });
         if (Option.isNone(targets)) continue;
@@ -668,6 +673,7 @@ export const make: Effect.Effect<
                 method: authorization.method,
                 capabilities: authorization.capabilities,
                 revocation: authorization.revocation,
+                label: authorization.label,
               },
         lastReceiptId: Option.isSome(latest) ? (latest.value.receipt?.id ?? null) : null,
         connectionDomains: attached.length,

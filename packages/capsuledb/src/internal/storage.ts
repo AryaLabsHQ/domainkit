@@ -137,6 +137,7 @@ interface AuthorizationRow {
   readonly method: string;
   readonly capabilities: unknown;
   readonly context: unknown;
+  readonly label: string | null;
   readonly revocation: string;
   readonly created_by: string;
   readonly created_at: unknown;
@@ -209,6 +210,7 @@ const authorizationOf = (row: AuthorizationRow) =>
     method: row.method,
     capabilities: fromJson(row.capabilities),
     context: fromJson(row.context),
+    label: row.label,
     revocation: row.revocation,
     createdBy: row.created_by,
     createdAt: iso(row.created_at),
@@ -433,6 +435,7 @@ export const make = (
                         method = ${row.method},
                         capabilities = ${toJson(row.capabilities)},
                         context = ${toJson(row.context)},
+                        label = ${row.label},
                         revocation = ${row.revocation},
                         created_by = ${row.createdBy},
                         created_at = ${at(row.createdAt)},
@@ -448,12 +451,13 @@ export const make = (
                   // insert claims it atomically instead of racing a prior existence check.
                   const inserted = yield* sql<{ readonly id: string }>`
                     INSERT INTO ${authorizations} (
-                      id, owner_id, provider, method, capabilities, context, revocation,
+                      id, owner_id, provider, method, capabilities, context, label, revocation,
                       created_by, created_at, credential_ciphertext, credential_expires_at,
                       credential_rotated_at, updated_at
                     ) VALUES (
                       ${row.id}, ${row.ownerId}, ${row.provider}, ${row.method},
-                      ${toJson(row.capabilities)}, ${toJson(row.context)}, ${row.revocation},
+                      ${toJson(row.capabilities)}, ${toJson(row.context)}, ${row.label},
+                      ${row.revocation},
                       ${row.createdBy}, ${at(row.createdAt)}, ${secret.ciphertext},
                       ${atOrNull(secret.expiresAt)}, ${at(secret.rotatedAt)}, ${stamp}
                     ) ON CONFLICT (id) DO NOTHING RETURNING id

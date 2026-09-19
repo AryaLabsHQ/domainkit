@@ -243,6 +243,8 @@ export const Zones = Schema.Struct({
     Schema.Struct({
       connectionId: Schema.String,
       provider: Schema.String,
+      /** What the provider called the account at connect time; `null` when it named none. */
+      label: Schema.NullOr(Schema.String),
       status: ConnectionStatus,
     }),
   ),
@@ -725,7 +727,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
           return new Connected({
             connectionId: input.connection.id,
             provider: authorization.provider,
-            label: input.attachment?.label ?? definition.name,
+            label: input.attachment?.label ?? authorization.label ?? definition.name,
             snapshot: input.domain === undefined ? null : yield* snapshot(input.domain),
           });
         });

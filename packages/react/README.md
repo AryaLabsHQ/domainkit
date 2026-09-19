@@ -114,7 +114,8 @@ a time. `Connect.rejectedField` names the one field a rejection was about.
 ## Adding a domain
 
 `Connect.useZones` lists every zone the workspace's accounts reach, `Connect.useAccounts` adds
-another account without naming a domain, and `Connect.useDomainField` turns a text input into a
+another account without naming a domain and lists the ones already connected, each with the
+`label` the provider gave it (`null` when the provider named none), and `Connect.useDomainField` turns a text input into a
 combobox over those zones: it returns `inputProps`, `listboxProps`, and `optionProps`, moves the
 highlight with the arrow keys, and completes on Tab or Enter while keeping whatever subdomain was
 typed in front of the zone.

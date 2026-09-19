@@ -18,6 +18,7 @@ describe("Storage.layerMemoryWith", () => {
             ownerId: principal.ownerId,
             provider: "fake",
             method: "token",
+            label: null,
             capabilities: [],
             context: null,
             revocation: "active",

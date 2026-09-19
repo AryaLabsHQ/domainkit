@@ -68,6 +68,12 @@ export interface Credential {
 /** A credential the provider just issued or refreshed; `null` expiry means it does not expire. */
 export interface IssuedCredential extends Credential {
   readonly expiresAt: DateTime.Utc | null;
+  /**
+   * What the provider calls the account this credential reaches, so a UI names the connection
+   * without a provider call. Omit it, or answer `null`, when the provider cannot name one: a
+   * credential that spans several accounts has no single name.
+   */
+  readonly label?: string | null;
 }
 
 /** Raw token-method input keyed by the provider's declared field names. */

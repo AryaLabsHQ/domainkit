@@ -39,6 +39,7 @@ describe("Cloudflare.provider", () => {
     return Effect.gen(function* () {
       const issued = yield* (definition.auth.token ?? bail("token")).authenticate({ token });
       assert.deepStrictEqual(issued.context, { accountId: "account-1", tokenKind: "user" });
+      assert.strictEqual(issued.label, "Example Account");
       assert.strictEqual(Redacted.value(issued.secret), "cf-token");
       assert.ok(issued.expiresAt !== null);
       assert.strictEqual(
@@ -62,12 +63,15 @@ describe("Cloudflare.provider", () => {
       const issued = yield* (definition.auth.token ?? bail("token")).authenticate({ token });
       assert.strictEqual(issued.expiresAt, null);
       assert.deepStrictEqual(issued.context, { accountId: "account-1", tokenKind: "account" });
+      assert.strictEqual(issued.label, "Example Account");
     });
   });
 
   it.effect("verifies an account-owned token against the declared account id", () => {
+    const pinned = { ...zone, account: { id: "account-9", name: "Pinned Account" } };
     const recording = recordedFetch([
       { body: activeToken, expect: { pathname: "/client/v4/accounts/account-9/tokens/verify" } },
+      { body: page([pinned]), expect: { pathname: "/client/v4/zones" } },
     ]);
     const definition = Cloudflare.provider({ fetch: recording.fetch });
     return Effect.gen(function* () {
@@ -76,11 +80,28 @@ describe("Cloudflare.provider", () => {
         accountId: Redacted.make("account-9"),
       });
       assert.deepStrictEqual(issued.context, { accountId: "account-9", tokenKind: "account" });
+      // The name only ever comes from a zone, so the pinned token lists its account's zones.
+      assert.strictEqual(issued.label, "Pinned Account");
+      assert.ok(recording.requests[1]?.url.includes("account.id=account-9"));
       assert.ok(issued.expiresAt !== null);
       assert.deepStrictEqual(Provider.describeMethods(definition)[0]?.fields, [
         { name: "token", required: true, secret: true },
         { name: "accountId", required: false, secret: false },
       ]);
+    });
+  });
+
+  it.effect("names no account for a token whose zones span several", () => {
+    const other = { ...zone, id: "zone-2", account: { id: "account-2", name: "Other" } };
+    const recording = recordedFetch([
+      { body: page([zone, other]), expect: { pathname: "/client/v4/zones" } },
+      { body: activeToken, expect: { pathname: "/client/v4/user/tokens/verify" } },
+    ]);
+    const definition = Cloudflare.provider({ fetch: recording.fetch });
+    return Effect.gen(function* () {
+      const issued = yield* (definition.auth.token ?? bail("token")).authenticate({ token });
+      assert.deepStrictEqual(issued.context, { accountId: null, tokenKind: "user" });
+      assert.strictEqual(issued.label, null);
     });
   });
 
@@ -357,6 +378,7 @@ describe("Cloudflare.provider", () => {
         refreshToken: "refresh-1",
       });
       assert.deepStrictEqual(issued.context, { accountId: "account-1" });
+      assert.strictEqual(issued.label, "Example Account");
       assert.ok(issued.expiresAt !== null);
       const tokenRequest = new URLSearchParams(String(recording.requests[0]?.init?.body));
       assert.strictEqual(tokenRequest.get("grant_type"), "authorization_code");

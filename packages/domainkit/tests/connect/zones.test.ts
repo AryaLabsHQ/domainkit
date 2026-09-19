@@ -86,6 +86,7 @@ describe("Connect.zones", () => {
   it.effect("lists every connection's zones, ordered by zone", () => {
     const one = Testing.provider({
       id: "one",
+      accountLabel: "One Account",
       zones: ["b.example", "a.example"],
       labels: { "a.example": "a.example (One)", "b.example": "b.example (One)" },
     });
@@ -111,9 +112,11 @@ describe("Connect.zones", () => {
           ["c.example", "c.example (Two)", "two", second.id],
         ],
       );
+      // The account label is the provider's, taken at connect time; a provider that names no
+      // account leaves it null.
       assert.deepStrictEqual(listing.connections, [
-        { connectionId: first.id, provider: "one", status: "connected" },
-        { connectionId: second.id, provider: "two", status: "connected" },
+        { connectionId: first.id, provider: "one", label: "One Account", status: "connected" },
+        { connectionId: second.id, provider: "two", label: null, status: "connected" },
       ]);
       assert.deepStrictEqual(
         listing.providers.map(({ id, name }) => [id, name]),
@@ -147,7 +150,7 @@ describe("Connect.zones", () => {
       );
       assert.deepStrictEqual(
         listing.connections.find(({ connectionId }) => connectionId === dead.id),
-        { connectionId: dead.id, provider: "rejecting", status: "reconnect" },
+        { connectionId: dead.id, provider: "rejecting", label: null, status: "reconnect" },
       );
       assert.strictEqual(
         listing.connections.find(({ connectionId }) => connectionId === alive.id)?.status,

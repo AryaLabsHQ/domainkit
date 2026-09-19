@@ -144,7 +144,8 @@ export function DomainField({
                 variant="outline"
               >
                 <Mark className="size-4" marks={marks} provider={provider} />
-                {messages.reconnectAccount(named(entry.provider))}
+                {/* The account's own name when the provider gave one; its name otherwise. */}
+                {messages.reconnectAccount(entry.label ?? named(entry.provider))}
               </Button>
             );
           })}

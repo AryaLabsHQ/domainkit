@@ -48,6 +48,11 @@ export class Authorization extends Schema.Class<Authorization>("@domainkit/Stora
   capabilities: Schema.Array(Capability),
   /** Provider-specific account context (account id, team id, ...) decoded by the provider's `context` schema. */
   context: Schema.Unknown,
+  /**
+   * What the provider called the account when the credential was issued, so a UI names the
+   * connection without a provider call. `null` when the provider names no single account.
+   */
+  label: Schema.NullOr(Schema.String),
   revocation: Schema.Literals(["active", "pending", "revoked"]),
   createdBy: Schema.String,
   createdAt: Schema.DateTimeUtcFromString,

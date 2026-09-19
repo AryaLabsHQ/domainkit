@@ -15,6 +15,7 @@ const scenario = (options: { readonly oauth?: boolean } = {}) => {
   return {
     transport: Testing.transport({
       provider: {
+        accountLabel: "Acme",
         labels: Object.fromEntries(zones.map((zone) => [zone, `${zone} (Acme)`])),
         ...(options.oauth === true ? { oauth: true } : {}),
         zones,
@@ -43,6 +44,8 @@ describe("Connect.useZones", () => {
     await until(() => expect(view.result.current.state._tag).toBe("Ready"));
     expect(view.result.current.zones.map((zone) => zone.zone).sort()).toEqual([...zones].sort());
     expect(view.result.current.connections).toHaveLength(1);
+    // The account carries the name the provider gave it when the credential was issued.
+    expect(view.result.current.connections[0]?.label).toBe("Acme");
     expect(view.result.current.providers.map((provider) => provider.id)).toEqual(["fake"]);
   });
 

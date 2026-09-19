@@ -15,8 +15,14 @@ export const porkbun = Provider.make({
       docsUrl: "https://porkbun.com/account/api",
       requiredCapabilities: ["dns:read", "dns:write"],
       fields: Schema.Struct({ token: Schema.RedactedFromValue(Schema.String) }),
+      // `label` names the account the credential reaches, so a UI can name the connection later.
       authenticate: ({ token }) =>
-        Effect.succeed({ secret: token, context: { apiKey: "pk1" }, expiresAt: null }),
+        Effect.succeed({
+          secret: token,
+          context: { apiKey: "pk1" },
+          label: "Porkbun (pk1)",
+          expiresAt: null,
+        }),
     }),
   },
   session: (credential) => ({

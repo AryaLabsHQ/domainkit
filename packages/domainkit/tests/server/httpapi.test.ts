@@ -30,7 +30,7 @@ const identity = Layer.succeed(Server.Identity)({
 const host = "http://domainkit.test";
 
 const server = (options: Server.WebHandlerOptions = {}) => {
-  const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+  const fake = Testing.provider({ zones: ["example.com"], oauth: true, accountLabel: "Acme" });
   const services = DomainKit.layerMemory({
     providers: [fake],
     resolver: Testing.resolver(),
@@ -79,7 +79,8 @@ describe("Server.group over the lifecycle", () => {
       const connection = started.body as Server.Connected;
       assert.strictEqual(connection._tag, "Connected");
       assert.strictEqual(connection.provider, fake.id);
-      assert.strictEqual(connection.label, fake.name);
+      // A start with no domain has no zone to name, so the account label names the connection.
+      assert.strictEqual(connection.label, "Acme");
       assert.strictEqual(connection.snapshot, null);
 
       const listed = await call("GET", "/zones");
@@ -90,7 +91,12 @@ describe("Server.group over the lifecycle", () => {
         [[connection.connectionId, fake.id, "example.com"]],
       );
       assert.deepStrictEqual(zones.connections, [
-        { connectionId: connection.connectionId, provider: fake.id, status: "connected" },
+        {
+          connectionId: connection.connectionId,
+          provider: fake.id,
+          label: "Acme",
+          status: "connected",
+        },
       ]);
 
       assert.deepStrictEqual(
@@ -439,7 +445,7 @@ describe("Server.group over the lifecycle", () => {
   it("completes the callback under an identity the browser can satisfy", async () => {
     // The provider drives a top-level navigation to /callback/:provider, so only a credential the
     // browser attaches by itself reaches it. A cookie identity has to work end to end.
-    const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+    const fake = Testing.provider({ zones: ["example.com"], oauth: true, accountLabel: "Acme" });
     const cookieIdentity = Layer.succeed(Server.Identity)({
       principal: (request) =>
         request.cookies.session === "s3cret"
@@ -489,7 +495,7 @@ describe("Server.group over the lifecycle", () => {
   it("resolves the callback against callbackBaseUrl behind a Host-rewriting proxy", async () => {
     // The browser reaches samva.dev; the edge forwards to api.samva.dev with a rewritten Host, so
     // the request origin is one the customer never sees. `callbackBaseUrl` names the public one.
-    const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+    const fake = Testing.provider({ zones: ["example.com"], oauth: true, accountLabel: "Acme" });
     const { handler, dispose } = Server.toWebHandler(
       DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() }).pipe(
         Layer.merge(identity),
@@ -700,7 +706,7 @@ describe("Server.group over the lifecycle", () => {
      * host authenticates.
      */
     const bound = (policy: Partial<Connect.PolicyShape> = {}) => {
-      const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+      const fake = Testing.provider({ zones: ["example.com"], oauth: true, accountLabel: "Acme" });
       let current: Principal.Interface = Testing.principal;
       const shifting = Layer.succeed(Server.Identity)({
         principal: () => Effect.succeed(current),
@@ -838,7 +844,7 @@ describe("Server.group over the lifecycle", () => {
     });
 
     it("authenticates before it decides, so the status is no oracle on a state", async () => {
-      const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+      const fake = Testing.provider({ zones: ["example.com"], oauth: true, accountLabel: "Acme" });
       const cookieIdentity = Layer.succeed(Server.Identity)({
         principal: (request) =>
           request.cookies.session === "s3cret"
@@ -888,7 +894,7 @@ describe("Server.group over the lifecycle", () => {
       // The host's authentication sits between the header read and the scoped read, so the flow
       // can expire or be spent in that window. The identity layer below spends it there on
       // purpose, which is the race made deterministic.
-      const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+      const fake = Testing.provider({ zones: ["example.com"], oauth: true, accountLabel: "Acme" });
       const base = DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() });
       let spend: string | null = null;
       const racing = Layer.effect(Server.Identity)(

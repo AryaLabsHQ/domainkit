@@ -74,14 +74,14 @@ folder against the current capsule in CI.
 
 ## Tables
 
-| Table                      | Key                               | Holds                                                             |
-| -------------------------- | --------------------------------- | ----------------------------------------------------------------- |
-| `domainkit_authorizations` | `id`                              | provider grant, capabilities, revocation state, sealed credential |
-| `domainkit_connections`    | `id`                              | the principal-facing handle over one authorization                |
-| `domainkit_attachments`    | `id`, unique `(owner_id, domain)` | domain, zone, provider target                                     |
-| `domainkit_continuations`  | `id`                              | interactive-flow state with a TTL                                 |
-| `domainkit_attempts`       | `id`                              | plan, approval, receipt, status, lease, failure                   |
-| `domainkit_readiness`      | `(owner_id, domain)`              | latest observation, per-requirement evidence, backoff             |
+| Table                      | Key                               | Holds                                                                            |
+| -------------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
+| `domainkit_authorizations` | `id`                              | provider grant, account label, capabilities, revocation state, sealed credential |
+| `domainkit_connections`    | `id`                              | the principal-facing handle over one authorization                               |
+| `domainkit_attachments`    | `id`, unique `(owner_id, domain)` | domain, zone, provider target                                                    |
+| `domainkit_continuations`  | `id`                              | interactive-flow state with a TTL                                                |
+| `domainkit_attempts`       | `id`                              | plan, approval, receipt, status, lease, failure                                  |
+| `domainkit_readiness`      | `(owner_id, domain)`              | latest observation, per-requirement evidence, backoff                            |
 
 Readiness is keyed by domain rather than by attachment, so a host observing public DNS alone gets
 the same row; `attachment_id` links the attachment when one exists and is cleared when it is

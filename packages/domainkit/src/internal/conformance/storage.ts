@@ -56,6 +56,7 @@ const authorizationRow = (principal: Principal.Interface, id: string, now: DateT
     method: "token",
     capabilities: ["dns:read"],
     context: { account: "acc" },
+    label: "Acme",
     revocation: "active",
     createdBy: principal.actorId,
     createdAt: now,
@@ -222,6 +223,9 @@ export const cases = (layer: Layer.Layer<Storage.Service, unknown>): ReadonlyArr
             [...promoted.capabilities].sort().join(",") === "dns:read,dns:write",
             "promoteCapabilities did not merge capabilities",
           );
+          // The account label names the connection without a provider call, so it has to survive
+          // the round trip as written.
+          yield* expect(promoted.label === "Acme", "authorization label was not stored");
         }).pipe(Effect.provideService(Principal.Service, owner)),
       ),
     },

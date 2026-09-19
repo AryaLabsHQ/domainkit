@@ -168,6 +168,7 @@ describe("lifecycle on PgStorage", () => {
               method: "oauth",
               capabilities: ["dns:read", "dns:write"],
               context: { account: "fake" },
+              label: "Fake account",
               revocation: "active",
               createdBy: "actor",
               createdAt: now,

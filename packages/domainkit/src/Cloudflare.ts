@@ -133,11 +133,16 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
   const baseUrl = (options.baseUrl ?? "https://api.cloudflare.com/client/v4").replace(/\/$/, "");
   const client = (token: string): Client.Options => ({ token, fetch, baseUrl });
 
-  const discoverAccount = (token: string) =>
-    Client.listZones(client(token)).pipe(
+  /**
+   * The one account every zone the credential sees belongs to, with the name Cloudflare gives it.
+   * `null` when the credential spans several accounts or reaches no zone at all: neither names a
+   * single account. `accountId` narrows the listing to a token already pinned to an account.
+   */
+  const discoverAccount = (token: string, accountId?: string) =>
+    Client.listZones(client(token), accountId).pipe(
       Effect.map((zones) => {
-        const accounts = new Set(zones.map((zone) => zone.account.id));
-        const [only] = accounts;
+        const accounts = new Map(zones.map((zone) => [zone.account.id, zone.account]));
+        const [only] = accounts.values();
         return accounts.size === 1 && only !== undefined ? only : null;
       }),
     );
@@ -167,9 +172,10 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
     tokens: OAuth.Tokens,
   ): Effect.Effect<Provider.IssuedCredential, Errors.DomainKitError> =>
     discoverAccount(tokens.accessToken).pipe(
-      Effect.map((accountId) => ({
+      Effect.map((account) => ({
         secret: packSecret(tokens),
-        context: { accountId } satisfies AccountContext,
+        context: { accountId: account?.id ?? null } satisfies AccountContext,
+        label: account?.name ?? null,
         expiresAt: tokens.expiresAt,
       })),
     );
@@ -274,17 +280,27 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
                 client(raw),
                 `/accounts/${encodeURIComponent(accountId)}/tokens/verify`,
               );
+              // The account name only ever comes from a zone, so a pinned token that reaches no
+              // zone connects unnamed rather than failing over a label.
+              const pinned = yield* discoverAccount(raw, accountId).pipe(
+                Effect.orElseSucceed(() => null),
+              );
               return {
                 secret: token,
                 context: { accountId, tokenKind: "account" } satisfies AccountContext,
+                label: pinned?.name ?? null,
                 expiresAt,
               };
             }
             const discovered = yield* discoverAccount(raw);
-            const verified = yield* Client.tokenExpiry(client(raw), discovered);
+            const verified = yield* Client.tokenExpiry(client(raw), discovered?.id ?? null);
             return {
               secret: token,
-              context: { accountId: discovered, tokenKind: verified.kind } satisfies AccountContext,
+              context: {
+                accountId: discovered?.id ?? null,
+                tokenKind: verified.kind,
+              } satisfies AccountContext,
+              label: discovered?.name ?? null,
               expiresAt: verified.expiresAt,
             };
           }),

@@ -58,7 +58,9 @@ card can say how many records it holds without another call.
 
 `Connect.useZones({ provider? })` lists every zone the owner's connections reach. Its state is
 `Loading`, `Ready { zones, connections, providers }`, or `Failure`; a connection whose credential
-the provider turned down appears in `connections` as `reconnect` and contributes no zones.
+the provider turned down appears in `connections` as `reconnect` and contributes no zones. Each
+connection carries the account `label` its provider gave at connect time, so a list names accounts
+without a provider call; it is `null` when the provider named no single account.
 
 `Connect.useAccounts({ returnTo })` reads the same listing and adds two commands:
 `connect({ provider, method, values? })` starts a provider with no domain attached, and
