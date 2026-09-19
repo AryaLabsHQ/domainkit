@@ -8,7 +8,7 @@ Accepted
 
 `Storage` is the durable seam every lifecycle operation goes through: authorizations with sealed
 credentials, connections, attachments, interactive-flow continuations, attempts carrying a plan,
-approval and receipt, and observed readiness. A host implementing that itself has to reproduce
+approval and receipt, the batches that plan many domains at once, and observed readiness. A host implementing that itself has to reproduce
 tenant scoping on every query, single-flight credential refresh, attempt leases and replay, and
 resumable revocation. Those are protocol invariants, not application choices, and a conformance
 suite is a poor substitute for shipping one implementation that holds them.
@@ -19,8 +19,10 @@ DomainKit ships one optional package, `@domainkit/capsuledb`, that implements `S
 PostgreSQL through a declarative CapsuleDB capsule. The `domainkit` root has no dependency on it;
 a host that persists elsewhere provides its own `Storage`, in Effect or through the async adapter.
 
-The capsule declares six tables under a `domainkit` prefix — authorizations, connections,
-attachments, continuations, attempts, readiness — and one additive migration. Every table carries
+The capsule declares eight tables under a `domainkit` prefix — authorizations, connections,
+attachments, continuations, attempts, readiness, batches, batch items — through additive
+migrations. A table added after the first deploy is declared with the rest and created by its own
+migration, so what an earlier migration renders never moves. Every table carries
 `owner_id`, and every query filters by the `Principal.Service`, so a row belonging to another tenant reads
 as absent rather than forbidden. The package declares no foreign keys, to host tables or between its
 own; a host adds the ones it wants in the SQL it applies.

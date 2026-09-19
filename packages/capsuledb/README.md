@@ -3,7 +3,8 @@
 DomainKit's `Storage` on PostgreSQL, as one declarative [CapsuleDB](https://github.com/aryasaatvik/CapsuleDB)
 capsule. Install it under `DomainKit.layer` and the whole durable lifecycle — provider
 authorizations, connections, attachments, interactive-flow continuations, plan/approval/receipt
-attempts, and observed readiness — lives in your database, scoped to your tenants.
+attempts, multi-domain batches, and observed readiness — lives in your database, scoped to your
+tenants.
 
 The host owns the `SqlClient` and its lifetime. This package owns its own tables and never exposes
 rows, queries, or a raw client.
@@ -74,14 +75,20 @@ folder against the current capsule in CI.
 
 ## Tables
 
-| Table                      | Key                               | Holds                                                                            |
-| -------------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
-| `domainkit_authorizations` | `id`                              | provider grant, account label, capabilities, revocation state, sealed credential |
-| `domainkit_connections`    | `id`                              | the principal-facing handle over one authorization                               |
-| `domainkit_attachments`    | `id`, unique `(owner_id, domain)` | domain, zone, provider target                                                    |
-| `domainkit_continuations`  | `id`                              | interactive-flow state with a TTL                                                |
-| `domainkit_attempts`       | `id`                              | plan, approval, receipt, status, lease, failure                                  |
-| `domainkit_readiness`      | `(owner_id, domain)`              | latest observation, per-requirement evidence, backoff                            |
+| Table                      | Key                                        | Holds                                                                            |
+| -------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------- |
+| `domainkit_authorizations` | `id`                                       | provider grant, account label, capabilities, revocation state, sealed credential |
+| `domainkit_connections`    | `id`                                       | the principal-facing handle over one authorization                               |
+| `domainkit_attachments`    | `id`, unique `(owner_id, domain)`          | domain, zone, provider target                                                    |
+| `domainkit_continuations`  | `id`                                       | interactive-flow state with a TTL                                                |
+| `domainkit_attempts`       | `id`                                       | plan, approval, receipt, status, lease, failure                                  |
+| `domainkit_readiness`      | `(owner_id, domain)`                       | latest observation, per-requirement evidence, backoff                            |
+| `domainkit_batches`        | `id`, unique `(owner_id, idempotency_key)` | batch status, approval digest, rejection                                         |
+| `domainkit_batch_items`    | `(batch_id, attachment_id)`                | one domain's place in a batch: position, attempt pointer, plan failure           |
+
+A batch item is a pointer: the plan, approval, receipt, lease, and failure it shows a customer all
+live on the attempt it names, so nothing is stored twice and the batch's status is recomputed from
+those attempts inside the transaction that moves it.
 
 Readiness is keyed by domain rather than by attachment, so a host observing public DNS alone gets
 the same row; `attachment_id` links the attachment when one exists and is cleared when it is

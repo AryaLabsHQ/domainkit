@@ -299,6 +299,59 @@ export const Attempt = Schema.Struct({
 });
 export type Attempt = typeof Attempt.Type;
 
+/** What a batch's create and resume routes take: one domain and its requirements per item. */
+export const BatchPayload = Schema.Struct({
+  items: Schema.Array(
+    Schema.Struct({ domain: Schema.String, requirements: Schema.Array(DnsRecord.Model) }),
+  ),
+});
+export type BatchPayload = typeof BatchPayload.Type;
+
+/** The digest the principal read, which the batch's current plans must still produce. */
+export const BatchApprovePayload = Schema.Struct({ digest: Plan.Digest });
+export type BatchApprovePayload = typeof BatchApprovePayload.Type;
+
+/** One domain's place in a batch, with whatever its attempt holds. */
+export const BatchItem = Schema.Struct({
+  attachmentId: Schema.String,
+  position: Schema.Number,
+  /** Null while the item has no plan; `planFailure` then says why. */
+  plan: Schema.NullOr(Plan.Model),
+  status: Schema.NullOr(Storage.AttemptStatus),
+  approval: Schema.NullOr(Approval.Model),
+  receipt: Schema.NullOr(Receipt.Model),
+  rejection: Schema.NullOr(Storage.Rejection),
+  failure: Schema.NullOr(Schema.String),
+  planFailure: Schema.NullOr(Schema.String),
+});
+export type BatchItem = typeof BatchItem.Type;
+
+/** Many domains planned together, as every batch route returns them. */
+export const Batch = Schema.Struct({
+  id: Storage.BatchId,
+  status: Storage.BatchStatus,
+  /** What `POST /batches/:batchId/approvals` takes; null while any item is unplanned. */
+  digest: Schema.NullOr(Plan.Digest),
+  approval: Schema.NullOr(Storage.BatchApproval),
+  rejection: Schema.NullOr(Storage.Rejection),
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+  completedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  items: Schema.Array(BatchItem),
+});
+export type Batch = typeof Batch.Type;
+
+/** A batch without its plans, as the unfinished index returns them. */
+export const BatchSummary = Schema.Struct({
+  id: Storage.BatchId,
+  status: Storage.BatchStatus,
+  itemCount: Schema.Number,
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+  completedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+});
+export type BatchSummary = typeof BatchSummary.Type;
+
 /** `Verify.Readiness` on the wire; timestamps encode as ISO strings. */
 export const Readiness = Schema.Struct({
   domain: Schema.String,
@@ -477,6 +530,65 @@ export const group = HttpApiGroup.make("domainkit")
     HttpApiEndpoint.post("cleanupPlan", "/receipts/:receiptId/cleanup-plans", {
       params: { receiptId: Receipt.ReceiptId },
       success: Plan.Model,
+      error: errors,
+    }),
+  )
+  .add(
+    // `Idempotency-Key` is the batch's identity for this owner: a retried create answers with the
+    // batch the first call made rather than planning the same domains twice.
+    HttpApiEndpoint.post("createBatch", "/batches", {
+      headers: { "idempotency-key": Schema.String },
+      payload: BatchPayload,
+      success: Batch,
+      error: errors,
+    }),
+  )
+  .add(
+    // The one listing there is: what this owner still owes a move on. A finished batch is read by
+    // its own id.
+    HttpApiEndpoint.get("batches", "/batches", {
+      query: { unfinished: Schema.Literal("true") },
+      success: Schema.Array(BatchSummary),
+      error: errors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("batch", "/batches/:batchId", {
+      params: { batchId: Storage.BatchId },
+      success: Batch,
+      error: errors,
+    }),
+  )
+  .add(
+    // Plan the items that still have none. The batch stores pointers, not requirements, so the
+    // host supplies them again.
+    HttpApiEndpoint.post("planBatch", "/batches/:batchId/plans", {
+      params: { batchId: Storage.BatchId },
+      payload: BatchPayload,
+      success: Batch,
+      error: errors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("approveBatch", "/batches/:batchId/approvals", {
+      params: { batchId: Storage.BatchId },
+      payload: BatchApprovePayload,
+      success: Batch,
+      error: errors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("rejectBatch", "/batches/:batchId/rejections", {
+      params: { batchId: Storage.BatchId },
+      payload: RejectPayload,
+      success: Batch,
+      error: errors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("applyBatch", "/batches/:batchId/apply", {
+      params: { batchId: Storage.BatchId },
+      success: Batch,
       error: errors,
     }),
   );
@@ -1060,6 +1172,48 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
         )
         .handle("cleanupPlan", ({ params, request }) =>
           as("cleanupPlan", request, cleanup.plan({ receiptId: params.receiptId })),
+        )
+        .handle("createBatch", ({ headers, payload, request }) =>
+          as(
+            "createBatch",
+            request,
+            provision.batch.create({
+              items: payload.items,
+              idempotencyKey: headers["idempotency-key"],
+            }),
+          ),
+        )
+        .handle("batches", ({ request }) =>
+          as("batches", request, provision.batch.list({ unfinished: true })),
+        )
+        .handle("batch", ({ params, request }) =>
+          as("batch", request, provision.batch.get(params.batchId)),
+        )
+        .handle("planBatch", ({ params, payload, request }) =>
+          as(
+            "planBatch",
+            request,
+            provision.batch.resumePlanning(params.batchId, { items: payload.items }),
+          ),
+        )
+        .handle("approveBatch", ({ params, payload, request }) =>
+          as(
+            "approveBatch",
+            request,
+            provision.batch.approve(params.batchId, { digest: payload.digest }),
+          ),
+        )
+        .handle("rejectBatch", ({ params, payload, request }) =>
+          as(
+            "rejectBatch",
+            request,
+            provision.batch.reject(params.batchId, {
+              ...(payload.reason === undefined ? {} : { reason: payload.reason }),
+            }),
+          ),
+        )
+        .handle("applyBatch", ({ params, request }) =>
+          as("applyBatch", request, provision.batch.apply(params.batchId)),
         );
     }),
   ) as Layer.Layer<HttpApiGroup.Service<ApiId, "domainkit">, never, Services>;

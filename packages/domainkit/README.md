@@ -65,6 +65,13 @@ Plans are additive and fail closed: exact records are `Noop`, missing records ar
 incompatible state is `Conflict`. DomainKit never updates or deletes a record it did not create,
 and cleanup is its own plan, approval, and receipt built from the apply receipt.
 
+Several domains at once are one batch: `Provision.batch.create` plans them with
+`Policy.batchConcurrency` in flight, `approve` binds one digest over every plan, and `apply` walks
+the approved domains under their own attempt leases, so a second apply skips what the first holds
+and a domain that fails does not stop the ones beside it. A batch is resumable at every step —
+`resumePlanning` re-plans what failed, `apply` re-claims what failed — and
+`Provision.batch.list({ unfinished: true })` is the index behind a "you still owe this" banner.
+
 Every step is a stored attempt, so a host can render the plan in one request, collect consent in
 another, and apply in a third; retrying any step replays its result. A customer who declines calls
 `Provision.reject`, which closes the attempt for good and leaves the domain free for a new plan. Every failure is one
@@ -153,9 +160,9 @@ export const ApiLive = HttpApiBuilder.layer(Api).pipe(
 );
 ```
 
-`Server.group` is one `HttpApiGroup` with fifteen typed endpoints covering the whole lifecycle:
+`Server.group` is one `HttpApiGroup` with twenty-five typed endpoints covering the whole lifecycle:
 inspect, discover, connect, callback, attach, detach, disconnect, plan, approve, reject, apply, read
-a plan or a receipt, observe, and build a cleanup plan. `Identity` is the only service you write, and
+a plan or a receipt, observe, build a cleanup plan, and the seven batch routes under `/batches`. `Identity` is the only service you write, and
 every handler derives the `Principal` for the request it is serving. `Server.group.prefix("/internal/dns")` moves
 every route, and the OAuth callback URL follows the mount. `OpenApi.fromApi(Server.api)` documents
 the group.

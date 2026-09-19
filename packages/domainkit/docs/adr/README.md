@@ -12,3 +12,4 @@ deleted; history lives in git.
 - [0008: Optional CapsuleDB persistence](0008-optional-capsuledb-persistence.md)
 - [0009: Authorization, connection, attachment](0009-authorization-connection-attachment.md)
 - [0010: Credential-scoped provider sessions](0010-credential-scoped-provider-sessions.md)
+- [0011: The batch is an aggregate over attempts](0011-batch-aggregate.md)

@@ -24,6 +24,7 @@ export class DomainKitError extends Schema.TaggedError<DomainKitError>("@domaink
         return "auth";
       case "Conflict":
       case "Stale":
+      case "BatchStale":
       case "Expired":
       case "Busy":
         return "plan";
@@ -62,6 +63,7 @@ export class DomainKitError extends Schema.TaggedError<DomainKitError>("@domaink
         return 404;
       case "Conflict":
       case "Stale":
+      case "BatchStale":
       case "Expired":
       case "Busy":
         return 409;

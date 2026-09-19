@@ -1,0 +1,101 @@
+---
+title: Setting up many domains at once
+description: How a batch plans several domains together, binds one digest to one consent, applies with bounded concurrency, and resumes whatever did not land.
+sidebar:
+  label: Batches
+seo:
+  title: DomainKit batches
+---
+
+A customer moving several domains reviews them as one thing. A batch is that unit: plan every
+domain, show one digest, take one consent, apply with bounded concurrency, and come back later for
+whatever did not land.
+
+A batch owns nothing a single domain already has. Each item is a pointer to the attachment and to
+the [attempt](/docs/core/plans) carrying that domain's plan, so the plan, the approval, the receipt,
+the lease, and the failure all live where they always did.
+
+## Planning
+
+<Snippet file="examples/core/batches.ts" region="create" title="Planning several domains" />
+
+Every domain must already be attached. Planning reads a provider per domain, so
+`Policy.batchConcurrency` bounds how many run at once; it defaults to 4.
+
+A domain that cannot be planned does not stop the ones beside it. Its item records `planFailure`,
+the batch stays `planning`, and nothing is lost.
+
+<Snippet file="examples/core/batches.ts" region="review" title="What a review screen needs" />
+
+<Snippet file="examples/core/batches.ts" region="resume" title="Re-planning what failed" />
+
+Resuming plans only the items that have none. A batch stores pointers, not requirements, so the
+host supplies the requirements again — the same shape `create` takes.
+
+## One digest, one consent
+
+A batch's `digest` is a SHA-256 over its items' sorted `attachmentId:planDigest` pairs, so it moves
+whenever any domain's plan moves. It is null until every item is planned, and that is exactly when
+a batch is approvable.
+
+<Snippet file="examples/core/batches.ts" region="approve" title="Approving the whole batch" />
+
+Approval writes one `Approval` per attempt, each bound to that attempt's own plan digest, together
+with the batch's own approval in a single transaction. A batch is never approved without the
+per-attempt approvals apply takes, and an attempt is never approved for a batch that was not.
+
+A digest the batch's current plans no longer produce fails `BatchStale` and writes nothing. Read the
+batch again and show the customer what moved.
+
+## Applying
+
+<Snippet file="examples/core/batches.ts" region="apply" title="Applying, and applying again" />
+
+Apply walks the approved domains with `Policy.batchConcurrency` in flight, each under its own
+attempt lease. Two applies of the same batch never write the same record twice: the one that loses
+a lease finds that domain `Busy` and skips it.
+
+A domain that fails records its failure on its own attempt rather than stopping the others, so
+calling apply again re-claims it. A domain whose write failed after an earlier one landed has a
+`partial` receipt and needs a new plan, exactly as it would on its own.
+
+## Where a batch stands
+
+| Status     | Means                                                        |
+| ---------- | ------------------------------------------------------------ |
+| `planning` | At least one domain has no plan yet                          |
+| `planned`  | Every domain is planned and the digest is ready to approve   |
+| `approved` | Consent recorded, nothing applied yet                        |
+| `applying` | An apply is in flight                                        |
+| `complete` | Every domain is done                                         |
+| `partial`  | A domain's write failed after an earlier one landed; re-plan |
+| `failed`   | A domain stopped before any write; apply again               |
+| `rejected` | The customer declined, and every plan under it with them     |
+
+The status is recomputed from the items' attempts on every transition, so it never disagrees with
+the domains it summarizes. `complete` and `rejected` are terminal.
+
+<Snippet file="examples/core/batches.ts" region="list" title="What a customer still owes" />
+
+`list({ unfinished: true })` reads no plans, which is what makes a "you still have a setup waiting"
+banner cheap. Open one batch and `Provision.batch.get` pays for that one.
+
+## Declining
+
+<Snippet file="examples/core/batches.ts" region="reject" title="Declining the whole batch" />
+
+Rejection is terminal, and it declines every plan under the batch. Declining again returns the same
+batch; a batch that was already approved fails `BatchStale`.
+
+A planning pass runs outside any transaction, because it reads a provider. Landing its result checks
+the batch's state in the same transaction as the write, so a pass still in flight when the customer
+declines lands nothing.
+
+## Retrying a create
+
+`idempotencyKey` is unique per owner. A retried create — a double-clicked button, a client that
+resent the request — answers with the batch the first call made instead of planning the same domains
+twice. Over HTTP the key is the `Idempotency-Key` header on `POST /batches`; the
+[`domainkit/server` reference](/docs/reference/server) lists every batch route.
+
+<Snippet file="examples/core/batches.ts" region="failures" title="Reading the status" />

@@ -1,5 +1,5 @@
 /**
- * The six tables DomainKit owns, declared once and rendered per dialect by CapsuleDB.
+ * The eight tables DomainKit owns, declared once and rendered per dialect by CapsuleDB.
  *
  * Every table carries `owner_id` and every query filters by it: tenancy is a column, not a schema.
  * There are no foreign keys to host tables, and none between DomainKit's own tables either, so a
@@ -14,13 +14,15 @@ export interface Tables {
   readonly continuations: Schema.Table;
   readonly attempts: Schema.Table;
   readonly readiness: Schema.Table;
+  readonly batches: Schema.Table;
+  readonly batchItems: Schema.Table;
 }
 
 /** Default table prefix. Part of the physical layout, so it is immutable after the first deploy. */
 export const DEFAULT_PREFIX = "domainkit";
 
 /**
- * Declare the six tables under `prefix`.
+ * Declare the eight tables under `prefix`.
  *
  * `Schema.table` validates every identifier it will quote, so an invalid prefix throws
  * `CapsuleDefinitionError` here rather than reaching a renderer.
@@ -143,6 +145,45 @@ export const make = (prefix: string): Tables => ({
     // The sweep index drives the backoff ladder; the attachment index is for clearing the link.
     indexes: [{ columns: ["owner_id", "next_check_at"] }, { columns: ["attachment_id"] }],
   }),
+  batches: Schema.table(`${prefix}_batches`, {
+    columns: {
+      id: Schema.text(),
+      owner_id: Schema.text(),
+      kind: Schema.text(),
+      status: Schema.text(),
+      /** SHA-256 over the items' `attachmentId:planDigest` pairs; set when the batch is approved. */
+      digest: Schema.text({ nullable: true }),
+      /** Who bound the digest, and when; the per-attempt approvals live on the attempts. */
+      approval: Schema.json({ nullable: true }),
+      rejection: Schema.json({ nullable: true }),
+      idempotency_key: Schema.text(),
+      created_by: Schema.text(),
+      created_at: Schema.timestamp(),
+      updated_at: Schema.timestamp(),
+      /** When the batch reached `complete` or `rejected`; null while it still owes a move. */
+      completed_at: Schema.timestamp({ nullable: true }),
+    },
+    primaryKey: ["id"],
+    // One batch per key per tenant; `batches.create` reads the conflict as a replay.
+    uniques: [["owner_id", "idempotency_key"]],
+    // The owner-scoped unfinished index, newest first.
+    indexes: [{ columns: ["owner_id", "status", "updated_at"] }],
+  }),
+  batchItems: Schema.table(`${prefix}_batch_items`, {
+    columns: {
+      batch_id: Schema.text(),
+      attachment_id: Schema.text(),
+      /** The item's place in the batch, as `batches.create` received it. */
+      position: Schema.integer(),
+      /** The attempt carrying this item's plan; null until one lands. */
+      attempt_id: Schema.text({ nullable: true }),
+      /** Why the last planning pass stopped here; cleared when a plan lands. */
+      plan_failure: Schema.text({ nullable: true }),
+    },
+    // One item per attachment per batch, which is what makes a replayed plan write idempotent.
+    primaryKey: ["batch_id", "attachment_id"],
+    indexes: [{ columns: ["attempt_id"] }],
+  }),
 });
 
 /**
@@ -196,6 +237,18 @@ export const attachmentsV1 = (prefix: string): Schema.Table =>
   });
 
 export const list = (tables: Tables): ReadonlyArray<Schema.Table> => [
+  ...initial(tables),
+  tables.batches,
+  tables.batchItems,
+];
+
+/**
+ * The tables the first migration creates.
+ *
+ * A migration is history: what it renders must not move, so a table added later is declared above
+ * and created by its own migration rather than joining this list.
+ */
+export const initial = (tables: Tables): ReadonlyArray<Schema.Table> => [
   tables.authorizations,
   tables.connections,
   tables.attachments,

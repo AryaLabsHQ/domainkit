@@ -101,7 +101,7 @@ describe("emitted SQL", () => {
     assert.strictEqual(typeof Context.get(context, Storage.Service).withLock, "function");
   }, 180_000);
 
-  it("declares the six tables the emitted SQL creates", async () => {
+  it("declares the eight tables the emitted SQL creates", async () => {
     const out = directory;
     if (out === undefined) throw new Error("the suite did not start");
     const names = capsule.tables.map((table) => table.name);
@@ -112,14 +112,22 @@ describe("emitted SQL", () => {
       "domainkit_continuations",
       "domainkit_attempts",
       "domainkit_readiness",
+      "domainkit_batches",
+      "domainkit_batch_items",
     ]);
     const index = JSON.parse(await readFile(join(out, "capsuledb.emit.json"), "utf8")) as EmitIndex;
     const migrationFile = index.files.find(({ path }) => path.startsWith("0001_"))?.path;
     assert.ok(migrationFile !== undefined, "emit numbers the capsule migration 0001");
     const migration = await readFile(join(out, migrationFile), "utf8");
-    for (const name of names) {
+    // The batch tables arrived in their own migration, so the first one creates the other six.
+    const initial = names.filter((name) => !name.startsWith("domainkit_batch"));
+    for (const name of initial) {
       assert.ok(migration.includes(name), `emitted SQL creates ${name}`);
     }
+    assert.ok(
+      !migration.includes("domainkit_batches"),
+      "the first migration predates the batch aggregate",
+    );
     // The first migration is history: the label columns arrived later and are added by their own
     // migrations, so an installation that already ran 0001 reads the same checksum for it.
     assert.ok(!migration.includes("label"), "the first migration predates every label column");
@@ -130,6 +138,12 @@ describe("emitted SQL", () => {
     assert.ok(
       later.some((sql) => sql.includes("domainkit_authorizations") && sql.includes("label")),
       "a later migration adds the authorization label column",
+    );
+    assert.ok(
+      later.some(
+        (sql) => sql.includes("domainkit_batches") && sql.includes("domainkit_batch_items"),
+      ),
+      "a later migration creates the batch tables",
     );
   });
 });

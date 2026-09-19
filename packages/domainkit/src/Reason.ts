@@ -36,6 +36,7 @@ export class NotFound extends Schema.TaggedError<NotFound>("@domainkit/Reason/No
       "zone",
       "authorization",
       "record",
+      "batch",
     ]),
     id: Schema.String,
   },
@@ -63,6 +64,22 @@ export class Stale extends Schema.TaggedError<Stale>("@domainkit/Reason/Stale")(
 }) {
   override get message(): string {
     return `plan ${this.planId} is stale; provider state no longer matches digest ${this.digest}`;
+  }
+}
+/**
+ * The batch moved since it was read: it was declined, it is already approved, or the digest the
+ * principal reviewed is no longer the one its plans produce. Read the batch again.
+ *
+ * The aggregate's own refusal, beside `Stale`: a batch has no plan and no plan digest of its own,
+ * so nothing here can name one. `digest` is the batch's current digest, null while its items are
+ * still being planned.
+ */
+export class BatchStale extends Schema.TaggedError<BatchStale>("@domainkit/Reason/BatchStale")(
+  "BatchStale",
+  { batchId: Schema.String, status: Schema.String, digest: Schema.NullOr(Schema.String) },
+) {
+  override get message(): string {
+    return `batch ${this.batchId} is ${this.status}; its current digest is ${this.digest ?? "not yet known"}`;
   }
 }
 export class Expired extends Schema.TaggedError<Expired>("@domainkit/Reason/Expired")("Expired", {
@@ -139,6 +156,7 @@ export const Model = Schema.Union([
   NotFound,
   Conflict,
   Stale,
+  BatchStale,
   Expired,
   Busy,
   ProviderRejected,

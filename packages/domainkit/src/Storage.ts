@@ -142,6 +142,117 @@ export class Attempt extends Schema.Class<Attempt>("@domainkit/Storage/Attempt")
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
 
+export const BatchId = Schema.String.pipe(Schema.brand("@domainkit/BatchId"));
+export type BatchId = typeof BatchId.Type;
+
+/**
+ * Where a batch stands, recomputed from its items' attempts after every transition.
+ *
+ * `planning` while any item is still without a plan, `planned` once every item carries one,
+ * `approved` once the principal bound the batch digest, then the apply states. `partial` and
+ * `failed` are resumable; `complete` and `rejected` are terminal and leave the unfinished index.
+ */
+export const BatchStatus = Schema.Literals([
+  "planning",
+  "planned",
+  "approved",
+  "applying",
+  "complete",
+  "partial",
+  "failed",
+  "rejected",
+]);
+export type BatchStatus = typeof BatchStatus.Type;
+
+/** Who bound the batch to its digest, and when. The digest itself is `Batch.digest`. */
+export const BatchApproval = Schema.Struct({
+  actorId: Schema.String,
+  at: Schema.DateTimeUtcFromString,
+});
+export type BatchApproval = typeof BatchApproval.Type;
+
+/**
+ * Many domains planned together, approved once, and applied with bounded concurrency.
+ *
+ * The batch owns the aggregate's own state only: its digest, who approved or declined it, and the
+ * status recomputed from its items. Every plan, approval, receipt, lease, and failure stays on the
+ * attempt an item points at, so nothing is stored twice.
+ */
+export class Batch extends Schema.Class<Batch>("@domainkit/Storage/Batch")({
+  id: BatchId,
+  ownerId: Schema.String,
+  kind: Plan.Kind,
+  status: BatchStatus,
+  /** SHA-256 over the items' `attachmentId:planDigest` pairs, bound at approval. */
+  digest: Schema.NullOr(Plan.Digest),
+  approval: Schema.NullOr(BatchApproval),
+  rejection: Schema.NullOr(Rejection),
+  /** Unique per owner: a replayed create returns the batch this key already made. */
+  idempotencyKey: Schema.String,
+  createdBy: Schema.String,
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+  /** When the batch reached `complete` or `rejected`; null while it still owes a move. */
+  completedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+}) {}
+
+/**
+ * One domain's place in a batch: a pointer to the attachment and to the attempt carrying its plan.
+ *
+ * `attemptId` is null until the item is planned, and `planFailure` carries why the last planning
+ * pass stopped, cleared the moment a plan lands.
+ */
+export class BatchItem extends Schema.Class<BatchItem>("@domainkit/Storage/BatchItem")({
+  batchId: BatchId,
+  attachmentId: Schema.String,
+  /** The item's place in the batch, as `create` received it. */
+  position: Schema.Number,
+  attemptId: Schema.NullOr(Plan.PlanId),
+  planFailure: Schema.NullOr(Schema.String),
+}) {}
+
+/**
+ * The status a batch holds, given whether it was approved or declined and where each item's
+ * attempt stands. `null` names an item that has no plan yet.
+ *
+ * Both `Storage` implementations recompute the stored status through this after every transition,
+ * so the owner-scoped unfinished index never disagrees with the attempts it summarizes.
+ */
+export const batchStatusOf = (input: {
+  readonly approved: boolean;
+  readonly rejected: boolean;
+  readonly items: ReadonlyArray<AttemptStatus | null>;
+}): BatchStatus => {
+  if (input.rejected) return "rejected";
+  const items = input.items;
+  if (items.length === 0 || items.some((status) => status === null)) return "planning";
+  const statuses = items as ReadonlyArray<AttemptStatus>;
+  const every = (status: AttemptStatus) => statuses.every((item) => item === status);
+  if (every("planned")) return "planned";
+  // An approval the batch never took means an item moved on its own; it is not approvable, and
+  // planning is the state a host resumes from.
+  if (!input.approved) return "planning";
+  if (every("approved")) return "approved";
+  const settled = statuses.every(
+    (status) => status !== "planned" && status !== "approved" && status !== "applying",
+  );
+  if (!settled) return "applying";
+  if (every("complete")) return "complete";
+  return statuses.some((status) => status === "partial") ? "partial" : "failed";
+};
+
+/** A batch with its items, in `position` order. Every batch read returns one. */
+export interface BatchAggregate {
+  readonly batch: Batch;
+  readonly items: ReadonlyArray<BatchItem>;
+}
+
+/** One item's attempt approval, as `batches.approve` writes it beside the batch's own. */
+export interface BatchItemApproval {
+  readonly attachmentId: string;
+  readonly approval: Approval.Model;
+}
+
 export const RequirementStatus = Schema.Literals(["satisfied", "missing", "mismatch", "unknown"]);
 export type RequirementStatus = typeof RequirementStatus.Type;
 
@@ -271,6 +382,83 @@ export interface Interface {
     readonly claim: (id: Plan.PlanId, lease: DateTime.Utc) => Fx<Attempt>;
     readonly complete: (id: Plan.PlanId, receipt: Receipt.Model) => Fx<Attempt>;
     readonly fail: (id: Plan.PlanId, message: string) => Fx<Attempt>;
+  };
+  /**
+   * The batch aggregate: many attempts planned together and approved once.
+   *
+   * Every transition runs in one transaction over the locked batch row and leaves `status`
+   * recomputed from the items' attempts, so the owner-scoped unfinished index never disagrees
+   * with the attempts it summarizes.
+   */
+  readonly batches: {
+    /**
+     * Insert the batch and one item per attachment, or return the batch this owner already
+     * created under `idempotencyKey`. A replay ignores `attachmentIds` and returns what is
+     * stored, which is what makes a retried create safe.
+     */
+    readonly create: (input: {
+      readonly kind: Plan.Kind;
+      readonly idempotencyKey: string;
+      /** One item per attachment, in order; empty or duplicated fails `InvalidInput`. */
+      readonly attachmentIds: ReadonlyArray<string>;
+    }) => Fx<BatchAggregate>;
+    readonly get: (id: BatchId) => Fx<BatchAggregate>;
+    /**
+     * The batch this owner created under `idempotencyKey`, if any.
+     *
+     * What a caller reads before it validates a create's payload, so a retried request answers
+     * with the batch the first one made whatever the retry now says.
+     */
+    readonly byIdempotencyKey: (key: string) => Fx<Option.Option<BatchAggregate>>;
+    /** Every batch that has not reached `complete` or `rejected`, most recently touched first. */
+    readonly listUnfinished: () => Fx<ReadonlyArray<BatchAggregate>>;
+    /**
+     * Point an item at the attempt that now carries its plan and clear its plan failure.
+     *
+     * Fails `Stale` unless the batch is still `planning` or `planned`. That check is the fence a
+     * planner still in flight hits when the principal declines the batch underneath it, so plan
+     * state never lands on a rejected aggregate.
+     */
+    readonly recordItemPlan: (
+      id: BatchId,
+      attachmentId: string,
+      attemptId: Plan.PlanId,
+    ) => Fx<BatchAggregate>;
+    /** Record why an item could not be planned; the batch stays `planning`. Same fence. */
+    readonly recordItemPlanFailure: (
+      id: BatchId,
+      attachmentId: string,
+      message: string,
+    ) => Fx<BatchAggregate>;
+    /**
+     * Bind the batch to `digest` and approve every item's attempt in the same transaction, so a
+     * batch is never approved without the per-attempt approvals `attempts.apply` needs.
+     *
+     * Fails `Stale` unless the batch is `planned` and every item still points at the attempt its
+     * approval names. Approving an approved batch under the same digest returns it unchanged; a
+     * different digest fails `Stale`.
+     */
+    readonly approve: (
+      id: BatchId,
+      input: {
+        readonly digest: Plan.Digest;
+        readonly actorId: string;
+        /** One per item, covering every item in the batch. */
+        readonly approvals: ReadonlyArray<BatchItemApproval>;
+      },
+    ) => Fx<BatchAggregate>;
+    /**
+     * Decline the batch and every planned attempt under it, in one transaction. Terminal.
+     *
+     * Rejecting again returns the batch unchanged; a batch that reached `approved` or later
+     * fails `Stale`.
+     */
+    readonly reject: (
+      id: BatchId,
+      input: { readonly actorId: string; readonly reason: string | null },
+    ) => Fx<BatchAggregate>;
+    /** Recompute the stored status from the items' attempts, after applying moved them. */
+    readonly refresh: (id: BatchId) => Fx<BatchAggregate>;
   };
   readonly readiness: {
     /** One row per (owner, domain); `attachmentId`, when set, must exist for the owner. */
@@ -427,6 +615,51 @@ export interface AsyncInterface {
       message: string,
     ) => Promise<Attempt>;
   };
+  readonly batches: {
+    readonly create: (
+      principal: Principal.Interface,
+      input: {
+        readonly kind: Plan.Kind;
+        readonly idempotencyKey: string;
+        readonly attachmentIds: ReadonlyArray<string>;
+      },
+    ) => Promise<BatchAggregate>;
+    readonly get: (principal: Principal.Interface, id: BatchId) => Promise<BatchAggregate>;
+    readonly byIdempotencyKey: (
+      principal: Principal.Interface,
+      key: string,
+    ) => Promise<BatchAggregate | null>;
+    readonly listUnfinished: (
+      principal: Principal.Interface,
+    ) => Promise<ReadonlyArray<BatchAggregate>>;
+    readonly recordItemPlan: (
+      principal: Principal.Interface,
+      id: BatchId,
+      attachmentId: string,
+      attemptId: Plan.PlanId,
+    ) => Promise<BatchAggregate>;
+    readonly recordItemPlanFailure: (
+      principal: Principal.Interface,
+      id: BatchId,
+      attachmentId: string,
+      message: string,
+    ) => Promise<BatchAggregate>;
+    readonly approve: (
+      principal: Principal.Interface,
+      id: BatchId,
+      input: {
+        readonly digest: Plan.Digest;
+        readonly actorId: string;
+        readonly approvals: ReadonlyArray<BatchItemApproval>;
+      },
+    ) => Promise<BatchAggregate>;
+    readonly reject: (
+      principal: Principal.Interface,
+      id: BatchId,
+      input: { readonly actorId: string; readonly reason: string | null },
+    ) => Promise<BatchAggregate>;
+    readonly refresh: (principal: Principal.Interface, id: BatchId) => Promise<BatchAggregate>;
+  };
   readonly readiness: {
     readonly put: (principal: Principal.Interface, readiness: Readiness) => Promise<void>;
     readonly get: (principal: Principal.Interface, domain: string) => Promise<Readiness | null>;
@@ -539,6 +772,25 @@ export const fromAsync = (service: AsyncInterface): Interface => {
       complete: (id, receipt) =>
         call("attempts.complete", (p) => service.attempts.complete(p, id, receipt)),
       fail: (id, message) => call("attempts.fail", (p) => service.attempts.fail(p, id, message)),
+    },
+    batches: {
+      create: (input) => call("batches.create", (p) => service.batches.create(p, input)),
+      get: (id) => call("batches.get", (p) => service.batches.get(p, id)),
+      byIdempotencyKey: (key) =>
+        option("batches.byIdempotencyKey", (p) => service.batches.byIdempotencyKey(p, key)),
+      listUnfinished: () =>
+        call("batches.listUnfinished", (p) => service.batches.listUnfinished(p)),
+      recordItemPlan: (id, attachmentId, attemptId) =>
+        call("batches.recordItemPlan", (p) =>
+          service.batches.recordItemPlan(p, id, attachmentId, attemptId),
+        ),
+      recordItemPlanFailure: (id, attachmentId, message) =>
+        call("batches.recordItemPlanFailure", (p) =>
+          service.batches.recordItemPlanFailure(p, id, attachmentId, message),
+        ),
+      approve: (id, input) => call("batches.approve", (p) => service.batches.approve(p, id, input)),
+      reject: (id, input) => call("batches.reject", (p) => service.batches.reject(p, id, input)),
+      refresh: (id) => call("batches.refresh", (p) => service.batches.refresh(p, id)),
     },
     readiness: {
       put: (readiness) => call("readiness.put", (p) => service.readiness.put(p, readiness)),

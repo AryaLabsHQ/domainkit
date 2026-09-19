@@ -16,6 +16,9 @@ interface State {
   readonly attachments: Map<string, Storage.Attachment>;
   readonly continuations: Map<string, Storage.Continuation>;
   readonly attempts: Map<string, Storage.Attempt>;
+  readonly batches: Map<string, Storage.Batch>;
+  /** Items by batch id, kept in `position` order. */
+  readonly batchItems: Map<string, Array<Storage.BatchItem>>;
   readonly readiness: Map<string, Storage.Readiness>;
   readonly locks: Set<string>;
 }
@@ -33,6 +36,8 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Interfa
     attachments: new Map(),
     continuations: new Map(),
     attempts: new Map(),
+    batches: new Map(),
+    batchItems: new Map(),
     readiness: new Map(),
     locks: new Set(),
   };
@@ -90,6 +95,64 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Interfa
     Effect.suspend(() => {
       const row = ownedRows(state.attempts, principal).find(predicate);
       return row === undefined ? notFound(entity, id) : Effect.succeed(row);
+    });
+
+  const batch = (principal: Principal.Interface, id: string) =>
+    Effect.suspend(() => {
+      const row = owned(state.batches, principal, id);
+      return row === undefined ? notFound("batch", id) : Effect.succeed(row);
+    });
+
+  const itemsOf = (batchId: string): ReadonlyArray<Storage.BatchItem> =>
+    [...(state.batchItems.get(batchId) ?? [])].sort(
+      (left, right) => left.position - right.position,
+    );
+
+  const aggregateOf = (row: Storage.Batch): Storage.BatchAggregate => ({
+    batch: row,
+    items: itemsOf(row.id),
+  });
+
+  const batchStale = (row: Storage.Batch) =>
+    Errors.fail(new Reason.BatchStale({ batchId: row.id, status: row.status, digest: row.digest }));
+
+  const statusOf = (row: Storage.Batch, items: ReadonlyArray<Storage.BatchItem>) =>
+    Storage.batchStatusOf({
+      approved: row.approval !== null,
+      rejected: row.rejection !== null,
+      items: items.map((item) =>
+        item.attemptId === null ? null : (state.attempts.get(item.attemptId)?.status ?? null),
+      ),
+    });
+
+  /** Store `row` with its status recomputed from the items' attempts, and return the aggregate. */
+  const settle = (row: Storage.Batch, now: DateTime.Utc): Storage.BatchAggregate => {
+    const items = itemsOf(row.id);
+    const status = statusOf(row, items);
+    const next = new Storage.Batch({
+      ...row,
+      status,
+      completedAt: status === "complete" || status === "rejected" ? now : null,
+      updatedAt: now,
+    });
+    state.batches.set(row.id, next);
+    return { batch: next, items };
+  };
+
+  const replaceItem = (item: Storage.BatchItem) => {
+    const items = state.batchItems.get(item.batchId) ?? [];
+    const index = items.findIndex((row) => row.attachmentId === item.attachmentId);
+    if (index >= 0) items[index] = item;
+  };
+
+  /** Only a batch still being planned accepts plan state, an approval, or a rejection. */
+  const openForPlanning = (row: Storage.Batch) =>
+    row.status === "planning" || row.status === "planned" ? Effect.void : batchStale(row);
+
+  const itemAt = (row: Storage.Batch, attachmentId: string) =>
+    Effect.suspend(() => {
+      const item = itemsOf(row.id).find((entry) => entry.attachmentId === attachmentId);
+      return item === undefined ? notFound("attachment", attachmentId) : Effect.succeed(item);
     });
 
   const finishRevocation = <E, R>(
@@ -472,6 +535,213 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Interfa
             yield* commit("attempts.fail");
             state.attempts.set(id, next);
             return next;
+          }),
+        ),
+    },
+    batches: {
+      create: (input) =>
+        write((principal) =>
+          Effect.gen(function* () {
+            const replay = ownedRows(state.batches, principal).find(
+              (row) => row.idempotencyKey === input.idempotencyKey,
+            );
+            if (replay !== undefined) return aggregateOf(replay);
+            if (input.attachmentIds.length === 0) {
+              return yield* invalid("A batch needs at least one attachment", "attachmentIds");
+            }
+            if (new Set(input.attachmentIds).size !== input.attachmentIds.length) {
+              return yield* invalid("A batch holds one item per attachment", "attachmentIds");
+            }
+            for (const attachmentId of input.attachmentIds) {
+              yield* attachment(principal, attachmentId);
+            }
+            const now = yield* DateTime.now;
+            const id = Storage.BatchId.make(yield* fresh("batch"));
+            const row = new Storage.Batch({
+              id,
+              ownerId: principal.ownerId,
+              kind: input.kind,
+              status: "planning",
+              digest: null,
+              approval: null,
+              rejection: null,
+              idempotencyKey: input.idempotencyKey,
+              createdBy: principal.actorId,
+              createdAt: now,
+              updatedAt: now,
+              completedAt: null,
+            });
+            yield* commit("batches.create");
+            state.batches.set(id, row);
+            state.batchItems.set(
+              id,
+              input.attachmentIds.map(
+                (attachmentId, position) =>
+                  new Storage.BatchItem({
+                    batchId: id,
+                    attachmentId,
+                    position,
+                    attemptId: null,
+                    planFailure: null,
+                  }),
+              ),
+            );
+            return aggregateOf(row);
+          }),
+        ),
+      get: (id) => read((principal) => Effect.map(batch(principal, id), aggregateOf)),
+      byIdempotencyKey: (key) =>
+        read((principal) =>
+          Effect.sync(() =>
+            Option.map(
+              Option.fromNullishOr(
+                ownedRows(state.batches, principal).find((row) => row.idempotencyKey === key),
+              ),
+              aggregateOf,
+            ),
+          ),
+        ),
+      listUnfinished: () =>
+        read((principal) =>
+          Effect.sync(() =>
+            ownedRows(state.batches, principal)
+              .filter((row) => row.status !== "complete" && row.status !== "rejected")
+              .sort(
+                (left, right) =>
+                  DateTime.toEpochMillis(right.updatedAt) - DateTime.toEpochMillis(left.updatedAt),
+              )
+              .map(aggregateOf),
+          ),
+        ),
+      recordItemPlan: (id, attachmentId, attemptId) =>
+        write((principal) =>
+          Effect.gen(function* () {
+            const row = yield* batch(principal, id);
+            yield* openForPlanning(row);
+            const item = yield* itemAt(row, attachmentId);
+            const planned = yield* attempt(principal, attemptId);
+            if (planned.attachmentId !== attachmentId || planned.kind !== row.kind) {
+              return yield* invalid(
+                `Plan ${attemptId} does not belong to attachment ${attachmentId} in this batch`,
+                "attemptId",
+              );
+            }
+            yield* commit("batches.recordItemPlan");
+            replaceItem(new Storage.BatchItem({ ...item, attemptId, planFailure: null }));
+            return settle(row, yield* DateTime.now);
+          }),
+        ),
+      recordItemPlanFailure: (id, attachmentId, message) =>
+        write((principal) =>
+          Effect.gen(function* () {
+            const row = yield* batch(principal, id);
+            yield* openForPlanning(row);
+            const item = yield* itemAt(row, attachmentId);
+            yield* commit("batches.recordItemPlanFailure");
+            replaceItem(new Storage.BatchItem({ ...item, attemptId: null, planFailure: message }));
+            return settle(row, yield* DateTime.now);
+          }),
+        ),
+      approve: (id, input) =>
+        write((principal) =>
+          Effect.gen(function* () {
+            const row = yield* batch(principal, id);
+            // Replaying the same approval is how a retried request stays safe.
+            if (row.approval !== null) {
+              return row.digest === input.digest ? aggregateOf(row) : yield* batchStale(row);
+            }
+            if (row.status !== "planned") return yield* batchStale(row);
+            const items = itemsOf(id);
+            const pairs: Array<{
+              readonly attempt: Storage.Attempt;
+              readonly approval: Approval.Model;
+            }> = [];
+            for (const item of items) {
+              const supplied = input.approvals.find(
+                (entry) => entry.attachmentId === item.attachmentId,
+              );
+              if (supplied === undefined) {
+                return yield* invalid(
+                  `Batch ${id} has no approval for attachment ${item.attachmentId}`,
+                  "approvals",
+                );
+              }
+              // The item has to still point at the attempt this approval names: anything else
+              // means the batch was re-planned after the principal reviewed it.
+              const stored =
+                item.attemptId === null ? undefined : state.attempts.get(item.attemptId);
+              if (stored === undefined || stored.id !== supplied.approval.planId) {
+                return yield* batchStale(row);
+              }
+              // The attempt has to still be open: one declined or applied through the
+              // single-domain API is not something a batch approval may reopen.
+              if (stored.approval?.id !== supplied.approval.id && stored.status !== "planned") {
+                return yield* stale(stored);
+              }
+              pairs.push({ attempt: stored, approval: supplied.approval });
+            }
+            const now = yield* DateTime.now;
+            yield* commit("batches.approve");
+            for (const { attempt: stored, approval } of pairs) {
+              if (stored.approval?.id === approval.id) continue;
+              state.attempts.set(
+                stored.id,
+                new Storage.Attempt({
+                  ...stored,
+                  status: "approved",
+                  approval,
+                  updatedAt: now,
+                }),
+              );
+            }
+            return settle(
+              new Storage.Batch({
+                ...row,
+                digest: input.digest,
+                approval: { actorId: input.actorId, at: now },
+              }),
+              now,
+            );
+          }),
+        ),
+      reject: (id, input) =>
+        write((principal) =>
+          Effect.gen(function* () {
+            const row = yield* batch(principal, id);
+            // Terminal: a second rejection is the same outcome, so it returns the first one.
+            if (row.rejection !== null) return aggregateOf(row);
+            yield* openForPlanning(row);
+            const now = yield* DateTime.now;
+            yield* commit("batches.reject");
+            for (const item of itemsOf(id)) {
+              const stored =
+                item.attemptId === null ? undefined : state.attempts.get(item.attemptId);
+              if (stored === undefined || stored.status !== "planned") continue;
+              state.attempts.set(
+                stored.id,
+                new Storage.Attempt({
+                  ...stored,
+                  status: "rejected",
+                  rejection: { actorId: input.actorId, reason: input.reason, at: now },
+                  updatedAt: now,
+                }),
+              );
+            }
+            return settle(
+              new Storage.Batch({
+                ...row,
+                rejection: { actorId: input.actorId, reason: input.reason, at: now },
+              }),
+              now,
+            );
+          }),
+        ),
+      refresh: (id) =>
+        write((principal) =>
+          Effect.gen(function* () {
+            const row = yield* batch(principal, id);
+            yield* commit("batches.refresh");
+            return settle(row, yield* DateTime.now);
           }),
         ),
     },

@@ -1,6 +1,6 @@
 ---
 title: "@domainkit/capsuledb"
-description: DomainKit's Storage on PostgreSQL as one declarative CapsuleDB capsule, with its options, its six tables, and the two ways to run its migrations.
+description: DomainKit's Storage on PostgreSQL as one declarative CapsuleDB capsule, with its options, its eight tables, and the two ways to run its migrations.
 sidebar:
   label: "@domainkit/capsuledb"
 seo:
@@ -36,14 +36,16 @@ never handles plaintext.
 
 ## Tables
 
-| Table                      | Key                               | Holds                                                                            |
-| -------------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
-| `domainkit_authorizations` | `id`                              | Provider grant, account label, capabilities, revocation state, sealed credential |
-| `domainkit_connections`    | `id`                              | The principal-facing handle over one authorization                               |
-| `domainkit_attachments`    | `id`, unique `(owner_id, domain)` | Domain, zone, provider target                                                    |
-| `domainkit_continuations`  | `id`                              | Interactive-flow state with a TTL                                                |
-| `domainkit_attempts`       | `id`                              | Plan, approval, receipt, status, lease, failure                                  |
-| `domainkit_readiness`      | `(owner_id, domain)`              | Latest observation, per-requirement evidence, backoff                            |
+| Table                      | Key                                        | Holds                                                                            |
+| -------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------- |
+| `domainkit_authorizations` | `id`                                       | Provider grant, account label, capabilities, revocation state, sealed credential |
+| `domainkit_connections`    | `id`                                       | The principal-facing handle over one authorization                               |
+| `domainkit_attachments`    | `id`, unique `(owner_id, domain)`          | Domain, zone, provider target                                                    |
+| `domainkit_continuations`  | `id`                                       | Interactive-flow state with a TTL                                                |
+| `domainkit_attempts`       | `id`                                       | Plan, approval, receipt, status, lease, failure                                  |
+| `domainkit_readiness`      | `(owner_id, domain)`                       | Latest observation, per-requirement evidence, backoff                            |
+| `domainkit_batches`        | `id`, unique `(owner_id, idempotency_key)` | Batch status, approval digest, rejection                                         |
+| `domainkit_batch_items`    | `(batch_id, attachment_id)`                | One domain's place in a batch: position, attempt pointer, plan failure           |
 
 Every table carries `owner_id` and every query filters by the request's `Principal`, so a row
 belonging to another tenant reads as absent. The one exception is
