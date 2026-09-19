@@ -160,9 +160,9 @@ export const ApiLive = HttpApiBuilder.layer(Api).pipe(
 );
 ```
 
-`Server.group` is one `HttpApiGroup` with fifteen typed endpoints covering the whole lifecycle:
+`Server.group` is one `HttpApiGroup` with twenty-five typed endpoints covering the whole lifecycle:
 inspect, discover, connect, callback, attach, detach, disconnect, plan, approve, reject, apply, read
-a plan or a receipt, observe, and build a cleanup plan. `Identity` is the only service you write, and
+a plan or a receipt, observe, build a cleanup plan, and the seven batch routes under `/batches`. `Identity` is the only service you write, and
 every handler derives the `Principal` for the request it is serving. `Server.group.prefix("/internal/dns")` moves
 every route, and the OAuth callback URL follows the mount. `OpenApi.fromApi(Server.api)` documents
 the group.

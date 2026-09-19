@@ -177,6 +177,7 @@ export interface Catalog {
   readonly notFound: (reason: Reason.NotFound, context: OutcomeContext) => Outcome;
   readonly conflict: (reason: Reason.Conflict, context: OutcomeContext) => Outcome;
   readonly stale: (reason: Reason.Stale, context: OutcomeContext) => Outcome;
+  readonly batchStale: (reason: Reason.BatchStale, context: OutcomeContext) => Outcome;
   readonly expired: (reason: Reason.Expired, context: OutcomeContext) => Outcome;
   readonly busy: (reason: Reason.Busy, context: OutcomeContext) => Outcome;
   readonly providerRejected: (reason: Reason.ProviderRejected, context: OutcomeContext) => Outcome;
@@ -218,6 +219,7 @@ export type EvidenceLike =
 const entity: Readonly<Record<Reason.NotFound["entity"], string>> = {
   approval: "approval",
   attachment: "domain attachment",
+  batch: "domain setup",
   authorization: "provider authorization",
   connection: "provider connection",
   continuation: "sign-in attempt",
@@ -548,6 +550,10 @@ export const english: Catalog = {
     description: "Review the new plan before you apply it.",
     title: "The zone changed since you reviewed",
   }),
+  batchStale: () => ({
+    description: "Open it again to see where it stands.",
+    title: "This setup changed since you reviewed it",
+  }),
   expired: (reason) => ({
     description: "Start this step again.",
     title: `That ${expiredEntity[reason.entity]} expired`,
@@ -612,6 +618,8 @@ export const outcome = (
       return catalog.conflict(reason, context);
     case "Stale":
       return catalog.stale(reason, context);
+    case "BatchStale":
+      return catalog.batchStale(reason, context);
     case "Expired":
       return catalog.expired(reason, context);
     case "Busy":

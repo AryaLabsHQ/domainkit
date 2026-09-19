@@ -1,6 +1,6 @@
 ---
 title: domainkit/server
-description: The mountable route group and its eighteen endpoints, the Identity service a host implements, the wire schemas, the options, and the Web handler.
+description: The mountable route group and its twenty-five endpoints, the Identity service a host implements, the wire schemas, the options, and the Web handler.
 sidebar:
   label: domainkit/server
 seo:
@@ -21,32 +21,46 @@ import { Server } from "domainkit/server";
 
 ## Endpoints
 
-`Server.group` is one `HttpApiGroup` with eighteen endpoints. It declares no prefix of its own, so
+`Server.group` is one `HttpApiGroup` with twenty-five endpoints. It declares no prefix of its own, so
 `Server.group.prefix("/internal/dns")` or a router mount moves every route at once and the OAuth
 callback URL follows the mount.
 
-| Method   | Path                                       | Endpoint      | Answers                  |
-| -------- | ------------------------------------------ | ------------- | ------------------------ |
-| `GET`    | `/domains/:domain`                         | `inspect`     | `Snapshot`               |
-| `GET`    | `/domains/:domain/discovery`               | `discover`    | `Discovery`              |
-| `GET`    | `/zones`                                   | `zones`       | `Zones`                  |
-| `POST`   | `/connections`                             | `start`       | `Started`                |
-| `GET`    | `/callback/:provider`                      | `callback`    | `302` to the return path |
-| `POST`   | `/connections/:connectionId/reconnections` | `reconnect`   | `Started`                |
-| `POST`   | `/connections/:connectionId/attachments`   | `attach`      | `Started`                |
-| `DELETE` | `/attachments/:attachmentId`               | `detach`      | Empty                    |
-| `DELETE` | `/connections/:connectionId`               | `disconnect`  | Empty                    |
-| `POST`   | `/domains/:domain/plans`                   | `createPlan`  | `Plan.Model`             |
-| `POST`   | `/plans/:planId/approvals`                 | `approve`     | `Approval.Model`         |
-| `POST`   | `/plans/:planId/rejections`                | `reject`      | `Attempt`                |
-| `POST`   | `/approvals/:approvalId/apply`             | `apply`       | `Receipt.Model`          |
-| `GET`    | `/plans/:planId`                           | `plan`        | `Attempt`                |
-| `GET`    | `/receipts/:receiptId`                     | `receipt`     | `Receipt.Model`          |
-| `POST`   | `/domains/:domain/observations`            | `observe`     | `Readiness`              |
-| `GET`    | `/domains/:domain/readiness`               | `readiness`   | `Readiness \| null`      |
-| `POST`   | `/receipts/:receiptId/cleanup-plans`       | `cleanupPlan` | `Plan.Model`             |
+| Method   | Path                                       | Endpoint       | Answers                  |
+| -------- | ------------------------------------------ | -------------- | ------------------------ |
+| `GET`    | `/domains/:domain`                         | `inspect`      | `Snapshot`               |
+| `GET`    | `/domains/:domain/discovery`               | `discover`     | `Discovery`              |
+| `GET`    | `/zones`                                   | `zones`        | `Zones`                  |
+| `POST`   | `/connections`                             | `start`        | `Started`                |
+| `GET`    | `/callback/:provider`                      | `callback`     | `302` to the return path |
+| `POST`   | `/connections/:connectionId/reconnections` | `reconnect`    | `Started`                |
+| `POST`   | `/connections/:connectionId/attachments`   | `attach`       | `Started`                |
+| `DELETE` | `/attachments/:attachmentId`               | `detach`       | Empty                    |
+| `DELETE` | `/connections/:connectionId`               | `disconnect`   | Empty                    |
+| `POST`   | `/domains/:domain/plans`                   | `createPlan`   | `Plan.Model`             |
+| `POST`   | `/plans/:planId/approvals`                 | `approve`      | `Approval.Model`         |
+| `POST`   | `/plans/:planId/rejections`                | `reject`       | `Attempt`                |
+| `POST`   | `/approvals/:approvalId/apply`             | `apply`        | `Receipt.Model`          |
+| `GET`    | `/plans/:planId`                           | `plan`         | `Attempt`                |
+| `GET`    | `/receipts/:receiptId`                     | `receipt`      | `Receipt.Model`          |
+| `POST`   | `/domains/:domain/observations`            | `observe`      | `Readiness`              |
+| `GET`    | `/domains/:domain/readiness`               | `readiness`    | `Readiness \| null`      |
+| `POST`   | `/receipts/:receiptId/cleanup-plans`       | `cleanupPlan`  | `Plan.Model`             |
+| `POST`   | `/batches`                                 | `createBatch`  | `Batch`                  |
+| `GET`    | `/batches?unfinished=true`                 | `batches`      | `BatchSummary[]`         |
+| `GET`    | `/batches/:batchId`                        | `batch`        | `Batch`                  |
+| `POST`   | `/batches/:batchId/plans`                  | `planBatch`    | `Batch`                  |
+| `POST`   | `/batches/:batchId/approvals`              | `approveBatch` | `Batch`                  |
+| `POST`   | `/batches/:batchId/rejections`             | `rejectBatch`  | `Batch`                  |
+| `POST`   | `/batches/:batchId/apply`                  | `applyBatch`   | `Batch`                  |
 
 Approve, reject, and apply serve both provisioning and cleanup: the stored attempt knows its kind.
+
+Every batch route answers with the whole `Batch`, so a UI renders the aggregate from one response.
+`createBatch` takes the batch's identity in an `Idempotency-Key` header: a retried create answers
+with the batch the first call made rather than planning the same domains twice. `planBatch` re-plans
+the items that have none, with their requirements supplied again. `batches` is the owner's
+unfinished index and reads no plans; a finished batch is read by its own id. See
+[batches](/docs/core/batches) for the lifecycle those routes serve.
 
 `start` takes an optional `domain`. Without one it connects the account alone and answers
 `Connected` with the connection it made and no snapshot, which is how a customer grants an account

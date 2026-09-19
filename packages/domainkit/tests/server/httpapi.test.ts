@@ -41,13 +41,16 @@ const server = (options: Server.WebHandlerOptions = {}) => {
     method: string,
     path: string,
     body?: unknown,
+    headers: Readonly<Record<string, string>> = {},
   ): Promise<{ readonly status: number; readonly body: unknown }> => {
     const response = await handler(
       new Request(`${host}${prefix}${path}`, {
         method,
-        ...(body === undefined
-          ? {}
-          : { body: JSON.stringify(body), headers: { "content-type": "application/json" } }),
+        headers: {
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+          ...headers,
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         redirect: "manual",
       }),
     );
@@ -1008,21 +1011,234 @@ describe("Server.group over the lifecycle", () => {
   });
 });
 
+describe("Server.group over batches", () => {
+  const ONE = "one.example.com";
+  const TWO = "two.example.com";
+  const wire = (record: DnsRecord.Model) => JSON.parse(JSON.stringify(record)) as unknown;
+  const requirementsFor = (domain: string) => [
+    wire(DnsRecord.cname({ name: domain, target: "edge.acme.dev" })),
+    wire(DnsRecord.txt({ name: `_acme.${domain}`, value: "acme-verify=7f3a" })),
+  ];
+
+  /** One connection serving both domains, which is what a customer's batch looks like. */
+  const attachBoth = async (call: ReturnType<typeof server>["call"], provider: string) => {
+    const started = await call("POST", "/connections", {
+      domain: ONE,
+      provider,
+      method: { _tag: "Token", values: { token: "token" } },
+    });
+    assert.strictEqual(started.status, 200);
+    const { connectionId } = started.body as Server.Connected;
+    const attached = await call("POST", `/connections/${connectionId}/attachments`, {
+      domain: TWO,
+    });
+    assert.strictEqual(attached.status, 200);
+  };
+
+  it("creates a batch once per Idempotency-Key, then approves and applies it", async () => {
+    const { fake, call, dispose } = server();
+    try {
+      await attachBoth(call, fake.id);
+      const key = { "idempotency-key": "setup-1" };
+      const created = await call(
+        "POST",
+        "/batches",
+        {
+          items: [
+            { domain: ONE, requirements: requirementsFor(ONE) },
+            { domain: TWO, requirements: requirementsFor(TWO) },
+          ],
+        },
+        key,
+      );
+      assert.strictEqual(created.status, 200);
+      const batch = created.body as Server.Batch;
+      assert.strictEqual(batch.status, "planned");
+      assert.strictEqual(batch.items.length, 2);
+      assert.ok(batch.digest !== null, "a fully planned batch carries the digest to approve");
+
+      // The header is the batch's identity: a retried create answers with the same batch.
+      const replay = await call("POST", "/batches", { items: [] }, key);
+      assert.strictEqual(replay.status, 200);
+      assert.strictEqual((replay.body as Server.Batch).id, batch.id);
+
+      const listed = await call("GET", "/batches?unfinished=true");
+      assert.strictEqual(listed.status, 200);
+      assert.deepStrictEqual(
+        (listed.body as ReadonlyArray<Server.BatchSummary>).map(({ id, status, itemCount }) => ({
+          id,
+          status,
+          itemCount,
+        })),
+        [{ id: batch.id, status: "planned" as const, itemCount: 2 }],
+      );
+
+      const read = await call("GET", `/batches/${batch.id}`);
+      assert.strictEqual(read.status, 200);
+      assert.strictEqual((read.body as Server.Batch).status, "planned");
+
+      // Consent is bound to the digest the principal read.
+      const moved = await call("POST", `/batches/${batch.id}/approvals`, {
+        digest: "not-the-digest-you-read",
+      });
+      assert.strictEqual(moved.status, 409);
+      assert.strictEqual(
+        (moved.body as { readonly reason: { readonly _tag: string } }).reason._tag,
+        "BatchStale",
+      );
+
+      const approved = await call("POST", `/batches/${batch.id}/approvals`, {
+        digest: batch.digest,
+      });
+      assert.strictEqual(approved.status, 200);
+      assert.strictEqual((approved.body as Server.Batch).status, "approved");
+
+      const applied = await call("POST", `/batches/${batch.id}/apply`);
+      assert.strictEqual(applied.status, 200);
+      assert.strictEqual((applied.body as Server.Batch).status, "complete");
+      assert.strictEqual(fake.records("example.com").length, 4);
+
+      const settled = await call("GET", "/batches?unfinished=true");
+      assert.deepStrictEqual(settled.body, []);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("resumes planning for the items that failed, and declines the whole batch", async () => {
+    const { fake, call, dispose } = server();
+    try {
+      await attachBoth(call, fake.id);
+      const created = await call(
+        "POST",
+        "/batches",
+        {
+          items: [
+            { domain: ONE, requirements: requirementsFor(ONE) },
+            {
+              domain: TWO,
+              requirements: [wire(DnsRecord.txt({ name: "_acme.elsewhere.com", value: "no" }))],
+            },
+          ],
+        },
+        { "idempotency-key": "setup-resume" },
+      );
+      const batch = created.body as Server.Batch;
+      assert.strictEqual(batch.status, "planning");
+      assert.strictEqual(batch.digest, null);
+      assert.ok(batch.items[1]?.planFailure !== null, "the second item records why it failed");
+
+      const resumed = await call("POST", `/batches/${batch.id}/plans`, {
+        items: [{ domain: TWO, requirements: requirementsFor(TWO) }],
+      });
+      assert.strictEqual(resumed.status, 200);
+      assert.strictEqual((resumed.body as Server.Batch).status, "planned");
+
+      const rejected = await call("POST", `/batches/${batch.id}/rejections`, {
+        reason: "wrong domains",
+      });
+      assert.strictEqual(rejected.status, 200);
+      const declined = rejected.body as Server.Batch;
+      assert.strictEqual(declined.status, "rejected");
+      assert.deepStrictEqual(
+        declined.items.map(({ status }) => status),
+        ["rejected", "rejected"],
+      );
+
+      // A declined batch has nothing left to approve.
+      const late = await call("POST", `/batches/${batch.id}/approvals`, { digest: "anything" });
+      assert.strictEqual(late.status, 409);
+      const missing = await call("GET", "/batches/batch_nope");
+      assert.strictEqual(missing.status, 404);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("refuses a create with no Idempotency-Key", async () => {
+    const { fake, call, dispose } = server();
+    try {
+      await attachBoth(call, fake.id);
+      const created = await call("POST", "/batches", {
+        items: [{ domain: ONE, requirements: requirementsFor(ONE) }],
+      });
+      assert.strictEqual(created.status, 400);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("forbids a batch route the host's authorize declines", async () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    const writes = new Set<Server.EndpointName>(["createBatch"]);
+    const memberIdentity = Layer.succeed(Server.Identity)({
+      principal: (request) =>
+        Effect.succeed({
+          ...Testing.principal,
+          actorId: request.headers["x-role"] === "admin" ? "admin" : "member",
+        }),
+      authorize: (principal, endpoint) =>
+        principal.actorId === "admin" || !writes.has(endpoint)
+          ? Effect.void
+          : Effect.fail(
+              new DomainKit.Error({
+                reason: new Reason.Forbidden({ message: `${endpoint} needs an administrator` }),
+              }),
+            ),
+    });
+    const { handler, dispose } = Server.toWebHandler(
+      DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() }).pipe(
+        Layer.merge(memberIdentity),
+      ),
+    );
+    try {
+      const response = await handler(
+        new Request(`${host}/batches`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "idempotency-key": "setup-forbidden" },
+          body: JSON.stringify({ items: [] }),
+        }),
+      );
+      assert.strictEqual(response.status, 403);
+      const admin = await handler(
+        new Request(`${host}/batches`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "idempotency-key": "setup-forbidden",
+            "x-role": "admin",
+          },
+          body: JSON.stringify({ items: [] }),
+        }),
+      );
+      // Allowed onto the route, and refused by the aggregate instead: a batch needs a domain.
+      assert.strictEqual(admin.status, 400);
+    } finally {
+      await dispose();
+    }
+  });
+});
+
 describe("Server.api", () => {
   it("generates an OpenAPI document covering every route", () => {
     const spec = OpenApi.fromApi(Server.api);
     const operations = Object.values(spec.paths).flatMap((item) => Object.values(item));
-    assert.strictEqual(operations.length, 18);
+    assert.strictEqual(operations.length, 25);
     assert.deepStrictEqual(
       operations
         .map((operation) => (operation as { readonly operationId: string }).operationId)
         .sort(),
       [
         "domainkit.apply",
+        "domainkit.applyBatch",
         "domainkit.approve",
+        "domainkit.approveBatch",
         "domainkit.attach",
+        "domainkit.batch",
+        "domainkit.batches",
         "domainkit.callback",
         "domainkit.cleanupPlan",
+        "domainkit.createBatch",
         "domainkit.createPlan",
         "domainkit.detach",
         "domainkit.disconnect",
@@ -1030,10 +1246,12 @@ describe("Server.api", () => {
         "domainkit.inspect",
         "domainkit.observe",
         "domainkit.plan",
+        "domainkit.planBatch",
         "domainkit.readiness",
         "domainkit.receipt",
         "domainkit.reconnect",
         "domainkit.reject",
+        "domainkit.rejectBatch",
         "domainkit.start",
         "domainkit.zones",
       ],

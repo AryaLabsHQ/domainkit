@@ -27,7 +27,7 @@ from context (`Provision.plan(...)`). `Policy` values are `Context.Reference`s w
 | Namespace   | Owns                                                                                                                                                                                        |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Connect`   | `inspect`, `discover`, `zones`, `start`, `reconnect`, `complete`, `attach`, `detach`, `disconnect`, `refresh`, `session`                                                                    |
-| `Provision` | `plan`, `approve`, `reject`, `apply`, `get`, `latest` over durable attempts                                                                                                                 |
+| `Provision` | `plan`, `approve`, `reject`, `apply`, `get`, `latest` over durable attempts, and `batch` over many at once                                                                                  |
 | `Cleanup`   | The same verbs over a plan built from an apply receipt                                                                                                                                      |
 | `Verify`    | `observe`, `attachEvidence`, `latest`, `summary`, `requirementKey`, `Observer` (`readinessChanged({ ownerId, domain, readiness, cause })`), `Policy`, and the evidence classes they produce |
 
