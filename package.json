@@ -52,7 +52,7 @@
   "overrides": {
     "capsuledb": "0.2.0"
   },
-  "packageManager": "bun@1.4.0",
+  "packageManager": "bun@1.4.2",
   "patchedDependencies": {
     "blume@1.5.3": "patches/blume@1.5.3.patch"
   }
