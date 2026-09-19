@@ -403,6 +403,13 @@ export interface Interface {
       readonly attachmentIds: ReadonlyArray<string>;
     }) => Fx<BatchAggregate>;
     readonly get: (id: BatchId) => Fx<BatchAggregate>;
+    /**
+     * The batch this owner created under `idempotencyKey`, if any.
+     *
+     * What a caller reads before it validates a create's payload, so a retried request answers
+     * with the batch the first one made whatever the retry now says.
+     */
+    readonly byIdempotencyKey: (key: string) => Fx<Option.Option<BatchAggregate>>;
     /** Every batch that has not reached `complete` or `rejected`, most recently touched first. */
     readonly listUnfinished: () => Fx<ReadonlyArray<BatchAggregate>>;
     /**
@@ -618,6 +625,10 @@ export interface AsyncInterface {
       },
     ) => Promise<BatchAggregate>;
     readonly get: (principal: Principal.Interface, id: BatchId) => Promise<BatchAggregate>;
+    readonly byIdempotencyKey: (
+      principal: Principal.Interface,
+      key: string,
+    ) => Promise<BatchAggregate | null>;
     readonly listUnfinished: (
       principal: Principal.Interface,
     ) => Promise<ReadonlyArray<BatchAggregate>>;
@@ -765,6 +776,8 @@ export const fromAsync = (service: AsyncInterface): Interface => {
     batches: {
       create: (input) => call("batches.create", (p) => service.batches.create(p, input)),
       get: (id) => call("batches.get", (p) => service.batches.get(p, id)),
+      byIdempotencyKey: (key) =>
+        option("batches.byIdempotencyKey", (p) => service.batches.byIdempotencyKey(p, key)),
       listUnfinished: () =>
         call("batches.listUnfinished", (p) => service.batches.listUnfinished(p)),
       recordItemPlan: (id, attachmentId, attemptId) =>

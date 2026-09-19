@@ -340,7 +340,19 @@ export const make: Effect.Effect<Interface, never, Storage.Service | Connect.Ser
                     storage.batches.recordItemPlanFailure(id, attachment.id, error.message),
                   ),
                 onSuccess: (plan) =>
-                  ignoreFence(storage.batches.recordItemPlan(id, attachment.id, plan.id)),
+                  storage.batches.recordItemPlan(id, attachment.id, plan.id).pipe(
+                    Effect.asVoid,
+                    Effect.catch((error) =>
+                      error.reason._tag === "BatchStale"
+                        ? // The batch was declined while this plan was being built. The fence kept
+                          // the plan off the aggregate; closing the attempt keeps it out of the
+                          // single-domain API too, which would otherwise approve and apply it.
+                          Effect.ignore(
+                            attempts.reject(plan.id, { reason: "the batch was declined" }),
+                          )
+                        : Effect.fail(error),
+                    ),
+                  ),
               }),
             ),
           { concurrency: policy.batchConcurrency, discard: true },
@@ -356,9 +368,49 @@ export const make: Effect.Effect<Interface, never, Storage.Service | Connect.Ser
         })),
       );
 
+    /**
+     * The same resolution, tolerating a domain this owner cannot reach.
+     *
+     * What a replay uses: the batch it answers with is already stored, so a payload naming a
+     * domain that was never attached, or one detached since, plans nothing rather than failing a
+     * request the first call already succeeded at.
+     */
+    const resolvableFor = (items: ReadonlyArray<BatchInput>) =>
+      Effect.map(
+        Effect.forEach(items, (item) =>
+          attachmentFor(item.domain).pipe(
+            Effect.map((attachment) => [{ attachment, requirements: item.requirements }]),
+            Effect.catch((error) =>
+              error.reason._tag === "NotFound" || error.reason._tag === "InvalidInput"
+                ? Effect.succeed(
+                    [] as ReadonlyArray<{
+                      readonly attachment: Storage.Attachment;
+                      readonly requirements: ReadonlyArray<DnsRecord.Model>;
+                    }>,
+                  )
+                : Effect.fail(error),
+            ),
+          ),
+        ),
+        (groups) => groups.flat(),
+      );
+
     const batch: BatchInterface = {
       create: (input) =>
         Effect.gen(function* () {
+          // The key decides first: a retried request answers with the batch the first one made,
+          // whatever this payload now says, so a domain detached in between cannot fail a create
+          // that already succeeded.
+          const replay = yield* storage.batches.byIdempotencyKey(input.idempotencyKey);
+          if (Option.isSome(replay)) {
+            const aggregate = replay.value;
+            if (aggregate.batch.kind !== "provisioning") {
+              return yield* Errors.fail(
+                new Reason.NotFound({ entity: "batch", id: aggregate.batch.id }),
+              );
+            }
+            return yield* planMissing(aggregate, yield* resolvableFor(input.items));
+          }
           const supplied = yield* attachmentsFor(input.items);
           const aggregate = yield* storage.batches.create({
             kind: "provisioning",

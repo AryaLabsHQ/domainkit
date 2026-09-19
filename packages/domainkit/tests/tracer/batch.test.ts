@@ -151,6 +151,48 @@ describe("batch tracer", () => {
         const second = yield* Provision.batch.create({ idempotencyKey: "setup-replay", items });
         assert.strictEqual(second.id, first.id);
         assert.strictEqual(second.items[0]?.plan?.id, first.items[0]?.plan?.id);
+
+        // The key decides before the payload is validated, so a retry naming a domain this owner
+        // cannot reach still answers with the batch the first call made.
+        const retried = yield* Provision.batch.create({
+          idempotencyKey: "setup-replay",
+          items: [{ domain: "never.attached.example.com", requirements: [] }],
+        });
+        assert.strictEqual(retried.id, first.id);
+        assert.strictEqual(retried.items.length, 1);
+      }),
+    );
+  });
+
+  it.effect("closes the attempt a planning pass lands after the batch was declined", () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    return run(fake)(
+      Effect.gen(function* () {
+        yield* attachBoth(fake);
+        // One item planned, one left unplanned, so a later pass has work to do.
+        const created = yield* Provision.batch.create({
+          idempotencyKey: "setup-fence",
+          items: [
+            { domain: ONE, requirements: requirementsFor(ONE) },
+            {
+              domain: TWO,
+              requirements: [DnsRecord.txt({ name: "_acme.elsewhere.com", value: "nope" })],
+            },
+          ],
+        });
+        assert.strictEqual(created.status, "planning");
+        yield* Provision.batch.reject(created.id, { reason: "changed their mind" });
+
+        // The pass builds a real attempt, then meets the fence. The plan must not stay live: the
+        // single-domain API would otherwise approve and apply it.
+        const fenced = yield* Provision.batch.resumePlanning(created.id, {
+          items: [{ domain: TWO, requirements: requirementsFor(TWO) }],
+        });
+        assert.strictEqual(fenced.status, "rejected");
+        assert.strictEqual(fenced.items[1]?.plan, null);
+        const orphan = yield* Provision.latest(TWO);
+        assert.strictEqual(orphan?.status, "rejected");
+        assert.strictEqual(fake.records("example.com").length, 0);
       }),
     );
   });

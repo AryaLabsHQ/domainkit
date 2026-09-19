@@ -1233,6 +1233,21 @@ export const make = (
           Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.flatMap(requireBatch(ownerId, id), (batch) => aggregateOf(ownerId, batch)),
           ).pipe(guard("batches.get")),
+        byIdempotencyKey: (key) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
+            sql<BatchRow>`
+              SELECT * FROM ${batches}
+              WHERE owner_id = ${ownerId} AND idempotency_key = ${key}
+            `.pipe(
+              Effect.flatMap((rows) =>
+                rows[0] === undefined
+                  ? Effect.succeedNone
+                  : Effect.flatMap(batchOf(rows[0]), (batch) =>
+                      Effect.map(aggregateOf(ownerId, batch), Option.some),
+                    ),
+              ),
+            ),
+          ).pipe(guard("batches.byIdempotencyKey")),
         listUnfinished: () =>
           Effect.flatMap(Principal.Service, ({ ownerId }) =>
             Effect.gen(function* () {

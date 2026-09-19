@@ -590,6 +590,17 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Interfa
           }),
         ),
       get: (id) => read((principal) => Effect.map(batch(principal, id), aggregateOf)),
+      byIdempotencyKey: (key) =>
+        read((principal) =>
+          Effect.sync(() =>
+            Option.map(
+              Option.fromNullishOr(
+                ownedRows(state.batches, principal).find((row) => row.idempotencyKey === key),
+              ),
+              aggregateOf,
+            ),
+          ),
+        ),
       listUnfinished: () =>
         read((principal) =>
           Effect.sync(() =>
@@ -661,6 +672,11 @@ export function makeMemory(options: Storage.MemoryOptions = {}): Storage.Interfa
                 item.attemptId === null ? undefined : state.attempts.get(item.attemptId);
               if (stored === undefined || stored.id !== supplied.approval.planId) {
                 return yield* batchStale(row);
+              }
+              // The attempt has to still be open: one declined or applied through the
+              // single-domain API is not something a batch approval may reopen.
+              if (stored.approval?.id !== supplied.approval.id && stored.status !== "planned") {
+                return yield* stale(stored);
               }
               pairs.push({ attempt: stored, approval: supplied.approval });
             }

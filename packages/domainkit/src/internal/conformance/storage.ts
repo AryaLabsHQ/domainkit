@@ -739,6 +739,16 @@ export const cases = (layer: Layer.Layer<Storage.Service, unknown>): ReadonlyArr
             "InvalidInput",
             "batches.create with a repeated attachment",
           );
+          const found = yield* storage.batches.byIdempotencyKey("batch-key-create");
+          yield* expect(
+            Option.isSome(found) && found.value.batch.id === created.batch.id,
+            "batches.byIdempotencyKey did not find the batch the key made",
+          );
+          const unknown = yield* storage.batches.byIdempotencyKey("batch-key-never-used");
+          yield* expect(
+            Option.isNone(unknown),
+            "batches.byIdempotencyKey invented a batch for an unused key",
+          );
           const asOther = <A, E>(effect: Effect.Effect<A, E, Principal.Service>) =>
             effect.pipe(Effect.provideService(Principal.Service, other));
           yield* expectReason(
@@ -746,6 +756,8 @@ export const cases = (layer: Layer.Layer<Storage.Service, unknown>): ReadonlyArr
             "NotFound",
             "batches.get",
           );
+          const foreignKey = yield* asOther(storage.batches.byIdempotencyKey("batch-key-create"));
+          yield* expect(Option.isNone(foreignKey), "batches.byIdempotencyKey leaked across owners");
           const foreign = yield* asOther(storage.batches.listUnfinished());
           yield* expect(
             !foreign.some(({ batch }) => batch.id === created.batch.id),
@@ -878,6 +890,46 @@ export const cases = (layer: Layer.Layer<Storage.Service, unknown>): ReadonlyArr
           yield* expect(
             !unfinished.some((entry) => entry.batch.id === batch.id),
             "a complete batch is still in the unfinished index",
+          );
+        }).pipe(Effect.provideService(Principal.Service, owner)),
+      ),
+    },
+    {
+      name: "refuses a batch approval for an attempt that was declined on its own",
+      run: run(
+        Effect.gen(function* () {
+          const { storage, attachment } = yield* connect(owner, "auth-batch-declined");
+          const now = yield* DateTime.now;
+          const plan = planRow(attachment.id, now, "batch-declined");
+          yield* storage.attempts.create(attemptRow(owner, plan));
+          const { batch } = yield* storage.batches.create({
+            kind: "provisioning",
+            idempotencyKey: "batch-key-declined",
+            attachmentIds: [attachment.id],
+          });
+          const planned = yield* storage.batches.recordItemPlan(batch.id, attachment.id, plan.id);
+          yield* expect(planned.batch.status === "planned", "the batch is not planned");
+          // The single-domain API declines the attempt underneath the batch.
+          yield* storage.attempts.reject(plan.id, {
+            digest: plan.digest,
+            actorId: owner.actorId,
+            reason: null,
+          });
+          yield* expectReason(
+            storage.batches.approve(batch.id, {
+              digest: Plan.Digest.make("batch-digest-declined"),
+              actorId: owner.actorId,
+              approvals: [
+                { attachmentId: attachment.id, approval: approvalRow(plan, "batch-declined") },
+              ],
+            }),
+            "Stale",
+            "batches.approve over a declined attempt",
+          );
+          const attempt = yield* storage.attempts.get(plan.id);
+          yield* expect(
+            attempt.status === "rejected" && attempt.approval === null,
+            "batches.approve reopened a declined attempt",
           );
         }).pipe(Effect.provideService(Principal.Service, owner)),
       ),
