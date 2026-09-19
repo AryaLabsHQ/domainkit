@@ -1,26 +1,28 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## A connection carries the name of the account it reaches\n\nListing accounts could only name them by provider: `Connect.zones` answered a `connections` entry\nof `connectionId`, `provider`, and `status`, so a customer holding two Cloudflare accounts read\n\"Cloudflare\" twice and had to open one to tell them apart.\n\nA provider now names the account when it issues a credential. `Provider.IssuedCredential` takes an\noptional `label`, `Connect` stores it on the authorization at connect and reconnect time, and every\nlisting of accounts carries it:\n\n```ts\ninterface ZoneConnection {\n  readonly connectionId: string;\n  readonly provider: string;\n  /** \"Acme Inc\" when the provider named the account; null when it named none. */\n  readonly label: string | null;\n  readonly status: \"connected\" | \"reconnect\";\n}\n```\n\nThe same field crosses the wire on `GET /zones`, so `Transport.Zones[\"connections\"][number]` and\n`@domainkit/react`'s `Connect.Account` carry `label` without a second call. `Server.Connected` now\nprefers it too: a start with no domain names the account instead of the provider, and a start that\nattached a domain still names the zone.\n\nCloudflare fills it. Connecting reads the account from the zones the credential sees, so a\ncredential inside one account carries that account's Cloudflare name and one spanning several\naccounts names none. A token pinned with `accountId` is named from that account's zones, and a\npinned token that reaches no zone connects unnamed rather than failing over a label. Providers that\nname no account, including Vercel, answer `null`, and so does `Testing.provider` until a test sets\n`accountLabel`.\n\nThe field is additive. A provider definition that returns no `label` keeps compiling, and\n`@domainkit/capsuledb` adds a nullable `label` column to `domainkit_authorizations` through its own\nadditive migration, which rows written before it read as `null`. `Storage.Authorization` now requires `label`, so a host that\nimplements `Storage` itself supplies it; the conformance suite checks that it survives the round\ntrip.\n"
-    filename: account-label.md
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n  \"@domainkit/capsuledb\":\n    type: minor\n---\n\n## Plan many domains, approve once, apply bounded\n\nSetting up several domains at once meant a host rebuilt the lifecycle DomainKit already guards for\none: a manifest over per-domain attempts, a digest the customer approves, a lease per item, a\nresumable apply, and a way to find the setups still owed a move. `Provision.batch` is that\nlifecycle inside DomainKit.\n\n```ts\nconst batch =\n  yield *\n  provision.batch.create({\n    idempotencyKey: request.idempotencyKey,\n    items: zones.map((zone) => ({ domain: zone.domain, requirements: zone.requirements })),\n  });\nyield * provision.batch.approve(batch.id, { digest: batch.digest });\nyield * provision.batch.apply(batch.id);\n```\n\nA batch is `planning` until every item has a plan, `planned` once it does, `approved` after one\ndigest-bound approval covers every plan, and `applying`, `complete`, `partial`, or `failed` as its\nattempts move. `reject` closes a batch that was never approved. `create` replays by idempotency\nkey, `resumePlanning` re-plans the items whose plan failed, `apply` skips an item another apply\nholds and returns, and `list({ unfinished: true })` answers every batch the owner still owes a\nmove on. Items point at attempts: plan, approval, receipt, and lease live once, on the attempt.\n\n`Storage` gains `batches`; `@domainkit/capsuledb` adds `domainkit_batches` and\n`domainkit_batch_items` as one additive migration; `domainkit/server` mounts the routes under\n`/batches`. A digest that no longer matches fails `BatchStale`, which names the batch, its status,\nand the digest it holds.\n"
+    filename: batch-aggregate.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
-  - id: npm:@domainkit/capsuledb
+  - id: npm:@domainkit/react
     updated: true
   - id: npm:@domainkit/docs
     updated: false
   - changelogIds:
-      - account-label.md
+      - batch-aggregate.md
     id: npm:domainkit
     updated: true
-  - id: npm:@domainkit/react
+  - changelogIds:
+      - batch-aggregate.md
+    id: npm:@domainkit/capsuledb
     updated: true
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
-  - id: npm:@domainkit/capsuledb
+  - id: npm:@domainkit/react
   - id: npm:@domainkit/docs
   - id: npm:domainkit
-  - id: npm:@domainkit/react
+  - id: npm:@domainkit/capsuledb
