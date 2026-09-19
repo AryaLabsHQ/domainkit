@@ -39,6 +39,7 @@ import { Testing } from "domainkit/testing";
 | -------------------- | ------------------------------------------------------------------------------------------------ |
 | `id`                 | The provider id. Default `fake`                                                                  |
 | `zones`              | Zones the fake credential reaches. Default `example.com`                                         |
+| `accountLabel`       | What the fake calls the account it issues credentials for. Default: none, so the label is null   |
 | `records`            | Pre-existing records, to produce `Noop` and `Conflict` operations                                |
 | `oauth`              | Offer OAuth beside the token method; the fake redirects to `callbackUrl` immediately             |
 | `failWrite`          | Fail the write at this zero-based index, to exercise a partial receipt                           |

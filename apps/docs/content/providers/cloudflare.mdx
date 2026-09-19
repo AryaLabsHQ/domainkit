@@ -77,6 +77,13 @@ whether Cloudflare answers HTTP 400 with code 6003 or 6111 (malformed token), 40
 verify endpoint. The server answers 401, so a connect form offers a retry on the same field. A 403
 while listing zones is a missing `zone.read` permission and stays `Forbidden`.
 
+## Naming the account
+
+Connecting reads the account from the zones the credential sees: a credential inside one account
+carries that account's Cloudflare name as the connection's label, and one spanning several names
+none. A token pinned to an account is named from that account's zones, so a pinned token that
+reaches no zone connects unnamed rather than failing.
+
 ## Zones and targets
 
 `listTargets` lists the zones the credential reaches, each with its Cloudflare zone id and the

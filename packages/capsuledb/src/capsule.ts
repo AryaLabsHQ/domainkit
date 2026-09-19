@@ -10,7 +10,13 @@ import { Layer } from "effect";
 import type * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { make as makeService } from "./internal/storage.ts";
-import { attachmentsV1, DEFAULT_PREFIX, list, make as makeTables } from "./internal/tables.ts";
+import {
+  attachmentsV1,
+  authorizationsV1,
+  DEFAULT_PREFIX,
+  list,
+  make as makeTables,
+} from "./internal/tables.ts";
 
 export { DEFAULT_PREFIX };
 
@@ -34,7 +40,11 @@ export const make = (
         risk: "additive",
         steps: list(tables).map((table) =>
           Migration.createTable(
-            table.name === tables.attachments.name ? attachmentsV1(prefix) : table,
+            table.name === tables.attachments.name
+              ? attachmentsV1(prefix)
+              : table.name === tables.authorizations.name
+                ? authorizationsV1(prefix)
+                : table,
           ),
         ),
       }),
@@ -55,6 +65,20 @@ export const make = (
               ]),
             ),
           ),
+        ],
+      }),
+      // An installation that connected accounts before the column existed keeps those rows
+      // unnamed: the provider named the account at connect time, and nothing here can name it
+      // after the fact without a credential.
+      Migration.make({
+        id: 3,
+        name: "authorization-label",
+        risk: "additive",
+        steps: [
+          Migration.addColumn(tables.authorizations.name, "label", {
+            type: "text",
+            nullable: true,
+          }),
         ],
       }),
     ],

@@ -133,7 +133,7 @@ describe("Transport.fromFetch", () => {
         [[started.connectionId, fake.id, "example.com", "example.com"]],
       );
       assert.deepStrictEqual(listing.connections, [
-        { connectionId: started.connectionId, provider: fake.id, status: "connected" },
+        { connectionId: started.connectionId, provider: fake.id, label: null, status: "connected" },
       ]);
 
       const discovery = yield* connection.discover("app.example.com");

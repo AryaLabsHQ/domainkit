@@ -32,7 +32,9 @@ a transport that typechecks and a UI that renders only what the server can serve
 | `cleanup`      | `plan`, `approve`, `reject`, `apply`                                                   |
 
 `connection.zones(filter?)` answers with every zone this owner's connections reach, how each
-connection stands, and the provider catalog, so a picker builds itself from one call.
+connection stands, and the provider catalog, so a picker builds itself from one call. Each
+connection carries the `label` the provider gave its account at connect time, or `null` when the
+provider named none.
 `connection.start` takes an optional `domain`: without one it connects the account alone.
 `connection.reconnect({ connectionId, method })` replaces the credential behind a connection the
 owner already holds, keeping its domains.

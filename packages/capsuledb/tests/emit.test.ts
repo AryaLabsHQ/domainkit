@@ -120,5 +120,16 @@ describe("emitted SQL", () => {
     for (const name of names) {
       assert.ok(migration.includes(name), `emitted SQL creates ${name}`);
     }
+    // The first migration is history: the label columns arrived later and are added by their own
+    // migrations, so an installation that already ran 0001 reads the same checksum for it.
+    assert.ok(!migration.includes("label"), "the first migration predates every label column");
+    const added = index.files
+      .map(({ path }) => path)
+      .filter((path) => path.endsWith(".sql") && !path.startsWith("0001_"));
+    const later = await Promise.all(added.map((file) => readFile(join(out, file), "utf8")));
+    assert.ok(
+      later.some((sql) => sql.includes("domainkit_authorizations") && sql.includes("label")),
+      "a later migration adds the authorization label column",
+    );
   });
 });

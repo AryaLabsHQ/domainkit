@@ -57,6 +57,7 @@ const attachZone = (
       method: "token",
       capabilities: ["dns:read", "dns:write"],
       context: yield* Provider.encodeContext(definition, credential.context),
+      label: null,
       revocation: "active",
       createdBy: principal.actorId,
       createdAt: now,

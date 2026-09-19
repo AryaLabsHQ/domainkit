@@ -138,18 +138,18 @@ flow. The flow is left unspent, so the person who started it can still finish it
 
 The client and `@domainkit/react` decode these, so the three cannot drift.
 
-| Schema             | Shape                                                                                    |
-| ------------------ | ---------------------------------------------------------------------------------------- |
-| `Snapshot`         | Domain, attachment, connection, provider, status, reusable connections, provider catalog |
-| `Attachment`       | The attachment's `id` and the zone `label` the provider gave when it was created         |
-| `Zones`            | Every zone the principal's connections reach, how each connection stands, the catalog    |
-| `Started`          | `Connected`, `Redirect`, or `SelectionRequired`                                          |
-| `Discovery`        | `DiscoveryResolved`, `DiscoverySelectionRequired`, or `DiscoveryNotFound`                |
-| `Method`           | `Token`, `OAuth`, or `Integration`                                                       |
-| `MethodDescriptor` | A method's `kind`, `label`, `docsUrl`, and token `Field` list                            |
-| `Attempt`          | `plan`, `status`, `approval`, `receipt`, `rejection`                                     |
-| `ObservePayload`   | The `requirements` to observe, or nothing to use the attachment's receipt                |
-| `Readiness`        | `Verify.Readiness` with timestamps as ISO strings; each requirement carries its `key`    |
+| Schema             | Shape                                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `Snapshot`         | Domain, attachment, connection, provider, status, reusable connections, provider catalog                                       |
+| `Attachment`       | The attachment's `id` and the zone `label` the provider gave when it was created                                               |
+| `Zones`            | Every zone the principal's connections reach, how each connection stands with the account label the provider gave, the catalog |
+| `Started`          | `Connected`, `Redirect`, or `SelectionRequired`                                                                                |
+| `Discovery`        | `DiscoveryResolved`, `DiscoverySelectionRequired`, or `DiscoveryNotFound`                                                      |
+| `Method`           | `Token`, `OAuth`, or `Integration`                                                                                             |
+| `MethodDescriptor` | A method's `kind`, `label`, `docsUrl`, and token `Field` list                                                                  |
+| `Attempt`          | `plan`, `status`, `approval`, `receipt`, `rejection`                                                                           |
+| `ObservePayload`   | The `requirements` to observe, or nothing to use the attachment's receipt                                                      |
+| `Readiness`        | `Verify.Readiness` with timestamps as ISO strings; each requirement carries its `key`                                          |
 
 ## Failures
 

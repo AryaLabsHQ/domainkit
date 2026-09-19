@@ -34,6 +34,12 @@ export const make = (prefix: string): Tables => ({
       method: Schema.text(),
       capabilities: Schema.json(),
       context: Schema.json(),
+      /**
+       * What the provider called the account when the credential was issued, so a UI names the
+       * connection offline. Null names no account, which is also what rows written before the
+       * column existed carry.
+       */
+      label: Schema.text({ nullable: true }),
       revocation: Schema.text(),
       created_by: Schema.text(),
       created_at: Schema.timestamp(),
@@ -138,6 +144,33 @@ export const make = (prefix: string): Tables => ({
     indexes: [{ columns: ["owner_id", "next_check_at"] }, { columns: ["attachment_id"] }],
   }),
 });
+
+/**
+ * The authorizations table as the first migration created it, before `label`.
+ *
+ * Frozen for the same reason as `attachmentsV1`: migration 1 renders this shape, and the migration
+ * that adds the column carries the difference.
+ */
+export const authorizationsV1 = (prefix: string): Schema.Table =>
+  Schema.table(`${prefix}_authorizations`, {
+    columns: {
+      id: Schema.text(),
+      owner_id: Schema.text(),
+      provider: Schema.text(),
+      method: Schema.text(),
+      capabilities: Schema.json(),
+      context: Schema.json(),
+      revocation: Schema.text(),
+      created_by: Schema.text(),
+      created_at: Schema.timestamp(),
+      credential_ciphertext: Schema.text(),
+      credential_expires_at: Schema.timestamp({ nullable: true }),
+      credential_rotated_at: Schema.timestamp(),
+      updated_at: Schema.timestamp(),
+    },
+    primaryKey: ["id"],
+    indexes: [{ columns: ["owner_id", "revocation"] }, { columns: ["owner_id", "provider"] }],
+  });
 
 /**
  * The attachments table as the first migration created it, before `label`.
