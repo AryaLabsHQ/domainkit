@@ -3,6 +3,7 @@
 import { tegami, type TegamiPlugin } from "tegami";
 import { runCli } from "tegami/cli";
 import { github } from "tegami/plugins/github";
+import path from "node:path";
 
 import rootPackage from "../packages/domainkit/package.json" with { type: "json" };
 
@@ -28,6 +29,42 @@ const releaseChecks = (): TegamiPlugin => ({
       stdout: "inherit",
     });
     if ((await child.exited) !== 0) throw new Error("DomainKit release gate failed");
+  },
+});
+
+/**
+ * The version commit is `git add -A` over the working tree, so the lockfile has to carry the bumped
+ * workspace versions before it runs. `bun install --lockfile-only` rewrites `bun.lock` from the
+ * manifests without touching `node_modules`. Bun's frozen install does not treat a workspace
+ * version as a lockfile change, so the check reads the lockfile back: a workspace whose recorded
+ * version is not the manifest's fails the release rather than shipping a `main` whose lockfile is
+ * behind its manifests.
+ */
+const lockfileSync = (): TegamiPlugin => ({
+  name: "domainkit-lockfile-sync",
+  enforce: "pre",
+  async applyCliDraft() {
+    const install = Bun.spawn(["bun", "install", "--lockfile-only"], {
+      cwd: this.cwd,
+      stderr: "inherit",
+      stdout: "inherit",
+    });
+    if ((await install.exited) !== 0) throw new Error("bun.lock refresh failed");
+
+    const lockfile = await Bun.file(path.join(this.cwd, "bun.lock")).text();
+    const stale: Array<string> = [];
+    for (const pkg of this.graph.getPackages()) {
+      if (pkg.version === undefined) continue;
+      const workspace = path.relative(this.cwd, pkg.path).split(path.sep).join("/");
+      const block = new RegExp(
+        `"${workspace}": \\{\\s*"name": "${pkg.name}",\\s*"version": "([^"]+)"`,
+      );
+      const recorded = lockfile.match(block)?.[1];
+      if (recorded !== pkg.version)
+        stale.push(`${pkg.name} ${recorded ?? "missing"} != ${pkg.version}`);
+    }
+    if (stale.length > 0) throw new Error(`bun.lock is behind the manifests: ${stale.join(", ")}`);
+    console.log("bun.lock carries the bumped workspace versions");
   },
 });
 
@@ -88,6 +125,7 @@ const paper = tegami({
         },
       },
     }),
+    lockfileSync(),
     releaseChecks(),
     versionTag(),
   ],
