@@ -690,6 +690,255 @@ export const cases = (layer: Layer.Layer<Storage.Service, unknown>): ReadonlyArr
       ),
     },
     {
+      name: "creates a batch once per idempotency key and keeps it inside its owner",
+      run: run(
+        Effect.gen(function* () {
+          const first = yield* connect(owner, "auth-batch-key");
+          const second = yield* connect(owner, "auth-batch-key-2");
+          const storage = first.storage;
+          const attachmentIds = [first.attachment.id, second.attachment.id];
+          const created = yield* storage.batches.create({
+            kind: "provisioning",
+            idempotencyKey: "batch-key-create",
+            attachmentIds,
+          });
+          yield* expect(created.batch.status === "planning", "a new batch is not planning");
+          yield* expect(
+            created.items.map((item) => item.position).join(",") === "0,1",
+            "batch items did not keep the order they were created in",
+          );
+          yield* expect(
+            created.items.every((item) => item.attemptId === null && item.planFailure === null),
+            "a new batch item already points at an attempt",
+          );
+          // A retried create is the same batch, whatever the second call asks for.
+          const replay = yield* storage.batches.create({
+            kind: "provisioning",
+            idempotencyKey: "batch-key-create",
+            attachmentIds: [first.attachment.id],
+          });
+          yield* expect(
+            replay.batch.id === created.batch.id && replay.items.length === 2,
+            "a replayed idempotency key did not return the stored batch",
+          );
+          yield* expectReason(
+            storage.batches.create({
+              kind: "provisioning",
+              idempotencyKey: "batch-key-empty",
+              attachmentIds: [],
+            }),
+            "InvalidInput",
+            "batches.create with no attachments",
+          );
+          yield* expectReason(
+            storage.batches.create({
+              kind: "provisioning",
+              idempotencyKey: "batch-key-duplicate",
+              attachmentIds: [first.attachment.id, first.attachment.id],
+            }),
+            "InvalidInput",
+            "batches.create with a repeated attachment",
+          );
+          const asOther = <A, E>(effect: Effect.Effect<A, E, Principal.Service>) =>
+            effect.pipe(Effect.provideService(Principal.Service, other));
+          yield* expectReason(
+            asOther(storage.batches.get(created.batch.id)),
+            "NotFound",
+            "batches.get",
+          );
+          const foreign = yield* asOther(storage.batches.listUnfinished());
+          yield* expect(
+            !foreign.some(({ batch }) => batch.id === created.batch.id),
+            "batches.listUnfinished leaked across owners",
+          );
+          const unfinished = yield* storage.batches.listUnfinished();
+          yield* expect(
+            unfinished.some(({ batch }) => batch.id === created.batch.id),
+            "a planning batch is missing from the unfinished index",
+          );
+        }).pipe(Effect.provideService(Principal.Service, owner)),
+      ),
+    },
+    {
+      name: "recomputes batch status from its items and approves every attempt at once",
+      run: run(
+        Effect.gen(function* () {
+          const first = yield* connect(owner, "auth-batch-plan");
+          const second = yield* connect(owner, "auth-batch-plan-2");
+          const storage = first.storage;
+          const now = yield* DateTime.now;
+          const planA = planRow(first.attachment.id, now, "batch-a");
+          const planB = planRow(second.attachment.id, now, "batch-b");
+          yield* storage.attempts.create(attemptRow(owner, planA));
+          yield* storage.attempts.create(attemptRow(owner, planB));
+          const { batch } = yield* storage.batches.create({
+            kind: "provisioning",
+            idempotencyKey: "batch-key-plan",
+            attachmentIds: [first.attachment.id, second.attachment.id],
+          });
+          const approvalA = approvalRow(planA, "batch-a");
+          const approvalB = approvalRow(planB, "batch-b");
+          const approvals = [
+            { attachmentId: first.attachment.id, approval: approvalA },
+            { attachmentId: second.attachment.id, approval: approvalB },
+          ];
+          const digest = Plan.Digest.make("batch-digest-1");
+          yield* expectReason(
+            storage.batches.approve(batch.id, {
+              digest,
+              actorId: owner.actorId,
+              approvals,
+            }),
+            "BatchStale",
+            "batches.approve before every item is planned",
+          );
+          const failed = yield* storage.batches.recordItemPlanFailure(
+            batch.id,
+            first.attachment.id,
+            "the provider was unavailable",
+          );
+          yield* expect(
+            failed.batch.status === "planning" &&
+              failed.items[0]?.planFailure === "the provider was unavailable",
+            "a plan failure did not leave the batch planning",
+          );
+          const partiallyPlanned = yield* storage.batches.recordItemPlan(
+            batch.id,
+            first.attachment.id,
+            planA.id,
+          );
+          yield* expect(
+            partiallyPlanned.batch.status === "planning" &&
+              partiallyPlanned.items[0]?.planFailure === null,
+            "a landed plan did not clear the item's failure",
+          );
+          const planned = yield* storage.batches.recordItemPlan(
+            batch.id,
+            second.attachment.id,
+            planB.id,
+          );
+          yield* expect(
+            planned.batch.status === "planned",
+            "a batch whose items are all planned is not planned",
+          );
+          const approved = yield* storage.batches.approve(batch.id, {
+            digest,
+            actorId: owner.actorId,
+            approvals,
+          });
+          yield* expect(
+            approved.batch.status === "approved" && approved.batch.digest === digest,
+            "batches.approve did not bind the digest",
+          );
+          const attemptA = yield* storage.attempts.get(planA.id);
+          const attemptB = yield* storage.attempts.get(planB.id);
+          yield* expect(
+            attemptA.approval?.id === approvalA.id && attemptB.approval?.id === approvalB.id,
+            "batches.approve did not approve every item's attempt",
+          );
+          const again = yield* storage.batches.approve(batch.id, {
+            digest,
+            actorId: owner.actorId,
+            approvals,
+          });
+          yield* expect(
+            again.batch.status === "approved",
+            "approving an approved batch under the same digest is not idempotent",
+          );
+          yield* expectReason(
+            storage.batches.approve(batch.id, {
+              digest: Plan.Digest.make("batch-digest-moved"),
+              actorId: owner.actorId,
+              approvals,
+            }),
+            "BatchStale",
+            "batches.approve with a digest the batch does not hold",
+          );
+          yield* expectReason(
+            storage.batches.reject(batch.id, { actorId: owner.actorId, reason: null }),
+            "BatchStale",
+            "batches.reject after approval",
+          );
+          const lease = DateTime.add(now, { minutes: 2 });
+          yield* storage.attempts.claim(planA.id, lease);
+          yield* storage.attempts.complete(planA.id, receiptRow(planA, approvalA, "batch-a"));
+          const applying = yield* storage.batches.refresh(batch.id);
+          yield* expect(
+            applying.batch.status === "applying",
+            "a batch with one item left is not applying",
+          );
+          yield* storage.attempts.claim(planB.id, lease);
+          yield* storage.attempts.complete(planB.id, receiptRow(planB, approvalB, "batch-b"));
+          const complete = yield* storage.batches.refresh(batch.id);
+          yield* expect(
+            complete.batch.status === "complete" && complete.batch.completedAt !== null,
+            "a batch whose items all completed is not complete",
+          );
+          const unfinished = yield* storage.batches.listUnfinished();
+          yield* expect(
+            !unfinished.some((entry) => entry.batch.id === batch.id),
+            "a complete batch is still in the unfinished index",
+          );
+        }).pipe(Effect.provideService(Principal.Service, owner)),
+      ),
+    },
+    {
+      name: "declines a batch with its planned attempts and fences a late planner",
+      run: run(
+        Effect.gen(function* () {
+          const { storage, attachment } = yield* connect(owner, "auth-batch-reject");
+          const now = yield* DateTime.now;
+          const plan = planRow(attachment.id, now, "batch-reject");
+          const late = planRow(attachment.id, now, "batch-reject-late");
+          yield* storage.attempts.create(attemptRow(owner, plan));
+          yield* storage.attempts.create(attemptRow(owner, late));
+          const { batch } = yield* storage.batches.create({
+            kind: "provisioning",
+            idempotencyKey: "batch-key-reject",
+            attachmentIds: [attachment.id],
+          });
+          yield* storage.batches.recordItemPlan(batch.id, attachment.id, plan.id);
+          const rejected = yield* storage.batches.reject(batch.id, {
+            actorId: owner.actorId,
+            reason: "the customer changed their mind",
+          });
+          yield* expect(
+            rejected.batch.status === "rejected" && rejected.batch.completedAt !== null,
+            "batches.reject is not terminal",
+          );
+          const attempt = yield* storage.attempts.get(plan.id);
+          yield* expect(
+            attempt.status === "rejected",
+            "batches.reject left a planned attempt open",
+          );
+          const twice = yield* storage.batches.reject(batch.id, {
+            actorId: owner.actorId,
+            reason: null,
+          });
+          yield* expect(
+            twice.batch.rejection?.reason === "the customer changed their mind",
+            "a second rejection overwrote the first",
+          );
+          // The fence: a planning pass still in flight must not land state on a declined batch.
+          yield* expectReason(
+            storage.batches.recordItemPlan(batch.id, attachment.id, late.id),
+            "BatchStale",
+            "batches.recordItemPlan on a rejected batch",
+          );
+          yield* expectReason(
+            storage.batches.recordItemPlanFailure(batch.id, attachment.id, "too late"),
+            "BatchStale",
+            "batches.recordItemPlanFailure on a rejected batch",
+          );
+          const unfinished = yield* storage.batches.listUnfinished();
+          yield* expect(
+            !unfinished.some((entry) => entry.batch.id === batch.id),
+            "a rejected batch is still in the unfinished index",
+          );
+        }).pipe(Effect.provideService(Principal.Service, owner)),
+      ),
+    },
+    {
       name: "stores readiness per domain, with or without an attachment",
       run: run(
         Effect.gen(function* () {

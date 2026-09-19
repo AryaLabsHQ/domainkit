@@ -1,5 +1,5 @@
 /**
- * DomainKit's CapsuleDB capsule: six tables and one `Storage.Service` implementation.
+ * DomainKit's CapsuleDB capsule: eight tables and one `Storage.Service` implementation.
  *
  * The capsule is a plain value, so a host imports it, points `capsuledb emit` at it, or hands it
  * to `Registry.layer` without running an Effect first.
@@ -14,6 +14,7 @@ import {
   attachmentsV1,
   authorizationsV1,
   DEFAULT_PREFIX,
+  initial,
   list,
   make as makeTables,
 } from "./internal/tables.ts";
@@ -38,7 +39,7 @@ export const make = (
         id: 1,
         name: "create-storage",
         risk: "additive",
-        steps: list(tables).map((table) =>
+        steps: initial(tables).map((table) =>
           Migration.createTable(
             table.name === tables.attachments.name
               ? attachmentsV1(prefix)
@@ -80,6 +81,15 @@ export const make = (
             nullable: true,
           }),
         ],
+      }),
+      // The batch aggregate: many attempts planned together and approved once. Both tables are
+      // new, so an installation that ran migrations 1 to 3 gains them without touching a row it
+      // already holds.
+      Migration.make({
+        id: 4,
+        name: "batches",
+        risk: "additive",
+        steps: [Migration.createTable(tables.batches), Migration.createTable(tables.batchItems)],
       }),
     ],
     layer: Layer.effect(Storage.Service)(makeService(tables)),

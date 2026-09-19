@@ -10,7 +10,7 @@
  * Storage never sees plaintext. `Connect` seals a credential through `Custody` before it reaches
  * `upsert` or `rotate`, so this module only ever moves a ciphertext string.
  */
-import { DomainKit, Principal, Reason, Storage } from "domainkit";
+import { type Approval, DomainKit, type Plan, Principal, Reason, Storage } from "domainkit";
 import { DateTime, Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlError from "effect/unstable/sql/SqlError";
@@ -89,6 +89,8 @@ const attachmentCodec = codec(Storage.Attachment, "attachment");
 const continuationCodec = codec(Storage.Continuation, "continuation");
 const continuationHeaderCodec = codec(Storage.ContinuationHeader, "continuation header");
 const attemptCodec = codec(Storage.Attempt, "attempt");
+const batchCodec = codec(Storage.Batch, "batch");
+const batchItemCodec = codec(Storage.BatchItem, "batch item");
 const readinessCodec = codec(Storage.Readiness, "readiness");
 const credentialCodec = codec(Storage.Credential, "credential");
 
@@ -190,6 +192,34 @@ interface AttemptRow {
   readonly updated_at: unknown;
 }
 
+interface BatchRow {
+  readonly id: string;
+  readonly owner_id: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly digest: string | null;
+  readonly approval: unknown;
+  readonly rejection: unknown;
+  readonly idempotency_key: string;
+  readonly created_by: string;
+  readonly created_at: unknown;
+  readonly updated_at: unknown;
+  readonly completed_at: unknown;
+}
+
+interface BatchItemRow {
+  readonly batch_id: string;
+  readonly attachment_id: string;
+  readonly position: number;
+  readonly attempt_id: string | null;
+  readonly plan_failure: string | null;
+}
+
+/** An item row with its attempt's status joined in; null while the item carries no plan. */
+interface BatchItemStatusRow extends BatchItemRow {
+  readonly attempt_status: string | null;
+}
+
 interface ReadinessRow {
   readonly owner_id: string;
   readonly domain: string;
@@ -284,6 +314,31 @@ const attemptOf = (row: AttemptRow) =>
     updatedAt: iso(row.updated_at),
   });
 
+const batchOf = (row: BatchRow) =>
+  batchCodec.read({
+    id: row.id,
+    ownerId: row.owner_id,
+    kind: row.kind,
+    status: row.status,
+    digest: row.digest,
+    approval: fromJsonOrNull(row.approval),
+    rejection: fromJsonOrNull(row.rejection),
+    idempotencyKey: row.idempotency_key,
+    createdBy: row.created_by,
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+    completedAt: isoOrNull(row.completed_at),
+  });
+
+const batchItemOf = (row: BatchItemRow) =>
+  batchItemCodec.read({
+    batchId: row.batch_id,
+    attachmentId: row.attachment_id,
+    position: row.position,
+    attemptId: row.attempt_id,
+    planFailure: row.plan_failure,
+  });
+
 const readinessOf = (row: ReadinessRow) =>
   readinessCodec.read({
     domain: row.domain,
@@ -299,6 +354,9 @@ const readinessOf = (row: ReadinessRow) =>
 
 const stale = (attempt: Storage.Attempt) =>
   fail(new Reason.Stale({ planId: attempt.id, digest: attempt.plan.digest }));
+
+const batchStale = (batch: Storage.Batch) =>
+  fail(new Reason.BatchStale({ batchId: batch.id, status: batch.status, digest: batch.digest }));
 
 /** `prefix_<uuid>`, the same identifier shape the memory implementation mints. */
 const fresh = (prefix: string) => Effect.sync(() => `${prefix}_${crypto.randomUUID()}`);
@@ -322,6 +380,8 @@ export const make = (
     const continuations = sql(tables.continuations.name);
     const attempts = sql(tables.attempts.name);
     const readiness = sql(tables.readiness.name);
+    const batches = sql(tables.batches.name);
+    const batchItems = sql(tables.batchItems.name);
 
     /** The row this principal owns, locked for the rest of the transaction. */
     const lockedAuthorization = (owner: string, id: string) =>
@@ -403,6 +463,102 @@ export const make = (
         DELETE FROM ${authorizations}
         WHERE id = ${id} AND owner_id = ${owner} AND credential_ciphertext = ${ciphertext}
       `;
+
+    const requireBatch = (owner: string, id: string) =>
+      sql<BatchRow>`
+        SELECT * FROM ${batches} WHERE id = ${id} AND owner_id = ${owner}
+      `.pipe(
+        Effect.flatMap((rows) =>
+          rows[0] === undefined ? notFound("batch", id) : Effect.succeed(rows[0]),
+        ),
+        Effect.flatMap(batchOf),
+      );
+
+    /** The batch this principal owns, locked for the rest of the transaction. */
+    const lockedBatch = (owner: string, id: string) =>
+      sql<BatchRow>`
+        SELECT * FROM ${batches} WHERE id = ${id} AND owner_id = ${owner} FOR UPDATE
+      `.pipe(
+        Effect.flatMap((rows) =>
+          rows[0] === undefined ? notFound("batch", id) : Effect.succeed(rows[0]),
+        ),
+        Effect.flatMap(batchOf),
+      );
+
+    const requireAttempt = (owner: string, id: string) =>
+      sql<AttemptRow>`
+        SELECT * FROM ${attempts} WHERE id = ${id} AND owner_id = ${owner}
+      `.pipe(
+        Effect.flatMap((rows) =>
+          rows[0] === undefined ? notFound("plan", id) : Effect.succeed(rows[0]),
+        ),
+      );
+
+    /**
+     * A batch's items in `position` order, each with its attempt's status, which is what the
+     * aggregate's own status is recomputed from. The batch was already read under its owner, and
+     * the join carries the same filter so an item can only ever reach that owner's attempts.
+     */
+    const itemRows = (owner: string, batchId: string) =>
+      sql<BatchItemStatusRow>`
+        SELECT item.batch_id, item.attachment_id, item."position", item.attempt_id,
+               item.plan_failure, attempt.status AS attempt_status
+        FROM ${batchItems} AS item
+        LEFT JOIN ${attempts} AS attempt
+          ON attempt.id = item.attempt_id AND attempt.owner_id = ${owner}
+        WHERE item.batch_id = ${batchId}
+        ORDER BY item."position" ASC
+      `;
+
+    const aggregateOf = (
+      owner: string,
+      batch: Storage.Batch,
+    ): Effect.Effect<Storage.BatchAggregate, Fail | SqlError.SqlError> =>
+      itemRows(owner, batch.id).pipe(
+        Effect.flatMap((rows) => Effect.forEach(rows, batchItemOf)),
+        Effect.map((items) => ({ batch, items })),
+      );
+
+    /**
+     * Write `batch` with its status recomputed from the items' attempts.
+     *
+     * Every transition ends here, inside the transaction that locked the row, so the stored status
+     * and the owner-scoped unfinished index never disagree with the attempts they summarize.
+     */
+    const settled = (
+      owner: string,
+      batch: Storage.Batch,
+    ): Effect.Effect<Storage.BatchAggregate, Fail | SqlError.SqlError> =>
+      Effect.gen(function* () {
+        const rows = yield* itemRows(owner, batch.id);
+        const items = yield* Effect.forEach(rows, batchItemOf);
+        const status = Storage.batchStatusOf({
+          approved: batch.approval !== null,
+          rejected: batch.rejection !== null,
+          items: rows.map((row) =>
+            row.attempt_id === null ? null : (row.attempt_status as Storage.AttemptStatus | null),
+          ),
+        });
+        const instant = yield* DateTime.now;
+        const next = new Storage.Batch({
+          ...batch,
+          status,
+          completedAt: status === "complete" || status === "rejected" ? instant : null,
+          updatedAt: instant,
+        });
+        const encoded = yield* batchCodec.write(next);
+        yield* sql`
+          UPDATE ${batches} SET
+            status = ${encoded.status},
+            digest = ${encoded.digest},
+            approval = ${toJsonOrNull(encoded.approval)},
+            rejection = ${toJsonOrNull(encoded.rejection)},
+            completed_at = ${atOrNull(encoded.completedAt)},
+            updated_at = ${at(encoded.updatedAt)}
+          WHERE id = ${batch.id} AND owner_id = ${owner}
+        `;
+        return { batch: next, items };
+      });
 
     const service: Storage.Interface = {
       authorizations: {
@@ -987,6 +1143,284 @@ export const make = (
               }),
             ),
           ).pipe(guard("attempts.fail")),
+      },
+      batches: {
+        create: (input) =>
+          Effect.flatMap(Principal.Service, ({ actorId, ownerId }) =>
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const replayed = (row: BatchRow) =>
+                  Effect.flatMap(batchOf(row), (batch) => aggregateOf(ownerId, batch));
+                const existing = yield* sql<BatchRow>`
+                  SELECT * FROM ${batches}
+                  WHERE owner_id = ${ownerId} AND idempotency_key = ${input.idempotencyKey}
+                `;
+                // A retried create is the same batch, whatever the second call asks for.
+                if (existing[0] !== undefined) return yield* replayed(existing[0]);
+                if (input.attachmentIds.length === 0) {
+                  return yield* invalid("A batch needs at least one attachment", "attachmentIds");
+                }
+                if (new Set(input.attachmentIds).size !== input.attachmentIds.length) {
+                  return yield* invalid("A batch holds one item per attachment", "attachmentIds");
+                }
+                for (const attachmentId of input.attachmentIds) {
+                  yield* requireAttachment(ownerId, attachmentId);
+                }
+                const instant = yield* DateTime.now;
+                const batch = new Storage.Batch({
+                  id: Storage.BatchId.make(yield* fresh("batch")),
+                  ownerId,
+                  kind: input.kind,
+                  status: "planning",
+                  digest: null,
+                  approval: null,
+                  rejection: null,
+                  idempotencyKey: input.idempotencyKey,
+                  createdBy: actorId,
+                  createdAt: instant,
+                  updatedAt: instant,
+                  completedAt: null,
+                });
+                const encoded = yield* batchCodec.write(batch);
+                // The unique key decides the race rather than the read above: a concurrent create
+                // under the same key loses the insert and reads the batch it lost to.
+                const inserted = yield* sql<{ readonly id: string }>`
+                  INSERT INTO ${batches} (
+                    id, owner_id, kind, status, digest, approval, rejection, idempotency_key,
+                    created_by, created_at, updated_at, completed_at
+                  ) VALUES (
+                    ${encoded.id}, ${encoded.ownerId}, ${encoded.kind}, ${encoded.status},
+                    ${encoded.digest}, ${toJsonOrNull(encoded.approval)},
+                    ${toJsonOrNull(encoded.rejection)}, ${encoded.idempotencyKey},
+                    ${encoded.createdBy}, ${at(encoded.createdAt)}, ${at(encoded.updatedAt)},
+                    ${atOrNull(encoded.completedAt)}
+                  ) ON CONFLICT (owner_id, idempotency_key) DO NOTHING RETURNING id
+                `;
+                if (inserted[0] === undefined) {
+                  const winner = yield* sql<BatchRow>`
+                    SELECT * FROM ${batches}
+                    WHERE owner_id = ${ownerId} AND idempotency_key = ${input.idempotencyKey}
+                  `;
+                  return winner[0] === undefined
+                    ? yield* notFound("batch", input.idempotencyKey)
+                    : yield* replayed(winner[0]);
+                }
+                const items = input.attachmentIds.map(
+                  (attachmentId, position) =>
+                    new Storage.BatchItem({
+                      batchId: batch.id,
+                      attachmentId,
+                      position,
+                      attemptId: null,
+                      planFailure: null,
+                    }),
+                );
+                for (const item of items) {
+                  yield* sql`
+                    INSERT INTO ${batchItems} (
+                      batch_id, attachment_id, "position", attempt_id, plan_failure
+                    ) VALUES (
+                      ${item.batchId}, ${item.attachmentId}, ${item.position}, ${item.attemptId},
+                      ${item.planFailure}
+                    )
+                  `;
+                }
+                return { batch, items };
+              }),
+            ),
+          ).pipe(guard("batches.create")),
+        get: (id) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
+            Effect.flatMap(requireBatch(ownerId, id), (batch) => aggregateOf(ownerId, batch)),
+          ).pipe(guard("batches.get")),
+        listUnfinished: () =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
+            Effect.gen(function* () {
+              const rows = yield* sql<BatchRow>`
+                SELECT * FROM ${batches}
+                WHERE owner_id = ${ownerId} AND status NOT IN ('complete', 'rejected')
+                ORDER BY updated_at DESC
+              `;
+              if (rows.length === 0) return [];
+              const list = yield* Effect.forEach(rows, batchOf);
+              // Items are pointers, so the whole index is two queries: no attempt is read here.
+              const itemsRows = yield* sql<BatchItemRow>`
+                SELECT batch_id, attachment_id, "position", attempt_id, plan_failure
+                FROM ${batchItems}
+                WHERE ${sql.in(
+                  "batch_id",
+                  list.map(({ id }) => id),
+                )}
+                ORDER BY "position" ASC
+              `;
+              const items = yield* Effect.forEach(itemsRows, batchItemOf);
+              return list.map((batch) => ({
+                batch,
+                items: items.filter((item) => item.batchId === batch.id),
+              }));
+            }),
+          ).pipe(guard("batches.listUnfinished")),
+        recordItemPlan: (id, attachmentId, attemptId) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const batch = yield* lockedBatch(ownerId, id);
+                // The fence: a planning pass still in flight must not land state on a batch the
+                // principal declined, or on one already bound to an approved digest.
+                if (batch.status !== "planning" && batch.status !== "planned") {
+                  return yield* batchStale(batch);
+                }
+                const attempt = yield* requireAttempt(ownerId, attemptId);
+                if (attempt.attachment_id !== attachmentId || attempt.kind !== batch.kind) {
+                  return yield* invalid(
+                    `Plan ${attemptId} does not belong to attachment ${attachmentId} in this batch`,
+                    "attemptId",
+                  );
+                }
+                const updated = yield* sql<{ readonly attachment_id: string }>`
+                  UPDATE ${batchItems} SET attempt_id = ${attemptId}, plan_failure = NULL
+                  WHERE batch_id = ${id} AND attachment_id = ${attachmentId}
+                  RETURNING attachment_id
+                `;
+                return updated[0] === undefined
+                  ? yield* notFound("attachment", attachmentId)
+                  : yield* settled(ownerId, batch);
+              }),
+            ),
+          ).pipe(guard("batches.recordItemPlan")),
+        recordItemPlanFailure: (id, attachmentId, message) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const batch = yield* lockedBatch(ownerId, id);
+                if (batch.status !== "planning" && batch.status !== "planned") {
+                  return yield* batchStale(batch);
+                }
+                const updated = yield* sql<{ readonly attachment_id: string }>`
+                  UPDATE ${batchItems} SET attempt_id = NULL, plan_failure = ${message}
+                  WHERE batch_id = ${id} AND attachment_id = ${attachmentId}
+                  RETURNING attachment_id
+                `;
+                return updated[0] === undefined
+                  ? yield* notFound("attachment", attachmentId)
+                  : yield* settled(ownerId, batch);
+              }),
+            ),
+          ).pipe(guard("batches.recordItemPlanFailure")),
+        approve: (id, input) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const batch = yield* lockedBatch(ownerId, id);
+                // Replaying the same approval is how a retried request stays safe.
+                if (batch.approval !== null) {
+                  return batch.digest === input.digest
+                    ? yield* aggregateOf(ownerId, batch)
+                    : yield* batchStale(batch);
+                }
+                if (batch.status !== "planned") return yield* batchStale(batch);
+                const items = yield* Effect.forEach(yield* itemRows(ownerId, id), batchItemOf);
+                const pairs: Array<{
+                  readonly attemptId: Plan.PlanId;
+                  readonly approval: Approval.Model;
+                }> = [];
+                for (const item of items) {
+                  const supplied = input.approvals.find(
+                    (entry) => entry.attachmentId === item.attachmentId,
+                  );
+                  if (supplied === undefined) {
+                    return yield* invalid(
+                      `Batch ${id} has no approval for attachment ${item.attachmentId}`,
+                      "approvals",
+                    );
+                  }
+                  // The item has to still point at the attempt this approval names: anything else
+                  // means the batch was re-planned after the principal reviewed it.
+                  if (item.attemptId === null || item.attemptId !== supplied.approval.planId) {
+                    return yield* batchStale(batch);
+                  }
+                  pairs.push({ attemptId: item.attemptId, approval: supplied.approval });
+                }
+                const instant = yield* DateTime.now;
+                // The per-attempt approvals and the batch's own are one transaction: a batch is
+                // never approved without the approvals `attempts.apply` takes.
+                for (const pair of pairs) {
+                  const current = yield* lockedAttempt(ownerId, pair.attemptId);
+                  if (current.approval?.id === pair.approval.id) continue;
+                  if (current.status !== "planned") return yield* stale(current);
+                  const next = new Storage.Attempt({
+                    ...current,
+                    status: "approved",
+                    approval: pair.approval,
+                    updatedAt: instant,
+                  });
+                  const encoded = yield* attemptCodec.write(next);
+                  yield* sql`
+                    UPDATE ${attempts} SET
+                      status = ${encoded.status},
+                      approval = ${toJsonOrNull(encoded.approval)},
+                      approval_id = ${pair.approval.id},
+                      updated_at = ${at(encoded.updatedAt)}
+                    WHERE id = ${pair.attemptId} AND owner_id = ${ownerId}
+                  `;
+                }
+                return yield* settled(
+                  ownerId,
+                  new Storage.Batch({
+                    ...batch,
+                    digest: input.digest,
+                    approval: { actorId: input.actorId, at: instant },
+                  }),
+                );
+              }),
+            ),
+          ).pipe(guard("batches.approve")),
+        reject: (id, input) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const batch = yield* lockedBatch(ownerId, id);
+                // Terminal: a second rejection is the same outcome, so it returns the first one.
+                if (batch.rejection !== null) return yield* aggregateOf(ownerId, batch);
+                if (batch.status !== "planning" && batch.status !== "planned") {
+                  return yield* batchStale(batch);
+                }
+                const rows = yield* itemRows(ownerId, id);
+                const instant = yield* DateTime.now;
+                const rejection = {
+                  actorId: input.actorId,
+                  reason: input.reason,
+                  at: instant,
+                };
+                for (const row of rows) {
+                  if (row.attempt_id === null || row.attempt_status !== "planned") continue;
+                  const current = yield* lockedAttempt(ownerId, row.attempt_id);
+                  if (current.status !== "planned") continue;
+                  const next = new Storage.Attempt({
+                    ...current,
+                    status: "rejected",
+                    rejection,
+                    updatedAt: instant,
+                  });
+                  const encoded = yield* attemptCodec.write(next);
+                  yield* sql`
+                    UPDATE ${attempts} SET
+                      status = ${encoded.status},
+                      rejection = ${toJsonOrNull(encoded.rejection)},
+                      updated_at = ${at(encoded.updatedAt)}
+                    WHERE id = ${row.attempt_id} AND owner_id = ${ownerId}
+                  `;
+                }
+                return yield* settled(ownerId, new Storage.Batch({ ...batch, rejection }));
+              }),
+            ),
+          ).pipe(guard("batches.reject")),
+        refresh: (id) =>
+          Effect.flatMap(Principal.Service, ({ ownerId }) =>
+            sql.withTransaction(
+              Effect.flatMap(lockedBatch(ownerId, id), (batch) => settled(ownerId, batch)),
+            ),
+          ).pipe(guard("batches.refresh")),
       },
       readiness: {
         put: (row) =>
