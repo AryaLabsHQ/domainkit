@@ -4,24 +4,30 @@ import { DomainKit, Principal, Verify } from "domainkit";
 declare const providers: DomainKit.Options["providers"];
 declare const principal: Principal.Interface;
 /** Your own durable queue, cron, or workflow scheduler. */
-declare const wake: (input: { domain: string; at: Date }) => Effect.Effect<void>;
-/** Whatever your application stores per domain. */
-declare const markReady: (domain: string) => Effect.Effect<void>;
+declare const wake: (input: { ownerId: string; domain: string; at: Date }) => Effect.Effect<void>;
+/** Whatever your application stores per tenant and domain. */
+declare const markReady: (input: { ownerId: string; domain: string }) => Effect.Effect<void>;
 declare const domainsDue: Effect.Effect<ReadonlyArray<string>>;
 
 // #region observer
 /**
  * `Verify.Observer` fires once per stored readiness, after the write. It is the one place a host
  * learns that DomainKit wrote readiness, so a projection lives here instead of beside every call
- * that might have caused one.
+ * that might have caused one. The observer is bound to the layer rather than to one request, so
+ * the event names the tenant it was written for: key the transition by `ownerId` and `domain`,
+ * because the same domain can be attached in two tenants at once.
  */
 const observer = Layer.succeed(Verify.Observer, {
-  readinessChanged: ({ cause, domain, readiness }) =>
+  readinessChanged: ({ cause, domain, ownerId, readiness }) =>
     Effect.gen(function* () {
-      if (readiness.overall === "ready") return yield* markReady(domain);
+      if (readiness.overall === "ready") return yield* markReady({ ownerId, domain });
       // A pending domain carries its own schedule, so the host sleeps on it rather than polling.
       if (readiness.nextCheckAt !== null && cause === "observe") {
-        yield* wake({ domain, at: new Date(DateTime.toEpochMillis(readiness.nextCheckAt)) });
+        yield* wake({
+          ownerId,
+          domain,
+          at: new Date(DateTime.toEpochMillis(readiness.nextCheckAt)),
+        });
       }
     }),
 });

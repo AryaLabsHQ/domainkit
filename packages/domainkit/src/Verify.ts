@@ -170,6 +170,8 @@ export class Policy extends Context.Reference<PolicyShape>("@domainkit/Verify/Po
 export type Cause = "observe" | "evidence";
 
 export interface ReadinessChanged {
+  /** The tenant the row was written under, from the `Principal` the write ran as. */
+  readonly ownerId: string;
   readonly domain: string;
   readonly readiness: Readiness;
   readonly cause: Cause;
@@ -180,6 +182,11 @@ export interface ObserverShape {
    * Called once per stored readiness, after the write. A host that projects readiness onto its own
    * rows, wakes a durable job at `nextCheckAt`, or notifies a customer hangs it here instead of
    * mirroring the fact at every call site.
+   *
+   * Readiness is stored per owner and domain, and an observer provided over `DomainKit.layer` is
+   * scoped to the layer rather than to one request, so a host that serves more than one tenant
+   * keys its projection by `ownerId` and `domain`: the same domain name can be attached in two
+   * tenants at once.
    *
    * Events for one domain are not ordered against each other: two observations that overlap both
    * store, last write wins in `Storage`, and their callbacks can finish in either order. A
@@ -409,7 +416,12 @@ export const make: Effect.Effect<
         nextCheckAt,
       };
       yield* observer
-        .readinessChanged({ domain: row.domain, readiness, cause: input.cause })
+        .readinessChanged({
+          ownerId: principal.ownerId,
+          domain: row.domain,
+          readiness,
+          cause: input.cause,
+        })
         .pipe(
           Effect.catchCause((cause) =>
             Effect.logWarning(`Verify.Observer failed for ${row.domain}`, cause),
