@@ -65,6 +65,13 @@ Plans are additive and fail closed: exact records are `Noop`, missing records ar
 incompatible state is `Conflict`. DomainKit never updates or deletes a record it did not create,
 and cleanup is its own plan, approval, and receipt built from the apply receipt.
 
+Several domains at once are one batch: `Provision.batch.create` plans them with
+`Policy.batchConcurrency` in flight, `approve` binds one digest over every plan, and `apply` walks
+the approved domains under their own attempt leases, so a second apply skips what the first holds
+and a domain that fails does not stop the ones beside it. A batch is resumable at every step —
+`resumePlanning` re-plans what failed, `apply` re-claims what failed — and
+`Provision.batch.list({ unfinished: true })` is the index behind a "you still owe this" banner.
+
 Every step is a stored attempt, so a host can render the plan in one request, collect consent in
 another, and apply in a third; retrying any step replays its result. A customer who declines calls
 `Provision.reject`, which closes the attempt for good and leaves the domain free for a new plan. Every failure is one

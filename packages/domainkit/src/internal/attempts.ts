@@ -119,13 +119,17 @@ export const make = (storage: Storage.Interface, connect: Connect.Interface, kin
       return attempt;
     });
 
-  const approve = (
-    plan: Plan.Model | Plan.PlanId,
+  /**
+   * The approval a planned attempt would record, built and checked but not written.
+   *
+   * Split out so an aggregate can collect one approval per attempt and write them all in a single
+   * transaction beside its own.
+   */
+  const draftApproval = (
+    attempt: Storage.Attempt,
     options: ApproveOptions = {},
   ): Fx<Approval.Model> =>
     Effect.gen(function* () {
-      const attempt = yield* attemptOf(plan);
-      if (attempt.approval !== null) return attempt.approval;
       const principal = yield* Principal.Service;
       const now = yield* DateTime.now;
       if (past(attempt.plan.expiresAt, now)) return yield* expired("plan", attempt.plan.id);
@@ -157,7 +161,7 @@ export const make = (storage: Storage.Interface, connect: Connect.Interface, kin
           );
         }
       }
-      const approval = new Approval.Model({
+      return new Approval.Model({
         id: Approval.ApprovalId.make(yield* fresh("apr")),
         version: "domainkit.approval.v2",
         kind,
@@ -168,6 +172,16 @@ export const make = (storage: Storage.Interface, connect: Connect.Interface, kin
         approvedAt: now,
         expiresAt: attempt.plan.expiresAt,
       });
+    });
+
+  const approve = (
+    plan: Plan.Model | Plan.PlanId,
+    options: ApproveOptions = {},
+  ): Fx<Approval.Model> =>
+    Effect.gen(function* () {
+      const attempt = yield* attemptOf(plan);
+      if (attempt.approval !== null) return attempt.approval;
+      const approval = yield* draftApproval(attempt, options);
       const stored = yield* storage.attempts.approve(attempt.id, approval);
       return stored.approval ?? approval;
     });
@@ -382,7 +396,7 @@ export const make = (storage: Storage.Interface, connect: Connect.Interface, kin
           return operation.providerRecordId;
         });
 
-  return { record, approve, reject, apply, attemptOf };
+  return { record, approve, draftApproval, reject, apply, attemptOf };
 };
 
 /** Read one receipt-proven record back; anything but an exact match is a conflict. */

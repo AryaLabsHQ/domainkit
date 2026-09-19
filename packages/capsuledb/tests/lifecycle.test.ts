@@ -39,10 +39,11 @@ afterAll(async () => {
 const run = <A>(
   ownerId: string,
   effect: Effect.Effect<A, unknown, DomainKit.Services | Storage.Service | Principal.Service>,
+  provider: Testing.FakeProviderOptions = { zones: ["example.com"] },
 ) => {
   const client = postgres?.layer;
   if (client === undefined) throw new Error("the Postgres container was not started");
-  const fake = Testing.provider({ zones: ["example.com"] });
+  const fake = Testing.provider(provider);
   return Effect.runPromise(
     effect.pipe(
       Effect.provideService(Principal.Service, Principal.make({ ownerId, actorId: "actor" })),
@@ -123,6 +124,132 @@ describe("lifecycle on PgStorage", () => {
     180_000,
   );
 
+  it(
+    "plans a batch, resumes what failed, approves once, and resumes a partial apply",
+    () =>
+      run(
+        "org-batch",
+        Effect.gen(function* () {
+          const one = "one.batch.example.com";
+          const two = "two.batch.example.com";
+          const requirementsFor = (domain: string) => [
+            DnsRecord.cname({ name: domain, target: "edge.acme.dev" }),
+            DnsRecord.txt({ name: `_acme.${domain}`, value: "acme-verify=7f3a" }),
+          ];
+          const started = yield* Connect.start({
+            provider: "fake",
+            method: Connect.Method.token("token"),
+            domain: one,
+          });
+          if (started._tag !== "Connected") return;
+          yield* Connect.attach({ connectionId: started.connection.id, domain: two });
+
+          // A requirement outside the attached domain fails before the planner reads the zone.
+          const created = yield* Provision.batch.create({
+            idempotencyKey: "pg-batch-1",
+            items: [
+              { domain: one, requirements: requirementsFor(one) },
+              {
+                domain: two,
+                requirements: [DnsRecord.txt({ name: "_acme.elsewhere.com", value: "nope" })],
+              },
+            ],
+          });
+          assert.strictEqual(created.status, "planning");
+          assert.strictEqual(created.digest, null);
+          assert.ok(created.items[1]?.planFailure !== null, "the second item records its failure");
+
+          const replay = yield* Provision.batch.create({
+            idempotencyKey: "pg-batch-1",
+            items: [{ domain: one, requirements: requirementsFor(one) }],
+          });
+          assert.strictEqual(replay.id, created.id);
+
+          const planned = yield* Provision.batch.resumePlanning(created.id, {
+            items: [{ domain: two, requirements: requirementsFor(two) }],
+          });
+          assert.strictEqual(planned.status, "planned");
+          assert.strictEqual(planned.items[0]?.plan?.id, created.items[0]?.plan?.id);
+          assert.ok(planned.digest !== null, "a fully planned batch has a digest");
+
+          const moved = yield* Effect.flip(
+            Provision.batch.approve(created.id, {
+              digest: Plan.Digest.make("not-the-digest-you-read"),
+            }),
+          );
+          assert.strictEqual(moved.reason._tag, "BatchStale");
+
+          const approved = yield* Provision.batch.approve(created.id, { digest: planned.digest });
+          assert.strictEqual(approved.status, "approved");
+          assert.ok(
+            approved.items.every((item) => item.approval !== null),
+            "the batch approval and the per-attempt approvals committed together",
+          );
+
+          // The first provider write fails, so one domain stops before any record.
+          const partial = yield* Provision.batch.apply(created.id);
+          assert.strictEqual(partial.status, "failed");
+          assert.strictEqual(partial.items[0]?.status, "failed");
+          assert.strictEqual(partial.items[1]?.receipt?.status, "complete");
+
+          const complete = yield* Provision.batch.apply(created.id);
+          assert.strictEqual(complete.status, "complete");
+          assert.ok(complete.completedAt !== null, "a complete batch is completed");
+          assert.deepStrictEqual(
+            (yield* Provision.batch.list({ unfinished: true })).map(({ id }) => id),
+            [],
+          );
+        }).pipe(
+          // One domain at a time, so the fake's write counter is deterministic.
+          Effect.provideService(Provision.Policy, {
+            ...Provision.defaults,
+            batchConcurrency: 1,
+          }),
+        ),
+        { zones: ["example.com"], failWrite: (index) => index === 0 },
+      ),
+    180_000,
+  );
+  it(
+    "declines a batch with every plan under it",
+    () =>
+      run(
+        "org-batch-reject",
+        Effect.gen(function* () {
+          const domain = "declined.example.com";
+          const started = yield* Connect.start({
+            provider: "fake",
+            method: Connect.Method.token("token"),
+            domain,
+          });
+          if (started._tag !== "Connected") return;
+          const created = yield* Provision.batch.create({
+            idempotencyKey: "pg-batch-reject",
+            items: [
+              {
+                domain,
+                requirements: [DnsRecord.cname({ name: domain, target: "edge.acme.dev" })],
+              },
+            ],
+          });
+          assert.strictEqual(created.status, "planned");
+          const rejected = yield* Provision.batch.reject(created.id, { reason: "wrong domain" });
+          assert.strictEqual(rejected.status, "rejected");
+          assert.deepStrictEqual(
+            rejected.items.map(({ status }) => status),
+            ["rejected"],
+          );
+          // The fence: a planning pass still in flight lands nothing on a declined batch.
+          const storage = yield* Storage.Service;
+          const attachmentId = created.items[0]?.attachmentId ?? "";
+          const fenced = yield* Effect.flip(
+            storage.batches.recordItemPlanFailure(created.id, attachmentId, "x"),
+          );
+          assert.strictEqual(fenced.reason._tag, "BatchStale");
+        }),
+      ),
+    180_000,
+  );
   it(
     "releases the advisory lock so the next single-flight caller acquires it",
     () =>
