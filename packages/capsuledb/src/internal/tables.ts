@@ -146,6 +146,33 @@ export const make = (prefix: string): Tables => ({
 });
 
 /**
+ * The authorizations table as the first migration created it, before `label`.
+ *
+ * Frozen for the same reason as `attachmentsV1`: migration 1 renders this shape, and the migration
+ * that adds the column carries the difference.
+ */
+export const authorizationsV1 = (prefix: string): Schema.Table =>
+  Schema.table(`${prefix}_authorizations`, {
+    columns: {
+      id: Schema.text(),
+      owner_id: Schema.text(),
+      provider: Schema.text(),
+      method: Schema.text(),
+      capabilities: Schema.json(),
+      context: Schema.json(),
+      revocation: Schema.text(),
+      created_by: Schema.text(),
+      created_at: Schema.timestamp(),
+      credential_ciphertext: Schema.text(),
+      credential_expires_at: Schema.timestamp({ nullable: true }),
+      credential_rotated_at: Schema.timestamp(),
+      updated_at: Schema.timestamp(),
+    },
+    primaryKey: ["id"],
+    indexes: [{ columns: ["owner_id", "revocation"] }, { columns: ["owner_id", "provider"] }],
+  });
+
+/**
  * The attachments table as the first migration created it, before `label`.
  *
  * A migration is history: what it renders must not move, or an installation that already ran it

@@ -37,7 +37,7 @@ name no account, including Vercel, answer `null`, and so does `Testing.provider`
 `accountLabel`.
 
 The field is additive. A provider definition that returns no `label` keeps compiling, and
-`@domainkit/capsuledb` adds a nullable `label` column to `domainkit_authorizations`, which rows
-written before it read as `null`. `Storage.Authorization` now requires `label`, so a host that
+`@domainkit/capsuledb` adds a nullable `label` column to `domainkit_authorizations` through its own
+additive migration, which rows written before it read as `null`. `Storage.Authorization` now requires `label`, so a host that
 implements `Storage` itself supplies it; the conformance suite checks that it survives the round
 trip.
