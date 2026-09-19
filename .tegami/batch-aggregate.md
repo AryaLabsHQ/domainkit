@@ -14,12 +14,14 @@ resumable apply, and a way to find the setups still owed a move. `Provision.batc
 lifecycle inside DomainKit.
 
 ```ts
-const batch = yield* provision.batch.create({
-  idempotencyKey: request.idempotencyKey,
-  items: zones.map((zone) => ({ domain: zone.domain, requirements: zone.requirements })),
-});
-yield* provision.batch.approve(batch.id, { digest: batch.digest });
-yield* provision.batch.apply(batch.id);
+const batch =
+  yield *
+  provision.batch.create({
+    idempotencyKey: request.idempotencyKey,
+    items: zones.map((zone) => ({ domain: zone.domain, requirements: zone.requirements })),
+  });
+yield * provision.batch.approve(batch.id, { digest: batch.digest });
+yield * provision.batch.apply(batch.id);
 ```
 
 A batch is `planning` until every item has a plan, `planned` once it does, `approved` after one
