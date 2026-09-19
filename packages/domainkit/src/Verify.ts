@@ -122,16 +122,17 @@ export interface Summary {
   readonly unknown: number;
 }
 
-/** The least a value has to carry to be summarised: core `Readiness` and the wire shape both do. */
-export interface Summarisable {
-  readonly requirements: ReadonlyArray<{ readonly status: Storage.RequirementStatus }>;
-}
-
 /**
  * How a readiness stands, as counts. Pure and total: a host renders "3 of 4 found" from the stored
- * fact without deciding what an absent readiness means, because `observed` says so.
+ * fact without deciding what an absent readiness means, because `observed` says so. The parameter
+ * is the least a value has to carry to be summarised, so core `Readiness` and the wire shape both
+ * pass without naming a type between them.
  */
-export const summary = (readiness: Summarisable | null): Summary => {
+export const summary = (
+  readiness: {
+    readonly requirements: ReadonlyArray<{ readonly status: Storage.RequirementStatus }>;
+  } | null,
+): Summary => {
   const statuses = readiness?.requirements.map(({ status }) => status) ?? [];
   const count = (status: Storage.RequirementStatus): number =>
     statuses.filter((candidate) => candidate === status).length;
