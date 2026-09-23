@@ -119,7 +119,7 @@ describe("packed consumers", () => {
           name: "domainkit-packed-consumer",
           private: true,
           type: "module",
-          dependencies: { effect: "4.0.0-rc.112" },
+          dependencies: { effect: "4.0.0-rc.117" },
         }),
       );
       await run(

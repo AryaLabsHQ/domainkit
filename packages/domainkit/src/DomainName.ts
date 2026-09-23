@@ -22,7 +22,7 @@ const Branded = Schema.String.check(
 export const Model = Schema.String.pipe(
   Schema.decodeTo(
     Branded,
-    SchemaTransformation.transformOrFail({
+    SchemaTransformation.transformEffect({
       decode: (input, options) =>
         Effect.try({
           try: () => normalize(input),

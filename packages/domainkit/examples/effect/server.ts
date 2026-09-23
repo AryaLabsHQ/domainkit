@@ -8,8 +8,8 @@ const DomainKitLive = DomainKit.layer({
   providers: [
     Cloudflare.provider({
       oauth: {
-        clientId: Config.string("CF_CLIENT_ID"),
-        clientSecret: Config.redacted("CF_CLIENT_SECRET"),
+        clientId: Config.String("CF_CLIENT_ID"),
+        clientSecret: Config.Redacted("CF_CLIENT_SECRET"),
       },
     }),
     Vercel.provider(), // tokens only
