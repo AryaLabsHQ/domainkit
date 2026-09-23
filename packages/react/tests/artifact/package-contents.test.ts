@@ -16,7 +16,7 @@ describe("packed React package", () => {
     expect(packageJson.type).toBe("module");
     expect(packageJson.peerDependencies.react).toBe(">=19.0.0 <20.0.0");
     expect(packageJson.peerDependencies["react-dom"]).toBe(">=19.0.0 <20.0.0");
-    expect(packageJson.peerDependencies.effect).toBe(">=4.0.0-rc.115 <5.0.0");
+    expect(packageJson.peerDependencies.effect).toBe(">=4.0.0-rc.117 <5.0.0");
     expect(packageJson.exports["."].types).toBe("./dist/index.d.mts");
     // Nothing in the package runs for its side effects, and there is no stylesheet to keep.
     expect(packageJson.sideEffects).toBe(false);
