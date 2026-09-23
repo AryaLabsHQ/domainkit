@@ -1,3 +1,22 @@
+## @domainkit/capsuledb@0.17.0
+
+### CapsuleDB 0.3
+
+`@domainkit/capsuledb` peers on `capsuledb` `>=0.3.0 <0.4.0`. CapsuleDB `0.3.0` builds against Effect
+`4.0.0-rc.117`, and its `capsuledb emit` command runs on the same Effect as the rest of DomainKit, so
+a host installs `capsuledb@0.3` alongside this release.
+
+### Effect 4.0.0-rc.117
+
+DomainKit builds against Effect `4.0.0-rc.117`, and every package's `effect` peer range is now
+`>=4.0.0-rc.117 <5.0.0`. Effect removed `Config.redacted` and `SchemaTransformation.transformOrFail`,
+which `0.16.0` calls at import and layer build, so a host on a newer Effect needs this release and a
+host on an older one upgrades Effect with it.
+
+`Custody.layerConfig` reads `DOMAINKIT_CUSTODY_KEY` through `Config.Redacted`, and the examples and
+READMEs use the PascalCase `Config` constructors. `@domainkit/capsuledb` reads `TIMESTAMPTZ` columns
+whether `@effect/sql-pg` returns a `Date`, a `DateTime`, an epoch number, or a string.
+
 ## @domainkit/capsuledb@0.16.0
 
 ### Plan many domains, approve once, apply bounded
