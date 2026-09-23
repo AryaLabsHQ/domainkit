@@ -57,7 +57,8 @@
     "effect": "4.0.0-rc.117",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
-    "vitest": "4.1.11"
+    "vite": "7.1.12",
+    "vitest": "5.0.1"
   },
   "peerDependencies": {
     "capsuledb": ">=0.2.0 <0.3.0",
