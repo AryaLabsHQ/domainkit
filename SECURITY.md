@@ -7,6 +7,6 @@ pull requests.
 Please report vulnerabilities privately through GitHub's security advisory interface for
 `AryaLabsHQ/domainkit`. Include the affected version, impact, and a minimal reproduction when safe.
 
-The core package does not persist or encrypt credentials. Hosts are responsible for durable storage,
-encryption, access control, audit logging, and secret rotation. DomainKit's interfaces intentionally
-keep those responsibilities explicit.
+The library seals credentials through `Custody` before durable storage, and `Storage` stores
+ciphertext only, never plaintext. Hosts own durable storage, keys, KMS configuration, rotation,
+audit logging, and consent.
