@@ -46,7 +46,7 @@
         "@effect/sql-pg": "4.0.0-rc.117",
         "@types/react": "19.2.14",
         "@types/react-dom": "19.2.3",
-        "capsuledb": "0.2.0",
+        "capsuledb": "0.3.0",
         "effect": "4.0.0-rc.117",
         "react": "19.2.4",
         "react-dom": "19.2.4",
@@ -64,7 +64,7 @@
         "@effect/vitest": "4.0.0-rc.117",
         "@testcontainers/postgresql": "12.1.0",
         "@types/bun": "1.4.0",
-        "capsuledb": "0.2.0",
+        "capsuledb": "0.3.0",
         "drizzle-orm": "1.0.0-rc.5-ab785fc",
         "effect": "4.0.0-rc.117",
         "tsdown": "0.22.14",
@@ -73,7 +73,7 @@
         "vitest": "5.0.1",
       },
       "peerDependencies": {
-        "capsuledb": ">=0.2.0 <0.3.0",
+        "capsuledb": ">=0.3.0 <0.4.0",
         "effect": ">=4.0.0-rc.117 <5.0.0",
       },
     },
@@ -130,7 +130,7 @@
     "blume@1.5.3": "patches/blume@1.5.3.patch",
   },
   "overrides": {
-    "capsuledb": "0.2.0",
+    "capsuledb": "0.3.0",
   },
   "packages": {
     "@ai-sdk/gateway": ["@ai-sdk/gateway@4.0.69", "", { "dependencies": { "@ai-sdk/provider": "4.0.9", "@ai-sdk/provider-utils": "5.0.34", "@vercel/oidc": "3.2.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-W5MMdyqsaziQy/A4kxlK74iEQ+NuO6OaszH32cEQpUgBW0o15S2fAdP0aYSH2/5lrVZSMXLQLCzuMkRGHBua3A=="],
@@ -1311,7 +1311,7 @@
 
     "caniuse-lite": ["caniuse-lite@1.0.30001810", "", {}, "sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg=="],
 
-    "capsuledb": ["capsuledb@0.2.0", "", { "peerDependencies": { "@effect/sql-libsql": ">=4.0.0-rc.111 <5", "@effect/sql-sqlite-bun": ">=4.0.0-rc.111 <5", "effect": ">=4.0.0-rc.111 <5" }, "optionalPeers": ["@effect/sql-libsql", "@effect/sql-sqlite-bun"], "bin": { "capsuledb": "dist/cli.mjs" } }, "sha512-SyezLz+TE/1M2qx+RPdhnfatYuvORWAqNB74xapQ9wgPqHWsq5VrOD7TkjU5m6PlTU70xjJM69Kws1Zke7JJLg=="],
+    "capsuledb": ["capsuledb@0.3.0", "", { "peerDependencies": { "@effect/sql-libsql": ">=4.0.0-rc.117 <5", "@effect/sql-sqlite-bun": ">=4.0.0-rc.117 <5", "effect": ">=4.0.0-rc.117 <5" }, "optionalPeers": ["@effect/sql-libsql", "@effect/sql-sqlite-bun"], "bin": { "capsuledb": "dist/cli.mjs" } }, "sha512-AueQVbqwRbS9jhIH53Vd58ePO6GmAy+RPPEdTxApRyZ/eWPF/n9r+n44Ho4I7PoGqVviPdBbUZemMDZBImQdGw=="],
 
     "ccount": ["ccount@2.0.1", "", {}, "sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg=="],
 

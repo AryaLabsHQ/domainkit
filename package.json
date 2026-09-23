@@ -50,7 +50,7 @@
     "tegami": "1.4.0"
   },
   "overrides": {
-    "capsuledb": "0.2.0"
+    "capsuledb": "0.3.0"
   },
   "packageManager": "bun@1.4.2",
   "patchedDependencies": {

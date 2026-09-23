@@ -43,7 +43,7 @@ describe("packed manifest", () => {
       const { packed } = await pack(directory);
       // The host installs one capsuledb and this package binds to it, so a consumer can never end
       // up with two copies of the registry.
-      assert.strictEqual(packed.peerDependencies?.capsuledb, ">=0.2.0 <0.3.0");
+      assert.strictEqual(packed.peerDependencies?.capsuledb, ">=0.3.0 <0.4.0");
       assert.strictEqual(packed.dependencies?.capsuledb, undefined);
       // Nothing a consumer installs may come from a Git URL or a local checkout.
       const ranges = Object.values({

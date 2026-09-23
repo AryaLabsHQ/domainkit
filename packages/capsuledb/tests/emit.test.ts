@@ -1,6 +1,9 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { createRequire } from "node:module";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { promisify } from "node:util";
 
 import { Storage } from "domainkit";
 import { Emit, Manifest } from "capsuledb";
@@ -10,6 +13,9 @@ import { afterAll, assert, beforeAll, describe, it } from "@effect/vitest";
 import { PgStorage } from "../src/index.ts";
 import { capsule } from "../src/capsule.ts";
 import { type Postgres, start } from "./postgres.ts";
+
+const execFileAsync = promisify(execFile);
+const packageRoot = join(import.meta.dirname, "..");
 
 interface EmitIndex {
   readonly files: ReadonlyArray<{ readonly path: string; readonly checksum: string }>;
@@ -33,12 +39,17 @@ const statementsOf = (contents: string): ReadonlyArray<string> =>
     )
     .filter((statement) => statement.length > 0);
 
+const readIndex = async (out: string): Promise<EmitIndex> =>
+  JSON.parse(await readFile(join(out, "capsuledb.emit.json"), "utf8")) as EmitIndex;
+
 let postgres: Postgres | undefined;
+let root: string | undefined;
 let directory: string | undefined;
 
 beforeAll(async () => {
   postgres = await start(4);
-  directory = await mkdtemp(join(tmpdir(), "domainkit-capsuledb-emit-"));
+  root = await mkdtemp(join(tmpdir(), "domainkit-capsuledb-emit-"));
+  directory = join(root, "emitter");
   const out = directory;
   const manifest = await Effect.runPromise(Manifest.buildManifest({ capsules: [capsule] }));
   const files = await Effect.runPromise(Emit.emit(manifest, { dialect: "postgres" }));
@@ -56,7 +67,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await postgres?.stop();
-  if (directory !== undefined) await rm(directory, { force: true, recursive: true });
+  if (root !== undefined) await rm(root, { force: true, recursive: true });
 });
 
 describe("emitted SQL", () => {
@@ -65,7 +76,7 @@ describe("emitted SQL", () => {
     const out = directory;
     if (suite === undefined || out === undefined) throw new Error("the suite did not start");
 
-    const index = JSON.parse(await readFile(join(out, "capsuledb.emit.json"), "utf8")) as EmitIndex;
+    const index = await readIndex(out);
     const sqlFiles = index.files.map(({ path }) => path).filter((path) => path.endsWith(".sql"));
     assert.ok(sqlFiles.length >= 3, "emit writes the ledger, the migration, and the readiness row");
 
@@ -98,7 +109,7 @@ describe("emitted SQL", () => {
       "domainkit_batches",
       "domainkit_batch_items",
     ]);
-    const index = JSON.parse(await readFile(join(out, "capsuledb.emit.json"), "utf8")) as EmitIndex;
+    const index = await readIndex(out);
     const migrationFile = index.files.find(({ path }) => path.startsWith("0001_"))?.path;
     assert.ok(migrationFile !== undefined, "emit numbers the capsule migration 0001");
     const migration = await readFile(join(out, migrationFile), "utf8");
@@ -129,4 +140,53 @@ describe("emitted SQL", () => {
       "a later migration creates the batch tables",
     );
   });
+});
+
+describe("capsuledb emit", () => {
+  it("writes the files the emitter returns", async () => {
+    const parent = root;
+    const expected = directory;
+    if (parent === undefined || expected === undefined) throw new Error("the suite did not start");
+    const out = join(parent, "cli");
+    await mkdir(out, { recursive: true });
+
+    // The CLI guards on argv[1] resolving to its own module, so it needs its real path rather than a
+    // bin shim, which a workspace install may hoist or omit.
+    const cli = await realpath(
+      join(
+        dirname(createRequire(import.meta.url).resolve("capsuledb/package.json")),
+        "dist",
+        "cli.mjs",
+      ),
+    );
+    await execFileAsync(
+      "node",
+      [
+        cli,
+        "emit",
+        "--module",
+        join(packageRoot, "src", "capsule.ts"),
+        "--export",
+        "capsule",
+        "--dialect",
+        "postgres",
+        "--out",
+        out,
+      ],
+      { cwd: packageRoot },
+    );
+
+    const index = await readIndex(out);
+    assert.deepStrictEqual(index, await readIndex(expected));
+    const pairs = await Promise.all(
+      index.files.map(async ({ path }) => ({
+        path,
+        written: await readFile(join(out, path), "utf8"),
+        returned: await readFile(join(expected, path), "utf8"),
+      })),
+    );
+    for (const { path, written, returned } of pairs) {
+      assert.strictEqual(written, returned, `the CLI writes ${path} as the emitter returns it`);
+    }
+  }, 180_000);
 });

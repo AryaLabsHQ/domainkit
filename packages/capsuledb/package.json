@@ -52,7 +52,7 @@
     "@effect/vitest": "4.0.0-rc.117",
     "@testcontainers/postgresql": "12.1.0",
     "@types/bun": "1.4.0",
-    "capsuledb": "0.2.0",
+    "capsuledb": "0.3.0",
     "drizzle-orm": "1.0.0-rc.5-ab785fc",
     "effect": "4.0.0-rc.117",
     "tsdown": "0.22.14",
@@ -61,7 +61,7 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "capsuledb": ">=0.2.0 <0.3.0",
+    "capsuledb": ">=0.3.0 <0.4.0",
     "effect": ">=4.0.0-rc.117 <5.0.0"
   },
   "engines": {
