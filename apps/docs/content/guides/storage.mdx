@@ -9,7 +9,8 @@ seo:
 
 `Storage` is the durable seam every lifecycle operation goes through: authorizations with sealed
 credentials, connections, attachments, interactive-flow continuations, attempts carrying a plan,
-approval and receipt, and observed readiness. `Custody` seals a credential before Storage sees it.
+approval and receipt, and observed readiness. `Connect` seals provider secret material through
+`Custody` before writing an authorization credential to `Storage`.
 
 ## Choose an implementation
 
@@ -30,7 +31,7 @@ behaviour change.
 only then provides `Storage`, so a service can never observe a database whose tables are missing.
 The layer needs only your `SqlClient`, and it never opens, replaces, or closes it.
 
-The six tables and their keys are on the
+The eight tables and their keys are on the
 [`@domainkit/capsuledb` reference](/docs/reference/capsuledb). Every one carries `owner_id`, and
 every query filters by the request's `Principal`, so a row belonging to another tenant reads as
 absent rather than forbidden. `continuations.header` is the single exception, described below.
@@ -76,8 +77,10 @@ principal still fails closed.
 
 ## Custody
 
-There is no plaintext mode. `Connect` seals every credential through `Custody` before it reaches a
-row and opens it after reading one, so a `Storage` implementation only ever stores ciphertext.
+There is no plaintext mode for authorization credentials. `Connect` seals provider secret material
+through `Custody` before it reaches a credential row and opens it after reading one. OAuth
+continuation payloads follow a separate path: they include PKCE verifiers and CapsuleDB stores them
+as unsealed JSON. Protect database access and backups, and sweep expired continuation rows.
 
 <Snippet file="examples/storage/postgres.ts" region="custody" title="Sealing credentials" />
 

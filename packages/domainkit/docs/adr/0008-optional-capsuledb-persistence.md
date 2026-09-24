@@ -29,8 +29,9 @@ own; a host adds the ones it wants in the SQL it applies.
 
 `PgStorage.layer()` composes the capsule through CapsuleDB's registry: create the ledger, apply
 pending migrations, then provide `Storage`. It requires only the host's `SqlClient`, because
-credentials are sealed through `Custody.Service` before they reach a row and Storage never handles
-plaintext. A host that owns its migration pipeline runs `capsuledb emit`, applies the SQL itself,
+provider secrets are sealed through `Custody.Service` before they reach authorization credential
+rows. Continuation payloads, including PKCE verifiers, are stored as unsealed JSON. A host that owns
+its migration pipeline runs `capsuledb emit`, applies the SQL itself,
 and boots with `mode: "assert"`, which touches no schema and fails unless the database already
 matches the capsule.
 
