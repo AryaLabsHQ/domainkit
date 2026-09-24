@@ -7,8 +7,8 @@
  * reserved connection, and revocation is two-phase: mark `pending`, call the provider outside any
  * transaction, then delete.
  *
- * Storage never sees plaintext. `Connect` seals a credential through `Custody` before it reaches
- * `upsert` or `rotate`, so this module only ever moves a ciphertext string.
+ * `Connect` seals provider secret material through `Custody` before it reaches authorization
+ * `upsert` or `rotate`. Continuation payloads, including PKCE verifiers, are stored as unsealed JSON.
  */
 import { type Approval, DomainKit, type Plan, Principal, Reason, Storage } from "domainkit";
 import { DateTime, Effect, Option, Schema } from "effect";

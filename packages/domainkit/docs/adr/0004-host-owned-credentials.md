@@ -21,8 +21,10 @@ its own implementation.
 
 Provider context is persisted as an envelope `{ version, value }` tagged with the definition's
 `contextVersion`; decoding a newer or unknown version fails `Unsupported` unless the definition
-migrates it. `Storage` never sees plaintext: `Connect` seals a credential through `Custody` before writing it
-and opens it after reading it. Every session handed to `Provision`, `Cleanup`, or `Verify` is re-checked against the provider:
+migrates it. `Connect` seals provider secret material through `Custody` before writing an
+authorization credential to `Storage` and opens it after reading it. OAuth continuations also pass
+through `Storage`; their payloads include PKCE verifiers that `Custody` does not seal. Every session
+handed to `Provision`, `Cleanup`, or `Verify` is re-checked against the provider:
 the attached zone must still be among the targets the credential can reach, else `NotFound`.
 Token methods declare their input once as a `fields` schema (secrets as `Redacted`, optional
 keys as optional), so the UI renders the form from the definition and `Connect.start` decodes the
@@ -42,7 +44,8 @@ scopes.
 
 - Hosts integrate DomainKit with their existing security and tenancy model while writing no
   refresh, sealing, or revocation logic.
-- The core never chooses plaintext persistence; a Storage implementation stores ciphertext only.
+- Authorization credential secrets reach `Storage` sealed; hosts protect other persisted data,
+  including OAuth continuation payloads, and sweep expired continuations.
 - Hosts own keys, KMS configuration, rotation policy, audit logging, and consent UX.
 - Interactive flows tolerate a failed provider or storage call before persistence; a provider code
   the provider already redeemed needs a fresh start.
