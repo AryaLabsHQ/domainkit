@@ -152,6 +152,28 @@ describe("Vercel.provider", () => {
     });
   });
 
+  it.effect("starts the install beneath a configured install origin", () => {
+    const integration =
+      Vercel.provider({
+        integration: {
+          clientId: "client-1",
+          clientSecret: Redacted.make("secret"),
+          slug: "domainkit",
+          installOrigin: "http://localhost:4000/vercel/",
+        },
+      }).auth.integration ?? bail("integration");
+    return Effect.gen(function* () {
+      const started = yield* integration.start({
+        state: "state-1",
+        callbackUrl: "https://app.example/cb",
+      });
+      assert.strictEqual(
+        started.authorizationUrl,
+        "http://localhost:4000/vercel/integrations/domainkit/new?source=external&state=state-1",
+      );
+    });
+  });
+
   it.effect("lists, decodes, creates, reads, and deletes records with the team scope", () => {
     const recording = recordedFetch([
       {

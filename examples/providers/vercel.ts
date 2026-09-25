@@ -20,6 +20,22 @@ export const withIntegration = Vercel.provider({
 });
 // #endregion integration
 
+// #region integration-emulator
+/**
+ * A development stage whose browser cannot reach a registered install (one Redirect URL per
+ * integration) points the install page and the API at an emulator that serves both.
+ */
+export const againstEmulator = Vercel.provider({
+  baseUrl: "http://localhost:4000/vercel",
+  integration: {
+    clientId: "emulated-client",
+    clientSecret: Config.Redacted("VERCEL_CLIENT_SECRET"),
+    slug: "acme-domains",
+    installOrigin: "http://localhost:4000/vercel",
+  },
+});
+// #endregion integration-emulator
+
 // #region connect-token
 /** `teamId` scopes the connection to one team; leave it out for a personal account. */
 export const connectTeamToken = Connect.start({
