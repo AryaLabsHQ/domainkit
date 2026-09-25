@@ -1,34 +1,26 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n  \"@domainkit/capsuledb\":\n    type: minor\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Effect 4.0.0-rc.117\n\nDomainKit builds against Effect `4.0.0-rc.117`, and every package's `effect` peer range is now\n`>=4.0.0-rc.117 <5.0.0`. Effect removed `Config.redacted` and `SchemaTransformation.transformOrFail`,\nwhich `0.16.0` calls at import and layer build, so a host on a newer Effect needs this release and a\nhost on an older one upgrades Effect with it.\n\n`Custody.layerConfig` reads `DOMAINKIT_CUSTODY_KEY` through `Config.Redacted`, and the examples and\nREADMEs use the PascalCase `Config` constructors. `@domainkit/capsuledb` reads `TIMESTAMPTZ` columns\nwhether `@effect/sql-pg` returns a `Date`, a `DateTime`, an epoch number, or a string.\n"
-    filename: effect-rc117.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@domainkit/capsuledb\":\n    type: minor\n---\n\n## CapsuleDB 0.3\n\n`@domainkit/capsuledb` peers on `capsuledb` `>=0.3.0 <0.4.0`. CapsuleDB `0.3.0` builds against Effect\n`4.0.0-rc.117`, and its `capsuledb emit` command runs on the same Effect as the rest of DomainKit, so\na host installs `capsuledb@0.3` alongside this release.\n"
-    filename: capsuledb-0.3.md
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## A Vercel integration can start its install on another origin\n\n`Vercel.provider`'s `integration` settings take an optional `installOrigin`, the origin of the\ninstall page the browser is sent to. It defaults to `https://vercel.com`, so the flow still starts at\n`https://vercel.com/integrations/<slug>/new`:\n\n```ts\nVercel.provider({\n  baseUrl: \"http://localhost:4000/vercel\",\n  integration: {\n    clientId: \"emulated-client\",\n    clientSecret: Config.Redacted(\"VERCEL_CLIENT_SECRET\"),\n    slug: \"acme-domains\",\n    installOrigin: \"http://localhost:4000/vercel\",\n  },\n});\n```\n\nAn integration has one Redirect URL, so a development stage with its own origin cannot complete a\nreal install. With `installOrigin` and `baseUrl` pointed at an emulator, the whole install, the code\nexchange, and the DNS API run locally, the same way Cloudflare's `oauth.issuer` already moves its\nconsent page. The option is additive; a definition without it keeps its behaviour.\n"
+    filename: vercel-install-origin.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
-  - changelogIds:
-      - effect-rc117.md
-    id: npm:@domainkit/react
-    updated: true
-  - changelogIds:
-      - effect-rc117.md
-    id: npm:domainkit
-    updated: true
-  - changelogIds:
-      - capsuledb-0.3.md
-      - effect-rc117.md
-    id: npm:@domainkit/capsuledb
-    updated: true
   - id: npm:@domainkit/docs
     updated: false
+  - changelogIds:
+      - vercel-install-origin.md
+    id: npm:domainkit
+    updated: true
+  - id: npm:@domainkit/react
+    updated: true
+  - id: npm:@domainkit/capsuledb
+    updated: true
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
-  - id: npm:@domainkit/react
-  - id: npm:domainkit
-  - id: npm:@domainkit/capsuledb
   - id: npm:@domainkit/docs
+  - id: npm:domainkit
+  - id: npm:@domainkit/react
+  - id: npm:@domainkit/capsuledb
