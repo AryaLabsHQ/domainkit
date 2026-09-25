@@ -26,6 +26,13 @@ export interface Options {
     readonly clientId: string | Config.Config<string>;
     readonly clientSecret: Redacted.Redacted<string> | Config.Config<Redacted.Redacted<string>>;
     readonly slug: string;
+    /**
+     * Origin of the install page, which Vercel serves at `/integrations/{slug}/new` beneath it.
+     * Default `https://vercel.com`; a stage points it at an emulator that mounts the same path.
+     * It stays separate from `baseUrl` because in production these are different hosts:
+     * `vercel.com` for the browser install, `api.vercel.com` for the code exchange and the REST API.
+     */
+    readonly installOrigin?: string;
   };
   readonly fetch?: Fetch;
   readonly baseUrl?: string;
@@ -51,11 +58,12 @@ export const provider = (options: Options = {}): Provider.Definition<TeamContext
   function integrationAuth(
     settings: NonNullable<Options["integration"]>,
   ): Provider.IntegrationAuth {
+    const installOrigin = (settings.installOrigin ?? "https://vercel.com").replace(/\/$/, "");
     return {
       label: "Install the Vercel integration",
       start: (input) => {
         const authorizationUrl = new URL(
-          `https://vercel.com/integrations/${encodeURIComponent(settings.slug)}/new`,
+          `${installOrigin}/integrations/${encodeURIComponent(settings.slug)}/new`,
         );
         authorizationUrl.searchParams.set("source", "external");
         authorizationUrl.searchParams.set("state", input.state);

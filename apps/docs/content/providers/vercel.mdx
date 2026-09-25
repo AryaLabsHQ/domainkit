@@ -23,6 +23,17 @@ same connection.
 endpoint. It redirects like OAuth, and it is not OAuth, so DomainKit models it as its own method
 rather than pretending the two are the same.
 
+An integration has exactly one Redirect URL, so a development stage with its own origin cannot
+complete a real install. `installOrigin` moves the install page off `https://vercel.com` and
+`baseUrl` moves the code exchange and the REST API off `https://api.vercel.com`; point both at an
+emulator that serves `/integrations/<slug>/new` and Vercel's API paths.
+
+<Snippet
+  file="examples/providers/vercel.ts"
+  region="integration-emulator"
+  title="Against an emulator"
+/>
+
 ## Connecting with a token
 
 <Snippet file="examples/providers/vercel.ts" region="connect-token" title="An access token" />
