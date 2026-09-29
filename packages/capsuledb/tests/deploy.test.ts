@@ -28,11 +28,13 @@ const client = () => {
   return postgres.layer;
 };
 
-/** Run an effect on the shared client and count every statement it sends. */
-const counted = async <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) => {
+/** Run an effect on the shared client, handing it a reader for the statements sent so far. */
+const counted = <A, E>(
+  use: (statements: () => number) => Effect.Effect<A, E, SqlClient.SqlClient>,
+) => {
   let statements = 0;
-  const value = await Effect.runPromise(
-    effect.pipe(
+  return Effect.runPromise(
+    use(() => statements).pipe(
       Effect.provide(client()),
       Effect.provideService(Statement.CurrentTransformer, (statement) =>
         Effect.sync(() => {
@@ -42,7 +44,6 @@ const counted = async <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) =
       ),
     ),
   );
-  return { value, statements };
 };
 
 const firstRead = Effect.gen(function* () {
@@ -74,24 +75,40 @@ describe("PgStorage at deploy time", () => {
   it("builds a first-use layer with no statement and checks once on first use", async () => {
     const shape = options("prepared");
     // The counter has to see a boot prepare, or a zero below would prove nothing.
-    const prepared = await counted(Layer.build(PgStorage.layer(shape)).pipe(Effect.scoped));
-    assert.ok(prepared.statements > 0);
-    const built = await counted(
-      Layer.build(PgStorage.layer({ ...shape, mode: "assert", readiness: "first-use" })).pipe(
+    const prepared = await counted((statements) =>
+      Layer.build(PgStorage.layer(shape)).pipe(
+        Effect.map(() => statements()),
         Effect.scoped,
       ),
     );
-    assert.strictEqual(built.statements, 0);
+    assert.ok(prepared > 0);
 
-    const read = await Effect.runPromise(
+    const sent = await counted((statements) =>
       Effect.gen(function* () {
         const context = yield* Layer.build(
           PgStorage.layer({ ...shape, mode: "assert", readiness: "first-use" }),
         );
-        return yield* firstRead.pipe(Effect.provide(context));
-      }).pipe(Effect.scoped, Effect.provide(client())),
+        const built = statements();
+        const read = firstRead.pipe(Effect.provide(context));
+        const first = yield* read;
+        const afterFirst = statements();
+        yield* read;
+        const afterSecond = statements();
+        yield* read;
+        const afterThird = statements();
+        assert.ok(Option.isNone(first));
+        return {
+          built,
+          first: afterFirst - built,
+          second: afterSecond - afterFirst,
+          third: afterThird - afterSecond,
+        };
+      }).pipe(Effect.scoped),
     );
-    assert.ok(Option.isNone(read));
+    assert.strictEqual(sent.built, 0);
+    // The first query carries the one registry check; later queries send only their own statement.
+    assert.ok(sent.first > sent.second, `first ${sent.first} should exceed second ${sent.second}`);
+    assert.strictEqual(sent.third, sent.second);
   }, 180_000);
 
   it("fails first use against an empty database, then succeeds once it is prepared", async () => {
