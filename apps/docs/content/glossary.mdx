@@ -7,7 +7,8 @@ seo:
   title: DomainKit glossary
 ---
 
-Every page, type name, and error message uses these words the same way.
+Look up the words DomainKit uses for the custom domain lifecycle. Every page, type name, and error
+message uses them the same way.
 
 ## The lifecycle
 
@@ -26,8 +27,14 @@ terminal for that plan, and the domain stays free for a new one.
 **Receipt** — durable evidence of what an apply actually wrote, with one outcome per operation and
 a `status` of `complete` or `partial`. Cleanup is planned only from a receipt. A `Receipt.Model`.
 
+**Digest** — the SHA-256 hash of a plan's operations. An approval names a digest, and apply refuses
+when the zone no longer produces it. Requirement labels are not part of it.
+
 **Attempt** — one durable plan, approval, and receipt with a status, so a host can plan in one
 request, collect consent in another, and apply in a third.
+
+**Batch** — several domains planned together, with one digest and one consent, that each keep their
+own attempt. Create one with `Provision.batch.create`.
 
 ## The connection
 
@@ -80,7 +87,7 @@ credential your app issued.
 **Transport** — the browser-side view of the mounted routes, split into optional capability groups
 (`connection`, `provisioning`, `verification`, `cleanup`).
 
-## Words we avoid
+## What DomainKit is not
 
 DomainKit is not a DNS host, a registrar, a universal provider abstraction, or an automatic DNS
 reconciler. Provider writes are not atomic, transactional, or rollback-safe: a plan is applied

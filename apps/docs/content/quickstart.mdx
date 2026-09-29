@@ -21,8 +21,8 @@ it, and observe the result. No provider account, network request, database, or b
 domainkit effect@rc
 ```
 
-`effect` is a peer dependency. The package root is Effect-native and this tutorial uses it at every
-step.
+`effect` is a peer dependency. The package root is Effect-native, and every step in this tutorial
+is an Effect.
 
 ## Write the program
 
@@ -58,11 +58,14 @@ stored per-requirement readiness with a `nextCheckAt` for the next look.
 | `Principal.Service`     | Who is acting. Every stored row is scoped by it; there is no default  |
 | `Connect.start`         | Connects the provider and attaches the domain in one call for a token |
 
-## Run it again
+## Plan again
 
-Run the program a second time. The plan now carries two `Noop` operations, `Plan.isApplicable` is
-`false`, and there is nothing to write. Planning is a read, so it is safe to run whenever a screen
-needs to show what would change.
+Against a provider that kept the write, planning after the apply returns two `Noop` operations,
+`Plan.isApplicable` is `false`, and there is nothing to write. Planning is a read, so it is safe to
+run whenever a screen needs to show what would change.
+
+The fake provider lives in memory, so each `bun quickstart.ts` run starts from the same zone and
+shows the same `Create` and `Noop`. A real provider keeps the CNAME.
 
 ## Next
 

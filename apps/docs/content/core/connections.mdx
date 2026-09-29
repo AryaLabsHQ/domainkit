@@ -7,7 +7,8 @@ seo:
   title: DomainKit connections and attachments
 ---
 
-Three rows carry a customer's provider access, and each answers a different question.
+This page explains how a customer's provider access is stored and reused: an authorization, a
+connection, and an attachment, each answering a different question.
 
 ```text
 authorization   the credential, sealed, plus the provider account context
@@ -62,35 +63,38 @@ whose credential the provider turned down is reported once in the sibling `conne
 status `reconnect`, and contributes no zones, so one dead account never costs the customer the
 others. Each entry in that array carries the `label` the provider gave the account at connect
 time, so a list names accounts without asking the provider again; a provider that names no single
-account leaves it `null`. The reply also carries the provider catalog, so a picker offers a new account without a
-second call.
+account leaves it `null`. The reply also carries the provider catalog, so a picker can offer a new
+account without a second call.
 
 ## Reusing a connection
 
 The second domain on a provider the customer already connected should not ask them to connect
 again. `Connect.discover` resolves the domain's authoritative nameservers, lists the zones each of
-the principal's connections can reach, and answers which one serves it.
+the principal's connections can reach, and answers `Resolved`, `SelectionRequired`, or `NotFound`.
 
 <Snippet file="examples/core/connections.ts" region="discover" title="Skipping the connect step" />
 
 The closest zone wins. When several connections hold that zone, a connection whose reported
-nameservers cover every authoritative nameserver wins; otherwise the caller selects.
+nameservers cover every authoritative nameserver wins; otherwise the answer is
+`SelectionRequired` and the caller picks.
 
-When no connection reaches the domain, `NotFound` carries the authoritative nameservers and `host`:
-the one registered provider whose declared nameserver suffixes cover every one of them, matched on
-trailing labels and ignoring case. Cloudflare declares `ns.cloudflare.com` and Vercel declares
-`vercel-dns.com`, so a connect screen can name the provider that already serves the domain before
-the customer picks one. `host` is `null` when no provider matches or more than one does.
+When no connection reaches the domain, the `NotFound` answer carries the authoritative nameservers
+and `host`. `host.provider` is the one registered provider whose declared nameserver suffixes cover
+every one of them, matched on trailing labels and ignoring case. Cloudflare declares
+`ns.cloudflare.com` and Vercel declares `vercel-dns.com`, so a connect screen can name the provider
+that already serves the domain before the customer picks one. `host` is `null` when no provider
+matches or more than one does.
 
 ## Attaching
 
 <Snippet file="examples/core/connections.ts" region="attach" title="Binding a domain to a zone" />
 
 An attachment is exact: one domain, one connection, one zone, and the provider identity that
-addresses it. It also keeps `label`, the zone's name as the provider gave it at attach time, so a
-surface names the account the records go to without asking the provider again. Every session handed to planning, applying, or observing is re-checked against the
-provider, so a zone the credential can no longer reach fails `NotFound` instead of writing
-somewhere else.
+addresses it. It also keeps `label`, the name the provider gave the zone at attach time, so a
+surface can say where the records go without asking the provider again.
+
+Every session handed to planning, applying, or observing is re-checked against the provider, so a
+zone the credential can no longer reach fails `NotFound` instead of writing somewhere else.
 
 ## Releasing
 
