@@ -9,24 +9,55 @@ import type { ProviderArtwork } from "@/components/domainkit/provider-artwork";
 export const previewZone = "northwind.app";
 export const previewDomain = `mail.${previewZone}`;
 
-export const previewRequirements = [
+/**
+ * The records a sending domain needs. Names are fully qualified: the domain itself carries the SPF
+ * and bounce records, and the DKIM selector and tracking host sit one label below it.
+ */
+export const requirementsFor = (domain: string): ReadonlyArray<DnsRecord.Model> => [
   DnsRecord.txt({
-    name: `samva._domainkey.${previewDomain}`,
+    name: `samva._domainkey.${domain}`,
     purpose: "Sign your mail",
     value: "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA",
   }),
   DnsRecord.mx({
     exchange: "feedback-smtp.us-east-1.amazonses.com",
-    name: `mail.${previewDomain}`,
+    name: domain,
     priority: 10,
     purpose: "Receive bounce reports",
   }),
   DnsRecord.txt({
-    name: `mail.${previewDomain}`,
+    name: domain,
     purpose: "Authorize the sender",
     value: "v=spf1 include:amazonses.com ~all",
   }),
+  DnsRecord.cname({
+    name: `track.${domain}`,
+    purpose: "Track opens and clicks",
+    target: "track.samva.dev",
+  }),
 ];
+
+/**
+ * What the zone already holds: the SPF record matches its requirement (a no-op), and the other
+ * three are missing (creates), so one apply brings the domain to verified.
+ */
+export const seedFor = (domain: string): ReadonlyArray<DnsRecord.Model> => [
+  DnsRecord.txt({ name: domain, value: "v=spf1 include:amazonses.com ~all" }),
+];
+
+/**
+ * The same zone with an A record on the tracking host. A CNAME cannot share a name, so that
+ * requirement is a conflict: the plan approves the creates and leaves the blocked record for the
+ * customer to fix at their provider.
+ */
+export const conflictSeedFor = (domain: string): ReadonlyArray<DnsRecord.Model> => [
+  ...seedFor(domain),
+  DnsRecord.a({ name: `track.${domain}`, address: "203.0.113.10" }),
+];
+
+export const previewRequirements = requirementsFor(previewDomain);
+export const previewSeed = seedFor(previewDomain);
+export const previewConflictSeed = conflictSeedFor(previewDomain);
 
 /** Square artwork a host passes in, which is what the mark renders with nothing wrapped round it. */
 export const previewMarks: ProviderArtwork = {
@@ -61,7 +92,7 @@ export function PreviewRoot({
   connected = false,
   oauth = false,
   readOnly = false,
-  seed = [],
+  seed = previewSeed,
 }: PreviewOptions & { readonly children: ReactNode }) {
   const transport = useMemo(
     () =>

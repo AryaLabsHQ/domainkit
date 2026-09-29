@@ -40,6 +40,21 @@ function Observed({ status }: { readonly status: Records.RequirementStatus | nul
   return <DnsStatus status={status}>{messages.requirementStatus(status)}</DnsStatus>;
 }
 
+/** One record's value with its copy control, and the priority an MX carries beneath it. */
+function Data({ record }: { readonly record: DnsRecord.Model }) {
+  const messages = DomainKit.useMessages();
+  return (
+    <>
+      <CopyValue className="max-w-full" value={DnsRecord.data(record)} />
+      {record._tag === "MX" ? (
+        <span className="mt-1 block text-xs text-muted-foreground">
+          {messages.priority(record.priority)}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 export interface RecordsTableProps extends Omit<ComponentProps<"div">, "children"> {
   readonly flow: Domain.Flow;
   /** The line above the table, which is where the provider row goes. */
@@ -65,15 +80,22 @@ export function RecordsTable({ className, flow, header, ...props }: RecordsTable
       {...props}
     >
       {header === undefined ? null : <div className="border-b border-border">{header}</div>}
-      <Table>
+      <Table className="table-fixed sm:table-auto">
         <caption className="sr-only">{messages.recordsCaption(flow.domain)}</caption>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-24">{messages.headingType}</TableHead>
-            {plan === null ? null : <TableHead className="w-32">{messages.headingPlan}</TableHead>}
-            <TableHead className="w-36">{messages.headingStatus}</TableHead>
+            <TableHead className="hidden w-24 sm:table-cell">{messages.headingType}</TableHead>
+            {plan === null ? null : (
+              <TableHead className="w-28 sm:w-32">{messages.headingPlan}</TableHead>
+            )}
+            {/* Narrow, a pending plan says what will happen and the observation waits behind it. */}
+            <TableHead className={cn("w-28 sm:w-36", plan !== null && "hidden sm:table-cell")}>
+              {messages.headingStatus}
+            </TableHead>
             <TableHead>{messages.headingName}</TableHead>
-            <TableHead className="w-full max-w-0">{messages.headingValue}</TableHead>
+            <TableHead className="hidden w-full max-w-0 sm:table-cell">
+              {messages.headingValue}
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -83,23 +105,28 @@ export function RecordsTable({ className, flow, header, ...props }: RecordsTable
             return (
               <Fragment key={Records.identity(record)}>
                 <TableRow className={conflict === null ? undefined : "border-b-0"}>
-                  <TableCell className="font-mono text-xs">{record._tag}</TableCell>
+                  <TableCell className="hidden font-mono text-xs sm:table-cell">
+                    {record._tag}
+                  </TableCell>
                   {plan === null ? null : (
                     <TableCell>
                       <Planned operation={standing.planned} />
                     </TableCell>
                   )}
-                  <TableCell>
+                  <TableCell className={plan === null ? undefined : "hidden sm:table-cell"}>
                     <Observed status={standing.observed?.status ?? null} />
                   </TableCell>
-                  <TableCell className="font-mono text-xs">{record.name}</TableCell>
-                  <TableCell className="w-full max-w-0">
-                    <CopyValue className="max-w-full" value={DnsRecord.data(record)} />
-                    {record._tag === "MX" ? (
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        {messages.priority(record.priority)}
-                      </span>
-                    ) : null}
+                  <TableCell className="font-mono text-xs">
+                    <span className="block break-all whitespace-normal">
+                      <span className="sm:hidden">{record._tag} </span>
+                      {record.name}
+                    </span>
+                    <div className="mt-1.5 sm:hidden">
+                      <Data record={record} />
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden w-full max-w-0 sm:table-cell">
+                    <Data record={record} />
                   </TableCell>
                 </TableRow>
                 {conflict === null ? null : (

@@ -9,9 +9,9 @@ export type DnsOperationKind = "conflict" | "create" | "delete" | "noop";
 
 export const dnsOperationLabels: Record<DnsOperationKind, string> = {
   conflict: "Conflict",
-  create: "Create",
-  delete: "Remove",
-  noop: "No change",
+  create: "Will add",
+  delete: "Will remove",
+  noop: "Already set",
 };
 
 export interface DnsOperationProps extends ComponentProps<typeof Card> {
