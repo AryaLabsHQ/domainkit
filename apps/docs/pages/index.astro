@@ -17,6 +17,33 @@ const identity = snippet("examples/server/mount.ts", "identity");
 const mount = snippet("examples/server/mount.ts", "mount");
 const transport = snippet("examples/react/domain-settings.tsx", "setup");
 const flow = snippet("examples/react/domain-settings.tsx", "flow");
+
+const siteUrl = (config.site ?? "").replace(/\/$/u, "");
+const structuredData = JSON.stringify({
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@id": `${siteUrl}#organization`,
+      "@type": "Organization",
+      name: "Arya Labs",
+      sameAs: ["https://github.com/AryaLabsHQ"],
+    },
+    {
+      "@id": `${siteUrl}#software`,
+      "@type": "SoftwareSourceCode",
+      name: "DomainKit",
+      description:
+        "An open-source TypeScript library that sets up a customer's DNS records through their own Cloudflare or Vercel account.",
+      codeRepository: "https://github.com/AryaLabsHQ/domainkit",
+      license: "https://opensource.org/licenses/MIT",
+      programmingLanguage: "TypeScript",
+      sameAs: ["https://www.npmjs.com/package/domainkit"],
+      url: `${siteUrl}/`,
+      author: { "@id": `${siteUrl}#organization` },
+      publisher: { "@id": `${siteUrl}#organization` },
+    },
+  ],
+}).replaceAll("<", "\\u003c");
 ---
 
 <PageLayout
@@ -35,6 +62,7 @@ const flow = snippet("examples/react/domain-settings.tsx", "flow");
   x={config.x}
 >
   <main class="landing">
+    <script is:inline type="application/ld+json" set:html={structuredData} />
     <section class="hero">
       <h1>Custom domains for your SaaS, without the DNS support tickets</h1>
       <p class="lede">
@@ -109,7 +137,7 @@ const flow = snippet("examples/react/domain-settings.tsx", "flow");
       <div class="caption">
         <h2>Mount it in your API</h2>
         <p>
-          One HttpApi group, fifteen routes, OpenAPI for free. <code>Identity</code> is the one
+          One HttpApi group, twenty-five routes, OpenAPI for free. <code>Identity</code> is the one
           service you write.
         </p>
       </div>

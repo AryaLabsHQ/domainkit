@@ -2,8 +2,9 @@
 
 `apps/docs` is a public technical product surface. Write for a TypeScript SaaS or full-stack
 engineer who needs to ship embedded domain setup, not for someone browsing an internal module tree.
-Use `.agents/product-marketing.md` as the publication control plane for audience, vocabulary,
-evidence, and claim boundaries.
+Use `.agents/marketing/` as the publication control plane: `truth.md` for claims (it wins conflicts),
+`positioning.md` for audience and vocabulary, `voice.md` for style, and `proof-registry.md` for
+evidence.
 
 ## Page purpose
 
@@ -42,7 +43,7 @@ live in its own frame. Every registry preview mounts `lib/preview-flow.tsx`, whi
   identity and tenancy, consent, and audit stay outside DomainKit.
 - Do not claim DomainKit is a DNS host, registrar, automatic reconciler, hosted backend, or a Domain
   Connect successor. Do not claim unpublished worktree APIs are in the released package.
-- Keep the homepage promise focused on building domain setup into SaaS; reviewable plans are the
+- Keep the homepage promise focused on custom domains for SaaS (`positioning.md`); reviewable plans are the
   proof mechanism. Effect and React are delivery layers, not the product category.
 - The registry is the one styled path. `@domainkit/react` renders no element, so no page describes a
   packaged component, a part, a theme token, or a marks map.
