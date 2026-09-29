@@ -1,6 +1,6 @@
 ---
 title: "@domainkit/capsuledb"
-description: DomainKit's Storage on PostgreSQL as one declarative CapsuleDB capsule, with its options, its eight tables, and the two ways to run its migrations.
+description: DomainKit's Storage on PostgreSQL as one declarative CapsuleDB capsule, with its options, its eight tables, and the three ways to run its migrations.
 sidebar:
   label: "@domainkit/capsuledb"
 seo:
@@ -13,21 +13,27 @@ import { PgStorage } from "@domainkit/capsuledb";
 
 {/* reference-inventory:start */}
 
-| Export      | Carries                                                                          |
-| ----------- | -------------------------------------------------------------------------------- |
-| `PgStorage` | `layer(options)`, the `Storage.Service` implementation on the host's `SqlClient` |
-| `capsule`   | The declaration itself, which `capsuledb emit` reads to write SQL                |
-| `VERSION`   | The installed package version, read from the package manifest                    |
+| Export      | Carries                                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `PgStorage` | `layer(options)`, the `Storage.Service` implementation on the host's `SqlClient`; `manifest(options)`, its deploy manifest |
+| `capsule`   | The declaration itself, which `capsuledb emit` reads to write SQL                                                          |
+| `VERSION`   | The installed package version, read from the package manifest                                                              |
 
 {/* reference-inventory:end */}
 
 ## Options
 
-| Option           | Default     | Effect                                                                   |
-| ---------------- | ----------- | ------------------------------------------------------------------------ |
-| `prefix`         | `domainkit` | The table prefix. Part of the physical layout; fixed at the first deploy |
-| `mode`           | `prepare`   | `prepare` migrates at boot; `assert` expects the host applied the SQL    |
-| `registryPrefix` | `capsuledb` | CapsuleDB's own ledger prefix; must match `capsuledb emit --prefix`      |
+| Option           | Default     | Effect                                                                      |
+| ---------------- | ----------- | --------------------------------------------------------------------------- |
+| `prefix`         | `domainkit` | The table prefix. Part of the physical layout; fixed at the first deploy    |
+| `mode`           | `prepare`   | `prepare` migrates at boot; `assert` expects the host applied the SQL       |
+| `registryPrefix` | `capsuledb` | CapsuleDB's own ledger prefix; must match `capsuledb emit --prefix`         |
+| `readiness`      | `boot`      | `boot` checks while the layer builds; `first-use` checks on the first query |
+
+`PgStorage.manifest(options)` takes `prefix` and `registryPrefix` and returns an Effect of the
+CapsuleDB manifest for the capsule `layer` installs, without touching a database. A deploy stack
+passes it to `CapsuleDB.Registry` from `capsuledb/alchemy`; see
+[Prepare at deploy time](/docs/guides/storage#prepare-at-deploy-time-on-a-serverless-host).
 
 <Snippet file="examples/storage/postgres.ts" region="wire" title="Installing the layer" />
 

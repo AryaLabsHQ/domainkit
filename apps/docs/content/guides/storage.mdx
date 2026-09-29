@@ -1,6 +1,6 @@
 ---
 title: Persistence and custody
-description: Choose a Storage implementation, seal credentials, and decide whether DomainKit or your pipeline runs the migrations.
+description: Choose a Storage implementation, seal credentials, and decide whether DomainKit, your pipeline, or your deploy runs the migrations.
 sidebar:
   label: Persistence
 seo:
@@ -54,6 +54,39 @@ security you want, then boot in assert mode.
 Assert mode applies nothing and fails unless the database already matches the capsule, so a missed
 migration is a boot failure instead of a runtime surprise. `capsuledb check` compares an emitted
 folder against the current capsule in CI.
+
+## Prepare at deploy time on a serverless host
+
+A function should not migrate a database while it cold-starts, and several instances should not race
+to. Prepare the database in the deploy instead, with `capsuledb/alchemy`. `PgStorage.manifest()`
+yields the manifest of exactly the capsule `PgStorage.layer()` installs, so the stack prepares the
+schema the function will assert.
+
+<Snippet
+  file="examples/storage/serverless.ts"
+  region="prepare"
+  title="Preparing in the Alchemy stack"
+/>
+
+Pass the returned fingerprint into the function's environment as a value scoped to the code
+version. The deploy then finishes the migration before the new code publishes, and a version never
+runs against a schema older than the one it was built for. `CapsuleDB.providers` registers the
+resource beside the stack's other providers, and the database `url` stays a `Redacted` value.
+
+Boot the function with `mode: "assert"` and `readiness: "first-use"`.
+
+<Snippet file="examples/storage/serverless.ts" region="runtime" title="Asserting on first use" />
+
+The layer builds without sending a statement. The first Storage query runs one cached check, so a
+cold start that never reaches Storage does no registry work. If that check fails, the query fails
+with a `SqlError` and the next query retries it, which lets an instance that started before the
+deploy finished recover on its own. `readiness` defaults to `boot`, which checks while the layer
+builds.
+
+If you rename the tables, pass the same `prefix` and `registryPrefix` to `manifest` and to `layer`;
+the resource takes the registry prefix as `prefix`.
+
+<Snippet file="examples/storage/serverless.ts" region="prefixed" title="A renamed layout" />
 
 <Snippet file="examples/storage/postgres.ts" region="prefix" title="Renaming the tables" />
 
