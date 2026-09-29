@@ -1,0 +1,130 @@
+---
+title: Cloudflare for SaaS and DomainKit work together
+description: Cloudflare for SaaS issues certificates and routes customer hostnames. DomainKit writes the CNAME and validation records in the customer's DNS zone.
+sidebar:
+  label: Cloudflare for SaaS
+seo:
+  title: Use DomainKit with Cloudflare for SaaS
+---
+
+_Last reviewed 2026-09-29. Cloudflare changes its docs and plans, so check them before you build.
+To correct something, [open an issue on GitHub](https://github.com/AryaLabsHQ/domainkit/issues)._
+
+## Verdict
+
+Cloudflare for SaaS handles the custom hostname, the certificate, and the traffic. DomainKit
+handles the DNS records your customer has to add so that it works. You can use either alone.
+Together they cover both halves.
+
+## Who does what
+
+| Zone                     | What lives there                                                                     | Handled by                             |
+| ------------------------ | ------------------------------------------------------------------------------------ | -------------------------------------- |
+| Your Cloudflare account  | Custom hostname, certificate, fallback origin                                        | Cloudflare for SaaS                    |
+| Your customer's DNS zone | `CNAME app.customer.com` pointing at your hostname, and the validation `TXT` records | DomainKit, after the customer approves |
+
+Two zones. Cloudflare for SaaS works in yours. DomainKit works in theirs.
+
+## What Cloudflare for SaaS does
+
+Cloudflare for SaaS lets you serve your customers' own hostnames, such as `app.customer.com`,
+through Cloudflare. It issues and renews the certificates, routes the traffic, and gives you an API
+to create a custom hostname for each customer ([1](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/)).
+
+On the Free, Pro, and Business plans, Cloudflare's docs list 100 custom hostnames included and
+$0.10 for each one after that. Enterprise is priced by contract
+([2](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/plans/)).
+
+That's a solid product for the part it covers. It doesn't write into your customer's DNS.
+
+## What the customer still has to do
+
+Cloudflare's own docs tell you to have the customer add a CNAME that points their hostname at
+yours ([5](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/hostname-validation/realtime-validation/)).
+When you validate the hostname ahead of time, they also add TXT records that prove ownership and
+validate the certificate ([4](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/hostname-validation/)).
+
+| Type    | Name                                                                        | Value                        |
+| ------- | --------------------------------------------------------------------------- | ---------------------------- |
+| `CNAME` | `app.customer.com`                                                          | `customers.yourapp.com`      |
+| `TXT`   | The name Cloudflare returns, such as `_cf-custom-hostname.app.customer.com` | The value Cloudflare returns |
+
+Those are the fields people copy into a registrar by hand. This is where tickets come from.
+
+:::note
+Cloudflare notes that the response to creating a custom hostname may not include the validation
+records yet. Read the hostname again after a short delay before you ask the customer to add them
+([3](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/create-custom-hostnames/)).
+:::
+
+## Where DomainKit fits
+
+Declare the records Cloudflare gave you as requirements. The customer connects their DNS account,
+reviews the exact records, and approves. DomainKit writes them and checks that they resolve.
+
+1. Create the custom hostname with Cloudflare's API. Read back the validation records.
+2. Declare the CNAME and the TXT records as requirements.
+
+   <Snippet file="examples/core/custom-hostname.ts" region="requirements" />
+
+3. The customer connects Cloudflare or Vercel, reviews the plan, and approves.
+
+   <Snippet file="examples/providers/cloudflare.ts" region="connect-oauth" />
+
+   <Snippet file="examples/core/plans.ts" region="approve" />
+
+4. DomainKit applies the plan and observes the records in public DNS.
+
+   <Snippet file="examples/core/verification.ts" region="observe" />
+
+5. Show the certificate as pending on the same readiness screen until Cloudflare marks it active.
+
+   <Snippet file="examples/core/verification.ts" region="host-evidence" />
+
+The customer's DNS can be on Cloudflare too. Their account is separate from yours.
+
+Hosting on Vercel? The shape is the same. Vercel's Domains API attaches the domain to your project
+and issues the certificate ([6](https://vercel.com/docs/multi-tenant/domain-management)).
+DomainKit's Vercel adapter writes the customer's DNS records when their domain's DNS is hosted at
+Vercel. See the [Vercel provider page](/docs/providers/vercel).
+
+## What DomainKit doesn't do
+
+DomainKit doesn't create custom hostnames, issue certificates, or proxy traffic. It doesn't replace
+Cloudflare for SaaS. It can only write to a customer whose DNS is at Cloudflare or Vercel. For
+anyone else, your app still shows the records to add by hand.
+
+The full path from declaring records to cleanup is in
+[SaaS custom domain setup, step by step](/guides/custom-domain-onboarding).
+
+## FAQ
+
+<Accordion>
+  <AccordionItem title="Do I need Cloudflare for SaaS to use DomainKit?">
+    No. DomainKit writes DNS records for any product that needs them, such as email sending domains.
+    Cloudflare for SaaS is one reason to need them.
+  </AccordionItem>
+  <AccordionItem title="Does DomainKit create the custom hostname in Cloudflare?">
+    No. You do that with Cloudflare's API. DomainKit writes what the customer has to add on their
+    side.
+  </AccordionItem>
+  <AccordionItem title="Does DomainKit handle certificate issuance?">
+    No. Cloudflare issues and renews the certificate. You can show its status next to the DNS status
+    as host evidence.
+  </AccordionItem>
+  <AccordionItem title="What if the customer isn't on Cloudflare or Vercel?">
+    Then DomainKit can't write their records today. Show them the CNAME and TXT values to add by
+    hand.
+  </AccordionItem>
+</Accordion>
+
+## Sources
+
+All accessed 29 September 2026.
+
+1. [https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/)
+2. [https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/plans/](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/plans/)
+3. [https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/create-custom-hostnames/](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/create-custom-hostnames/)
+4. [https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/hostname-validation/](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/hostname-validation/)
+5. [https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/hostname-validation/realtime-validation/](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/hostname-validation/realtime-validation/)
+6. [https://vercel.com/docs/multi-tenant/domain-management](https://vercel.com/docs/multi-tenant/domain-management)

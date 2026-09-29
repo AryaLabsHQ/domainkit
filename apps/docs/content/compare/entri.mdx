@@ -1,0 +1,127 @@
+---
+title: DomainKit vs Entri, a library in your app or a managed modal
+description: Entri is a hosted modal covering 70+ DNS providers. DomainKit is an open-source library for Cloudflare and Vercel. Compare cost, control, and coverage.
+sidebar:
+  label: Entri
+seo:
+  title: DomainKit vs Entri for DNS setup
+---
+
+_Last reviewed 2026-09-29. Prices and provider counts change, so check Entri's
+[pricing](https://www.entri.com/pricing) and
+[provider](https://developers.entri.com/connect/provider-list) pages before you decide. To correct
+something, [open an issue on GitHub](https://github.com/AryaLabsHQ/domainkit/issues)._
+
+## Verdict
+
+**Choose Entri** if you want a managed, white-labelled flow, coverage across many DNS providers,
+and a vendor to call.
+
+**Choose DomainKit** if your customers are mostly on Cloudflare or Vercel, you want the flow inside
+your own app and database, and you want each customer to approve an exact plan.
+
+## Side by side
+
+|                           | Entri                                                                                                                                                                                                                | DomainKit                                                                                                                                  |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| What it is                | Hosted service with an embedded modal ([1](https://www.entri.com/), [2](https://developers.entri.com/connect/overview))                                                                                              | Open-source library that runs in your app                                                                                                  |
+| DNS providers             | Its site says 70+ DNS providers, and the docs list them by setup method. Unsupported providers get manual instructions ([3](https://developers.entri.com/connect/provider-list), [4](https://www.entri.com/connect)) | Cloudflare and Vercel are built in. Another provider needs an adapter you write                                                            |
+| How the customer signs in | In Entri's modal. Providers use OAuth, login, or an API key ([5](https://developers.entri.com/network/dns-provider-onboarding))                                                                                      | In your connect dialog, with an API token, OAuth (Cloudflare), or a marketplace install (Vercel)                                           |
+| Reviewing changes         | `checkConflicts` compares your records with the zone and flags overrides ([6](https://developers.entri.com/connect/sdk))                                                                                             | The customer sees an exact plan (Will add, Already set, Conflict). Approval is bound to the plan's digest. A conflict is never overwritten |
+| After apply               | Propagation monitoring and webhooks ([2](https://developers.entri.com/connect/overview))                                                                                                                             | Receipt of each write, provider and public-DNS observation, receipt-bound cleanup                                                          |
+| Where credentials live    | Entri's docs describe the sign-in methods. They don't state retention of end-user tokens ([5](https://developers.entri.com/network/dns-provider-onboarding))                                                         | In your database, sealed with your key                                                                                                     |
+| Beyond DNS                | Sell (domain purchase), Monitor, Secure (SSL), Power (root-domain hosting) ([1](https://www.entri.com/), [7](https://developers.entri.com/power/overview))                                                           | DNS records only                                                                                                                           |
+| Price                     | Startup from $249 a month for 600 domains a year. Higher tiers by quote ([8](https://www.entri.com/pricing))                                                                                                         | MIT license. No per-domain fee. You run it                                                                                                 |
+| Support                   | Commercial vendor with a trust center and DPA ([1](https://www.entri.com/))                                                                                                                                          | No SLA or support contract. Source and issues on GitHub                                                                                    |
+
+## What Entri does well
+
+Entri covers far more DNS providers than DomainKit does. If your customers use Namecheap, GoDaddy,
+Route 53, Squarespace, or Porkbun, Entri's list includes them and DomainKit does not.
+
+Entri is a finished, hosted flow. You mint a token, call one function, and get a modal that detects
+the provider, signs the customer in, and applies the records. It has a webhook for when records
+resolve. Entri also sells the pieces around it, such as SSL and root-domain hosting.
+
+Entri's site shows Webflow and Twilio as customers. If a vendor SLA and a name your security team
+recognizes matter to you, Entri answers both.
+
+## What DomainKit does differently
+
+DomainKit is a library, so the flow lives in your app. Your database holds the connections, your
+key seals the credentials, and your session decides who can approve. There is no separate vendor
+holding those tokens.
+
+The customer approves an exact plan. Each record is marked Will add, Already set, or Conflict
+before anything is written, and the approval covers that plan's digest. If the zone changes in
+between, apply stops.
+
+DomainKit keeps a receipt of each write and plans cleanup from it, so removing records later is as
+reviewed as adding them was.
+
+It costs nothing per domain. The cost is your own engineering time to integrate and run it.
+
+## Choose which
+
+### Choose Entri when
+
+- Your customers are spread across many registrars.
+- You want a hosted flow live quickly, without writing server routes or storage.
+- You want a vendor with a support contract.
+- You also need domain purchase, SSL, or root-domain hosting from the same vendor.
+
+### Choose DomainKit when
+
+- Most of your customers use Cloudflare or Vercel for DNS.
+- You want credentials and rows in your own database.
+- You want the customer to review and approve an exact plan, with a receipt.
+- You want the flow to look and behave like the rest of your product.
+
+## Using both
+
+The two aren't exclusive. Some teams will use DomainKit for customers on Cloudflare or Vercel and a
+hosted service for the rest. DomainKit doesn't integrate with Entri, so you choose the path in your
+own UI.
+
+## Questions to ask any vendor
+
+- Where are my customers' provider credentials stored, and for how long?
+- What does my customer see before a record is written?
+- What happens when a record already exists at that name?
+- Which providers are covered today, and how is that list maintained?
+- What happens to my customers' setup if I leave?
+
+## FAQ
+
+<Accordion>
+  <AccordionItem title="Is DomainKit an Entri alternative?">
+    It solves the same problem, letting customers connect a domain without copying DNS records, for
+    a smaller set of providers and with a different model. DomainKit is a library you run. Entri is
+    a service you call.
+  </AccordionItem>
+  <AccordionItem title="Does DomainKit cost anything?">
+    No. It's MIT-licensed with no per-domain fee. Entri's published price starts at $249 a month for
+    the Startup plan, with higher tiers by quote.
+  </AccordionItem>
+  <AccordionItem title="Does DomainKit cover my customers' registrars?">
+    Only Cloudflare and Vercel today. Entri's site says 70+ providers. Check your customers' DNS
+    providers against both lists before you decide.
+  </AccordionItem>
+  <AccordionItem title="Can I use DomainKit for domain purchase or SSL?">
+    No. DomainKit writes DNS records. For certificates and traffic, see [Cloudflare for
+    SaaS](/compare/cloudflare-for-saas), Vercel, or a proxy service.
+  </AccordionItem>
+</Accordion>
+
+## Sources
+
+All accessed 29 September 2026.
+
+1. [https://www.entri.com/](https://www.entri.com/)
+2. [https://developers.entri.com/connect/overview](https://developers.entri.com/connect/overview)
+3. [https://developers.entri.com/connect/provider-list](https://developers.entri.com/connect/provider-list)
+4. [https://www.entri.com/connect](https://www.entri.com/connect)
+5. [https://developers.entri.com/network/dns-provider-onboarding](https://developers.entri.com/network/dns-provider-onboarding)
+6. [https://developers.entri.com/connect/sdk](https://developers.entri.com/connect/sdk)
+7. [https://developers.entri.com/power/overview](https://developers.entri.com/power/overview)
+8. [https://www.entri.com/pricing](https://www.entri.com/pricing)
