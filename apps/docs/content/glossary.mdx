@@ -27,8 +27,8 @@ terminal for that plan, and the domain stays free for a new one.
 **Receipt** — durable evidence of what an apply actually wrote, with one outcome per operation and
 a `status` of `complete` or `partial`. Cleanup is planned only from a receipt. A `Receipt.Model`.
 
-**Digest** — the SHA-256 hash of a plan's operations. An approval names a digest, and apply refuses
-when the zone no longer produces it. Requirement labels are not part of it.
+**Digest** — the SHA-256 hash of a plan's version, kind, domain, zone, provider, attachment ID, and
+operations. An approval names a digest, and apply refuses when the zone no longer produces it. Requirement labels are not part of it.
 
 **Attempt** — one durable plan, approval, and receipt with a status, so a host can plan in one
 request, collect consent in another, and apply in a third.
