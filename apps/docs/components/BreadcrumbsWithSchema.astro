@@ -1,0 +1,58 @@
+---
+import Breadcrumbs from "blume/components/layout/Breadcrumbs.astro";
+import type { UIStrings } from "blume/core/i18n-ui.ts";
+import data from "blume:data";
+
+interface Crumb {
+  label: string;
+  route?: string;
+}
+
+interface Props {
+  crumbs: Crumb[];
+  strings?: UIStrings["nav"];
+  wide?: boolean;
+}
+
+const { crumbs, strings, wide } = Astro.props;
+const { config } = data;
+const origin = (config.site ?? "").replace(/\/$/u, "");
+const current = crumbs.at(-1);
+
+// Blume drops sidebar groups that have no index page, which leaves docs pages with a single
+// linked crumb. Build the trail from the site root, the header tab the page lives under, and the
+// page itself.
+const tabs = data.navigation.tabs;
+const tab = current?.route
+  ? tabs
+      .filter(
+        (candidate) =>
+          candidate.path !== "/" &&
+          (current.route === candidate.path || current.route?.startsWith(`${candidate.path}/`)),
+      )
+      .sort((a, b) => b.path.length - a.path.length)[0]
+  : undefined;
+
+const trail = [
+  { label: config.title, route: "/" },
+  ...(tab && tab.path !== current?.route ? [{ label: tab.label, route: tab.path }] : []),
+  ...(current?.route ? [{ label: current.label, route: current.route }] : []),
+];
+
+const breadcrumbList =
+  origin && current?.route && trail.length > 1
+    ? JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: trail.map((crumb, index) => ({
+          "@type": "ListItem",
+          item: `${origin}${crumb.route === "/" ? "" : crumb.route}`,
+          name: crumb.label,
+          position: index + 1,
+        })),
+      }).replaceAll("<", "\\u003c")
+    : null;
+---
+
+<Breadcrumbs crumbs={crumbs} strings={strings} wide={wide} />
+{breadcrumbList && <script is:inline type="application/ld+json" set:html={breadcrumbList} />}
