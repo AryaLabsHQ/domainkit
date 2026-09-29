@@ -7,8 +7,9 @@ seo:
   title: Integrate DomainKit into a host application
 ---
 
-A host writes one service and mounts one route group. Everything else, including provider callbacks
-and the error-to-status table, comes with them.
+This guide mounts DomainKit in your API so your app can connect DNS providers and plan, approve, and
+apply records for a customer's domain. You write one service, `Identity`, and mount one route group.
+Provider callbacks and the error-to-status table come with the group.
 
 ## Prerequisites
 
@@ -54,7 +55,7 @@ principal reaches every route.
 
 <Snippet file="examples/server/mount.ts" region="mount" title="Adding the group to your API" />
 
-`Server.group` covers the whole lifecycle in seventeen endpoints. It declares no path of its own, so
+`Server.group` covers the whole lifecycle in twenty-five endpoints. It declares no path of its own, so
 one prefix moves every route and the callback URL follows it.
 
 `GET /zones` is the read a picker needs: every zone the principal's connections reach, how each
