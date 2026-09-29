@@ -13,7 +13,8 @@ message uses them the same way.
 ## The lifecycle
 
 **Requirement** — DNS state your product needs: a record, its `policy` (`exclusive` or `append`),
-and an optional `purpose` label for the customer. A `DnsRecord.Model`.
+an optional `purpose` label for the customer, and, on a TXT record made with `DnsRecord.spf`, an
+SPF constraint. A `DnsRecord.Model`.
 
 **Plan** — a snapshot of one zone as exact operations, with a deterministic digest over them. Its
 operations are `Create`, `Noop`, `Conflict`, and, for cleanup, `Delete`. A `Plan.Model`.
@@ -67,7 +68,8 @@ only your app can see, such as a certificate or an email identity).
 and `nextCheckAt`, the time to look again.
 
 **Requirement status** — `satisfied` (an exact match), `missing` (nothing matched), `mismatch` (an
-exclusive requirement met a conflicting record at the same name and type), or `unknown` (no source
+exclusive requirement met another record at the same name and type, or an SPF requirement met a
+different or duplicate SPF record), or `unknown` (no source
 answered).
 
 ## The seams your app fills

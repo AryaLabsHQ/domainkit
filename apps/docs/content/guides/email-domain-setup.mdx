@@ -34,21 +34,35 @@ returns.
 
 A domain should have one SPF record. Two SPF records at the same name is a common failure.
 
-DomainKit treats SPF as an ordinary TXT record. It doesn't parse or merge SPF values. What happens
-at a name that already holds an SPF value depends on the requirement's policy:
+Declare SPF with `DnsRecord.spf`. It is a standard TXT record that carries an SPF constraint, and
+the constraint is part of the plan's digest. Provider writes stay ordinary TXT. What happens at a
+name depends on what the zone already holds:
 
-- The same value is already there, so the operation is `Noop`.
-- A different value with the default `append` policy is a `Create`. Applying it leaves two SPF
-  records at that name.
-- A different value with the `exclusive` policy is a `Conflict`. The plan can't be approved as it
-  stands, and nothing is written.
+- No SPF record is there, so the operation is `Create`. Unrelated TXT, such as a verification
+  token, doesn't get in the way.
+- One matching SPF record is there, so the operation is `Noop`.
+- A different SPF record, or more than one SPF record, is a `Conflict` with reason `spf-conflict`.
+  Two identical SPF records still conflict, and so does one matching record beside another SPF
+  record. The plan can't be approved as it stands, and nothing is written.
+- Two requested SPF values at the same name conflict inside one plan, so a plan never creates both.
+
+<Snippet file="examples/core/email-domain.ts" region="spf" />
+
+DomainKit checks the SPF version token, `v=spf1` followed by a space or the end of the value, and
+rejects a `DnsRecord.spf` value without it. It doesn't parse the rest of the policy, count DNS
+lookups, merge two policies, or replace an existing one. Your product or the customer decides how
+to combine them, and DomainKit reports the collision. Verification applies the same rules: a
+duplicate or different SPF record reads as `mismatch` even when the matching record is present.
+
+A generic `DnsRecord.txt` appends, even when its value is SPF, so an unmarked SPF value plans a
+second SPF record beside an existing one. Use `DnsRecord.spf` for SPF.
+
+`exclusive` is a broader tool. It makes any other record at that name and type a `Conflict` with
+reason `exclusive-name`, not only SPF, and it does so even when the exact record is also present.
+Use it at a name your service owns, such as a send subdomain. At a root domain that carries other
+TXT records, such as verification tokens, it reports a conflict for those too.
 
 <Snippet file="examples/core/email-domain.ts" region="spf-exclusive" />
-
-Declare SPF with the `exclusive` policy. `exclusive` conflicts with any other TXT record at the
-name, not only SPF, so use it at a name your service owns, such as a send subdomain. At a root
-domain that carries other TXT records, such as verification tokens, it reports a conflict for
-those too.
 
 The simplest way to avoid a collision is to publish your SPF on a subdomain your service owns, as
 Resend does with its send subdomain, instead of the customer's root domain. Then your record never
@@ -57,8 +71,9 @@ shape.
 
 ## Declare the records
 
-Build one requirement for each record your service returns. Use an exclusive policy for SPF, and
-for MX when a second record at that name would break the first. Use a CNAME for DKIM and tracking.
+Build one requirement for each record your service returns. Use `DnsRecord.spf` for SPF, an
+exclusive policy for MX when a second record at that name would break the first, and a CNAME for
+DKIM and tracking.
 The values here are placeholders.
 
 <Snippet file="examples/core/email-domain.ts" region="requirements" />
@@ -104,7 +119,8 @@ Cloudflare and Vercel. Read [how Samva sets up customer domains](/customers/samv
     No. It writes the DNS records that let receivers check your signatures.
   </AccordionItem>
   <AccordionItem title="What if the customer already has an SPF record?">
-    See the section on putting SPF where it can't collide. DomainKit doesn't merge SPF records.
+    A different SPF record at the same name is a `Conflict`, and DomainKit doesn't merge or replace
+    SPF records. See the section on putting SPF where it can't collide.
   </AccordionItem>
   <AccordionItem title="What if the customer's DNS isn't on Cloudflare or Vercel?">
     Show them the records to add by hand. DomainKit can't write there today.

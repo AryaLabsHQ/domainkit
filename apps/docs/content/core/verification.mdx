@@ -57,12 +57,18 @@ without paying for a full observation.
 
 ## Statuses
 
-| Requirement status | Means                                                                   |
-| ------------------ | ----------------------------------------------------------------------- |
-| `satisfied`        | An exact match was observed                                             |
-| `missing`          | Nothing matched                                                         |
-| `mismatch`         | An exclusive requirement met a conflicting record at that name and type |
-| `unknown`          | No source answered                                                      |
+| Requirement status | Means                                                                                                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `satisfied`        | An exact match was observed and no constraint is violated                                                                                                  |
+| `missing`          | Nothing matched                                                                                                                                            |
+| `mismatch`         | A constraint is violated: an exclusive requirement met another record at that name and type, or an SPF requirement met a different or duplicate SPF record |
+| `unknown`          | No source answered                                                                                                                                         |
+
+A constraint outranks an exact match. An exclusive requirement is `mismatch` when any incompatible
+record shares its name and type, even with the exact record present, and an explicit
+`DnsRecord.spf` requirement is `mismatch` when the name holds a different SPF record or more than
+one SPF record. Unrelated TXT doesn't affect an SPF requirement. Planning and verification apply the
+same rules.
 
 The domain's `overall` is `failed` when any requirement is a mismatch or any host evidence failed,
 `ready` when every requirement is satisfied and every host signal is `ok`, and `pending` otherwise.

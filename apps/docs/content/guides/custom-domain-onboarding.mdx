@@ -32,7 +32,8 @@ allow a CNAME at the apex.
 <Snippet file="examples/core/plans.ts" region="requirements" />
 
 A record's policy says what may share its name. A CNAME is exclusive by default, and everything
-else appends. The purpose is the sentence your customer reads next to the record.
+else appends. An SPF record is an appending TXT record made with `DnsRecord.spf`, which also
+refuses a second SPF record at its name. The purpose is the sentence your customer reads next to the record.
 
 ## 2. Mount the routes in your API
 

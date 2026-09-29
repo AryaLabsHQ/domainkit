@@ -18,8 +18,15 @@ the customer sees.
 <Snippet file="examples/core/plans.ts" region="requirements" title="Two requirements" />
 
 `policy` defaults to `exclusive` for CNAME and `append` for everything else. An exclusive
-requirement means no other record may sit at that name and type; an append requirement tolerates
-neighbours.
+requirement means no other record may sit at that name and type, and an exact match doesn't excuse
+an incompatible neighbour; an append requirement tolerates neighbours.
+
+`DnsRecord.spf({ name, value, ttl?, purpose? })` is a TXT requirement with an explicit SPF
+constraint. It appends beside unrelated TXT such as verification tokens, and it conflicts when the
+name holds a different SPF record, more than one SPF record (identical duplicates included), or
+another requested SPF value. Only the `v=spf1` version token is validated; DomainKit doesn't merge,
+replace, or fully parse SPF. A generic `DnsRecord.txt` stays an append requirement, including one
+whose value is SPF.
 
 Every requirement must sit at or below the attached domain. A name outside it fails `InvalidInput`
 before the planner reads the zone, so tenants sharing a zone cannot plan into each other's names.
@@ -30,18 +37,19 @@ before the planner reads the zone, so tenants sharing a zone cannot plan into ea
 
 ## The four operations
 
-| Operation  | Means                                                                  |
-| ---------- | ---------------------------------------------------------------------- |
-| `Create`   | The record is missing and will be created                              |
-| `Noop`     | An exact match already exists. `ttlDrift` says whether its TTL differs |
-| `Conflict` | Incompatible state, with a `reason` for what is in the way             |
-| `Delete`   | Cleanup only: remove a record a receipt proves DomainKit created       |
+| Operation  | Means                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| `Create`   | The record is missing and will be created                                                    |
+| `Noop`     | An exact match exists and no constraint is violated. `ttlDrift` says whether its TTL differs |
+| `Conflict` | Incompatible state, with a `reason` for what is in the way                                   |
+| `Delete`   | Cleanup only: remove a record a receipt proves DomainKit created                             |
 
 | Conflict reason   | Raised when                                                             | By           |
 | ----------------- | ----------------------------------------------------------------------- | ------------ |
 | `cname-collision` | A CNAME would share a name with another record, in either direction     | Provisioning |
 | `opaque`          | A record at that name and type is one DomainKit cannot model            | Provisioning |
 | `exclusive-name`  | An exclusive requirement meets a different record at that name and type | Provisioning |
+| `spf-conflict`    | An SPF requirement meets a different SPF record or more than one        | Provisioning |
 | `missing`         | The record a receipt names is already gone                              | Cleanup      |
 | `value-mismatch`  | The record a receipt names no longer matches what was written           | Cleanup      |
 

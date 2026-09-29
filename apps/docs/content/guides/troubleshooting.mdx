@@ -15,8 +15,8 @@ page is what to do when one of them keeps happening.
 ## The plan will not apply
 
 **`Conflict`.** The zone already holds something incompatible. The reason carries the conflicting
-operations, each with the requirement and what was found there. Show them: `cname-collision` and
-`exclusive-name` mean a record has to move before the plan can run, and `opaque` means the provider
+operations, each with the requirement and what was found there. Show them: `cname-collision`,
+`exclusive-name`, and `spf-conflict` mean a record has to move before the plan can run, and `opaque` means the provider
 reports something at that name DomainKit will not touch. A cleanup plan conflicts differently:
 `missing` and `value-mismatch` say the record a receipt names is gone or has been edited, and
 cleanup leaves it alone.
@@ -75,7 +75,8 @@ with the values that source returned and a `detail` explaining a status that is 
   minutes, 30 minutes.
 - **One resolver satisfied, another missing.** The default quorum is `any`, so this is still
   satisfied. Set `Verify.Policy.quorum` to `all` when your product needs agreement.
-- **`mismatch`.** An exclusive requirement met a conflicting record at the same name and type. That
+- **`mismatch`.** A constraint is violated: an exclusive requirement met another record at the same
+  name and type, or a `DnsRecord.spf` requirement met a different SPF record or more than one. That
   outranks agreement anywhere else, and it needs a DNS change, not another check.
 - **Everything `unknown`.** No source answered. Check `ResolverFailed` in your logs and whether the
   runtime can reach `cloudflare-dns.com` and `dns.google`.

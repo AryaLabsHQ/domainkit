@@ -36,6 +36,19 @@ Create `quickstart.ts`:
 bun quickstart.ts
 ```
 
+It prints `firstPlan`, the `receipt`, the readiness result, and `secondPlan`. The two plans list
+their operations and whether `Plan.isApplicable` is true:
+
+```json
+{
+  "firstPlan": { "operations": ["Create CNAME", "Noop TXT"], "isApplicable": true },
+  "receipt": { "status": "complete" },
+  "secondPlan": { "operations": ["Noop CNAME", "Noop TXT"], "isApplicable": false }
+}
+```
+
+The receipt carries more fields than shown here, and its ids differ on every run.
+
 ## What you just read
 
 `Provision.plan` listed the zone and reconciled it against the two requirements. The fake provider
@@ -60,12 +73,17 @@ stored per-requirement readiness with a `nextCheckAt` for the next look.
 
 ## Plan again
 
-Against a provider that kept the write, planning after the apply returns two `Noop` operations,
-`Plan.isApplicable` is `false`, and there is nothing to write. Planning is a read, so it is safe to
-run whenever a screen needs to show what would change.
+The program plans a second time after the apply, in the same run:
 
-The fake provider lives in memory, so each `bun quickstart.ts` run starts from the same zone and
-shows the same `Create` and `Noop`. A real provider keeps the CNAME.
+<Snippet file="packages/domainkit/examples/effect/quickstart.ts" region="replan" />
+
+The fake provider kept the CNAME the apply wrote, so `secondPlan` holds `Noop CNAME` and
+`Noop TXT`, `Plan.isApplicable` is `false`, and there is nothing to write. Planning is a read, so it
+is safe to run whenever a screen needs to show what would change.
+
+The fake provider lives in memory and is rebuilt on each invocation, so every `bun quickstart.ts`
+run starts from the same zone and prints the same `Create` and `Noop` first plan. A real provider
+keeps the CNAME between runs.
 
 ## Next
 
