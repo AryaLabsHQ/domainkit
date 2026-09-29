@@ -96,6 +96,7 @@ const structuredData = JSON.stringify({
 
 <PageLayout
   analytics={config.analytics}
+  appleIcon={config.appleIcon}
   banner={config.banner}
   favicon={config.favicon}
   fontCssVars={data.fontCssVars}
@@ -119,11 +120,6 @@ const structuredData = JSON.stringify({
         <p class="sub">
           Your customer connects Cloudflare or Vercel once, reviews the exact records, and approves.
           DomainKit applies them and verifies they resolve.
-        </p>
-        <p class="definition">
-          DomainKit is an open-source TypeScript library that sets up a customer's DNS records
-          through their own Cloudflare or Vercel account: it plans the exact changes, applies only
-          what the customer approved, and verifies them in public DNS.
         </p>
         <div class="install">
           <code>{installCommand}</code>
@@ -671,12 +667,6 @@ const structuredData = JSON.stringify({
     color: var(--blume-muted-foreground);
     font-size: 1.15rem;
     line-height: 1.5;
-  }
-  .definition {
-    border-left: 2px solid var(--blume-accent);
-    color: var(--blume-muted-foreground);
-    font-size: 0.88rem;
-    padding-left: 0.9rem;
   }
   .install {
     align-items: stretch;
