@@ -82,7 +82,10 @@ export default defineConfig({
       name: "DomainKit",
       price: 0,
       priceCurrency: "USD",
-      sameAs: ["https://github.com/AryaLabsHQ/domainkit", "https://www.npmjs.com/package/domainkit"],
+      sameAs: [
+        "https://github.com/AryaLabsHQ/domainkit",
+        "https://www.npmjs.com/package/domainkit",
+      ],
     },
   },
   theme: {
