@@ -18,10 +18,10 @@ a proof-registry row.
 
 1. Name the reader (evaluator or end customer), the page's search term, and its one primary action.
 2. **Structure.** Outline sections mapped to story beats (positioning) and proof rows. One section
-   advances one argument. Show the outline as an Artifact before writing prose.
+   advances one argument.
 3. **Text-only prototype.** Headings, copy, code snippet references, proof notes, and CTAs for the
-   whole page in one Artifact, no design. Sonnet subagents draft; the coordinator reviews. Wait for
-   approval.
+   whole page, no design, committed to the draft PR. Sonnet subagents draft; the coordinator
+   reviews; Saatvik reviews on the PR.
 4. **Metadata.** Title 60 columns or fewer; description 110 to 160 characters; H1 in customer words
    with the search term; open with the quotable definition sentence (positioning).
 5. Check each claim against the registry. Cut adjectives that a number or a record could replace.

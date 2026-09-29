@@ -18,9 +18,10 @@ on conflict.
    it. No row, no claim.
 3. **Evidence classes stay separate:** owned (Search Console, npm, GitHub), provider estimates
    (OpenSEO, DataForSEO), observed pages and SERPs (dated), verbatim sourced quotes, and inference.
-4. **Approval gates are real.** Canon changes, positioning shifts, and page drafts go to Saatvik as
-   an Artifact before the next stage starts. Silence is not approval. Merging and deploying need
-   their own explicit grants.
+4. **Review happens on the PR.** Canon changes, positioning shifts, and page copy ship as a draft
+   PR, and Saatvik reviews them there. Take the recommended default on open calls rather than
+   asking, and note the defaults in the session, not the PR: the PR body describes only the change,
+   because the repository is public. Merging and deploying need their own explicit grants.
 5. **Comparison pages need primary sources and owner sign-off** (truth).
 
 ## Pipeline
@@ -28,11 +29,9 @@ on conflict.
 | Stage       | Output                                                           | Owner                                  |
 | ----------- | ---------------------------------------------------------------- | -------------------------------------- |
 | 1. Research | ICP, customer words, competitors, demand, current-state audit    | this skill; `seo` for demand           |
-| **Gate 1**  | Synthesis Artifact: story, category, page map, claims. Approve.  | this skill                             |
-| 2. Copy     | Section outlines, then full text-only copy per page              | `copywriting` (Sonnet subagents write) |
-| **Gate 2**  | Copy Artifact. Approve the words before any design.              | this skill                             |
+| 2. Copy     | Canon changes, then text-only copy per page, in a draft PR       | `copywriting` (Sonnet subagents write) |
 | 3. Design   | Layout in the docs site's visual system, verified in the browser | the implementing agent                 |
-| 4. Ship     | Draft PRs from a `wt` worktree; strict docs checks green         | `pr` skill                             |
+| 4. Ship     | Draft PRs from a `wt` worktree; checks green; review on the PR   | `pr` skill                             |
 | 5. Measure  | Search Console, rank, and `pagegraph diff` against the baseline  | `seo`, `web-audit`                     |
 
 Research that a later stage contradicts goes back to stage 1, not into a copy workaround.
