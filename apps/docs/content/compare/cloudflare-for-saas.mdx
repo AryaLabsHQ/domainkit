@@ -62,8 +62,9 @@ records yet. Read the hostname again after a short delay before you ask the cust
 Declare the records Cloudflare gave you as requirements. The customer connects their DNS account,
 reviews the exact records, and approves. DomainKit writes them and checks that they resolve.
 
-1. Create the custom hostname with Cloudflare's API. Read back the validation records.
-2. Declare the CNAME and the TXT records as requirements.
+1. Create the custom hostname with Cloudflare's API. Read back the validation records: the
+   `ownership_verification` record and every TXT entry in `ssl.validation_records`.
+2. Declare the CNAME and every TXT record as requirements.
 
    <Snippet file="examples/core/custom-hostname.ts" region="requirements" />
 
