@@ -1,0 +1,122 @@
+---
+title: Domain Connect and DomainKit, two ways to set up a customer's DNS
+description: Domain Connect is an open template protocol each DNS provider onboards. DomainKit writes through the customer's own grant. How they differ.
+sidebar:
+  label: Domain Connect
+seo:
+  title: DomainKit vs Domain Connect for DNS setup
+---
+
+_Last reviewed 2026-09-29. Provider lists and repository activity change often. To correct
+something, [open an issue on GitHub](https://github.com/AryaLabsHQ/domainkit/issues)._
+
+## Verdict
+
+Domain Connect fits when your setup is a fixed template and your customers' DNS providers already
+support it. DomainKit fits when the record values differ per customer and you want to write through
+the customer's own Cloudflare or Vercel account. Nothing stops you from offering both.
+
+## What Domain Connect is
+
+Domain Connect is an open protocol. A service provider, such as an email or hosting company,
+publishes a DNS template. A supporting DNS provider shows the customer a consent screen and applies
+the template. The customer never edits records by hand.
+
+The protocol is under active work. Its IETF working-group draft is at revision 03, updated 3 July
+2026 ([4](https://datatracker.ietf.org/doc/draft-ietf-dconn-domainconnect/)). The
+[Templates repository](https://github.com/Domain-Connect/Templates) was pushed to on the day we
+checked, with dozens of open pull requests being reviewed.
+
+## What it asks of you
+
+Getting a template accepted has two steps ([1](https://www.domainconnect.org/getting-started/)).
+
+1. Define the template and get it merged into the shared Templates repository. Submissions need to
+   be tested in the online editor and follow strict naming and quality rules.
+2. Onboard the template with each DNS provider. Domain Connect's guide says this is done by
+   contacting them, and that some may require contractual terms and further review.
+
+The second step repeats for every DNS provider you want to reach, and each one decides on its own
+timeline.
+
+## Who supports it
+
+The Domain Connect site lists these providers as live: IONOS, Cloudflare, Domain Chief, Glauca
+Digital, GoDaddy, NameSilo, Plesk, Vercel, and WordPress.com
+([2](https://www.domainconnect.org/dns-providers/)).
+
+Two details matter for builders. Cloudflare supports the synchronous flow with signed requests, and
+asks you to email template links and public-key domains
+([5](https://developers.cloudflare.com/dns/reference/domain-connect/)). Vercel supports it only
+where Vercel is the domain's authoritative DNS ([6](https://vercel.com/docs/domains/domain-connect)).
+
+Well-known senders use it. Resend's Cloudflare guide offers a Sign in to Cloudflare option that
+uses Domain Connect ([7](https://resend.com/docs/dashboard/domains/cloudflare)).
+
+## Side by side
+
+|                                  | Domain Connect                                         | DomainKit                                                             |
+| -------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------- |
+| What it is                       | Open protocol and shared template repository           | Open-source library in your app                                       |
+| Who shows the consent screen     | The customer's DNS provider                            | Your app                                                              |
+| What you set up per DNS provider | Onboard your template with each provider               | One adapter per provider. Cloudflare and Vercel are built in          |
+| What the customer grants         | Approval of your template on their DNS provider's page | A grant to their own provider account, then approval of an exact plan |
+| Record values                    | Template variables, within the template's rules        | Any records you declare, per customer or tenant                       |
+| Reach                            | Nine providers listed live                             | Two built in                                                          |
+| Scope                            | Applying a template                                    | Connect, plan, approve, apply, receipt, verify, cleanup               |
+| License                          | Public domain spec (CC0 1.0)                           | MIT license, no per-domain fee                                        |
+
+## When each fits
+
+### Domain Connect fits when
+
+- Your setup is a fixed template with a few variables.
+- Your customers' DNS providers already support it and have onboarded your template.
+- You want the DNS provider to own the consent screen.
+
+### DomainKit fits when
+
+- Record values vary per customer, tenant, or environment.
+- You want the flow, the consent, and the audit inside your own app.
+- Your customers are on Cloudflare or Vercel.
+- You need receipts, verification, and reviewed cleanup after the first click.
+
+## Offering both
+
+They don't conflict. Try the automated path that fits the customer's DNS provider and keep manual
+records as the last option. The order is your decision, made in your own UI. DomainKit doesn't ship
+a Domain Connect adapter, and it doesn't publish templates.
+[What DomainKit does and doesn't do about Domain Connect](/docs/core/domain-connect).
+
+## FAQ
+
+<Accordion>
+  <AccordionItem title="Is Domain Connect still active?">
+    Yes. As of 29 September 2026 its Templates repository had a push that day, and new templates
+    were being merged.
+  </AccordionItem>
+  <AccordionItem title="Does DomainKit implement Domain Connect?">
+    No. It has no Domain Connect adapter and doesn't publish templates.
+  </AccordionItem>
+  <AccordionItem title="Is DomainKit a replacement for Domain Connect?">
+    No. They use different mechanisms. One relies on DNS providers onboarding your template. The
+    other relies on your customer granting access to their own provider account.
+  </AccordionItem>
+  <AccordionItem title="Which is faster to ship?">
+    It depends on your customers' DNS providers. If they already support Domain Connect and have
+    onboarded your template, the protocol needs no library. If they're on Cloudflare or Vercel,
+    DomainKit doesn't wait for an onboarding.
+  </AccordionItem>
+</Accordion>
+
+## Sources
+
+All accessed 29 September 2026.
+
+1. [https://www.domainconnect.org/getting-started/](https://www.domainconnect.org/getting-started/)
+2. [https://www.domainconnect.org/dns-providers/](https://www.domainconnect.org/dns-providers/)
+3. [https://github.com/Domain-Connect/Templates](https://github.com/Domain-Connect/Templates)
+4. [https://datatracker.ietf.org/doc/draft-ietf-dconn-domainconnect/](https://datatracker.ietf.org/doc/draft-ietf-dconn-domainconnect/)
+5. [https://developers.cloudflare.com/dns/reference/domain-connect/](https://developers.cloudflare.com/dns/reference/domain-connect/)
+6. [https://vercel.com/docs/domains/domain-connect](https://vercel.com/docs/domains/domain-connect)
+7. [https://resend.com/docs/dashboard/domains/cloudflare](https://resend.com/docs/dashboard/domains/cloudflare)

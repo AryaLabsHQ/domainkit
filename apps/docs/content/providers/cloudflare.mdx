@@ -1,16 +1,19 @@
 ---
-title: Cloudflare
-description: Connect Cloudflare with an API token or OAuth, what each method stores, and which capabilities DomainKit needs.
+title: Connect a customer's Cloudflare DNS
+description: Let customers connect Cloudflare with OAuth or an API token so your SaaS can add their DNS records. Pairs with Cloudflare for SaaS hostnames.
 sidebar:
   label: Cloudflare
 seo:
-  title: Connect Cloudflare DNS with DomainKit
+  title: Connect a customer's Cloudflare DNS
 ---
 
 <ProviderLogo provider="cloudflare" size={48} />
 
-Cloudflare offers two connect methods on one definition: API tokens, and OAuth when your app has a
-registered client. Both end at the same connection, and both keep the credential on your server.
+DomainKit writes DNS records to a customer's own Cloudflare account, after they connect it and
+approve the exact records. It offers two connect methods on one definition, API tokens and OAuth,
+and both keep the credential on your server. If you serve customer hostnames with Cloudflare for
+SaaS, DomainKit writes the CNAME and validation records that service asks your customer to add. See
+[Cloudflare for SaaS and DomainKit](/compare/cloudflare-for-saas).
 
 ## Register the provider
 

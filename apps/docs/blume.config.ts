@@ -8,13 +8,29 @@ export default defineConfig({
     root: "content",
     sources: [
       {
-        exclude: ["components/**"],
+        exclude: [
+          "components/**",
+          "compare/**",
+          "customers/**",
+          "guides/custom-domain-onboarding.mdx",
+          "guides/email-domain-setup.mdx",
+        ],
         prefix: "docs",
         root: "content",
         type: "filesystem",
       },
       {
         include: ["components/**/*.{md,mdx}"],
+        root: "content",
+        type: "filesystem",
+      },
+      {
+        include: [
+          "compare/**/*.{md,mdx}",
+          "customers/**/*.{md,mdx}",
+          "guides/custom-domain-onboarding.mdx",
+          "guides/email-domain-setup.mdx",
+        ],
         root: "content",
         type: "filesystem",
       },
@@ -42,6 +58,8 @@ export default defineConfig({
     repo: true,
     tabs: [
       { label: "Docs", path: "/docs" },
+      { label: "Guides", path: "/guides/custom-domain-onboarding" },
+      { label: "Compare", path: "/compare/entri" },
       { label: "Components", path: "/components" },
     ],
   },

@@ -1,0 +1,120 @@
+---
+title: How Samva sets up customer domains with DomainKit
+description: How Samva, an email API, lets customers add a sending domain without copying DNS records. The records, the flow, and what the customer approves.
+sidebar:
+  label: Samva
+seo:
+  title: How Samva sets up customer domains
+---
+
+<Card title="Samva" href="https://samva.dev" icon="mail">
+  An email API with Git-backed TSX templates.
+</Card>
+
+| Customer                   | Uses                                                        | Providers             | Records written    | Status        |
+| -------------------------- | ----------------------------------------------------------- | --------------------- | ------------------ | ------------- |
+| [Samva](https://samva.dev) | `domainkit`, `@domainkit/react`, and `@domainkit/capsuledb` | Cloudflare and Vercel | TXT, MX, and CNAME | In production |
+
+Samva sends email for its customers from their own domains. Before it can, each domain needs a set
+of DNS records at the customer's provider. Samva uses DomainKit to add those records after the
+customer reviews and approves them.
+
+## What an email sending domain needs
+
+A customer who wants to send from `mail.example.com` has to prove the domain is theirs and
+authorize Samva to send for it. That takes records in their DNS.
+
+| Type    | What it does                        | Policy in Samva                                            |
+| ------- | ----------------------------------- | ---------------------------------------------------------- |
+| `TXT`   | SPF and domain verification         | Append. Other TXT records at the same name are fine.       |
+| `MX`    | The mail-from address and receiving | Exclusive. A second MX at that name would break the first. |
+| `CNAME` | DKIM signing and click tracking     | Exclusive. One target per name.                            |
+
+Samva also checks for a DMARC record and recommends one. DomainKit doesn't write it, and a missing
+DMARC record doesn't block verification.
+
+## Why a table of records to copy isn't enough
+
+A table of records for the customer to add at their DNS provider is where setup stalls. Each record
+has a host and a value, and the values are long and exact. Registrars format the host column
+differently, and one wrong character means the domain doesn't verify.
+
+Other email products describe the same steps in their own docs, with a variant for each registrar.
+See the examples in [Copy-paste DNS instructions and where they break](/compare/manual-dns).
+
+> Onboarding gets difficult mainly because of DNS. Copying and pasting records is error-prone and it
+> increases support cases. That's what we built DomainKit to solve.
+>
+> Saatvik Arya, founder, Samva
+
+## How the flow works
+
+<Steps>
+  <Step title="The customer adds a domain.">
+    Samva asks DomainKit which provider serves it. If it's Cloudflare or Vercel, Samva offers to
+    connect.
+  </Step>
+  <Step title="They connect once.">
+    Cloudflare uses OAuth. Vercel uses a marketplace install. A token works for either.
+  </Step>
+  <Step title="They review the records.">
+    A table shows each TXT, MX, and CNAME as a record to add, a record that is already set, or a
+    conflict. Nothing has changed yet.
+  </Step>
+  <Step title="They approve and apply.">
+    One press adds the approved records, and Samva keeps the receipt.
+  </Step>
+  <Step title="DomainKit checks that the records resolve.">
+    Samva shows each record's status, when it last read public DNS, and a Check now button. When
+    every record resolves, the domain is verified.
+  </Step>
+</Steps>
+
+<img
+  src="/customers/samva-domain-verified.png"
+  alt="Samva's domain page for a verified sending domain. Each record shows Found, with a Check now button and the time of the last check."
+  width="1440"
+  height="1100"
+  style={{ maxWidth: "100%", height: "auto" }}
+/>
+
+_Samva's domain page._
+
+If the provider isn't Cloudflare or Vercel, the same page lists the records with copy buttons, so
+the customer adds them by hand.
+
+Removing a domain later is a separate step, planned from the receipt, so DomainKit only removes
+records it added.
+
+## Who can do what
+
+DomainKit doesn't decide who may connect a provider or change DNS. Samva does.
+
+| Role                                | What it can do                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Organization member                 | View the domain, its records, and its status. Nothing they can reach spends a credential or writes DNS. |
+| Organization owner or administrator | Connect a provider, approve a plan, apply it, and clean up.                                             |
+
+Samva lists every DomainKit endpoint and says which role may reach it. A new endpoint fails to
+compile until Samva decides. The same split is the [`authorize` step](/docs/guides/host-integration)
+of a host integration.
+
+## Where the credentials live
+
+Samva seals each provider credential with the same key that protects its other tenant secrets. The
+rows live in Samva's own Postgres, through `@domainkit/capsuledb`. The browser never sees a
+credential. DomainKit is a library inside Samva's API, so no third party holds its customers'
+tokens.
+
+## What DomainKit doesn't do for Samva
+
+It writes DNS records. It doesn't send mail, sign messages, or decide whether a domain may send.
+Those stay in Samva. It also can't write to a provider other than Cloudflare or Vercel, so some
+customers still add records by hand.
+
+## Build the same flow
+
+- [Set up customers' email sending domains](/guides/email-domain-setup)
+- [Quickstart](/docs/quickstart)
+- [Host integration](/docs/guides/host-integration)
+- [Visit Samva](https://samva.dev)

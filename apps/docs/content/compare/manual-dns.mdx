@@ -1,0 +1,102 @@
+---
+title: Copy-paste DNS instructions and where they break
+description: Webflow, Ghost, Framer, Resend, and Postmark all ask customers to copy DNS records by hand. Where that breaks, and what to do about it.
+sidebar:
+  label: Manual DNS
+seo:
+  title: Why copy-paste DNS instructions break
+---
+
+_Last reviewed 2026-09-29. Vendors change their pages, so check the links. To correct something,
+[open an issue on GitHub](https://github.com/AryaLabsHQ/domainkit/issues)._
+
+## Verdict
+
+Manual instructions work when a few people follow them carefully. They break at volume, because
+each customer has to copy exact values into an interface you don't control. The fix is to take the
+copying away, so the answer is a different flow and not a better page.
+
+These are good docs for a hard problem. The failures below come from the task, not from the writing.
+
+## Five real setups
+
+| Product                                                                                               | What the customer adds                                                                                   | What the vendor warns about                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Webflow](https://help.webflow.com/hc/en-us/articles/33961239562387-Manually-connect-a-custom-domain) | An A record, a CNAME for www, and a TXT verification record. Sites created earlier may use two A records | Some providers want the root domain instead of @. Some need a trailing dot on a CNAME. Propagation can take up to 48 hours. There are two possible sets of records that can differ from site to site                                                                                                                                                                            |
+| [Ghost(Pro)](https://ghost.org/help/using-custom-domains/)                                            | A CNAME for www plus an A record at the root, or a single CNAME for a blog subdomain                     | A root CNAME is supported by only some DNS providers, and may interfere with email                                                                                                                                                                                                                                                                                              |
+| [Framer](https://www.framer.com/help/articles/how-to-connect-a-custom-domain/)                        | Two A records at the root and a CNAME for www                                                            | Has a separate guide for each of six registrars                                                                                                                                                                                                                                                                                                                                 |
+| [Resend](https://resend.com/docs/dashboard/domains/introduction)                                      | MX and SPF TXT records on a send subdomain, plus DKIM                                                    | Omit your domain from the record values. Do not use the same priority for multiple records. Includes a [field-by-field mapping table for Cloudflare](https://resend.com/docs/dashboard/domains/cloudflare)                                                                                                                                                                      |
+| [Postmark](https://postmarkapp.com/support/article/1091-how-do-i-set-up-dkim-for-postmark)            | A DKIM TXT record and a Return-Path CNAME                                                                | Verification can take up to 48 hours. In DigitalOcean the TXT value must be [surrounded in quotes](https://postmarkapp.com/support/article/1017-adding-dkim-and-return-path-records-to-digitalocean). Has [tutorials for each common host](https://postmarkapp.com/support/article/resources-for-adding-dkim-and-return-path-records-to-dns-for-common-hosts-and-dns-providers) |
+
+## Where they break
+
+The same problems show up across all five.
+
+1. **Field names differ by registrar.** One wants @ for the host and another wants the bare domain
+   (Webflow).
+2. **Registrars change what you type.** Some add the domain name to the host, or need a trailing dot
+   (Webflow, Resend).
+3. **Values are long and exact.** DKIM values are long keys.
+4. **Quoting rules vary.** A TXT value must be in quotes at one registrar and must not be at
+   another (Postmark, DigitalOcean guide).
+5. **Some records can't exist together.** A CNAME can't share a name with other records, and some
+   registrars can't put one at the root (Ghost).
+6. **Then the customer waits.** Vendors say it can take up to 48 hours, and the customer has no way
+   to tell a wait from a mistake (Webflow, Postmark).
+
+Several vendors ship a variant for each registrar to cope. That is a lot of maintenance for a page
+the customer reads once.
+
+## When manual is fine
+
+If you have a handful of customers, a clear page and a Verify button is the right amount of
+engineering. If your customers are technical and use one registrar, it may be enough for a long
+time.
+
+## What DomainKit changes
+
+For customers on Cloudflare or Vercel, DomainKit removes the copying. The customer connects their
+account, sees the exact records in a table, and presses one button. DomainKit writes them and keeps
+checking public DNS until they resolve.
+
+It doesn't change anything for customers on other providers. They still need instructions.
+
+## Keep a manual path
+
+Keep your instruction page as the fallback. Your requirements are plain values, so the same
+declaration can drive both the automatic flow and a table for manual entry. When a plan exists,
+`Plan.renderInstructions` renders it as copyable lines.
+
+<Snippet file="examples/core/plans.ts" region="review" />
+
+The [custom domain guide](/guides/custom-domain-onboarding) shows where this fits in the whole
+flow.
+
+## FAQ
+
+<Accordion>
+  <AccordionItem title="Are copy-paste instructions bad?">
+    No. They work, and they're the only option for a provider you can't write to. They cost more as
+    your customer count grows.
+  </AccordionItem>
+  <AccordionItem title="Does DomainKit remove the need for instructions?">
+    Only for Cloudflare and Vercel. Keep instructions for everything else.
+  </AccordionItem>
+  <AccordionItem title="Won't a customer still be nervous about connecting an account?">
+    Possibly. DomainKit shows every record before anything changes and writes only what the customer
+    approves, which is the answer to that worry.
+  </AccordionItem>
+</Accordion>
+
+## Sources
+
+All accessed 29 September 2026.
+
+1. [https://help.webflow.com/hc/en-us/articles/33961239562387-Manually-connect-a-custom-domain](https://help.webflow.com/hc/en-us/articles/33961239562387-Manually-connect-a-custom-domain)
+2. [https://ghost.org/help/using-custom-domains/](https://ghost.org/help/using-custom-domains/)
+3. [https://www.framer.com/help/articles/how-to-connect-a-custom-domain/](https://www.framer.com/help/articles/how-to-connect-a-custom-domain/)
+4. [https://resend.com/docs/dashboard/domains/cloudflare](https://resend.com/docs/dashboard/domains/cloudflare)
+5. [https://resend.com/docs/dashboard/domains/introduction](https://resend.com/docs/dashboard/domains/introduction)
+6. [https://postmarkapp.com/support/article/resources-for-adding-dkim-and-return-path-records-to-dns-for-common-hosts-and-dns-providers](https://postmarkapp.com/support/article/resources-for-adding-dkim-and-return-path-records-to-dns-for-common-hosts-and-dns-providers)
+7. [https://postmarkapp.com/support/article/1017-adding-dkim-and-return-path-records-to-digitalocean](https://postmarkapp.com/support/article/1017-adding-dkim-and-return-path-records-to-digitalocean)
+8. [https://postmarkapp.com/support/article/1091-how-do-i-set-up-dkim-for-postmark](https://postmarkapp.com/support/article/1091-how-do-i-set-up-dkim-for-postmark)

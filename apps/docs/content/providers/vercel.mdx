@@ -1,16 +1,18 @@
 ---
-title: Vercel
-description: Connect Vercel with a personal or team access token or a marketplace integration, what each method stores, and which domains become DNS targets.
+title: Connect a customer's Vercel DNS
+description: Let customers connect Vercel with an access token or a marketplace integration so your SaaS can add records to their Vercel DNS zones.
 sidebar:
   label: Vercel
 seo:
-  title: Connect Vercel DNS with DomainKit
+  title: Connect a customer's Vercel DNS
 ---
 
 <ProviderLogo provider="vercel" size={48} />
 
-Vercel offers access tokens and, when you publish one, a marketplace integration. Both end at the
-same connection.
+DomainKit writes DNS records to a customer's own Vercel account, after they connect it and approve
+the exact records. It offers access tokens and, when you publish one, a marketplace integration.
+Both end at the same connection. Vercel's Domains API attaches domains to your project and issues
+certificates, and the DomainKit adapter writes the customer's DNS, so the two roles stay separate.
 
 ## Register the provider
 

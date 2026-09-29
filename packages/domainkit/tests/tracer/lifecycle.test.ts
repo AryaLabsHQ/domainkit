@@ -152,6 +152,93 @@ describe("provisioning and cleanup tracer", () => {
     }).pipe(withPrincipal, provide(fake));
   });
 
+  it.effect("treats SPF as an ordinary TXT: a different SPF value is a second record", () => {
+    const existingSpf = "v=spf1 include:_spf.google.com ~all";
+    const ours = "v=spf1 include:mail.acme.dev ~all";
+    const fake = Testing.provider({
+      zones: ["example.com"],
+      records: [
+        {
+          zone: "example.com",
+          record: DnsRecord.txt({ name: "mail.example.com", value: existingSpf }),
+        },
+      ],
+    });
+    return Effect.gen(function* () {
+      yield* Connect.start({
+        provider: fake.id,
+        method: Connect.Method.token("token"),
+        domain: "mail.example.com",
+      });
+      const same = yield* Provision.plan({
+        domain: "mail.example.com",
+        requirements: [DnsRecord.txt({ name: "mail.example.com", value: existingSpf })],
+      });
+      assert.deepStrictEqual(
+        same.operations.map(({ _tag }) => _tag),
+        ["Noop"],
+      );
+
+      // The default `append` policy does not merge SPF values: it plans a second record.
+      const appended = yield* Provision.plan({
+        domain: "mail.example.com",
+        requirements: [DnsRecord.txt({ name: "mail.example.com", value: ours })],
+      });
+      assert.deepStrictEqual(
+        appended.operations.map(({ _tag }) => _tag),
+        ["Create"],
+      );
+      const receipt = yield* Provision.apply(yield* Provision.approve(appended));
+      assert.strictEqual(receipt.status, "complete");
+      const spfValues = fake
+        .records("example.com")
+        .flatMap((record) => (record._tag === "TXT" ? [record.value] : []))
+        .sort();
+      assert.deepStrictEqual(spfValues, [ours, existingSpf].sort());
+    }).pipe(withPrincipal, provide(fake));
+  });
+
+  it.effect("fails closed on a second SPF value when the requirement is exclusive", () => {
+    const fake = Testing.provider({
+      zones: ["example.com"],
+      records: [
+        {
+          zone: "example.com",
+          record: DnsRecord.txt({
+            name: "mail.example.com",
+            value: "v=spf1 include:other.dev ~all",
+          }),
+        },
+      ],
+    });
+    return Effect.gen(function* () {
+      yield* Connect.start({
+        provider: fake.id,
+        method: Connect.Method.token("token"),
+        domain: "mail.example.com",
+      });
+      const plan = yield* Provision.plan({
+        domain: "mail.example.com",
+        requirements: [
+          DnsRecord.txt({
+            name: "mail.example.com",
+            value: "v=spf1 include:mail.acme.dev ~all",
+            policy: "exclusive",
+          }),
+        ],
+      });
+      assert.deepStrictEqual(
+        plan.operations.map(({ _tag }) => _tag),
+        ["Conflict"],
+      );
+      assert.strictEqual(Plan.conflicts(plan)[0]?.reason, "exclusive-name");
+      assert.strictEqual(Plan.isApplicable(plan), false);
+      const refused = yield* Provision.approve(plan).pipe(Effect.flip);
+      assert.strictEqual(refused.reason._tag, "Conflict");
+      assert.strictEqual(fake.records("example.com").length, 1);
+    }).pipe(withPrincipal, provide(fake));
+  });
+
   it.effect("detects provider drift between approval and apply", () => {
     const fake = Testing.provider({ zones: ["example.com"] });
     return Effect.gen(function* () {

@@ -1,0 +1,116 @@
+---
+title: Set up your customers' email sending domains
+description: What a customer's email sending domain needs, which DNS records to write, and how to review, apply, and verify them from your app.
+sidebar:
+  label: Email domain setup
+seo:
+  title: Email sending domain setup, SPF, DKIM, MX
+---
+
+A sending domain proves to mailbox providers that your product is allowed to send as your
+customer. That proof is DNS records at the customer's provider. This guide shows how to declare
+those records, have the customer approve them, and check that they resolve.
+
+It covers DNS. Signing messages, choosing a sending service, and warming a domain are your
+product's job.
+
+## The records a sending domain needs
+
+| Record                   | Purpose                                          | Type                                             |
+| ------------------------ | ------------------------------------------------ | ------------------------------------------------ |
+| SPF                      | Says which servers may send for the domain       | TXT                                              |
+| DKIM                     | Lets receivers check a signature on each message | TXT or CNAME, depending on the sending service   |
+| Return-path or mail-from | Routes bounces, and aligns the envelope sender   | MX and TXT, or a CNAME, depending on the service |
+| Tracking domain          | Serves branded links and open tracking           | CNAME                                            |
+| DMARC                    | Tells receivers what to do when checks fail      | TXT                                              |
+
+Sending services differ on the details. Postmark asks for a DKIM TXT record and a Return-Path CNAME
+([Postmark](https://postmarkapp.com/support/article/1091-how-do-i-set-up-dkim-for-postmark)).
+Resend asks for MX and SPF TXT records on a send subdomain, plus DKIM
+([Resend](https://resend.com/docs/dashboard/domains/introduction)). Declare whatever your service
+returns.
+
+## Put SPF where it can't collide
+
+A domain should have one SPF record. Two SPF records at the same name is a common failure.
+
+DomainKit treats SPF as an ordinary TXT record. It doesn't parse or merge SPF values. What happens
+at a name that already holds an SPF value depends on the requirement's policy:
+
+- The same value is already there, so the operation is `Noop`.
+- A different value with the default `append` policy is a `Create`. Applying it leaves two SPF
+  records at that name.
+- A different value with the `exclusive` policy is a `Conflict`. The plan can't be approved as it
+  stands, and nothing is written.
+
+<Snippet file="examples/core/email-domain.ts" region="spf-exclusive" />
+
+Declare SPF with the `exclusive` policy. `exclusive` conflicts with any other TXT record at the
+name, not only SPF, so use it at a name your service owns, such as a send subdomain. At a root
+domain that carries other TXT records, such as verification tokens, it reports a conflict for
+those too.
+
+The simplest way to avoid a collision is to publish your SPF on a subdomain your service owns, as
+Resend does with its send subdomain, instead of the customer's root domain. Then your record never
+competes with the one they already have. Check what your own service asks for before you copy that
+shape.
+
+## Declare the records
+
+Build one requirement for each record your service returns. Use an exclusive policy for SPF, and
+for MX when a second record at that name would break the first. Use a CNAME for DKIM and tracking.
+The values here are placeholders.
+
+<Snippet file="examples/core/email-domain.ts" region="requirements" />
+
+## Connect, review, and apply
+
+From here the flow is the one in the
+[custom domain guide](/guides/custom-domain-onboarding). The customer connects Cloudflare or
+Vercel once, sees each record marked Will add, Already set, or Conflict, and approves. DomainKit
+writes what they approved and keeps a receipt. Writes go one record at a time and are not atomic,
+so a failure part way gives a partial receipt, and planning again turns the landed records into
+no-ops.
+
+## Verify that the records resolve
+
+Observation reads the provider and public DNS for each requirement and stores the evidence. Your
+readiness screen can show which records are still pending and when the next check runs.
+
+<Snippet file="examples/core/verification.ts" region="observe" />
+
+<Snippet file="examples/core/verification.ts" region="evidence" />
+
+Verifying the DNS records is one step. Your sending service also has to confirm the domain on its
+side. Add that status to the same screen with host evidence.
+
+<Snippet file="examples/core/verification.ts" region="host-evidence" />
+
+## DMARC
+
+A DMARC record sets policy for the whole domain, and the customer may already have one. Check for
+it and recommend a record, and let the customer decide. Samva does this. It flags a missing DMARC
+record and lets verification pass without one.
+
+## Case study
+
+Samva sets up its customers' sending domains this way, with TXT, MX, and CNAME records on
+Cloudflare and Vercel. Read [how Samva sets up customer domains](/customers/samva).
+
+## FAQ
+
+<Accordion>
+  <AccordionItem title="Does DomainKit sign my messages?">
+    No. It writes the DNS records that let receivers check your signatures.
+  </AccordionItem>
+  <AccordionItem title="What if the customer already has an SPF record?">
+    See the section on putting SPF where it can't collide. DomainKit doesn't merge SPF records.
+  </AccordionItem>
+  <AccordionItem title="What if the customer's DNS isn't on Cloudflare or Vercel?">
+    Show them the records to add by hand. DomainKit can't write there today.
+  </AccordionItem>
+  <AccordionItem title="Can I set up many domains at once?">
+    Yes. [Batches](/docs/core/batches) plan several domains together, with one digest for one
+    consent.
+  </AccordionItem>
+</Accordion>
