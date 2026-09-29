@@ -71,7 +71,14 @@ describe("Verify", () => {
       assert.strictEqual(latest?.requirements.length, 2);
     }).pipe(
       withPrincipal,
-      Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
+      Effect.provide(
+        DomainKit.layerMemory({
+          providers: [fake],
+          resolver: Testing.resolver(
+            requirements.map((record) => ({ name: record.name, records: [record] })),
+          ),
+        }),
+      ),
     );
   });
 
@@ -170,7 +177,7 @@ describe("Verify", () => {
         ["mismatch", "missing"],
       );
       assert.strictEqual(readiness.requirements[0]?.operationId, null);
-      // Provider evidence alone: the fake resolver also answers from every other fake zone.
+      // Provider readback retains its mismatch even when public DNS has the requested value.
       assert.deepStrictEqual(
         readiness.requirements.map(({ evidence }) =>
           evidence.flatMap((item) =>
@@ -190,7 +197,14 @@ describe("Verify", () => {
       );
     }).pipe(
       withPrincipal,
-      Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
+      Effect.provide(
+        DomainKit.layerMemory({
+          providers: [fake],
+          resolver: Testing.resolver(
+            requirements.map((record) => ({ name: record.name, records: [record] })),
+          ),
+        }),
+      ),
     );
   });
 
@@ -407,7 +421,14 @@ describe("Verify", () => {
       });
     }).pipe(
       withPrincipal,
-      Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
+      Effect.provide(
+        DomainKit.layerMemory({
+          providers: [fake],
+          resolver: Testing.resolver(
+            requirements.map((record) => ({ name: record.name, records: [record] })),
+          ),
+        }),
+      ),
     );
   });
 
@@ -427,7 +448,14 @@ describe("Verify", () => {
       assert.strictEqual(strict.overall, "pending");
     }).pipe(
       withPrincipal,
-      Effect.provide(DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() })),
+      Effect.provide(
+        DomainKit.layerMemory({
+          providers: [fake],
+          resolver: Testing.resolver(
+            requirements.map((record) => ({ name: record.name, records: [record] })),
+          ),
+        }),
+      ),
     );
   });
 });

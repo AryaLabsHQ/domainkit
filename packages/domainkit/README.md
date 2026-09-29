@@ -65,6 +65,15 @@ Plans are additive and fail closed: exact records are `Noop`, missing records ar
 incompatible state is `Conflict`. DomainKit never updates or deletes a record it did not create,
 and cleanup is its own plan, approval, and receipt built from the apply receipt.
 
+A requirement's `policy` says what may share its name. `exclusive` conflicts with any incompatible
+record at that name and type, even when the exact record is also present, and `append` tolerates
+neighbours. `DnsRecord.spf({ name, value, ttl?, purpose? })` is a standard TXT requirement with an
+explicit SPF constraint: it plans beside unrelated TXT such as verification tokens, and it
+conflicts (`spf-conflict`) with a different SPF record, with more than one SPF record, or with
+another requested SPF value. `Verify` applies the same rules. DomainKit validates only the `v=spf1`
+version token; it doesn't merge, replace, or fully parse SPF policies. A generic `DnsRecord.txt`
+appends, even when its value is SPF.
+
 Several domains at once are one batch: `Provision.batch.create` plans them with
 `Policy.batchConcurrency` in flight, `approve` binds one digest over every plan, and `apply` walks
 the approved domains under their own attempt leases, so a second apply skips what the first holds

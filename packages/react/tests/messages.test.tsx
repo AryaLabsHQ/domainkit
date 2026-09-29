@@ -88,12 +88,14 @@ describe("Messages", () => {
     }
     for (const reason of [
       "exclusive-name",
+      "spf-conflict",
       "cname-collision",
       "value-mismatch",
       "opaque",
       "missing",
     ] as const) {
       expect(Messages.english.conflictReason(reason)).not.toBe(reason);
+      expect(Messages.english.conflictAdvice(reason)).toMatch(/\s/);
     }
     for (const status of [
       "planned",

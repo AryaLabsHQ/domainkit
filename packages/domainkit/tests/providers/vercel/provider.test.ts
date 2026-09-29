@@ -25,6 +25,23 @@ const target: Provider.Target = {
 };
 
 describe("Vercel.provider", () => {
+  it.effect("sends explicit SPF as ordinary provider TXT without requirement metadata", () => {
+    const recording = recordedFetch([{ body: { uid: "spf-record" } }]);
+    const dns = Vercel.provider({ fetch: recording.fetch }).session(credential()).dns(target);
+    return Effect.gen(function* () {
+      yield* dns.create(
+        "example.com",
+        DnsRecord.spf({ name: "example.com", value: "v=spf1 -all", ttl: 300, purpose: "mail" }),
+      );
+      assert.deepStrictEqual(JSON.parse(String(recording.requests[0]?.init?.body)), {
+        name: "",
+        ttl: 300,
+        type: "TXT",
+        value: "v=spf1 -all",
+      });
+    });
+  });
+
   it("offers tokens only unless an integration is configured", () => {
     assert.deepStrictEqual(Provider.methods(Vercel.provider()), ["token"]);
     assert.deepStrictEqual(Vercel.provider().nameservers, ["vercel-dns.com"]);

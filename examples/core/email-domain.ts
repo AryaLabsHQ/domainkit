@@ -3,10 +3,9 @@ import { DnsRecord } from "domainkit";
 // #region requirements
 /** What a sending service returns for one customer domain, as DomainKit requirements. */
 export const requirements = (domain: string) => [
-  DnsRecord.txt({
+  DnsRecord.spf({
     name: `send.${domain}`,
     value: "v=spf1 include:mail.acme.dev ~all",
-    policy: "exclusive",
     purpose: "Authorize Acme to send for this domain",
   }),
   DnsRecord.mx({
@@ -29,13 +28,22 @@ export const requirements = (domain: string) => [
 ];
 // #endregion requirements
 
+// #region spf
+/**
+ * `DnsRecord.spf` is a standard TXT record with an SPF constraint. It plans beside unrelated TXT
+ * such as verification tokens, and conflicts with a different SPF record, with more than one SPF
+ * record, or with another requested SPF value.
+ */
+export const spfRequirement = (name: string, value: string) =>
+  DnsRecord.spf({ name, value, purpose: "Authorize Acme to send" });
+// #endregion spf
+
 // #region spf-exclusive
 /**
- * SPF is an ordinary TXT record to DomainKit, so the default `append` policy plans a second TXT
- * beside any SPF value already at the name. `exclusive` turns that case into a Conflict, and it
- * does so for any other TXT record at the name, not only SPF.
+ * A generic `DnsRecord.txt` appends, even when its value is SPF. `exclusive` makes any other TXT
+ * record at the name a Conflict, so use it only at a name the service owns.
  */
-export const spfOrConflict = (name: string, value: string) =>
+export const ownedTxtOrConflict = (name: string, value: string) =>
   DnsRecord.txt({
     name,
     value,

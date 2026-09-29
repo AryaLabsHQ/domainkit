@@ -79,7 +79,7 @@ test("approves only the creates when a record on the tracking host blocks its CN
   // The blocked record stays blocked, and the row says what to fix.
   await expect(rowFor(page, "samva._domainkey")).toContainText("Found");
   await expect(rowFor(page, "track.mail")).toContainText("Conflict");
-  await expect(rowFor(page, "track.mail")).toContainText("Missing");
+  await expect(rowFor(page, "track.mail")).toContainText("Different value");
   await expect(row(page)).toContainText("Resolve the records above at your provider");
 });
 

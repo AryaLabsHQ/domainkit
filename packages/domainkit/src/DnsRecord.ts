@@ -9,6 +9,7 @@
 import { Schema } from "effect";
 
 import * as DomainName from "./DomainName.ts";
+import { isSpf } from "./internal/spf.ts";
 
 // DomainName, internal/error, Reason, Plan, and DnsRecord form an import cycle. Field schemas
 // that cross it are read lazily so any module can be the first one evaluated.
@@ -52,10 +53,20 @@ export class CNAME extends Schema.TaggedClass<CNAME>("@domainkit/DnsRecord/CNAME
   ...Common,
   target: Name,
 }) {}
-export class TXT extends Schema.TaggedClass<TXT>("@domainkit/DnsRecord/TXT")("TXT", {
-  ...Common,
-  value: NonEmpty,
-}) {}
+export class TXT extends Schema.TaggedClass<TXT>("@domainkit/DnsRecord/TXT")(
+  "TXT",
+  Schema.Struct({
+    ...Common,
+    value: NonEmpty,
+    constraint: Schema.optionalKey(Schema.Literal("spf")),
+  }).check(
+    Schema.makeFilter((record) =>
+      record.constraint !== "spf" || isSpf(record.value)
+        ? undefined
+        : "Expected an SPF version token (v=spf1 followed by space or end)",
+    ),
+  ),
+) {}
 export class MX extends Schema.TaggedClass<MX>("@domainkit/DnsRecord/MX")("MX", {
   ...Common,
   exchange: Name,
@@ -114,6 +125,11 @@ export const cname = (
   });
 export const txt = (input: { readonly name: string; readonly value: string } & Options): TXT =>
   new TXT({ ...common(input.name, input, "append"), value: input.value });
+/** A TXT requirement that permits unrelated TXT but requires a single matching SPF record. */
+export const spf = (
+  input: { readonly name: string; readonly value: string } & Omit<Options, "policy">,
+): TXT =>
+  new TXT({ ...common(input.name, input, "append"), value: input.value, constraint: "spf" });
 export const mx = (
   input: { readonly name: string; readonly exchange: string; readonly priority: number } & Options,
 ): MX =>
@@ -182,8 +198,8 @@ export const data = (record: Model): string => {
 };
 
 /**
- * Structural equality over type, name, and data. `ttl`, `policy`, and `purpose` are requirement
- * metadata, not record identity, so they are ignored; TTL drift is reported on plan operations.
+ * Structural equality over type, name, and data. Requirement metadata (`ttl`, `policy`,
+ * `constraint`, and `purpose`) is ignored; TTL drift is reported on plan operations.
  */
 export const equals = (left: Observed, right: Observed): boolean => {
   if (left._tag === "Opaque" || right._tag === "Opaque") {

@@ -4,6 +4,7 @@ import * as DnsRecord from "../DnsRecord.ts";
 import * as Errors from "./error.ts";
 import * as Reason from "../Reason.ts";
 import * as Plan from "../Plan.ts";
+import { collision, projectedCollision } from "./reconciliation.ts";
 import { sha256Hex, stringify } from "./digest.ts";
 
 const Unsigned = Schema.Struct({
@@ -57,7 +58,11 @@ export const reconcile = (
     const operations: Array<Plan.Create | Plan.Noop | Plan.Conflict> = [];
     for (const record of sorted) {
       const id = yield* operationId(record);
-      const operation = reconcileOne(id, record, projected);
+      const incompatible = projectedCollision(record, sorted);
+      const operation =
+        incompatible === undefined
+          ? reconcileOne(id, record, projected)
+          : new Plan.Conflict({ id, record, ...incompatible });
       operations.push(operation);
       if (operation._tag === "Create") projected.push(record);
     }
@@ -69,8 +74,9 @@ const reconcileOne = (
   record: DnsRecord.Model,
   existing: ReadonlyArray<DnsRecord.Observed>,
 ): Plan.Create | Plan.Noop | Plan.Conflict => {
-  const sameName = existing.filter((candidate) => candidate.name === record.name);
-  const exact = sameName.find((candidate) => DnsRecord.equals(candidate, record));
+  const incompatible = collision(record, existing);
+  if (incompatible !== undefined) return new Plan.Conflict({ id, record, ...incompatible });
+  const exact = existing.find((candidate) => DnsRecord.equals(candidate, record));
   if (exact !== undefined) {
     return new Plan.Noop({
       id,
@@ -79,18 +85,6 @@ const reconcileOne = (
       ttlDrift: exact._tag !== "Opaque" && exact.ttl !== record.ttl,
     });
   }
-  const conflict = (reason: Plan.Conflict["reason"], culprits: ReadonlyArray<DnsRecord.Observed>) =>
-    new Plan.Conflict({ id, record, existing: culprits, reason });
-  if (
-    sameName.length > 0 &&
-    (record._tag === "CNAME" || sameName.some((candidate) => candidate._tag === "CNAME"))
-  ) {
-    return conflict("cname-collision", sameName);
-  }
-  const sameSet = sameName.filter((candidate) => DnsRecord.sameSet(candidate, record));
-  if (sameSet.some((candidate) => candidate._tag === "Opaque")) return conflict("opaque", sameSet);
-  if (record.policy === "exclusive" && sameSet.length > 0)
-    return conflict("exclusive-name", sameSet);
   return new Plan.Create({ id, record });
 };
 

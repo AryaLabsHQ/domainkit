@@ -20,7 +20,7 @@ const PackResult = Schema.Array(Schema.Struct({ filename: Schema.String }));
 const lifecycle = `
 import { Cloudflare, Connect, Custody, DnsRecord, DomainKit, Principal, Provision, Vercel, Verify, VERSION } from "domainkit";
 import { Transport } from "domainkit/client";
-import { cname } from "domainkit/DnsRecord";
+import { cname, spf } from "domainkit/DnsRecord";
 import * as PrincipalModule from "domainkit/Principal";
 import { Server } from "domainkit/server";
 import { Testing } from "domainkit/testing";
@@ -37,7 +37,7 @@ export const run = async () => {
     });
     const plan = yield* Provision.plan({
       domain: "app.example.com",
-      requirements: [DnsRecord.txt({ name: "_verify.app.example.com", value: "domainkit" })],
+      requirements: [spf({ name: "app.example.com", value: "v=spf1 -all" })],
     });
     const receipt = yield* Provision.apply(yield* Provision.approve(plan));
     const readiness = yield* Verify.observe({ domain: "app.example.com" });
@@ -46,6 +46,7 @@ export const run = async () => {
       operations: plan.operations.map(({ _tag }) => _tag),
       status: receipt.status,
       overall: readiness.overall,
+      spfConstraint: readiness.requirements[0]?.record.constraint,
       providers: [Cloudflare.provider().id, Vercel.provider().id],
       keyLength: Custody.generateKey().length,
       version: VERSION,
@@ -94,6 +95,7 @@ const expected = (version: string) => ({
   operations: ["Create"],
   status: "complete",
   overall: "ready",
+  spfConstraint: "spf",
   providers: ["cloudflare", "vercel"],
   keyLength: 43,
   version,
@@ -195,7 +197,7 @@ export const connectionOnly: Transport.Interface = {
 export const groups = Transport.capabilities(connectionOnly);
 export const noRuntimeExit: Effect.Effect<void, unknown> = Effect.void;
 /** Inferred types below must be nameable through exported entries (TS2883 otherwise). */
-export const requirement = DnsRecord.txt({ name: "_verify.app.example.com", value: "domainkit" });
+export const requirement = DnsRecord.spf({ name: "app.example.com", value: "v=spf1 -all" });
 export const requirements = [requirement, DnsRecord.cname({ name: "www.example.com", target: "example.com" })];
 export const first = (items: ReadonlyArray<DnsRecord.Model>) => items[0];
 export const operations = (plan: Plan.Model) => plan.operations;

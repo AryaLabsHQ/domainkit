@@ -50,13 +50,13 @@ from context (`Provision.plan(...)`). `Policy` values are `Context.Reference`s w
 
 ## Values
 
-| Namespace    | Owns                                                                                      |
-| ------------ | ----------------------------------------------------------------------------------------- |
-| `DomainName` | A normalized, IDN-aware hostname, its zone `candidates`, and `isWithin`                   |
-| `DnsRecord`  | Record constructors, `Model`, `Observed`, `Opaque`, `data`, `equals`, `sameSet`           |
-| `Plan`       | `Model`, the four operations, `writes`, `conflicts`, `isApplicable`, `renderInstructions` |
-| `Approval`   | Consent bound to one plan digest and an explicit operation set                            |
-| `Receipt`    | What an apply actually wrote: `Applied`, `Skipped`, `Failed`, `applied`, `isComplete`     |
+| Namespace    | Owns                                                                                                      |
+| ------------ | --------------------------------------------------------------------------------------------------------- |
+| `DomainName` | A normalized, IDN-aware hostname, its zone `candidates`, and `isWithin`                                   |
+| `DnsRecord`  | Record constructors including `txt` and `spf`, `Model`, `Observed`, `Opaque`, `data`, `equals`, `sameSet` |
+| `Plan`       | `Model`, the four operations, `writes`, `conflicts`, `isApplicable`, `renderInstructions`                 |
+| `Approval`   | Consent bound to one plan digest and an explicit operation set                                            |
+| `Receipt`    | What an apply actually wrote: `Applied`, `Skipped`, `Failed`, `applied`, `isComplete`                     |
 
 ## Everything else
 

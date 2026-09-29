@@ -276,7 +276,7 @@ describe("Cloudflare.provider", () => {
       assert.strictEqual(records[0]?.record._tag === "CNAME" ? records[0].record.ttl : -1, null);
       const created = yield* dns.create(
         "example.com",
-        DnsRecord.txt({ name: "new.example.com", value: "v" }),
+        DnsRecord.spf({ name: "new.example.com", value: "v=spf1 -all", purpose: "mail" }),
       );
       assert.strictEqual(created.providerRecordId, "r6");
       assert.deepStrictEqual(JSON.parse(String(recording.requests[2]?.init?.body)), {
@@ -284,7 +284,7 @@ describe("Cloudflare.provider", () => {
         proxied: false,
         ttl: 1,
         type: "TXT",
-        content: "v",
+        content: "v=spf1 -all",
       });
       assert.strictEqual(yield* dns.get("example.com", "missing"), null);
       yield* dns.delete("example.com", "r6");

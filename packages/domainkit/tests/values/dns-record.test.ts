@@ -4,6 +4,42 @@ import { Schema } from "effect";
 import { DnsRecord } from "../../src/index.ts";
 
 describe("DnsRecord", () => {
+  it("validates the explicit SPF token at construction and serialized boundaries", () => {
+    for (const value of ["v=spf1", "V=SpF1 -all", "v=spf1 include:example.com ~all"]) {
+      const record = DnsRecord.spf({ name: "example.com", value, ttl: 300, purpose: "mail" });
+      assert.deepStrictEqual(
+        Schema.decodeUnknownSync(DnsRecord.Model)(
+          JSON.parse(JSON.stringify(Schema.encodeSync(DnsRecord.Model)(record))),
+        ),
+        record,
+      );
+      assert.strictEqual(
+        DnsRecord.equals(record, DnsRecord.txt({ name: "example.com", value })),
+        true,
+      );
+    }
+    const generic = Schema.encodeSync(DnsRecord.Model)(
+      DnsRecord.txt({ name: "example.com", value: "v=spf10" }),
+    );
+    assert.strictEqual(Schema.decodeUnknownSync(DnsRecord.Model)(generic)._tag, "TXT");
+    for (const value of [
+      "v=spf10",
+      "v=spf1\t-all",
+      "v=spf1\n",
+      "v=spf1\r",
+      " v=spf1",
+      "ownership=ok",
+      "",
+    ]) {
+      assert.throws(() => DnsRecord.spf({ name: "example.com", value }));
+      assert.throws(() =>
+        Schema.decodeUnknownSync(DnsRecord.Model)({ ...generic, value, constraint: "spf" }),
+      );
+    }
+    assert.throws(() =>
+      Schema.decodeUnknownSync(DnsRecord.Model)({ ...generic, constraint: "other" }),
+    );
+  });
   it("applies policy and ttl defaults per record type", () => {
     const cname = DnsRecord.cname({ name: "App.Example.com", target: "edge.acme.dev." });
     assert.strictEqual(cname.policy, "exclusive");

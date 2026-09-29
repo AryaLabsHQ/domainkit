@@ -5,7 +5,8 @@ plan digest they approved, keeps a receipt of every write, and plans cleanup fro
 Cloudflare and Vercel are built in, and a provider is one declarative value.
 
 Plans are additive and fail closed: missing records are created, exact records are no-ops, and
-incompatible state is a conflict rather than an overwrite.
+incompatible state is a conflict rather than an overwrite. `DnsRecord.spf` declares an SPF record
+that coexists with unrelated TXT and conflicts with a different or duplicate SPF record.
 
 Your app keeps identity, tenancy, credentials, storage, routes, consent, and audit. DomainKit
 supplies the lifecycle, not a hosted control plane.
