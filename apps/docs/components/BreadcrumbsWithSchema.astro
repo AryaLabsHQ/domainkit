@@ -20,8 +20,8 @@ const origin = (config.site ?? "").replace(/\/$/u, "");
 const current = crumbs.at(-1);
 
 // Blume drops sidebar groups that have no index page, which leaves docs pages with a single
-// linked crumb. Build the trail from the site root, the header tab the page lives under, and the
-// page itself.
+// linked crumb. Build the trail from the site root, the header tab the page lives under, any linked
+// ancestors Blume kept, and the page itself.
 const tabs = data.navigation.tabs;
 const tab = current?.route
   ? tabs
@@ -33,9 +33,29 @@ const tab = current?.route
       .sort((a, b) => b.path.length - a.path.length)[0]
   : undefined;
 
+// Intermediate paths between the tab and the page that are pages themselves, such as a section
+// overview.
+const pages = new Map(
+  data.routes.filter((route) => !route.draft && !route.hidden).map((route) => [route.path, route]),
+);
+const ancestors =
+  tab && current?.route
+    ? current.route
+        .slice(tab.path.length)
+        .split("/")
+        .filter(Boolean)
+        .slice(0, -1)
+        .map((_, index, segments) => `${tab.path}/${segments.slice(0, index + 1).join("/")}`)
+        .flatMap((route) => {
+          const page = pages.get(route);
+          return page ? [{ label: page.title, route }] : [];
+        })
+    : [];
+
 const trail = [
   { label: config.title, route: "/" },
   ...(tab && tab.path !== current?.route ? [{ label: tab.label, route: tab.path }] : []),
+  ...ancestors,
   ...(current?.route ? [{ label: current.label, route: current.route }] : []),
 ];
 
