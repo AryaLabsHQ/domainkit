@@ -6,6 +6,7 @@ export const requirements = (domain: string) => [
   DnsRecord.txt({
     name: `send.${domain}`,
     value: "v=spf1 include:mail.acme.dev ~all",
+    policy: "exclusive",
     purpose: "Authorize Acme to send for this domain",
   }),
   DnsRecord.mx({
@@ -31,8 +32,14 @@ export const requirements = (domain: string) => [
 // #region spf-exclusive
 /**
  * SPF is an ordinary TXT record to DomainKit, so the default `append` policy plans a second TXT
- * beside any SPF value already at the name. `exclusive` turns that case into a Conflict.
+ * beside any SPF value already at the name. `exclusive` turns that case into a Conflict, and it
+ * does so for any other TXT record at the name, not only SPF.
  */
 export const spfOrConflict = (name: string, value: string) =>
-  DnsRecord.txt({ name, value, policy: "exclusive", purpose: "Authorize Acme to send" });
+  DnsRecord.txt({
+    name,
+    value,
+    policy: "exclusive",
+    purpose: "Authorize Acme to send",
+  });
 // #endregion spf-exclusive

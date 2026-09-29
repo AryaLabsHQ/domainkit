@@ -45,6 +45,11 @@ at a name that already holds an SPF value depends on the requirement's policy:
 
 <Snippet file="examples/core/email-domain.ts" region="spf-exclusive" />
 
+Declare SPF with the `exclusive` policy. `exclusive` conflicts with any other TXT record at the
+name, not only SPF, so use it at a name your service owns, such as a send subdomain. At a root
+domain that carries other TXT records, such as verification tokens, it reports a conflict for
+those too.
+
 The simplest way to avoid a collision is to publish your SPF on a subdomain your service owns, as
 Resend does with its send subdomain, instead of the customer's root domain. Then your record never
 competes with the one they already have. Check what your own service asks for before you copy that
@@ -52,9 +57,9 @@ shape.
 
 ## Declare the records
 
-Build one requirement for each record your service returns. Use MX with an exclusive policy when a
-second MX at that name would break the first, and a CNAME for DKIM and tracking. The values here
-are placeholders.
+Build one requirement for each record your service returns. Use an exclusive policy for SPF, and
+for MX when a second record at that name would break the first. Use a CNAME for DKIM and tracking.
+The values here are placeholders.
 
 <Snippet file="examples/core/email-domain.ts" region="requirements" />
 
