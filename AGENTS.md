@@ -6,8 +6,8 @@ build an exact plan, review and approve its digest, apply it, keep a receipt, ob
 separately approved receipt-bound cleanup.
 
 This file is a default guide, not an encyclopedia. Read the nearest nested `AGENTS.md` before
-changing a scoped surface. Public positioning and forbidden claims live in
-`.agents/product-marketing.md`.
+changing a scoped surface. Public claims, positioning, and voice live in
+`.agents/marketing/` (`truth.md` wins conflicts).
 
 ## What we never compromise on
 
@@ -44,13 +44,14 @@ entries applied before finishing:
 - **Deployment** — only when explicitly requested; verify source, artifact, and provider state
   separately. Do not infer a live site from Wrangler configuration.
 
-Public marketing copy follows `.agents/product-marketing.md`, not this file.
+Public marketing copy follows `.agents/marketing/truth.md`, `positioning.md`, and `voice.md`, not this
+file; the `product-marketing` skill sequences the work.
 
 ## Documentation style
 
 Tracked documentation describes what DomainKit is now and where it is going. It carries no history:
 no "was", no "previously", no version comparisons, and no migration notes unless a page is itself a
-migration guide. ADRs state current principles and are rewritten or deleted, never marked
+migration guide. A "why DomainKit" explainer states its rationale in the present tense. ADRs state current principles and are rewritten or deleted, never marked
 superseded. History lives in git.
 
 ## Verification

@@ -11,9 +11,10 @@ domain setup while staying true to the installable package and host-owned securi
 
 ## Start with the product boundary
 
-Before drafting, read `.agents/product-marketing.md`, the nearest `AGENTS.md`, the relevant package
-manifest, public entry point, tests, and existing page. Treat current source, packed artifacts, and
-verified runtime behavior as evidence; label or omit anything that exists only in a dirty worktree.
+Before drafting, read `.agents/marketing/truth.md` (claims; it wins conflicts), `voice.md`, the nearest `AGENTS.md`, the relevant package
+manifest, public entry point, tests, and existing page. Defer to `truth.md` for every claim and to the
+proof registry for evidence. Treat current source, packed artifacts, and verified runtime behavior as
+evidence; label or omit anything that exists only in a dirty worktree.
 
 The public lifecycle is:
 
@@ -49,7 +50,7 @@ Do not force all four genres into one page. Preserve useful URLs and link reader
 - Use exact lifecycle nouns (`plan`, `digest`, `authorization`, `receipt`, `observation`) and avoid
   unsupported claims such as atomicity, rollback, zero risk, or production adoption.
 - When an export changes, update its owning reference inventory, package README, examples, and tests.
-- Check all relevant surfaces: core Effect API, Promise facade, testing helpers, React/workshop,
+- Check all relevant surfaces: core Effect API, `domainkit/client` Promise adapters, testing helpers, React hooks and registry,
   providers, registry, package artifacts, host transport, and docs navigation.
 - Run the narrowest relevant Bun tests/typechecks/builds, the docs reference checker and strict
   site checks for docs work, and `git diff --check`. Inspect the rendered journey for UI changes.
