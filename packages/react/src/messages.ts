@@ -369,6 +369,8 @@ export const english: Catalog = {
   },
   conflictReason: (reason) => {
     switch (reason) {
+      case "spf-conflict":
+        return "This name has a different SPF record or more than one SPF record.";
       case "exclusive-name":
         return "Another record already owns this name.";
       case "cname-collision":
@@ -383,6 +385,8 @@ export const english: Catalog = {
   },
   conflictAdvice: (reason) => {
     switch (reason) {
+      case "spf-conflict":
+        return "Review the SPF records at your provider and keep one matching policy, then check again.";
       case "exclusive-name":
         return "Remove the record on that name at your provider, then check again.";
       case "cname-collision":

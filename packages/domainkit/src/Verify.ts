@@ -8,6 +8,7 @@ import { Context, DateTime, Duration, Effect, Layer, Option, Schema } from "effe
 import * as Connect from "./Connect.ts";
 import * as DnsRecord from "./DnsRecord.ts";
 import * as Errors from "./internal/error.ts";
+import { collision } from "./internal/reconciliation.ts";
 import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
 import type * as Plan from "./Plan.ts";
@@ -224,19 +225,15 @@ interface ProviderSide {
 }
 const StoredHost = Schema.Array(HostEvidence);
 
-/** A requirement is satisfied by an exact match; an exclusive one is contradicted by any same-set record. */
+/** A requirement is satisfied only when its exact match also meets its safety constraints. */
 export const statusAgainst = (
   record: DnsRecord.Model,
   observed: ReadonlyArray<DnsRecord.Observed>,
 ): Storage.RequirementStatus => {
-  if (observed.some((candidate) => DnsRecord.equals(candidate, record))) return "satisfied";
-  if (
-    record.policy === "exclusive" &&
-    observed.some((candidate) => DnsRecord.sameSet(candidate, record))
-  ) {
-    return "mismatch";
-  }
-  return "missing";
+  if (collision(record, observed) !== undefined) return "mismatch";
+  return observed.some((candidate) => DnsRecord.equals(candidate, record))
+    ? "satisfied"
+    : "missing";
 };
 
 interface Observation {
@@ -301,10 +298,13 @@ const overallOf = (
   return ready ? "ready" : "pending";
 };
 
-/** The identity of a requirement set: type, name, data, and policy, independent of labels and order. */
+/** The identity of a requirement set: type, name, data, policy, and constraint, independent of labels and order. */
 const requirementSetKey = (requirements: ReadonlyArray<{ readonly record: DnsRecord.Model }>) =>
   requirements
-    .map(({ record }) => `${record._tag} ${record.name} ${DnsRecord.data(record)} ${record.policy}`)
+    .map(
+      ({ record }) =>
+        `${record._tag} ${record.name} ${DnsRecord.data(record)} ${record.policy} ${record._tag === "TXT" ? (record.constraint ?? "") : ""}`,
+    )
     .sort()
     .join("\n");
 

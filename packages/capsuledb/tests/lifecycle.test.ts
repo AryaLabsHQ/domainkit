@@ -64,6 +64,74 @@ const run = <A>(
 
 describe("lifecycle on PgStorage", () => {
   it(
+    "preserves SPF constraints through stored plans, readiness, and receipt-bound cleanup",
+    () =>
+      run(
+        "org-spf",
+        Effect.gen(function* () {
+          const domain = "send.example.com";
+          const requirement = DnsRecord.spf({
+            name: domain,
+            value: "v=spf1 include:mail.acme.dev ~all",
+          });
+          yield* Connect.start({
+            provider: "fake",
+            method: Connect.Method.token("token"),
+            domain,
+          });
+
+          const plan = yield* Provision.plan({ domain, requirements: [requirement] });
+          assert.deepStrictEqual(
+            plan.operations.map(({ _tag }) => _tag),
+            ["Create"],
+          );
+          const storage = yield* Storage.Service;
+          const storedPlan = (yield* storage.attempts.get(plan.id)).plan;
+          const storedRecord = storedPlan.operations[0]?.record;
+          assert.ok(storedRecord?._tag === "TXT");
+          assert.strictEqual(storedRecord.constraint, "spf");
+
+          const receipt = yield* Provision.apply(yield* Provision.approve(storedPlan));
+          assert.strictEqual(receipt.status, "complete");
+          const readiness = yield* Verify.observe({ domain });
+          assert.strictEqual(readiness.overall, "ready");
+          const storedReadiness = yield* storage.readiness.get(domain);
+          assert.ok(Option.isSome(storedReadiness));
+          const observedRecord = storedReadiness.value.requirements[0]?.record;
+          assert.ok(observedRecord?._tag === "TXT");
+          assert.strictEqual(observedRecord.constraint, "spf");
+
+          const secondPlan = yield* Provision.plan({ domain, requirements: [requirement] });
+          assert.deepStrictEqual(
+            secondPlan.operations.map(({ _tag }) => _tag),
+            ["Noop"],
+          );
+
+          const cleanup = yield* Cleanup.plan({ receiptId: receipt.id });
+          assert.deepStrictEqual(
+            cleanup.operations.map(({ _tag }) => _tag),
+            ["Delete"],
+          );
+          const cleanupRecord = cleanup.operations[0]?.record;
+          assert.ok(cleanupRecord?._tag === "TXT");
+          assert.strictEqual(cleanupRecord.constraint, "spf");
+          const removed = yield* Cleanup.apply(yield* Cleanup.approve(cleanup));
+          assert.strictEqual(removed.status, "complete");
+        }),
+        {
+          zones: ["example.com"],
+          records: [
+            {
+              zone: "example.com",
+              record: DnsRecord.txt({ name: "send.example.com", value: "acme-verify=7f3a" }),
+            },
+          ],
+        },
+      ),
+    180_000,
+  );
+
+  it(
     "connects, plans, approves, applies, observes, and cleans up",
     () =>
       run(

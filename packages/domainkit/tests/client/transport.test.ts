@@ -55,6 +55,65 @@ const groups = (transport: Transport.Interface) => {
 };
 
 describe("Transport.fromFetch", () => {
+  it.effect("retains explicit SPF through HTTP, stored plans, receipts, and readiness", () => {
+    const { fake, transport, dispose } = inProcess();
+    const { connection, provisioning, verification, cleanup } = groups(transport);
+    const record = DnsRecord.spf({ name: "mail.example.com", value: "v=spf1 -all" });
+    return Effect.gen(function* () {
+      yield* connection.start({
+        domain: record.name,
+        provider: fake.id,
+        method: Transport.Method.token("t"),
+      });
+      const plan = yield* provisioning.plan({ domain: record.name, requirements: [record] });
+      assert.deepStrictEqual(plan.operations[0]?.record, record);
+      const receipt = yield* provisioning.apply(
+        (yield* provisioning.approve({ planId: plan.id })).id,
+      );
+      assert.strictEqual(receipt.digest, plan.digest);
+      const latest = yield* provisioning.attempt(plan.id);
+      assert.deepStrictEqual(latest?.plan.operations[0]?.record, record);
+      const readiness = yield* verification.observe(record.name);
+      assert.deepStrictEqual(readiness.requirements[0]?.record, record);
+      assert.strictEqual(readiness.overall, "ready");
+      const cleanupPlan = yield* cleanup.plan(receipt.id);
+      assert.deepStrictEqual(cleanupPlan.operations[0]?.record, record);
+    }).pipe(Effect.ensuring(Effect.promise(dispose)));
+  });
+
+  it.effect("transports SPF conflicts and refuses approval without writing", () => {
+    const record = DnsRecord.spf({ name: "spf-conflict.example.com", value: "v=spf1 -all" });
+    const { fake, transport, dispose } = inProcess({
+      provider: {
+        records: [
+          {
+            zone: "example.com",
+            record: DnsRecord.txt({ name: record.name, value: record.value }),
+          },
+          {
+            zone: "example.com",
+            record: DnsRecord.txt({ name: record.name, value: "v=spf1 ~all" }),
+          },
+        ],
+      },
+    });
+    const { connection, provisioning } = groups(transport);
+    return Effect.gen(function* () {
+      yield* connection.start({
+        domain: record.name,
+        provider: fake.id,
+        method: Transport.Method.token("t"),
+      });
+      const plan = yield* provisioning.plan({ domain: record.name, requirements: [record] });
+      assert.strictEqual(Plan.conflicts(plan)[0]?.reason, "spf-conflict");
+      const error = yield* provisioning.approve({ planId: plan.id }).pipe(Effect.flip);
+      assert.strictEqual(error.reason._tag, "Conflict");
+      if (error.reason._tag === "Conflict")
+        assert.strictEqual(error.reason.operations[0]?.reason, "spf-conflict");
+      assert.strictEqual(fake.records("example.com").length, 2);
+    }).pipe(Effect.ensuring(Effect.promise(dispose)));
+  });
+
   it("calls the default fetch as a free function, the way a browser requires", async () => {
     const fake = Testing.provider({ zones: ["example.com"] });
     const { handler } = Server.toWebHandler(

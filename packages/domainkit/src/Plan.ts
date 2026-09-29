@@ -41,6 +41,7 @@ export class Conflict extends Schema.TaggedClass<Conflict>("@domainkit/Plan/Conf
   existing: Schema.Array(Observed),
   reason: Schema.Literals([
     "exclusive-name",
+    "spf-conflict",
     "cname-collision",
     "value-mismatch",
     "opaque",
