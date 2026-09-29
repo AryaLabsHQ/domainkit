@@ -73,6 +73,37 @@ Assert mode applies nothing and fails unless the database already matches the ca
 migration is a boot failure rather than a runtime surprise. `capsuledb check` compares an emitted
 folder against the current capsule in CI.
 
+## Or prepare at deploy time
+
+A serverless host prepares the database in its deploy and boots without touching the schema.
+`PgStorage.manifest()` yields the manifest of exactly the capsule `PgStorage.layer()` installs, so a
+stack using `capsuledb/alchemy` prepares what the function asserts:
+
+```ts
+import { PgStorage } from "@domainkit/capsuledb";
+import * as CapsuleDB from "capsuledb/alchemy";
+
+const manifest = yield * PgStorage.manifest();
+const registry =
+  yield *
+  CapsuleDB.Registry("domainkit-storage", {
+    url,
+    provider: "Postgres",
+    manifest,
+  });
+// Pass registry.fingerprint into the function's version-scoped environment.
+```
+
+The function boots with `readiness: "first-use"`:
+
+```ts
+PgStorage.layer({ mode: "assert", readiness: "first-use" });
+```
+
+The layer builds without a statement; the first Storage query runs one cached check. A failed check
+surfaces as a `SqlError` on that query and is retried on the next. Pass the same `prefix` and
+`registryPrefix` to `manifest` and `layer`.
+
 ## Tables
 
 | Table                      | Key                                        | Holds                                                                            |
