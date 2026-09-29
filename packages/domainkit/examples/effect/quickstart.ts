@@ -1,6 +1,6 @@
 // Plan, approve, apply. Plans are additive and fail closed; conflicts are data, not surprises.
 import { Effect, Match } from "effect";
-import { Connect, DnsRecord, DomainKit, Principal, Provision, Verify } from "domainkit";
+import { Connect, DnsRecord, DomainKit, Plan, Principal, Provision, Verify } from "domainkit";
 import { Testing } from "domainkit/testing";
 
 const requirements = [
@@ -21,7 +21,25 @@ const program = Effect.gen(function* () {
   //    ^ status: "complete" | "partial", one outcome per operation, safe to retry
 
   const readiness = yield* Verify.observe({ domain: "app.example.com" });
-  return { receipt, ready: readiness.overall === "ready", nextCheckAt: readiness.nextCheckAt };
+  // #region replan
+  // The same fake provider keeps the CNAME written by apply in this execution.
+  const secondPlan = yield* Provision.plan({ domain: "app.example.com", requirements });
+  //    ^ operations: [Noop CNAME, Noop TXT], so Plan.isApplicable(secondPlan) is false
+  // #endregion replan
+
+  return {
+    firstPlan: {
+      operations: plan.operations.map(({ _tag, record }) => `${_tag} ${record._tag}`),
+      isApplicable: Plan.isApplicable(plan),
+    },
+    receipt,
+    ready: readiness.overall === "ready",
+    nextCheckAt: readiness.nextCheckAt,
+    secondPlan: {
+      operations: secondPlan.operations.map(({ _tag, record }) => `${_tag} ${record._tag}`),
+      isApplicable: Plan.isApplicable(secondPlan),
+    },
+  };
 }).pipe(
   Effect.catchTag("DomainKitError", (error) =>
     Match.value(error.reason).pipe(
