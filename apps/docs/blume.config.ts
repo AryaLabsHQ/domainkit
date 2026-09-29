@@ -34,6 +34,7 @@ export default defineConfig({
     owner: "AryaLabsHQ",
     repo: "domainkit",
   },
+  lastModified: { type: "git" },
   logo: {
     text: "DomainKit",
   },
