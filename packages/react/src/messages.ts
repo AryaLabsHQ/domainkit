@@ -400,11 +400,11 @@ export const english: Catalog = {
       case "Create":
         return "Will add";
       case "Noop":
-        return "Already there";
+        return "Already set";
       case "Delete":
         return "Will remove";
       case "Conflict":
-        return "In the way";
+        return "Conflict";
     }
   },
   attemptStatus: (status) => {
