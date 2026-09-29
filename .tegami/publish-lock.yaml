@@ -1,6 +1,6 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## A Vercel integration can start its install on another origin\n\n`Vercel.provider`'s `integration` settings take an optional `installOrigin`, the origin of the\ninstall page the browser is sent to. It defaults to `https://vercel.com`, so the flow still starts at\n`https://vercel.com/integrations/<slug>/new`:\n\n```ts\nVercel.provider({\n  baseUrl: \"http://localhost:4000/vercel\",\n  integration: {\n    clientId: \"emulated-client\",\n    clientSecret: Config.Redacted(\"VERCEL_CLIENT_SECRET\"),\n    slug: \"acme-domains\",\n    installOrigin: \"http://localhost:4000/vercel\",\n  },\n});\n```\n\nAn integration has one Redirect URL, so a development stage with its own origin cannot complete a\nreal install. With `installOrigin` and `baseUrl` pointed at an emulator, the whole install, the code\nexchange, and the DNS API run locally, the same way Cloudflare's `oauth.issuer` already moves its\nconsent page. The option is additive; a definition without it keeps its behaviour.\n"
-    filename: vercel-install-origin.md
+  - content: "---\npackages:\n  \"@domainkit/capsuledb\":\n    type: minor\n---\n\n## Prepare Storage at deploy time, check it on first use\n\n`PgStorage.manifest()` returns the CapsuleDB manifest for exactly the capsule `PgStorage.layer()`\ninstalls, so a deploy stack can hand it to `CapsuleDB.Registry` from `capsuledb/alchemy` and prepare\nthe schema the function will assert:\n\n```ts\nconst manifest = yield * PgStorage.manifest();\nconst registry =\n  yield *\n  CapsuleDB.Registry(\"domainkit-storage\", {\n    url,\n    provider: \"Postgres\",\n    manifest,\n  });\n```\n\n`PgStorage.layer` takes a `readiness` option. `\"boot\"` (the default) checks while the layer builds.\n`\"first-use\"` builds without a statement and runs one cached check before the first Storage query,\nso a serverless function boots with `{ mode: \"assert\", readiness: \"first-use\" }` and a cold start\nthat never reaches Storage does no registry work. A failed check surfaces as a `SqlError` on that\nquery and is retried on the next.\n\nThe package now peers on `capsuledb` `>=0.4.0 <0.5.0`.\n"
+    filename: capsuledb-deploy-time.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
@@ -9,13 +9,13 @@ core:packages:
     updated: false
   - id: npm:@domainkit/docs
     updated: false
-  - changelogIds:
-      - vercel-install-origin.md
-    id: npm:domainkit
+  - id: npm:domainkit
     updated: true
   - id: npm:@domainkit/react
     updated: true
-  - id: npm:@domainkit/capsuledb
+  - changelogIds:
+      - capsuledb-deploy-time.md
+    id: npm:@domainkit/capsuledb
     updated: true
 npm:packages:
   - id: npm:domainkit-workspace
