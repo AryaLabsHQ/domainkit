@@ -1,13 +1,14 @@
 import { defineConfig } from "blume";
+import { orama } from "blume/search";
+import { filesystem } from "blume/sources";
 
 export default defineConfig({
-  ai: {
+  agents: {
     llmsTxt: true,
   },
   content: {
-    root: "content",
     sources: [
-      {
+      filesystem({
         exclude: [
           "components/**",
           "compare/**",
@@ -17,14 +18,12 @@ export default defineConfig({
         ],
         prefix: "docs",
         root: "content",
-        type: "filesystem",
-      },
-      {
+      }),
+      filesystem({
         include: ["components/**/*.{md,mdx}"],
         root: "content",
-        type: "filesystem",
-      },
-      {
+      }),
+      filesystem({
         include: [
           "compare/**/*.{md,mdx}",
           "customers/**/*.{md,mdx}",
@@ -32,12 +31,10 @@ export default defineConfig({
           "guides/email-domain-setup.mdx",
         ],
         root: "content",
-        type: "filesystem",
-      },
+      }),
     ],
   },
   deployment: {
-    output: "static",
     site: "https://domain-kit.dev",
   },
   description: "Add custom domains to your app with reviewable DNS plans and React flows.",
@@ -50,7 +47,7 @@ export default defineConfig({
     owner: "AryaLabsHQ",
     repo: "domainkit",
   },
-  lastModified: { type: "git" },
+  lastModified: "git",
   logo: {
     image: "/logo.svg",
     text: "DomainKit",
@@ -64,15 +61,28 @@ export default defineConfig({
       { label: "Components", path: "/components" },
     ],
   },
-  search: {
-    provider: "orama",
-  },
+  search: orama(),
   seo: {
+    organization: {
+      logo: "/logo.svg",
+      name: "Arya Labs",
+      sameAs: ["https://github.com/AryaLabsHQ"],
+    },
     og: {
       titles: {
         "/": "Add custom domains to your app",
         "/components": "DomainKit React components",
       },
+    },
+    software: {
+      applicationCategory: "DeveloperApplication",
+      description:
+        "An open-source TypeScript library that sets up a customer's DNS records through their own Cloudflare or Vercel account.",
+      license: "MIT",
+      name: "DomainKit",
+      price: 0,
+      priceCurrency: "USD",
+      sameAs: ["https://github.com/AryaLabsHQ/domainkit", "https://www.npmjs.com/package/domainkit"],
     },
   },
   theme: {

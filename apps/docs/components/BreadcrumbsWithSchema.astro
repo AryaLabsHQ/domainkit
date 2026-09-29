@@ -59,8 +59,12 @@ const trail = [
   ...(current?.route ? [{ label: current.label, route: current.route }] : []),
 ];
 
+// Blume emits the BreadcrumbList itself when the page has two or more linked crumbs. Emit ours only
+// for the pages where Blume has no trail to work with, so each page carries the node once.
+const linkedCrumbs = crumbs.filter((crumb) => typeof crumb.route === "string").length;
+
 const breadcrumbList =
-  origin && current?.route && trail.length > 1
+  origin && linkedCrumbs <= 1 && current?.route && trail.length > 1
     ? JSON.stringify({
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
