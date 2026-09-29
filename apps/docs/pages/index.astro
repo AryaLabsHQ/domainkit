@@ -6,6 +6,7 @@ import data from "blume:data";
 import { examplesBase } from "blume:examples";
 
 import ProviderLogo from "../components/ProviderLogo.astro";
+import SamvaMark from "../components/SamvaMark.astro";
 import { snippet } from "../components/snippets.ts";
 
 const { config } = data;
@@ -136,7 +137,7 @@ const structuredData = JSON.stringify({
           <a class="textlink" href="https://github.com/AryaLabsHQ/domainkit">GitHub</a>
         </div>
         <a class="chip" href="/customers/samva">
-          <img class="samva-mark" src="/logos/samva.svg" alt="" width="20" height="20" />
+          <SamvaMark class="samva-mark" size={20} />
           <span>Samva sets up customer domains with DomainKit</span>
           <span aria-hidden="true">→</span>
         </a>
@@ -408,7 +409,7 @@ const structuredData = JSON.stringify({
         </div>
         <figure class="testimonial">
           <a class="samva-logo" href="https://samva.dev" aria-label="Samva">
-            <img class="samva-mark" src="/logos/samva.svg" alt="" width="40" height="40" />
+            <SamvaMark class="samva-mark" size={40} />
             <span>Samva</span>
           </a>
           <blockquote>
