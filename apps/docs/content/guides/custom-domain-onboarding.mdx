@@ -1,0 +1,171 @@
+---
+title: SaaS custom domain setup, step by step
+description: A code-first guide to SaaS custom domain setup. Declare the records, let the customer connect DNS, review and approve, apply, and verify.
+sidebar:
+  label: Custom domain setup
+seo:
+  title: SaaS custom domain setup, step by step
+---
+
+A custom domain has three jobs. DNS points the domain at you, a hostname setup routes it, and TLS
+makes it safe. This guide covers the DNS job.
+
+| Job      | What it does                                                  | Who does it                                        |
+| -------- | ------------------------------------------------------------- | -------------------------------------------------- |
+| DNS      | Point the customer's domain at your app and prove it's theirs | DomainKit, and this guide                          |
+| Hostname | Tell your host or proxy to serve that domain                  | Your host: Cloudflare for SaaS, Vercel, or a proxy |
+| TLS      | Issue and renew the certificate                               | Your host                                          |
+
+You'll build the DNS job. When you're done, a customer can connect their DNS account, see the exact
+records, approve them, and watch them verify, all inside your app.
+
+You need Bun or Node 24, a TypeScript app, and an API that can identify the signed-in customer. The
+[Quickstart](/docs/quickstart) runs the same lifecycle in memory first, if you want to see it before
+you wire it up.
+
+## 1. Decide what the customer has to add
+
+Most custom domains need a CNAME that points the hostname at you and a TXT record that proves
+ownership. If you accept apex domains, declare an A record instead, since most DNS hosts don't
+allow a CNAME at the apex.
+
+<Snippet file="examples/core/plans.ts" region="requirements" />
+
+A record's policy says what may share its name. A CNAME is exclusive by default, and everything
+else appends. The purpose is the sentence your customer reads next to the record.
+
+## 2. Mount the routes in your API
+
+DomainKit ships one route group with twenty-five endpoints. You write one service, `Identity`, that
+reads your session and says who is calling. A request never names its own owner.
+
+<Snippet file="examples/server/mount.ts" region="identity" />
+
+<Snippet file="examples/server/mount.ts" region="mount" />
+
+Storage and custody come from your own database and key. The
+[host integration guide](/docs/guides/host-integration) covers both.
+
+## 3. Let the customer connect their DNS
+
+Register the providers you want to offer. With no options, each accepts API tokens. Add your OAuth
+client for Cloudflare or your marketplace integration for Vercel.
+
+<Snippet file="examples/providers/cloudflare.ts" region="oauth" />
+
+<Snippet file="examples/providers/vercel.ts" region="integration" />
+
+Starting a connection returns one of three answers. It connected, it needs a redirect, or it needs
+the customer to pick a zone.
+
+<Snippet file="examples/core/connections.ts" region="interactive" />
+
+The grant belongs to the account, not the domain. When the same customer adds another domain, ask
+DomainKit which connection already reaches it and skip this step.
+
+<Snippet file="examples/core/connections.ts" region="discover" />
+
+## 4. Show the plan
+
+Planning reads the customer's zone and returns the exact operations. It never writes.
+
+<Snippet file="examples/core/plans.ts" region="plan" />
+
+<Snippet file="examples/core/plans.ts" region="review" />
+
+Each operation is a `Create`, a `Noop`, or a `Conflict`. Render them as Will add, Already set, and
+Conflict. If the customer's provider isn't one you support, skip to your own table of records to
+add by hand.
+
+## 5. Let the customer approve
+
+Approval binds the customer's yes to the plan's digest. They can approve everything, or name the
+operations they accept. They can also decline, which ends that plan.
+
+<Snippet file="examples/core/plans.ts" region="approve" />
+
+<Snippet file="examples/core/plans.ts" region="reject" />
+
+## 6. Apply and keep the receipt
+
+Apply plans the zone again before it writes. If the zone moved since the customer looked, it fails
+with `Stale` and you build a new plan. Writes go one record at a time, and they are not atomic. A
+write that fails after another lands gives you a partial receipt, and planning again turns the
+landed records into no-ops.
+
+<Snippet file="examples/core/plans.ts" region="apply" />
+
+<Snippet file="examples/core/plans.ts" region="failures" />
+
+## 7. Verify that the records resolve
+
+Observation reads the provider and a pool of public resolvers, stores the status of each record,
+and says when to look again. A worker can sleep until that time.
+
+<Snippet file="examples/core/verification.ts" region="observe" />
+
+<Snippet file="examples/core/verification.ts" region="polling" />
+
+If your host has its own step, such as certificate issuance, add it to the same readiness with host
+evidence.
+
+<Snippet file="examples/core/verification.ts" region="host-evidence" />
+
+## 8. Put a UI on it
+
+One hook runs the flow. Render it yourself, or copy the styled block into your project.
+
+<Snippet file="examples/react/domain-settings.tsx" region="setup" />
+
+<Snippet file="examples/react/domain-settings.tsx" region="flow" />
+
+```sh
+npx shadcn@latest add https://domain-kit.dev/r/domain-flow.json
+```
+
+See the [React docs](/docs/react) and the [components](/components).
+
+## 9. Test without touching a real zone
+
+The testing entry point ships a fake provider and a recording transport, so your tests drive the
+real lifecycle.
+
+<Snippet file="examples/testing/fakes.ts" region="run" />
+
+## 10. Clean up when a domain leaves
+
+Removal is its own plan, built from the apply receipt. A record that still matches becomes a
+`Delete`. A record someone edited by hand is left alone.
+
+<Snippet file="examples/core/cleanup.ts" region="plan" />
+
+<Snippet file="examples/core/cleanup.ts" region="apply" />
+
+## Before you go live
+
+- `Identity` returns the signed-in customer and never trusts a value from the request body.
+- Only the roles you choose can connect a provider or apply a plan. Use `authorize`.
+- Credentials are sealed with your key. Your `Custody` implementation is tested.
+- The provider callback URL is registered and matches your mount prefix.
+- You show a manual table of records for customers whose DNS you can't write to.
+- Hostname and TLS are handled by your host. See
+  [Cloudflare for SaaS and DomainKit](/compare/cloudflare-for-saas).
+
+## FAQ
+
+<Accordion>
+  <AccordionItem title="Does this issue TLS certificates?">
+    No. Your host does. DomainKit writes the DNS records your host asks customers to add.
+  </AccordionItem>
+  <AccordionItem title="What about customers on other DNS providers?">
+    Show them the records to add by hand. DomainKit builds the plan only for providers it can write
+    to.
+  </AccordionItem>
+  <AccordionItem title="Can customers add many domains?">
+    Yes. They connect once per account, and each further domain reuses that connection.
+    [Batches](/docs/core/batches) plan several domains together.
+  </AccordionItem>
+  <AccordionItem title="Do I need React?">
+    No. The routes and the client transport work without it.
+  </AccordionItem>
+</Accordion>
