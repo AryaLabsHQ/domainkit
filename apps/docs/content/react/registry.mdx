@@ -3,13 +3,14 @@ title: Shadcn registry
 description: Copy the styled domain flow and the plain DNS display components into your project with the shadcn CLI, then own their markup, classes, and layout.
 ---
 
-The registry ships source files, not a package. It vends two kinds of item, and the CLI installs
+The registry ships source files, not a package. Use it to put the domain flow, or plain DNS display
+components, into your app with the shadcn CLI. It vends two kinds of item, and the CLI installs
 either into an initialised `components.json` project.
 
 ## The flow
 
 The flow items are written against `@domainkit/react` and your own kit: `ui/button`, `ui/dialog`,
-`ui/dropdown-menu`, `ui/input`, `ui/switch`, `ui/table`, and `ui/badge`. They take `render`, the
+`ui/dropdown-menu`, `ui/input`, `ui/label`, `ui/switch`, `ui/table`, and `ui/badge`. They take `render`, the
 Base UI idiom, so a kit on the `base-*` styles takes them unchanged.
 
 ```package-install
@@ -26,6 +27,7 @@ npx shadcn@latest add https://domain-kit.dev/r/domain-flow.json
 | `disconnect-dialog` | Releasing a provider, with the records DomainKit added under a switch |
 | `domain-field`      | One input over every zone the workspace's accounts reach              |
 | `outcome`           | A failed step in the catalog's words                                  |
+| `provider-artwork`  | Your logo per provider id, shared by the items above                  |
 
 The files land in `components/domainkit/` and are yours after the copy: change their classes, their
 icons, and their layout to fit your design system. What they must not change is where the boundary

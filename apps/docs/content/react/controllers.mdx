@@ -7,8 +7,8 @@ seo:
   title: DomainKit React controllers
 ---
 
-Every part of the flow is a hook. Each takes one options object and returns a controller whose
-`state` is a tagged union, so a screen renders from `state._tag` and never from a boolean pair.
+Use these hooks when you build the domain surface yourself. Each part of the flow is a hook that
+takes one options object and returns a controller whose `state` is a tagged union, so a screen renders from `state._tag` and never from a boolean pair.
 
 <Snippet file="examples/react/controllers.tsx" region="hooks" title="The four controllers" />
 
@@ -65,9 +65,8 @@ without a provider call; it is `null` when the provider named no single account.
 `Connect.useAccounts({ returnTo })` reads the same listing and adds two commands:
 `connect({ provider, method, values? })` starts a provider with no domain attached, and
 `reconnect({ connectionId, provider, method, values? })` replaces the credential behind a
-connection the owner already holds, keeping its domains. A token
-method finishes in place; an interactive one redirects and returns through the library's own
-callback. `Connect.DomainField` is the default surface over both.
+connection the owner already holds, keeping its domains. A token method finishes in place; an
+interactive one redirects and returns through the callback route your server mounts. The registry's [`domain-field`](/components/registry/domain-field) is a surface over both.
 
 ## Provisioning and cleanup
 
@@ -89,7 +88,7 @@ callback. `Connect.DomainField` is the default surface over both.
 <Snippet file="examples/react/controllers.tsx" region="commands" title="Approve or decline" />
 
 `approve(operationIds?)` authorizes the digest and applies it in one customer action, because the
-review screen offers Approve and Decline rather than Approve and then Apply. `apply()` stays
+review screen offers one approve and one decline rather than approve and then apply. `apply()` stays
 available for a host that approves out of band. `reject(reason?)` is terminal: approving that plan
 afterwards fails `Stale`.
 

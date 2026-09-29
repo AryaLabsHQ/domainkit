@@ -29,14 +29,14 @@ beside that field rather than at the foot of the dialog.
 
 ## API
 
-| Prop      | Type              | Required | Description                             |
-| --------- | ----------------- | -------- | --------------------------------------- |
-| `flow`    | `Domain.Flow`     | yes      | The flow the dialog connects.           |
-| `marks`   | `ProviderArtwork` | no       | Your artwork per provider id.           |
-| `trigger` | `ReactNode`       | no       | Replaces the default "Connect" trigger. |
+| Prop      | Type              | Required | Description                          |
+| --------- | ----------------- | -------- | ------------------------------------ |
+| `flow`    | `Domain.Flow`     | yes      | The flow the dialog connects.        |
+| `marks`   | `ProviderArtwork` | no       | Your artwork per provider id.        |
+| `trigger` | `ReactElement`    | no       | Replaces the default trigger button. |
 
 ## Boundary
 
 The dialog hands credentials to your transport, which hands them to the routes you mounted. Nothing
-in the browser stores a token, and an interactive method leaves the page and returns through your
-own callback.
+in the browser persists a token, and an interactive method leaves the page and returns through the
+callback route your server mounts.
