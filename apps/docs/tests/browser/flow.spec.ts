@@ -22,7 +22,7 @@ test("heads the records card with the provider row and lists every requirement",
   page,
 }) => {
   await page.goto("/");
-  await expect(row(page)).toContainText("Meridian DNS DNS detected");
+  await expect(row(page)).toContainText("Meridian DNS detected");
   await expect(page.getByRole("columnheader", { name: "Type" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Value" })).toBeVisible();
   await expect(page.locator("[data-slot='records-table'] tbody tr")).toHaveCount(4);
@@ -38,7 +38,7 @@ test("connects, reads the plan in the table, and adds the records in one press",
   await dialog.getByLabel("Token").fill("secret-token");
   await dialog.getByRole("button", { name: "Connect with an API token" }).click();
 
-  await expect(row(page)).toContainText("Meridian DNS · northwind.app (Northwind Traders)");
+  await expect(row(page)).toContainText("Meridian · northwind.app (Northwind Traders)");
   const add = row(page).getByRole("button", { name: /^Add \d+ records?$/ });
   await expect(add).toHaveText("Add 3 records");
   // The plan lands in the rows rather than behind a dialog of its own.
@@ -117,7 +117,7 @@ test("removes the records it added, then releases the connection", async ({ page
   await expect(releasing.locator("[data-slot='disconnect-cleanup'] li")).toHaveCount(3);
   await releasing.getByRole("button", { name: "Disconnect" }).click();
 
-  await expect(row(page)).toContainText("Meridian DNS DNS detected");
+  await expect(row(page)).toContainText("Meridian DNS detected");
   await expect(page.getByRole("button", { name: "Connect", exact: true })).toBeVisible();
 });
 
@@ -125,7 +125,7 @@ test("says who may connect, and offers nothing, to a customer who may only read"
   page,
 }) => {
   await page.goto("/?mode=read-only");
-  await expect(row(page)).toContainText("An administrator can connect Meridian DNS");
+  await expect(row(page)).toContainText("An administrator can connect Meridian");
   await expect(page.getByRole("button", { name: "Connect", exact: true })).toHaveCount(0);
   // The records are still there to read: nothing collapses because a customer cannot write.
   await expect(page.locator("[data-slot='records-table'] tbody tr")).toHaveCount(4);
@@ -134,7 +134,7 @@ test("says who may connect, and offers nothing, to a customer who may only read"
 test("completes a typed domain from the zones the workspace's accounts reach", async ({ page }) => {
   await page.goto("/?view=field");
   // No account yet, so the field offers the provider rather than a list of zones.
-  const offer = page.getByRole("button", { name: "Connect Meridian DNS" });
+  const offer = page.getByRole("button", { name: "Connect Meridian" });
   await expect(offer).toBeVisible();
   await offer.click();
   await page.getByPlaceholder("Token").fill("secret-token");

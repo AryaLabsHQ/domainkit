@@ -62,7 +62,7 @@ function Fixture() {
       Testing.transport({
         provider: {
           id: "meridian",
-          name: "Meridian DNS",
+          name: "Meridian",
           labels: { [zone]: `${zone} (Northwind Traders)` },
           ...(hosted ? { nameserverSuffixes: [zone] } : {}),
           oauth: view !== "field",

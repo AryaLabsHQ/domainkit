@@ -99,7 +99,7 @@ export function PreviewRoot({
       Testing.transport({
         provider: {
           id: "meridian",
-          name: "Meridian DNS",
+          name: "Meridian",
           // The zone's nameservers are this provider's own, so discovery names it as the host.
           nameserverSuffixes: [previewZone],
           labels: { [previewZone]: `${previewZone} (Northwind Traders)` },

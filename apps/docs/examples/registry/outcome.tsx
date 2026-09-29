@@ -15,8 +15,8 @@ function Failed() {
   const error = controller.state._tag === "Failure" ? controller.state.error : null;
   return (
     <div className="grid gap-4">
-      <Outcome context={{ provider: "Meridian DNS" }} error={error} onRetry={controller.retry} />
-      <Outcome context={{ provider: "Meridian DNS" }} error={error} layout="inline" />
+      <Outcome context={{ provider: "Meridian" }} error={error} onRetry={controller.retry} />
+      <Outcome context={{ provider: "Meridian" }} error={error} layout="inline" />
     </div>
   );
 }
