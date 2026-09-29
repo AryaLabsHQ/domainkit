@@ -210,7 +210,7 @@ const structuredData = JSON.stringify({
               <li>Log in to your DNS provider.</li>
               <li>
                 Add a CNAME record.
-                <pre>Host: send   Value: …   Priority: 10</pre>
+                <pre>Host: send   Value: …</pre>
               </li>
               <li>Wait up to 48 hours.</li>
               <li>Click Verify.</li>
@@ -806,6 +806,12 @@ const structuredData = JSON.stringify({
   #tab-core:checked ~ .tablist label[for="tab-core"] {
     box-shadow: inset 0 -2px 0 var(--blume-accent);
     color: var(--blume-foreground);
+  }
+  #tab-server:focus-visible ~ .tablist label[for="tab-server"],
+  #tab-react:focus-visible ~ .tablist label[for="tab-react"],
+  #tab-core:focus-visible ~ .tablist label[for="tab-core"] {
+    outline: 2px solid var(--blume-accent);
+    outline-offset: 2px;
   }
   .live {
     margin-top: 1.25rem;
