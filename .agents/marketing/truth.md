@@ -80,8 +80,6 @@ Samva may be named publicly. Approved wording: **"Samva sets up customer domains
 - Say only what the registry supports: Samva writes TXT, MX, and CNAME records for a customer's
   sending domain on Cloudflare and Vercel zones after the customer approves the plan. DMARC is
   observed, not written.
-- Do not call Samva a "design partner". Do not add a disclosure line about the shared maker.
-- Do not mention Samva's use of Domain Connect on DomainKit surfaces.
 - Any other consumer stays unnamed until it authorizes a public mention and a registry row records
   the evidence. A configured hostname, a passing test, or an internal fixture is never a production
   claim.

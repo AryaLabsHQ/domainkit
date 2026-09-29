@@ -68,7 +68,7 @@ proof sections.
 - **Words to avoid:** frictionless, seamless, robust, powerful, best-in-class, magic, "just works"
   without the specifics behind it, "modern" as a value, fully automatic, zero risk, atomic,
   transaction, rollback, credential management platform, provider partnership, Domain Connect
-  replacement or successor, "design partner". Truth owns the banned claims.
+  replacement or successor. Truth owns the banned claims.
 
 ## Who writes what
 
