@@ -1,0 +1,51 @@
+/* Field Manual tokens: paper and ink with one electric blue. Blume derives the rest of the chrome. */
+:root {
+  --blume-background: #fbfbf9;
+  --blume-foreground: #0b1015;
+  --blume-muted: #f3f3ee;
+  --blume-muted-foreground: #4c535a;
+  --blume-border: #e6e6e1;
+  --blume-accent: #0b5cff;
+  --blume-accent-foreground: #ffffff;
+  --blume-action: #0b5cff;
+  --blume-code-background: #f5f5f1;
+
+  --fm-hairline: #d9d9d3;
+  --fm-panel: #ffffff;
+  --fm-add: #a15c00;
+  --fm-add-bg: #fdf3e1;
+  --fm-set: #17703b;
+  --fm-set-bg: #e8f5ec;
+  --fm-conflict: #b42318;
+  --fm-conflict-bg: #fdecea;
+  --fm-link: #0b5cff;
+}
+
+:root[data-theme="dark"] {
+  --blume-background: #0a0d12;
+  --blume-foreground: #ecedee;
+  --blume-muted: #12161c;
+  --blume-muted-foreground: #a0a7ae;
+  --blume-border: #232830;
+  --blume-accent: #4b88ff;
+  --blume-accent-foreground: #ffffff;
+  --blume-action: #0b5cff;
+  --blume-code-background: #0f1319;
+
+  --fm-hairline: #2c323b;
+  --fm-panel: #0f1319;
+  --fm-add: #f2b45a;
+  --fm-add-bg: #2a2010;
+  --fm-set: #5fd08a;
+  --fm-set-bg: #102419;
+  --fm-conflict: #ff8a80;
+  --fm-conflict-bg: #2c1513;
+  --fm-link: #6f9dff;
+}
+
+/* Headings carry Geist at a lighter weight, like the essay-style references. */
+h1,
+h2,
+h3 {
+  font-weight: 500;
+}

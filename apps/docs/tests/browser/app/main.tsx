@@ -3,7 +3,7 @@
  * use, so the Playwright run exercises the real dialogs, portals, and focus behaviour with no host
  * application around it.
  */
-import { DnsRecord, DomainKit as Kit, Reason } from "domainkit";
+import { DomainKit as Kit, Reason } from "domainkit";
 import type { Transport } from "domainkit/client";
 import { DomainKit, Testing } from "@domainkit/react";
 import * as Effect from "effect/Effect";
@@ -15,6 +15,7 @@ import "./fixture.css";
 
 import { DomainField } from "@/components/domainkit/domain-field";
 import { DomainFlow } from "@/components/domainkit/domain-flow";
+import { conflictSeedFor, requirementsFor, seedFor } from "../../../lib/preview-flow.tsx";
 
 const parameters = new URLSearchParams(window.location.search);
 const zone = parameters.get("zone") ?? "northwind.app";
@@ -24,24 +25,9 @@ const hosted = parameters.get("host") !== "none";
 // The field view offers a token method, so the fixture can grant an account without leaving the page.
 const view = parameters.get("view");
 
-const requirements = [
-  DnsRecord.txt({
-    name: `samva._domainkey.${domain}`,
-    purpose: "Sign your mail",
-    value: "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA",
-  }),
-  DnsRecord.mx({
-    exchange: "feedback-smtp.us-east-1.amazonses.com",
-    name: `mail.${domain}`,
-    priority: 10,
-    purpose: "Receive bounce reports",
-  }),
-  DnsRecord.txt({
-    name: `mail.${domain}`,
-    purpose: "Authorize the sender",
-    value: "v=spf1 include:amazonses.com ~all",
-  }),
-];
+const requirements = requirementsFor(domain);
+// `seed=conflict` puts an A record on the tracking host, which blocks its CNAME.
+const seed = parameters.get("seed") === "conflict" ? conflictSeedFor(domain) : seedFor(domain);
 
 const marks = {
   meridian: (
@@ -76,10 +62,11 @@ function Fixture() {
       Testing.transport({
         provider: {
           id: "meridian",
-          name: "Meridian DNS",
+          name: "Meridian",
           labels: { [zone]: `${zone} (Northwind Traders)` },
           ...(hosted ? { nameserverSuffixes: [zone] } : {}),
           oauth: view !== "field",
+          records: seed.map((record) => ({ record, zone })),
           zones: [zone],
         },
       }),

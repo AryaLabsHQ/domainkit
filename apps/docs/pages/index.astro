@@ -1,15 +1,18 @@
 ---
 import CodeBlock from "blume/components/content/CodeBlock.astro";
 import PageLayout from "blume/components/layout/PageLayout.astro";
+import { withBase } from "blume/components/islands/base-path.ts";
 import data from "blume:data";
+import { examplesBase } from "blume:examples";
 
 import ProviderLogo from "../components/ProviderLogo.astro";
+import SamvaMark from "../components/SamvaMark.astro";
 import { snippet } from "../components/snippets.ts";
 
 const { config } = data;
-const pageTitle = "Custom domains for your SaaS | DomainKit";
+const pageTitle = "Custom domains for SaaS: DNS setup in your app | DomainKit";
 const pageDescription =
-  "Your app declares the DNS records it needs. DomainKit plans the changes, applies only what the customer approved, and verifies they landed.";
+  "Your customer connects Cloudflare or Vercel once, reviews the exact DNS records, and approves. DomainKit applies them and verifies they resolve.";
 
 // The same regions the documentation renders, so the landing page cannot drift from the API.
 const lifecycle = snippet("examples/core/lifecycle.ts", "program");
@@ -17,6 +20,51 @@ const identity = snippet("examples/server/mount.ts", "identity");
 const mount = snippet("examples/server/mount.ts", "mount");
 const transport = snippet("examples/react/domain-settings.tsx", "setup");
 const flow = snippet("examples/react/domain-settings.tsx", "flow");
+
+const flowFrame = withBase(`${examplesBase}/registry/domain-flow`);
+const installCommand = "bun add domainkit effect@rc";
+
+const faqs: {
+  q: string;
+  a: string;
+  link?: { href: string; label: string };
+  links?: { href: string; label: string }[];
+}[] = [
+  {
+    q: "What does my customer actually see?",
+    a: "They connect Cloudflare or Vercel, then see a table of the exact records: which ones will be added, which are already set, and which conflict. One button adds the ones they approved. After that they see each record's status until it resolves. They never type a record value.",
+  },
+  {
+    q: "Does DomainKit issue TLS certificates or proxy traffic?",
+    a: "No. It writes DNS records and checks that they resolve. Certificates and traffic belong to your host, such as Cloudflare for SaaS, Vercel, or Approximated. DomainKit writes the CNAME and validation records those services ask your customer to add.",
+  },
+  {
+    q: "What if my customer's DNS isn't on Cloudflare or Vercel?",
+    a: "DomainKit can't write there today. Your records are plain values, so your app can show them as a table to add by hand, the way it does now. You can also write a provider adapter for another DNS provider.",
+    link: { href: "/docs/guides/implement-provider", label: "Write a provider" },
+  },
+  {
+    q: "What if records already exist, or something fails halfway?",
+    a: "Records that already match are left alone. Records in the way are reported as conflicts, and DomainKit does not overwrite them. Writes are not atomic. If one fails after another lands, the receipt records exactly which writes completed, and re-planning turns those into no-ops. Cleanup is a separate plan that removes only records the receipt proves DomainKit created and that still match.",
+  },
+  {
+    q: "Where do provider credentials live?",
+    a: "In your database, sealed with your key. DomainKit defines the Custody and Storage interfaces and your app implements them. The browser never receives a credential.",
+  },
+  {
+    q: "Do I have to use Effect?",
+    a: "The lifecycle is written in Effect 4, and the services you implement (Identity, Custody, Storage) are Effect services. You can mount the routes behind a plain fetch handler, and browser code can use Promises through the client transport. If your team doesn't use Effect anywhere, plan for a small learning step on the server.",
+  },
+  {
+    q: "What does it cost?",
+    a: "Nothing. DomainKit is MIT-licensed open source with no per-domain fee and no paid plan. You run it in your own app, so you pay for your own hosting and database.",
+  },
+  {
+    q: "How is this different from Entri or Domain Connect?",
+    a: "Entri is a hosted modal with about 60 providers. Domain Connect is an open protocol where each DNS provider onboards your template. DomainKit is a library in your app that writes through the customer's own Cloudflare or Vercel account. Each fits different teams.",
+    links: [{ href: "/compare/entri", label: "DomainKit vs Entri" }, { href: "/compare/domain-connect", label: "DomainKit vs Domain Connect" }],
+  },
+];
 
 const siteUrl = (config.site ?? "").replace(/\/$/u, "");
 const structuredData = JSON.stringify({
@@ -48,6 +96,7 @@ const structuredData = JSON.stringify({
 
 <PageLayout
   analytics={config.analytics}
+  appleIcon={config.appleIcon}
   banner={config.banner}
   favicon={config.favicon}
   fontCssVars={data.fontCssVars}
@@ -61,273 +110,1167 @@ const structuredData = JSON.stringify({
   themeMode={config.theme.mode}
   x={config.x}
 >
-  <main class="landing">
+  <main class="fm">
     <script is:inline type="application/ld+json" set:html={structuredData} />
+
     <section class="hero">
-      <h1>Custom domains for your SaaS, without the DNS support tickets</h1>
-      <p class="lede">
-        Your app declares the DNS records it needs. DomainKit plans the changes, applies only what
-        the customer approved, and verifies they landed.
-      </p>
-      <p class="install"><code>bun add domainkit effect@rc</code></p>
-      <div class="actions">
-        <a class="primary" href="/docs/quickstart">Quickstart</a>
-        <a href="/docs">Read the docs</a>
-        <a href="https://github.com/AryaLabsHQ/domainkit">GitHub</a>
-      </div>
-      <p class="tech">
-        Effect 4 · HttpApi group for your server · React flow for your settings page · Cloudflare
-        and Vercel
-      </p>
-    </section>
-
-    <section class="split">
-      <div class="caption">
-        <h2>The whole lifecycle is four calls</h2>
-        <p>
-          Plans are additive and fail closed. Approval binds a digest, and apply refuses a zone that
-          moved.
+      <div class="hero-copy">
+        <p class="label">Open source · MIT · TypeScript</p>
+        <h1>Custom domains for your SaaS, without the DNS instructions.</h1>
+        <p class="sub">
+          A TypeScript library that runs in your app. Your customer connects Cloudflare or Vercel
+          once and approves the exact records; DomainKit applies them and verifies they resolve.
         </p>
-        <p class="aside">
-          Every failure is one <code>DomainKit.Error</code> whose <code>reason</code> is a tagged class,
-          so <code>catchTag</code> and <code>Match</code> do the routing.
-        </p>
-      </div>
-      <div class="code">
-        <CodeBlock code={lifecycle} lang="ts" title="examples/core/lifecycle.ts#program" />
-      </div>
-    </section>
-
-    <section class="principles" aria-label="What DomainKit guarantees">
-      <article>
-        <h2>Review before write</h2>
-        <p>
-          <code>Provision.plan</code> returns creates, exact no-ops, and conflicts. It never updates
-          or deletes.
-        </p>
-      </article>
-      <article>
-        <h2>Consent is a digest</h2>
-        <p>
-          Approval binds the plan digest. <code>apply</code> re-plans first and fails{" "}
-          <code>Stale</code> if the zone moved.
-        </p>
-      </article>
-      <article>
-        <div class="provider-pair">
-          <ProviderLogo provider="cloudflare" size={24} />
-          <ProviderLogo provider="vercel" size={20} />
+        <div class="install">
+          <code>{installCommand}</code>
+          <button type="button" data-copy={installCommand} aria-label="Copy install command">
+            Copy
+          </button>
         </div>
-        <h2>Your app keeps custody</h2>
-        <p>
-          Your <code>Custody</code> seals credentials, your <code>Storage</code> holds the rows, your
-          session is the <code>Identity</code>. No credential reaches the browser.
-        </p>
-      </article>
-      <article>
-        <h2>Verification with evidence</h2>
-        <p>
-          <code>Verify.observe</code> records what the provider and each public resolver saw, and
-          schedules the next check.
-        </p>
-      </article>
+        <div class="actions">
+          <a class="btn primary" href="/docs/quickstart">Quickstart</a>
+          <a class="btn ghost" href="/docs">Read the docs</a>
+          <a class="textlink" href="https://github.com/AryaLabsHQ/domainkit">GitHub</a>
+        </div>
+        <a class="chip" href="/customers/samva">
+          <SamvaMark class="samva-mark" size={20} />
+          <span>Samva sets up customer domains with DomainKit</span>
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+
+      <div class="hero-demo">
+        <div class="tabs">
+          <input type="radio" name="hero-tab" id="tab-server" checked />
+          <input type="radio" name="hero-tab" id="tab-react" />
+          <input type="radio" name="hero-tab" id="tab-core" />
+          <div class="tablist" role="presentation">
+            <label for="tab-server">Server</label>
+            <label for="tab-react">React</label>
+            <label for="tab-core">Core</label>
+          </div>
+          <div class="panel p-server">
+            <CodeBlock code={mount} lang="ts" title="examples/server/mount.ts" />
+          </div>
+          <div class="panel p-react">
+            <CodeBlock code={flow} lang="tsx" title="examples/react/domain-settings.tsx" />
+          </div>
+          <div class="panel p-core">
+            <CodeBlock code={lifecycle} lang="ts" title="examples/core/lifecycle.ts" />
+          </div>
+        </div>
+        <div class="live">
+          <iframe
+            data-flow-frame
+            loading="lazy"
+            src={flowFrame}
+            title="Live DomainKit domain flow, running on a test provider"></iframe>
+          <p class="cap">
+            Live demo. Test provider and example domain. Nothing here writes to a real zone.
+          </p>
+        </div>
+      </div>
     </section>
 
-    <section class="split">
-      <div class="caption">
-        <h2>Mount it in your API</h2>
+    <section class="block" id="problem">
+      <p class="label">[ 01 · The problem ]</p>
+      <h2>The DNS instructions page is where setup goes wrong.</h2>
+      <div class="prose-cols">
         <p>
-          One HttpApi group, twenty-five routes, OpenAPI for free. <code>Identity</code> is the one
-          service you write.
+          To use their own domain, your customer has to open a registrar they barely know and copy
+          three or four fields per record. One screen wants @ for the host. Another wants the bare
+          domain. Some add the domain name for you, and some want a dot on the end. Then they click
+          Verify and wait.
+        </p>
+        <p>
+          Webflow, Ghost, Framer, Resend, and Postmark all ship pages like this, several with a
+          variant for each registrar. They are good pages for a hard problem. They still hand the
+          customer the last step.
         </p>
       </div>
-      <div class="code">
-        <CodeBlock code={identity} lang="ts" title="examples/server/mount.ts#identity" />
-        <CodeBlock code={mount} lang="ts" title="examples/server/mount.ts#mount" />
+      <blockquote class="pull">
+        <p>
+          "Some of your customers will likely struggle to configure their DNS correctly, and thus
+          you will need to provide tech support to them."
+        </p>
+        <cite>
+          <a href="https://answers.netlify.com/t/43190">Netlify support guide, 2021</a>
+        </cite>
+      </blockquote>
+      <div class="compare">
+        <figure class="panelbox">
+          <p class="label">Today</p>
+          <div class="mock-instructions">
+            <strong>Connect your domain</strong>
+            <ol>
+              <li>Log in to your DNS provider.</li>
+              <li>
+                Add a CNAME record.
+                <pre>Host: send   Value: …</pre>
+              </li>
+              <li>Wait up to 48 hours.</li>
+              <li>Click Verify.</li>
+            </ol>
+          </div>
+          <figcaption>A composite of the pattern, not a real vendor page.</figcaption>
+        </figure>
+        <figure class="panelbox">
+          <p class="label">With DomainKit</p>
+          <div class="mock-flow">
+            <div class="mock-row">
+              <span>Cloudflare</span>
+              <span class="mock-btn">Connect Cloudflare</span>
+            </div>
+            <ul class="plan">
+              <li><span class="pill add">Will add</span><code>k1._domainkey</code></li>
+              <li><span class="pill set">Already set</span><code>_verify</code></li>
+            </ul>
+            <span class="mock-btn solid">Add 2 records</span>
+          </div>
+          <figcaption>
+            The customer connects once, sees the records, and presses one button.
+          </figcaption>
+        </figure>
       </div>
+      <p class="more"><a href="/compare/manual-dns">Read why copy-paste setup breaks →</a></p>
     </section>
 
-    <section class="split">
-      <div class="caption">
-        <h2>Ship the UI or bring your own</h2>
+    <section class="block" id="how">
+      <p class="label">[ 02 · How it works ]</p>
+      <h2>One approval, exact records, checked in public DNS.</h2>
+      <ol class="stops">
+        <li>
+          <span class="n">Connect</span>
+          <p>
+            Your customer signs in to Cloudflare or Vercel from your app, or pastes a token.
+            DomainKit finds the zone that serves the domain.
+          </p>
+        </li>
+        <li>
+          <span class="n">Review</span>
+          <p>
+            They see every record before anything changes. A missing record says Will add. A record
+            that already matches says Already set. Anything in the way says Conflict, and DomainKit
+            leaves it alone.
+          </p>
+        </li>
+        <li>
+          <span class="n">Apply</span>
+          <p>
+            They approve the exact plan. DomainKit writes what they approved and keeps a receipt of
+            each write.
+          </p>
+        </li>
+        <li>
+          <span class="n">Verify</span>
+          <p>
+            DomainKit checks the provider and public DNS and shows where each record stands. If
+            something is still pending, it says when it will look again.
+          </p>
+        </li>
+      </ol>
+      <figure class="plan-fig">
+        <div class="plan-table" role="table" aria-label="Illustrative plan for mail.northwind.app">
+          <div class="plan-head" role="row">
+            <span role="columnheader">Status</span>
+            <span role="columnheader">Type</span>
+            <span role="columnheader">Name</span>
+            <span role="columnheader">Value</span>
+          </div>
+          <div class="plan-line" role="row">
+            <span role="cell"><span class="pill add">Will add</span></span>
+            <span role="cell">CNAME</span>
+            <code role="cell">k1._domainkey.mail.northwind.app</code>
+            <code role="cell">k1.dkim.example.net</code>
+          </div>
+          <div class="plan-line" role="row">
+            <span role="cell"><span class="pill set">Already set</span></span>
+            <span role="cell">TXT</span>
+            <code role="cell">_verify.mail.northwind.app</code>
+            <code role="cell">verify=8f2c…</code>
+          </div>
+          <div class="plan-line" role="row">
+            <span role="cell"><span class="pill conflict">Conflict</span></span>
+            <span role="cell">CNAME</span>
+            <code role="cell">track.mail.northwind.app</code>
+            <span role="cell">Points to old.tracker.example. DomainKit will not change it.</span>
+          </div>
+        </div>
+        <figcaption>
+          Figure 1. Demo with a test provider and an example domain. The plan is illustrative: one
+          record to add, one already set, one conflict.
+        </figcaption>
+      </figure>
+      <p class="note">
+        Writes go one record at a time. If one fails after another lands, the receipt says how far
+        it got. Nothing is rolled back.
+      </p>
+    </section>
+
+    <section class="block split" id="lifecycle">
+      <div class="split-copy">
+        <p class="label">[ 03 · The lifecycle ]</p>
+        <h2>Plan, approve, apply, observe. Four calls.</h2>
         <p>
-          Two components run the whole lifecycle. Replace any slot and keep the rest.
+          Each step is one call. The plan is a read, so nothing changes until the customer says yes.
         </p>
+        <dl class="legend">
+          <dt><code>Provision.plan</code></dt>
+          <dd>Reads the zone and returns the exact operations.</dd>
+          <dt><code>Provision.approve</code></dt>
+          <dd>Binds the customer's yes to the plan's digest.</dd>
+          <dt><code>Provision.apply</code></dt>
+          <dd>Writes what was approved and returns a receipt.</dd>
+          <dt><code>Verify.observe</code></dt>
+          <dd>Checks the provider and public DNS, and says when to look again.</dd>
+        </dl>
         <p class="aside">
-          Or take the controllers without the components: <code>Connect.useController</code> and its
-          three siblings each return tagged state you render however you like.
+          Every failure is one <code>DomainKit.Error</code> with a tagged reason, so you can match on
+          it. <a href="/docs/core/errors">Failure reasons →</a>
         </p>
+        <p><a class="btn primary" href="/docs/quickstart">Run it in the Quickstart</a></p>
       </div>
-      <div class="code">
-        <CodeBlock code={transport} lang="tsx" title="examples/react/domain-settings.tsx#setup" />
-        <CodeBlock code={flow} lang="tsx" title="examples/react/domain-settings.tsx#flow" />
+      <div class="split-code">
+        <CodeBlock code={lifecycle} lang="ts" title="examples/core/lifecycle.ts" />
       </div>
     </section>
 
-    <section class="strip" aria-label="What DomainKit is built on">
-      <span>Built on Effect 4</span>
-      <span>Cloudflare and Vercel</span>
-      <span>Postgres storage through CapsuleDB</span>
-      <span>MIT</span>
+    <section class="block" id="safety">
+      <p class="label">[ 04 · Safety model ]</p>
+      <h2>The customer stays in charge, and so does your app.</h2>
+      <div class="cells">
+        <article>
+          <span class="idx">01</span>
+          <h3>Review before write</h3>
+          <p>
+            The plan is additive. DomainKit creates missing records, leaves exact matches alone, and
+            reports incompatible state as a conflict. It never updates or deletes a record it did
+            not create.
+          </p>
+          <a href="/docs/core/plans">How plans work →</a>
+        </article>
+        <article>
+          <span class="idx">02</span>
+          <h3>Consent is a digest</h3>
+          <p>
+            Approval is bound to the plan's digest. Before it writes, apply plans the zone again. If
+            the zone changed since the customer looked, apply stops with Stale.
+          </p>
+        </article>
+        <article>
+          <span class="idx">03</span>
+          <div class="provider-pair">
+            <ProviderLogo provider="cloudflare" size={22} />
+            <ProviderLogo provider="vercel" size={18} />
+          </div>
+          <h3>Your app keeps custody</h3>
+          <p>
+            Your key seals the credential. Your database holds the rows. Your session says who is
+            calling. No credential reaches the browser, and there is no hosted service holding your
+            customers' tokens.
+          </p>
+          <a href="/docs/guides/storage">Custody and storage →</a>
+        </article>
+        <article>
+          <span class="idx">04</span>
+          <h3>Verification with evidence</h3>
+          <p>
+            For each record, DomainKit stores what the provider returned and what each public
+            resolver saw, then schedules the next check.
+          </p>
+          <a href="/docs/core/verification">How verification works →</a>
+        </article>
+      </div>
+      <p class="strip-note">
+        <strong>Cleanup is a separate approval.</strong> Removing records is its own plan, bound to
+        an apply receipt. A record someone edited by hand is left alone.
+        <a href="/docs/core/cleanup">Cleanup →</a>
+      </p>
     </section>
+
+    <section class="block" id="production">
+      <p class="label">[ 05 · In production ]</p>
+      <h2>Samva runs its customer domain setup on DomainKit.</h2>
+      <div class="prod">
+        <div>
+          <p>
+            Samva is an email API. When a customer adds a sending domain, Samva uses DomainKit to
+            add the SPF and verification TXT records, the MX records, and the DKIM and tracking
+            CNAME records to the customer's Cloudflare or Vercel zone, after they approve the plan.
+          </p>
+          <p class="links">
+            <a href="/customers/samva">Read the Samva case study →</a>
+            <a href="https://samva.dev">Visit Samva</a>
+          </p>
+        </div>
+        <figure class="testimonial">
+          <a class="samva-logo" href="https://samva.dev" aria-label="Samva">
+            <SamvaMark class="samva-mark" size={40} />
+            <span>Samva</span>
+          </a>
+          <blockquote>
+            <p>
+              Onboarding gets difficult mainly because of DNS. Copying and pasting records is
+              error-prone and it increases support cases. That's what we built DomainKit to solve.
+            </p>
+          </blockquote>
+          <figcaption>Saatvik Arya, founder, Samva</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="block" id="integrate">
+      <p class="label">[ 06 · Integrate ]</p>
+      <h2>Mount it in your API. Ship the UI.</h2>
+      <div class="two">
+        <div class="col">
+          <h3>On your server</h3>
+          <p>
+            One route group with twenty-five endpoints, and an OpenAPI document with it. You write
+            one service, Identity, that says who is calling and what they can reach. Storage and
+            custody come from your own database and key.
+          </p>
+          <CodeBlock code={identity} lang="ts" title="examples/server/mount.ts#identity" />
+          <CodeBlock code={mount} lang="ts" title="examples/server/mount.ts#mount" />
+          <p><a href="/docs/guides/host-integration">Host integration guide →</a></p>
+        </div>
+        <div class="col">
+          <h3>In your app</h3>
+          <p>
+            One hook, <code>Domain.useFlow</code>, runs connect, plan, approve, apply, and verify.
+            Render it yourself, or copy the styled block into your project and change anything.
+          </p>
+          <CodeBlock code={transport} lang="tsx" title="examples/react/domain-settings.tsx#setup" />
+          <CodeBlock code={flow} lang="tsx" title="examples/react/domain-settings.tsx#flow" />
+          <div class="install">
+            <code>npx shadcn@latest add https://domain-kit.dev/r/domain-flow.json</code>
+          </div>
+          <p>
+            <a href="/docs/react">React docs →</a> <a href="/components">Browse the components →</a>
+          </p>
+        </div>
+      </div>
+      <p class="note">
+        DomainKit is Effect 4 underneath. Browser code can stay in Promises through{" "}
+        <code>Transport.toAsync</code>.
+      </p>
+    </section>
+
+    <section class="block" id="boundaries">
+      <p class="label">[ 07 · Boundaries ]</p>
+      <h2>What DomainKit is not.</h2>
+      <div class="cells">
+        <article>
+          <h3>Not a DNS host or registrar.</h3>
+          <p>Your customer's records stay at their own provider.</p>
+        </article>
+        <article>
+          <h3>Not TLS or traffic.</h3>
+          <p>
+            DomainKit writes DNS records. Certificates and routing stay with your host, such as
+            Cloudflare for SaaS or Vercel.
+          </p>
+          <a href="/compare/cloudflare-for-saas">Using DomainKit with Cloudflare for SaaS →</a>
+        </article>
+        <article>
+          <h3>Not a hosted service.</h3>
+          <p>
+            It runs in your app, with your database and your key. There is no SLA and no support
+            contract.
+          </p>
+        </article>
+        <article>
+          <h3>Two providers today.</h3>
+          <p>
+            Cloudflare and Vercel are built in. For any other provider, your app shows the records
+            to add by hand, or you write an adapter. Entri lists about 60 providers, and that
+            matters if your customers are mostly elsewhere.
+          </p>
+          <a href="/compare/entri">DomainKit vs Entri →</a>
+        </article>
+      </div>
+
+      <h2 class="faq-title">Questions</h2>
+      <div class="faq">
+        {
+          faqs.map((item) => (
+            <details>
+              <summary>{item.q}</summary>
+              <p>
+                {item.a}
+                {item.link && (
+                  <>
+                    {" "}
+                    <a href={item.link.href}>{item.link.label} →</a>
+                  </>
+                )}
+                {item.links?.map((l) => (
+                  <>
+                    {" "}
+                    <a href={l.href}>{l.label} →</a>
+                  </>
+                ))}
+              </p>
+            </details>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="band">
+      <h2>Add custom domains to your product.</h2>
+      <p>The Quickstart runs the whole lifecycle in memory, with no credentials.</p>
+      <div class="install center">
+        <code>{installCommand}</code>
+        <button type="button" data-copy={installCommand} aria-label="Copy install command">
+          Copy
+        </button>
+      </div>
+      <div class="actions center">
+        <a class="btn primary" href="/docs/quickstart">Quickstart</a>
+        <a class="btn ghost" href="https://github.com/AryaLabsHQ/domainkit">GitHub</a>
+        <a class="btn ghost" href="https://www.npmjs.com/package/domainkit">npm</a>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div>
+        <strong>Docs</strong>
+        <a href="/docs">Documentation</a>
+        <a href="/components">Components</a>
+      </div>
+      <div>
+        <strong>Guides</strong>
+        <a href="/guides/custom-domain-onboarding">Custom domain setup</a>
+        <a href="/guides/email-domain-setup">Email domain setup</a>
+      </div>
+      <div>
+        <strong>Compare</strong>
+        <a href="/compare/entri">Entri</a>
+        <a href="/compare/cloudflare-for-saas">Cloudflare for SaaS</a>
+        <a href="/compare/domain-connect">Domain Connect</a>
+        <a href="/compare/manual-dns">Manual DNS</a>
+      </div>
+      <div>
+        <strong>Customers</strong>
+        <a href="/customers/samva">Samva</a>
+      </div>
+      <div>
+        <strong>Project</strong>
+        <a href="https://github.com/AryaLabsHQ/domainkit">GitHub</a>
+        <a href="https://www.npmjs.com/package/domainkit">npm</a>
+        <span>MIT licensed</span>
+      </div>
+    </footer>
   </main>
 </PageLayout>
 
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>("button[data-copy]")) {
+    button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset.copy ?? "");
+        button.textContent = "Copied";
+        setTimeout(() => (button.textContent = "Copy"), 1600);
+      } catch {
+        button.textContent = "Select and copy";
+      }
+    });
+  }
+
+  // The preview frame reports its rendered height the way Blume's own <Component> frames do.
+  window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin || event.data?.type !== "blume:example-height") {
+      return;
+    }
+    const frame = document.querySelector<HTMLIFrameElement>("iframe[data-flow-frame]");
+    if (frame && frame.contentWindow === event.source && Number.isFinite(event.data.height)) {
+      frame.style.height = `${Math.max(420, Math.min(event.data.height, 760))}px`;
+    }
+  });
+</script>
+
 <style>
-  .landing {
+  .fm {
+    --gutter: clamp(1rem, 4vw, 2rem);
+    border-inline: 1px dashed var(--fm-hairline);
     margin: 0 auto;
-    /* Wide enough that the example regions render without a horizontal scrollbar. */
-    max-width: 84rem;
-    padding: clamp(5rem, 11vw, 9rem) 1.5rem 5rem;
+    max-width: 76rem;
+    padding: clamp(4.5rem, 9vw, 7rem) var(--gutter) 3rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    overflow-x: clip;
   }
-
-  .hero {
-    max-width: none;
+  @media (max-width: 80rem) {
+    .fm {
+      border-inline: 0;
+    }
   }
-
-  h1 {
+  .fm :global(a) {
+    text-underline-offset: 3px;
+  }
+  .fm p {
+    margin: 0 0 1rem;
+  }
+  .fm a:not(.btn):not(.chip):not(.textlink):not(.samva-logo) {
+    color: var(--fm-link);
+  }
+  code {
+    font-family: var(--blume-font-mono);
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+  }
+  .label {
+    color: var(--blume-muted-foreground);
+    font-family: var(--blume-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    margin: 0 0 1rem;
+    text-transform: uppercase;
+  }
+  h1,
+  h2,
+  h3 {
+    color: var(--blume-foreground);
     font-family: var(--blume-font-display);
-    font-size: clamp(3rem, 7vw, 6.5rem);
-    font-weight: 600;
-    letter-spacing: -0.055em;
-    line-height: 0.96;
-    margin: 0;
+    letter-spacing: -0.03em;
     text-wrap: balance;
   }
-
-  .lede {
-    color: var(--blume-muted-foreground);
-    font-size: clamp(1.35rem, 2vw, 1.5rem);
-    line-height: 1.5;
-    margin: 1.25rem 0 0;
+  h1 {
+    font-size: clamp(2.25rem, 5vw, 3.6rem);
+    line-height: 1.04;
+    margin: 0 0 1.25rem;
+  }
+  h2 {
+    font-size: clamp(1.6rem, 3.2vw, 2.3rem);
+    line-height: 1.1;
+    margin: 0 0 1.5rem;
     max-width: 40rem;
   }
+  h3 {
+    font-size: 1.1rem;
+    margin: 0 0 0.6rem;
+  }
 
+  /* Hero */
+  .hero {
+    display: grid;
+    gap: clamp(2rem, 4vw, 3.5rem);
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    align-items: start;
+  }
+  .hero-copy,
+  .hero-demo {
+    min-width: 0;
+  }
+  .sub {
+    color: var(--blume-muted-foreground);
+    font-size: 1.15rem;
+    line-height: 1.5;
+  }
   .install {
-    margin: 1.75rem 0 0;
+    align-items: stretch;
+    background: var(--fm-panel);
+    border: 1px solid var(--fm-hairline);
+    display: flex;
+    margin: 1.25rem 0;
+    max-width: 100%;
   }
-
   .install code {
-    border: 1px solid var(--blume-border);
-    border-radius: var(--blume-radius);
-    font-family: var(--blume-font-mono);
-    font-size: 0.9rem;
-    padding: 0.55rem 0.85rem;
+    align-self: center;
+    flex: 1;
+    min-width: 0;
+    padding: 0.65rem 0.9rem;
   }
-
+  .install button {
+    background: transparent;
+    border: 0;
+    border-left: 1px solid var(--fm-hairline);
+    color: var(--blume-muted-foreground);
+    cursor: pointer;
+    font-family: var(--blume-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    padding: 0 0.9rem;
+    text-transform: uppercase;
+  }
+  .install button:hover {
+    color: var(--blume-foreground);
+  }
   .actions {
     align-items: center;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 1.75rem;
+    gap: 0.7rem 0.9rem;
+    margin-bottom: 1.5rem;
   }
-
-  .tech {
-    color: var(--blume-muted-foreground);
+  .btn {
+    border: 1px solid var(--fm-hairline);
+    border-radius: 2px;
+    color: var(--blume-foreground);
+    display: inline-block;
     font-family: var(--blume-font-mono);
-    font-size: 0.8rem;
-    margin: 1.5rem 0 0;
-  }
-
-  .actions a {
-    border: 1px solid var(--blume-border);
-    border-radius: var(--blume-radius);
-    color: inherit;
-    font-weight: 600;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
     padding: 0.7rem 1rem;
     text-decoration: none;
+    text-transform: uppercase;
   }
-
-  .actions .primary {
-    background: var(--blume-action);
-    border-color: transparent;
-    color: var(--blume-action-foreground);
+  .btn.primary {
+    background: #0b5cff;
+    border-color: #0b5cff;
+    color: #fff;
   }
-
-  .split {
-    border-top: 1px solid var(--blume-border);
-    display: grid;
-    gap: 2.5rem;
-    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
-    margin-top: clamp(4rem, 8vw, 7rem);
-    padding-top: 2.5rem;
+  .btn.ghost {
+    position: relative;
   }
-
-  .caption h2 {
-    font-size: clamp(1.5rem, 3vw, 2rem);
-    letter-spacing: -0.02em;
-    margin: 0 0 1rem;
-    text-wrap: balance;
+  .btn.ghost:hover {
+    border-color: var(--blume-foreground);
   }
-
-  .caption p {
+  .textlink {
     color: var(--blume-muted-foreground);
-    line-height: 1.6;
+    font-family: var(--blume-font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .chip {
+    align-items: center;
+    background: var(--fm-panel);
+    border: 1px solid var(--fm-hairline);
+    border-radius: 999px;
+    color: var(--blume-foreground);
+    display: inline-flex;
+    font-size: 0.85rem;
+    gap: 0.6rem;
+    max-width: 100%;
+    padding: 0.4rem 0.9rem 0.4rem 0.5rem;
+    text-decoration: none;
+  }
+  .chip:hover {
+    border-color: var(--blume-foreground);
+  }
+  .samva-mark {
+    color: var(--blume-foreground);
+    height: 1.25rem;
+    width: 1.25rem;
+    flex: none;
+  }
+
+  /* Tabs, CSS only */
+  .tabs > input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .tablist {
+    border-bottom: 1px solid var(--fm-hairline);
+    display: flex;
+    gap: 1.25rem;
+  }
+  .tablist label {
+    color: var(--blume-muted-foreground);
+    cursor: pointer;
+    font-family: var(--blume-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    padding: 0.4rem 0 0.6rem;
+    text-transform: uppercase;
+  }
+  .panel {
+    display: none;
+    max-height: 18rem;
+    overflow: auto;
+  }
+  .panel :global(.blume-code-block),
+  .panel :global(figure) {
     margin: 0;
   }
-
-  .caption .aside {
-    border-top: 1px solid var(--blume-border);
-    font-size: 0.9rem;
+  #tab-server:checked ~ .p-server,
+  #tab-react:checked ~ .p-react,
+  #tab-core:checked ~ .p-core {
+    display: block;
+  }
+  #tab-server:checked ~ .tablist label[for="tab-server"],
+  #tab-react:checked ~ .tablist label[for="tab-react"],
+  #tab-core:checked ~ .tablist label[for="tab-core"] {
+    box-shadow: inset 0 -2px 0 var(--blume-accent);
+    color: var(--blume-foreground);
+  }
+  #tab-server:focus-visible ~ .tablist label[for="tab-server"],
+  #tab-react:focus-visible ~ .tablist label[for="tab-react"],
+  #tab-core:focus-visible ~ .tablist label[for="tab-core"] {
+    outline: 2px solid var(--blume-accent);
+    outline-offset: 2px;
+  }
+  .live {
     margin-top: 1.25rem;
-    padding-top: 1.25rem;
+  }
+  .live iframe {
+    background: var(--blume-background);
+    border: 1px solid var(--fm-hairline);
+    display: block;
+    height: 460px;
+    width: 100%;
+  }
+  .cap,
+  figcaption {
+    color: var(--blume-muted-foreground);
+    font-family: var(--blume-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    line-height: 1.5;
+    margin: 0.6rem 0 0;
   }
 
-  .code {
+  /* Sections */
+  .block {
+    border-top: 1px solid var(--fm-hairline);
+    margin-top: clamp(3.5rem, 8vw, 6rem);
+    padding-top: 2.25rem;
+  }
+  .prose-cols {
+    columns: 2 20rem;
+    column-gap: 2.5rem;
+    max-width: 62rem;
+  }
+  .prose-cols p {
+    break-inside: avoid;
+  }
+  .pull {
+    border-left: 2px solid var(--blume-accent);
+    margin: 1.5rem 0 2rem;
+    max-width: 44rem;
+    padding: 0.1rem 0 0.1rem 1.1rem;
+  }
+  .pull p {
+    font-size: 1.15rem;
+    margin: 0 0 0.4rem;
+  }
+  .pull cite {
+    font-family: var(--blume-font-mono);
+    font-size: 0.75rem;
+    font-style: normal;
+  }
+  .compare {
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .panelbox {
+    background: var(--fm-panel);
+    border: 1px solid var(--fm-hairline);
+    margin: 0;
+    padding: 1.1rem;
+  }
+  .panelbox .label {
+    margin-bottom: 0.75rem;
+  }
+  .mock-instructions {
+    font-size: 0.9rem;
+  }
+  .mock-instructions ol {
+    margin: 0.5rem 0 0;
+    padding-left: 1.2rem;
+  }
+  .mock-instructions pre {
+    background: var(--blume-muted);
+    font-family: var(--blume-font-mono);
+    font-size: 0.75rem;
+    margin: 0.3rem 0;
+    overflow-x: auto;
+    padding: 0.4rem 0.6rem;
+  }
+  .mock-flow {
+    display: grid;
+    gap: 0.75rem;
+    font-size: 0.9rem;
+  }
+  .mock-row {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .mock-btn {
+    border: 1px solid var(--fm-hairline);
+    border-radius: 2px;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.7rem;
+  }
+  .mock-btn.solid {
+    background: #0b5cff;
+    border-color: #0b5cff;
+    color: #fff;
+    justify-self: start;
+    padding: 0.45rem 0.9rem;
+  }
+  .plan {
+    display: grid;
+    gap: 0.4rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .plan li {
+    align-items: center;
+    display: flex;
+    gap: 0.6rem;
+  }
+  .more {
+    margin-top: 1.5rem;
+  }
+  .pill {
+    border-radius: 2px;
+    display: inline-block;
+    font-family: var(--blume-font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.45rem;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .pill.add {
+    background: var(--fm-add-bg);
+    color: var(--fm-add);
+  }
+  .pill.set {
+    background: var(--fm-set-bg);
+    color: var(--fm-set);
+  }
+  .pill.conflict {
+    background: var(--fm-conflict-bg);
+    color: var(--fm-conflict);
+  }
+
+  /* Figure 1 */
+  .stops {
+    counter-reset: stop;
+    display: grid;
+    gap: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    list-style: none;
+    margin: 0 0 2rem;
+    padding: 0;
+  }
+  .stops li {
+    border-left: 1px solid var(--fm-hairline);
+    counter-increment: stop;
+    font-size: 0.92rem;
+    padding: 0 1rem 0.5rem;
+  }
+  .stops li:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .stops .n {
+    display: block;
+    font-family: var(--blume-font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+  }
+  .stops .n::before {
+    color: var(--blume-accent);
+    content: counter(stop, decimal-leading-zero) " · ";
+  }
+  .plan-fig {
+    margin: 0;
+  }
+  .plan-table {
+    background: var(--fm-panel);
+    border: 1px solid var(--fm-hairline);
+    font-size: 0.85rem;
+    overflow-x: auto;
+  }
+  .plan-head,
+  .plan-line {
+    align-items: center;
     display: grid;
     gap: 1rem;
-    min-width: 0;
+    grid-template-columns: 8rem 4.5rem minmax(14rem, 1.4fr) minmax(12rem, 1.4fr);
+    min-width: 46rem;
+    padding: 0.7rem 1rem;
+  }
+  .plan-head {
+    background: var(--blume-muted);
+    color: var(--blume-muted-foreground);
+    font-family: var(--blume-font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .plan-line {
+    border-top: 1px solid var(--fm-hairline);
+  }
+  .note {
+    color: var(--blume-muted-foreground);
+    font-size: 0.9rem;
+    margin-top: 1.25rem;
   }
 
-  .principles {
-    border-top: 1px solid var(--blume-border);
+  /* Split */
+  .split {
     display: grid;
     gap: 2.5rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin-top: clamp(4rem, 8vw, 7rem);
-    padding-top: 2.5rem;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
   }
-
-  .principles h2 {
-    font-size: 1.1rem;
-    margin: 0 0 0.55rem;
+  .split > * {
+    min-width: 0;
   }
-
-  .principles p {
-    color: var(--blume-muted-foreground);
-    line-height: 1.55;
+  .legend {
+    display: grid;
+    gap: 0.15rem 1rem;
+    grid-template-columns: max-content 1fr;
+    margin: 1.25rem 0;
+  }
+  .legend dt,
+  .legend dd {
     margin: 0;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--fm-hairline);
+  }
+  .legend dd {
+    color: var(--blume-muted-foreground);
+    font-size: 0.92rem;
+  }
+  .aside {
+    font-size: 0.92rem;
   }
 
+  /* Cells */
+  .cells {
+    border: 1px solid var(--fm-hairline);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .cells article {
+    border-left: 1px solid var(--fm-hairline);
+    font-size: 0.92rem;
+    padding: 1.1rem;
+  }
+  .cells article:first-child {
+    border-left: 0;
+  }
+  .cells article p {
+    color: var(--blume-muted-foreground);
+  }
+  .idx {
+    color: var(--blume-accent);
+    display: block;
+    font-family: var(--blume-font-mono);
+    font-size: 0.72rem;
+    margin-bottom: 0.75rem;
+  }
   .provider-pair {
     align-items: center;
     display: flex;
-    gap: 0.65rem;
-    margin-bottom: 1rem;
-    min-height: 1.5rem;
+    gap: 0.6rem;
+    margin: -0.25rem 0 0.7rem;
+    min-height: 1.4rem;
+  }
+  .strip-note {
+    border: 1px solid var(--fm-hairline);
+    border-top: 0;
+    font-size: 0.92rem;
+    margin: 0;
+    padding: 0.9rem 1.1rem;
   }
 
-  code {
-    font-family: var(--blume-font-mono);
-    font-size: 0.875em;
+  /* Production */
+  .prod {
+    align-items: start;
+    display: grid;
+    gap: 2.5rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
-
-  .strip {
-    border-top: 1px solid var(--blume-border);
-    color: var(--blume-muted-foreground);
+  .links {
     display: flex;
     flex-wrap: wrap;
-    font-size: 0.9rem;
-    gap: 0.75rem 1.75rem;
-    margin-top: clamp(4rem, 8vw, 7rem);
-    padding-top: 2rem;
+    gap: 0.5rem 1.5rem;
+  }
+  .testimonial {
+    background: var(--fm-panel);
+    border: 1px solid var(--fm-hairline);
+    margin: 0;
+    padding: 1.4rem;
+  }
+  .samva-logo {
+    align-items: center;
+    color: var(--blume-foreground);
+    display: inline-flex;
+    font-weight: 500;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    text-decoration: none;
+  }
+  .samva-logo .samva-mark {
+    height: 2rem;
+    width: 2rem;
+  }
+  .testimonial blockquote {
+    border-left: 2px solid var(--blume-accent);
+    margin: 0;
+    padding-left: 1rem;
+  }
+  .testimonial blockquote p {
+    font-size: 1.05rem;
+    margin: 0;
   }
 
-  @media (max-width: 48rem) {
+  /* Integrate */
+  .two {
+    display: grid;
+    gap: 2.5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .col {
+    min-width: 0;
+  }
+  .col :global(figure) {
+    margin: 0 0 1rem;
+  }
+
+  .faq-title {
+    margin-top: 3.5rem;
+  }
+  .faq {
+    border-top: 1px solid var(--fm-hairline);
+    max-width: 48rem;
+  }
+  .faq details {
+    border-bottom: 1px solid var(--fm-hairline);
+    padding: 0.9rem 0;
+  }
+  .faq summary {
+    cursor: pointer;
+    font-weight: 500;
+    list-style: none;
+    padding-right: 1.5rem;
+    position: relative;
+  }
+  .faq summary::-webkit-details-marker {
+    display: none;
+  }
+  .faq summary::after {
+    color: var(--blume-muted-foreground);
+    content: "+";
+    font-family: var(--blume-font-mono);
+    position: absolute;
+    right: 0;
+  }
+  .faq details[open] summary::after {
+    content: "\2212";
+  }
+  .faq details p {
+    color: var(--blume-muted-foreground);
+    margin: 0.7rem 0 0;
+  }
+
+  /* Closing band */
+  .band {
+    background: var(--blume-muted);
+    border: 1px solid var(--fm-hairline);
+    margin-top: clamp(3.5rem, 8vw, 6rem);
+    padding: clamp(2rem, 5vw, 3.5rem) var(--gutter);
+    text-align: center;
+  }
+  .band h2 {
+    margin-inline: auto;
+  }
+  .install.center {
+    margin-inline: auto;
+    max-width: 26rem;
+  }
+  .actions.center {
+    justify-content: center;
+    margin-bottom: 0;
+  }
+
+  .foot {
+    border-top: 1px solid var(--fm-hairline);
+    display: grid;
+    font-size: 0.85rem;
+    gap: 1.5rem;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+  }
+  .foot div {
+    display: grid;
+    gap: 0.35rem;
+    align-content: start;
+  }
+  .foot strong {
+    font-family: var(--blume-font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .foot a {
+    color: var(--blume-muted-foreground);
+  }
+  .foot span {
+    color: var(--blume-muted-foreground);
+  }
+
+  @media (max-width: 62rem) {
+    .hero,
     .split,
-    .principles {
-      grid-template-columns: 1fr;
+    .prod,
+    .two {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .stops {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      row-gap: 1.5rem;
+    }
+    .stops li:nth-child(odd) {
+      border-left: 0;
+      padding-left: 0;
+    }
+    .cells {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .cells article:nth-child(odd) {
+      border-left: 0;
+    }
+    .cells article:nth-child(n + 3) {
+      border-top: 1px solid var(--fm-hairline);
+    }
+    .foot {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 40rem) {
+    .compare,
+    .stops,
+    .cells {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .stops li {
+      border-left: 0;
+      padding-left: 0;
+    }
+    .cells article {
+      border-left: 0;
+    }
+    .cells article + article {
+      border-top: 1px solid var(--fm-hairline);
+    }
+    .foot {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .legend {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .legend dt {
+      padding-bottom: 0;
+    }
+    .legend dd {
+      border-top: 0;
+      padding-top: 0;
     }
   }
 </style>

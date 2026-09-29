@@ -52,6 +52,7 @@ export default defineConfig({
   },
   lastModified: { type: "git" },
   logo: {
+    image: "/logo.svg",
     text: "DomainKit",
   },
   navigation: {
@@ -75,9 +76,10 @@ export default defineConfig({
     },
   },
   theme: {
-    accent: "blue",
+    accent: { dark: "#4b88ff", light: "#0b5cff" },
+    fonts: { body: "geist", display: "geist", mono: "geist-mono" },
     mode: "system",
-    radius: "md",
+    radius: "sm",
   },
   title: "DomainKit",
 });
