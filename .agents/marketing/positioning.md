@@ -144,7 +144,7 @@ and needs owner sign-off (truth).
 | "Entri already does this."                       | Entri is hosted and broader (about 60 providers). DomainKit is a library in your app: credentials in your database, receipts you own, two providers today. |
 | "Only Cloudflare and Vercel?"                    | Yes today; everything else falls back to manual records with observation.                                                                                  |
 | "Why would my customer grant a DNS token?"       | Consent is to an exact reviewed list of records. Plans are additive; cleanup is separately approved and receipt-bound.                                     |
-| "What if their SPF already exists?"              | The planner reports `Conflict` and refuses to write. It does not merge silently.                                                                           |
+| "What if their SPF already exists?"              | The same value is `Noop`. A different value is added beside it, or is a `Conflict` under the `exclusive` policy. DomainKit never merges SPF values.        |
 | "I can call the Cloudflare API myself."          | True. The shared lifecycle (digest-bound approval, stale-plan detection, receipts, cleanup, observation) is the part every team rebuilds.                  |
 | "Where does the token live? Who is liable?"      | The host: storage, encryption, tenancy, audit. DomainKit ships interfaces, not custody.                                                                    |
 | "Will it fix DNS conflicts automatically?"       | No. Conflicts are surfaced and writes fail closed.                                                                                                         |
