@@ -9,7 +9,7 @@ seo:
 
 `@domainkit/react` runs the whole custom-domain lifecycle over a transport your server owns, and
 paints none of it. The package supplies state, copy, and accessibility; your application supplies
-the markup. Provider credentials never reach the browser: the transport calls the routes you
+the markup. Use it to add custom-domain setup to a React settings page. Provider credentials never reach the browser: the transport calls the routes you
 mounted from `domainkit/server`.
 
 ```package-install
@@ -91,8 +91,8 @@ connect instead of rendering an empty row.
 
 <Snippet file="examples/react/read-only.tsx" region="per-domain" title="One domain among several" />
 
-Capability gating is the other half and is unchanged: a group the transport never declares is absent
-from `flow.capabilities`. `readOnly` covers the authorization a transport cannot express, such as a
+Capability gating is the other half: a group the transport never declares is absent from
+`flow.capabilities`. `readOnly` covers the authorization a transport cannot express, such as a
 member of an organisation who reaches the same routes and would get a 403 from any write.
 
 Observation stays available, because checking DNS reads the world rather than changing the domain.

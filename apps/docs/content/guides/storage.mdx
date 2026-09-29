@@ -7,7 +7,8 @@ seo:
   title: DomainKit persistence and credential custody
 ---
 
-`Storage` is the durable seam every lifecycle operation goes through: authorizations with sealed
+This guide covers where DomainKit keeps its rows, who runs the migrations, and how provider
+credentials are sealed. `Storage` is the durable seam every lifecycle operation goes through: authorizations with sealed
 credentials, connections, attachments, interactive-flow continuations, attempts carrying a plan,
 approval and receipt, and observed readiness. `Connect` seals provider secret material through
 `Custody` before writing an authorization credential to `Storage`.

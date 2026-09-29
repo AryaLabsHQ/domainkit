@@ -4,7 +4,8 @@ description: "The one press a plan needs: it names how many records it will add,
 ---
 
 `plan-action` is the single control the flow offers once a plan exists. It approves the plan's
-digest and applies it in one press, because connecting was already the customer saying yes.
+digest and applies it in one press, because the records table above it already shows every record
+the press will write.
 
 <Component path="registry/plan-action" />
 
@@ -16,8 +17,8 @@ npx shadcn@latest add https://domain-kit.dev/r/plan-action.json
 
 ## What it does
 
-Only a create or a delete is approvable: a conflict blocks, and a record already in place is nothing
-to write. Where a conflict blocks part of a plan the action names the remaining ids, so the rest
+Only a `Create` or a `Delete` is approvable: a `Conflict` blocks, and a `Noop` is a record already
+in place, so there is nothing to write. Where a conflict blocks part of a plan the action names the remaining ids, so the rest
 still goes in; where every operation is blocked it says what to fix instead. Once an apply has
 landed it reports how many records the receipt proves it added.
 

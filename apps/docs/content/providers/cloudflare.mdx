@@ -36,6 +36,9 @@ something DomainKit invents. Confidential `clientAuth` defaults to `client_secre
 The OAuth endpoints DomainKit uses are `dash.cloudflare.com/oauth2/auth`, `/token`, and `/revoke`.
 Register the callback URL your routes are mounted at, ending in `/callback/cloudflare`.
 
+For development against an emulator, `issuer` moves those three endpoints off
+`https://dash.cloudflare.com` and `baseUrl` moves the REST API off Cloudflare's.
+
 ## Connecting with a token
 
 <Snippet file="examples/providers/cloudflare.ts" region="connect-token" title="An API token" />

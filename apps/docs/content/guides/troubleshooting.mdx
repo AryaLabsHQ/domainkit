@@ -7,9 +7,10 @@ seo:
   title: Troubleshoot a DomainKit integration
 ---
 
-Every failure is a `DomainKit.Error` carrying one reason.
-[Failure reasons](/docs/core/errors) is the full table; this page is what to do when
-one of them keeps happening.
+This page helps you diagnose a DomainKit integration that fails to apply a plan, loses a connection,
+never finishes an interactive connection, or never reports DNS as ready. Every failure is a
+`DomainKit.Error` carrying one reason. [Failure reasons](/docs/core/errors) is the full table; this
+page is what to do when one of them keeps happening.
 
 ## The plan will not apply
 
@@ -41,11 +42,12 @@ customer connects the provider again. `Connect.inspect` reports the same thing a
 **`Unauthenticated` from a provider.** The token was revoked or rotated at the provider, or the
 customer pasted the wrong value. A token the provider rejects while connecting reads the same way
 whatever the provider's status: Cloudflare answers a malformed token with HTTP 400 code 6003 or
-6111 and a rejected one with 403 from its verify endpoint, Vercel answers 403 `forbidden`. The reason
+6111 and a rejected one with 401 or 403 from its verify endpoint, and Vercel answers 403. The reason
 carries the provider's own message, and the server answers 401.
 
-**`Forbidden`.** The credential is valid and lacks the permission. Cloudflare tokens need
-`zone.read` and `dns.write`; check the token's scopes and, for an account-owned token, that
+**`Forbidden`.** The credential is valid and lacks the permission. A Cloudflare token needs
+permission to read zones and to read and write DNS records (`zone.read`, `dns.read`, and `dns.write`
+for OAuth scopes); check the token's permissions and, for an account-owned token, that
 the account id matches.
 
 ## The interactive connection never completes

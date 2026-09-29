@@ -33,12 +33,12 @@ whose `Identity` reads a cookie needs no headers here at all.
 
 <Snippet file="examples/client/transport.ts" region="capabilities" title="Declaring what exists" />
 
-| Group          | Methods                                                          |
-| -------------- | ---------------------------------------------------------------- |
-| `connection`   | `inspect`, `discover`, `start`, `attach`, `detach`, `disconnect` |
-| `provisioning` | `plan`, `approve`, `reject`, `apply`, `attempt`                  |
-| `verification` | `observe`                                                        |
-| `cleanup`      | `plan`, `approve`, `reject`, `apply`                             |
+| Group          | Methods                                                                                |
+| -------------- | -------------------------------------------------------------------------------------- |
+| `connection`   | `inspect`, `discover`, `zones`, `start`, `reconnect`, `attach`, `detach`, `disconnect` |
+| `provisioning` | `plan`, `approve`, `reject`, `apply`, `attempt`, `receipt`                             |
+| `verification` | `observe`, `latest`                                                                    |
+| `cleanup`      | `plan`, `approve`, `reject`, `apply`                                                   |
 
 Every group is optional. A host that mounts only the connection routes gets a transport that
 typechecks and a UI that renders only the connection step, because `@domainkit/react` reads

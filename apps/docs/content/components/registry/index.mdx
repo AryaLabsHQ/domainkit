@@ -5,8 +5,8 @@ sidebar:
   label: Overview
 ---
 
-The DomainKit registry contains React components for DNS interfaces. Add the files to your
-application with the shadcn CLI, then own their markup, styling, and behavior.
+The DomainKit registry contains React components for custom-domain setup and DNS interfaces. Add
+the files to your application with the shadcn CLI, then own their markup and styling.
 
 The registry follows shadcn conventions. Your project needs an initialized `components.json`;
 required shadcn primitives are listed as `registryDependencies`, and the CLI installs those for you.
@@ -60,7 +60,7 @@ own state and only needs the surface.
     Show DNS records in a compact, responsive table.
   </Card>
   <Card title="DNS operation" href="/components/registry/dns-operation">
-    Show one planned create, no-op, or conflict.
+    Show one planned create, no-op, conflict, or delete.
   </Card>
   <Card title="DNS status" href="/components/registry/dns-status">
     Show a status label with an explicit tone.
@@ -88,6 +88,6 @@ The source is yours after you copy it. Change its classes, icons, and layout to 
 system. Keep credentials, authenticated routes, storage, and readiness rules outside it: the
 behaviour behind the flow still runs through the transport your server owns.
 
-The [components overview](/components) lists every item with a preview, and the
+The [components overview](/components) lists every item, and the
 [registry guide](/docs/react/registry) covers where the boundary sits between a copied file and the
 transport behind it.

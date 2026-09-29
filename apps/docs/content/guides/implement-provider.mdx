@@ -7,8 +7,10 @@ seo:
   title: Write a DomainKit provider adapter
 ---
 
-A provider is one value. Auth methods are optional cases, so a provider that only issues personal
-tokens declares `token` and nothing else. Adding OAuth is one more case on the same definition.
+This guide turns a DNS provider's HTTP API into a DomainKit provider you can register beside
+Cloudflare and Vercel. A provider is one value. Auth methods are optional cases, so a provider that
+only issues personal tokens declares `token` and nothing else. Adding OAuth is one more case on the
+same definition.
 
 ## The whole thing
 
@@ -82,9 +84,8 @@ envelope fails `Unsupported` instead of decoding into the wrong shape.
 
 ## Register it
 
-```ts
-DomainKit.layer({ providers: [porkbun] });
-```
+Pass the definition to `DomainKit.layer({ providers: [porkbun] })`, where `porkbun` is the value the
+example above exports.
 
 `Providers` rejects two definitions with the same id, and `Provider.make` rejects an id that is not
 lowercase kebab-case, a definition with no auth method, and an empty `contextVersion`.

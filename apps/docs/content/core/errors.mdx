@@ -1,15 +1,16 @@
 ---
 title: Failure reasons
-description: The one error type DomainKit raises, the sixteen reasons it carries, the HTTP status each answers with, and what a host should do about each of them.
+description: The one error type DomainKit raises, the seventeen reasons it carries, the HTTP status each answers with, and what a host should do about each one.
 sidebar:
   label: Failures
 seo:
   title: DomainKit failure reasons
 ---
 
-Every DomainKit operation fails with one `DomainKit.Error`. It carries exactly one `Reason`, and
-`category`, `isRetryable`, and `httpStatus` all derive from that reason. Hosts match on the reason;
-nothing parses a message.
+This page maps every `Reason` a DomainKit operation can fail with to its HTTP status and the next
+step for your host. Every operation fails with one `DomainKit.Error`. It carries exactly one reason,
+and `category`, `isRetryable`, and `httpStatus` all derive from that reason. Hosts match on the
+reason; nothing parses a message.
 
 ```ts
 import { DomainKit, Reason } from "domainkit";
@@ -17,24 +18,25 @@ import { DomainKit, Reason } from "domainkit";
 
 ## The reasons
 
-| Reason                | Status | Retryable | Carries                            | Next step                                                  |
-| --------------------- | ------ | --------- | ---------------------------------- | ---------------------------------------------------------- |
-| `InvalidInput`        | 400    | no        | `message`, `field`                 | Fix the request                                            |
-| `Unauthenticated`     | 401    | no        | `message`                          | Sign in, or supply a working credential                    |
-| `Forbidden`           | 403    | no        | `message`                          | The credential lacks the permission                        |
-| `Reconnect`           | 403    | no        | `provider`, `connectionId`         | Ask the customer to connect the provider again             |
-| `NotFound`            | 404    | no        | `entity`, `id`                     | The row or provider object does not exist for this owner   |
-| `Conflict`            | 409    | no        | `planId`, `operations`             | Show the conflicting records; approve partially or fix DNS |
-| `Stale`               | 409    | no        | `planId`, `digest`                 | The zone moved under the plan; build a new one             |
-| `Expired`             | 409    | no        | `entity`, `id`                     | The plan, approval, continuation, or credential aged out   |
-| `Busy`                | 409    | yes       | `key`                              | Another apply or refresh holds the lock; retry             |
-| `ProviderConflict`    | 409    | no        | `provider`, `code`, `message`      | The provider refused because a conflicting record exists   |
-| `Unsupported`         | 501    | no        | `provider`, `operation`, `message` | The provider or that target cannot do it                   |
-| `ProviderRejected`    | 502    | no        | `provider`, `code`, `message`      | The provider refused; the message says why                 |
-| `ProviderUnavailable` | 503    | yes       | `provider`, `retryAfterMs`         | Rate limited or down; retry after the delay                |
-| `StorageFailed`       | 500    | yes       | `operation`, `message`             | The database call failed; retry                            |
-| `CryptoFailed`        | 500    | no        | `operation`                        | Sealing or opening failed; check the custody key           |
-| `ResolverFailed`      | 500    | no        | `resolver`, `message`              | The DNS pool could not be reached                          |
+| Reason                | Status | Retryable | Carries                               | Next step                                                  |
+| --------------------- | ------ | --------- | ------------------------------------- | ---------------------------------------------------------- |
+| `InvalidInput`        | 400    | no        | `message`, `field`                    | Fix the request                                            |
+| `Unauthenticated`     | 401    | no        | `message`                             | Sign in, or supply a working credential                    |
+| `Forbidden`           | 403    | no        | `message`                             | The credential lacks the permission                        |
+| `Reconnect`           | 403    | no        | `provider`, `connectionId`            | Ask the customer to connect the provider again             |
+| `NotFound`            | 404    | no        | `entity`, `id`                        | The row or provider object does not exist for this owner   |
+| `Conflict`            | 409    | no        | `planId`, `operations`                | Show the conflicting records; approve partially or fix DNS |
+| `Stale`               | 409    | no        | `planId`, `digest`                    | The zone moved under the plan; build a new one             |
+| `BatchStale`          | 409    | no        | `batchId`, `status`, `digest`         | The batch moved since it was read; read it again           |
+| `Expired`             | 409    | no        | `entity`, `id`                        | The plan, approval, continuation, or credential aged out   |
+| `Busy`                | 409    | yes       | `key`                                 | Another apply or refresh holds the lock; retry             |
+| `ProviderConflict`    | 409    | no        | `provider`, `code`, `message`         | The provider refused because a conflicting record exists   |
+| `Unsupported`         | 501    | no        | `provider`, `operation`, `message`    | The provider or that target cannot do it                   |
+| `ProviderRejected`    | 502    | no        | `provider`, `code`, `message`         | The provider refused; the message says why                 |
+| `ProviderUnavailable` | 503    | yes       | `provider`, `retryAfterMs`, `message` | Rate limited or down; retry after the delay                |
+| `StorageFailed`       | 500    | yes       | `operation`, `message`                | The database call failed; retry                            |
+| `CryptoFailed`        | 500    | no        | `operation`                           | Sealing or opening failed; check the custody key           |
+| `ResolverFailed`      | 500    | no        | `resolver`, `message`                 | The DNS pool could not be reached                          |
 
 ## Categories
 

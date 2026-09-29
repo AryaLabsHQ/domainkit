@@ -7,7 +7,8 @@ seo:
   title: Test a DomainKit integration
 ---
 
-`domainkit/testing` exists so host tests never stub global `fetch`. Every fake is a real
+This guide shows how to test a DomainKit integration, from a plan to a rendered connect flow, without
+a database or a provider account. `domainkit/testing` exists so host tests never stub global `fetch`. Every fake is a real
 implementation of a seam the lifecycle already goes through, so the code under test is the code that
 ships.
 
