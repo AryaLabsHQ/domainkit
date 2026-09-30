@@ -240,7 +240,7 @@ createRoot(document.getElementById("root")!).render(
     "--yes",
     "--overwrite",
   );
-  // Reconcile the CLI's additions with the fixture's pinned baseline and branch overrides.
+  // Install the CLI's additions while keeping DomainKit on this branch's tarballs.
   await run("bun", "install");
   await run("bun", "run", "typecheck");
   await run("bun", "run", "build");

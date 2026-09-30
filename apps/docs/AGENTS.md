@@ -70,9 +70,10 @@ deliberately unstyled, because that run is about behaviour, focus, and portals.
 
 `registry:check` installs every built item into a scratch shadcn project on the `base-nova` style,
 against tarballs packed from this branch, then typechecks and builds it. It uses the workspace's
-locked shadcn CLI and pinned direct fixture dependencies, while fetching real registry primitives
-and transitive npm dependencies online. Browser or network restrictions must fail visibly, never
-skip coverage; `CONTRIBUTING.md` documents setup and explicit browser overrides. The display items are also
+locked shadcn CLI and exact initial direct dependency versions, while fetching real registry
+primitives and transitive npm dependencies online. Only the two branch-packed DomainKit packages
+override dependency resolution. Browser or network restrictions must fail visibly, never skip
+coverage; `CONTRIBUTING.md` documents setup and explicit browser overrides. The display items are also
 scanned for a managed-runtime import: `dns-table`, `dns-operation`, `dns-status`, `provider-mark`,
 `copy-value`, and `async-state` must import no `domainkit`, Effect, or transport.
 

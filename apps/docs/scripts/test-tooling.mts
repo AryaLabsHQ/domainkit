@@ -27,7 +27,10 @@ assert.throws(
 const manifest = registryManifest("/tmp/branch-core.tgz", "/tmp/branch-react.tgz");
 assert.equal(manifest.dependencies.domainkit, "file:/tmp/branch-core.tgz");
 assert.equal(manifest.dependencies["@domainkit/react"], "file:/tmp/branch-react.tgz");
-assert.deepEqual(manifest.overrides, manifest.dependencies);
+assert.deepEqual(manifest.overrides, {
+  "@domainkit/react": "file:/tmp/branch-react.tgz",
+  domainkit: "file:/tmp/branch-core.tgz",
+});
 for (const [name, version] of Object.entries(manifest.dependencies)) {
   if (name === "domainkit" || name === "@domainkit/react") continue;
   assert.match(version, /^\d+\.\d+\.\d+(?:-[\w.-]+)?$/, `${name} must name an exact version`);

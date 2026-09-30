@@ -57,9 +57,10 @@ browser. `bun run test:snippets` checks sample regions. These focused commands d
 full browser suite.
 
 `bun run registry:check` is an online installation test. It uses the workspace's locked shadcn CLI
-and pinned direct fixture dependencies, installs all built registry items with real `base-nova`
-primitives, then typechecks and builds against this branch's packed DomainKit packages. The shadcn
-registry and transitive npm dependencies remain external inputs; the fixture is not an offline
+and starts from exact direct dependency versions. It installs all built items with real `base-nova`
+primitives, then typechecks and builds against this branch's packed DomainKit packages. Only the
+two DomainKit packages override dependency resolution; live primitives keep their transitive
+requirements. The shadcn registry and transitive npm dependencies remain external inputs; the fixture is not an offline
 snapshot. Package downloads and `https://ui.shadcn.com` must be reachable. A proxy or network denial
 is a blocked check, not a passing result. Run the full check in an authorized environment or use
 the PR's CI result when local policy prevents it.
