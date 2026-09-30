@@ -27,9 +27,11 @@
     "registry:build": "shadcn build registry.json --output public/r",
     "registry:check": "bun run registry:build && bun scripts/test-registry.mts",
     "registry:validate": "shadcn registry validate registry.json",
-    "test": "bun scripts/test-snippets.mts && bun run test:browser",
+    "test": "bun run test:tooling && bun run test:snippets && bun run test:browser",
     "test:browser": "playwright test",
+    "test:browser:install": "playwright install chromium",
     "test:snippets": "bun scripts/test-snippets.mts",
+    "test:tooling": "bun scripts/test-tooling.mts",
     "typecheck": "blume check"
   },
   "dependencies": {

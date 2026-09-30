@@ -59,15 +59,21 @@ From this directory: `bun run reference:check`, `bun run typecheck`, `bun run te
 `bun run registry:check`. From the repository root: `bun run typecheck:examples`. Inspect the
 rendered primary journeys when navigation or UI changes.
 
-`bun run test` runs the snippet reader and the browser spec. `test:snippets` pins the reader that
+`bun run test` runs the tooling checks, snippet reader, and browser spec. Install the managed
+browser with `bun run test:browser:install`; Linux CI adds `--with-deps`. `test:tooling` checks
+explicit browser overrides and the pinned registry fixture inputs. `test:snippets` pins the reader that
 slices the samples: region names match whole, because several names in the gallery are prefixes of
-another. `test:browser` drives the registry block in Chrome over `Testing.transport`, through
+another. `test:browser` drives the registry block in Playwright-managed Chromium over `Testing.transport`, through
 `tests/browser/app`, a Vite fixture with no Tailwind build: the few positional rules the utility
 classes would have supplied live in `tests/browser/app/fixture.css`, and everything else is
 deliberately unstyled, because that run is about behaviour, focus, and portals.
 
 `registry:check` installs every built item into a scratch shadcn project on the `base-nova` style,
-against tarballs packed from this branch, then typechecks and builds it. The display items are also
+against tarballs packed from this branch, then typechecks and builds it. It uses the workspace's
+locked shadcn CLI and exact initial direct dependency versions, while fetching real registry
+primitives and transitive npm dependencies online. Only the two branch-packed DomainKit packages
+override dependency resolution. Browser or network restrictions must fail visibly, never skip
+coverage; `CONTRIBUTING.md` documents setup and explicit browser overrides. The display items are also
 scanned for a managed-runtime import: `dns-table`, `dns-operation`, `dns-status`, `provider-mark`,
 `copy-value`, and `async-state` must import no `domainkit`, Effect, or transport.
 
