@@ -48,8 +48,10 @@ DomainKit creates is DNS-only.
 
 Vercel offers personal and team access tokens and its own integration install flow.
 
-A token connection stores `{ teamId }`, `null` for a personal account. Team requests carry `teamId`;
-personal ones do not.
+A token connection stores `{ teamId }`. An explicit team id limits discovery to that team's zones.
+Without one, `teamId` is `null` and the connection discovers personal zones plus accessible team zones.
+Each target carries its own team context: DNS requests for a team target carry its `teamId`, and
+requests for a personal target do not.
 
 The integration flow starts at the integration's install URL and exchanges a one-time callback code
 at Vercel's token endpoint. DomainKit models it as an integration method rather than claiming it is

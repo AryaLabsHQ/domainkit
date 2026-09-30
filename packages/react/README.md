@@ -162,9 +162,9 @@ A host that observes on its own clock passes the readiness it holds as
 `Verify.useController`. The hook then observes nothing on mount, sets no timer, and routes `observe`
 and `retry` to the host's own, while drift replanning runs off the supplied value.
 
-Observation stays available in read-only, because checking DNS reads the world rather than changing
-the domain. Retrying is not: a flow that becomes read-only after a write failed keeps the failure
-and re-inspects instead of resending the command.
+Observation and verification retries stay available in read-only, because checking DNS reads the
+world rather than changing the domain. Provisioning and cleanup retries are refused. Connection
+retries re-inspect instead of resending a failed write.
 
 ## Words
 

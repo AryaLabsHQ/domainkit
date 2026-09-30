@@ -95,9 +95,9 @@ Capability gating is the other half: a group the transport never declares is abs
 `flow.capabilities`. `readOnly` covers the authorization a transport cannot express, such as a
 member of an organisation who reaches the same routes and would get a 403 from any write.
 
-Observation stays available, because checking DNS reads the world rather than changing the domain.
-Retrying does not: a flow that becomes read-only after a write failed keeps the failure and
-re-inspects instead of resending the command.
+Observation and verification retries stay available, because checking DNS reads the world rather
+than changing the domain. Provisioning and cleanup retries are refused. Connection retries
+re-inspect instead of resending a failed write.
 
 ## Verification without a connection
 
