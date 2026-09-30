@@ -92,8 +92,8 @@ export function RecordsTable({ className, flow, header, ...props }: RecordsTable
             <TableHead className={cn("w-28 sm:w-36", plan !== null && "hidden sm:table-cell")}>
               {messages.headingStatus}
             </TableHead>
-            <TableHead>{messages.headingName}</TableHead>
-            <TableHead className="hidden w-full max-w-0 sm:table-cell">
+            <TableHead className="sm:min-w-52">{messages.headingName}</TableHead>
+            <TableHead className="hidden w-full max-w-0 sm:table-cell sm:min-w-36">
               {messages.headingValue}
             </TableHead>
           </TableRow>
@@ -102,6 +102,10 @@ export function RecordsTable({ className, flow, header, ...props }: RecordsTable
           {requirements.map((record) => {
             const standing = Records.standingOf(record, { plan, readiness: flow.readiness });
             const conflict = standing.planned?._tag === "Conflict" ? standing.planned : null;
+            const conflictMessage =
+              conflict === null
+                ? null
+                : `${messages.conflictReason(conflict.reason)} ${messages.conflictAdvice(conflict.reason)}`;
             return (
               <Fragment key={Records.identity(record)}>
                 <TableRow className={conflict === null ? undefined : "border-b-0"}>
@@ -116,7 +120,7 @@ export function RecordsTable({ className, flow, header, ...props }: RecordsTable
                   <TableCell className={plan === null ? undefined : "hidden sm:table-cell"}>
                     <Observed status={standing.observed?.status ?? null} />
                   </TableCell>
-                  <TableCell className="font-mono text-xs">
+                  <TableCell className="font-mono text-xs sm:min-w-52">
                     <span className="block break-all whitespace-normal">
                       <span className="sm:hidden">{record._tag} </span>
                       {record.name}
@@ -125,18 +129,24 @@ export function RecordsTable({ className, flow, header, ...props }: RecordsTable
                       <Data record={record} />
                     </div>
                   </TableCell>
-                  <TableCell className="hidden w-full max-w-0 sm:table-cell">
+                  <TableCell className="hidden w-full max-w-0 sm:table-cell sm:min-w-36">
                     <Data record={record} />
                   </TableCell>
                 </TableRow>
                 {conflict === null ? null : (
                   <TableRow data-slot="records-conflict">
+                    {/* Under `sm` only two columns show, so a span of the full set would add phantom columns. */}
                     <TableCell
-                      className="pt-0 text-xs text-muted-foreground"
+                      className="pt-0 text-xs whitespace-normal! text-muted-foreground sm:hidden"
+                      colSpan={2}
+                    >
+                      {conflictMessage}
+                    </TableCell>
+                    <TableCell
+                      className="hidden pt-0 text-xs whitespace-normal! text-muted-foreground sm:table-cell"
                       colSpan={plan === null ? 4 : 5}
                     >
-                      {messages.conflictReason(conflict.reason)}{" "}
-                      {messages.conflictAdvice(conflict.reason)}
+                      {conflictMessage}
                     </TableCell>
                   </TableRow>
                 )}
