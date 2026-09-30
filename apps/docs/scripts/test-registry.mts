@@ -2,6 +2,8 @@ import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+import { registryManifest, shadcnCli } from "./registry-fixture.mts";
+
 const root = resolve(import.meta.dir, "..");
 const workspace = resolve(root, "..", "..");
 const output = join(root, "public", "r");
@@ -104,35 +106,7 @@ try {
   await mkdir(join(fixture, "src", "lib"), { recursive: true });
   const coreTarball = await pack(join(workspace, "packages", "domainkit"));
   const reactTarball = await pack(join(workspace, "packages", "react"));
-  const dependencies = {
-    "@base-ui/react": "^1.7.0",
-    "@domainkit/react": `file:${reactTarball}`,
-    "@vitejs/plugin-react": "6.1.1",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.5",
-    "class-variance-authority": "0.7.1",
-    clsx: "2.1.1",
-    "lucide-react": "0.474.0",
-    domainkit: `file:${coreTarball}`,
-    effect: "4.0.0-rc.117",
-    react: "19.2.4",
-    "react-dom": "19.2.4",
-    "tailwind-merge": "3.3.1",
-    typescript: "7.0.2",
-    vite: "8.2.2",
-  };
-  const manifest = {
-    private: true,
-    type: "module",
-    scripts: { build: "vite build", typecheck: "tsc --noEmit" },
-    dependencies,
-    // The CLI installs each item's declared dependencies, which would fetch the published
-    // DomainKit; the overrides keep the scratch project on the packed branch instead.
-    overrides: {
-      "@domainkit/react": `file:${reactTarball}`,
-      domainkit: `file:${coreTarball}`,
-    },
-  };
+  const manifest = registryManifest(coreTarball, reactTarball);
   await Bun.write(join(fixture, "package.json"), JSON.stringify(manifest));
   await Bun.write(
     join(fixture, "src", "lib", "utils.ts"),
@@ -259,14 +233,14 @@ createRoot(document.getElementById("root")!).render(
 
   await run("bun", "install");
   await run(
-    "bunx",
-    "shadcn",
+    "node",
+    shadcnCli,
     "add",
     ...[...display, ...flow].map((name) => join(local, `${name}.json`)),
     "--yes",
     "--overwrite",
   );
-  // The CLI's own install may have moved the workspace packages back to the registry versions.
+  // Reconcile the CLI's additions with the fixture's pinned baseline and branch overrides.
   await run("bun", "install");
   await run("bun", "run", "typecheck");
   await run("bun", "run", "build");

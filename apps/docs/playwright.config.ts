@@ -1,13 +1,16 @@
 import { defineConfig } from "@playwright/test";
 
+import { browserOptions } from "./scripts/browser-options.mts";
+
 const port = Number(process.env.DOMAINKIT_FIXTURE_PORT ?? "4321");
 
 export default defineConfig({
   testDir: "tests/browser",
   testMatch: "**/*.spec.ts",
   use: {
+    browserName: "chromium",
     baseURL: `http://127.0.0.1:${port}`,
-    channel: "chrome",
+    ...browserOptions(process.env),
     colorScheme: "light",
   },
   webServer: {
