@@ -37,7 +37,7 @@ export const againstEmulator = Vercel.provider({
 // #endregion integration-emulator
 
 // #region connect-token
-/** `teamId` scopes the connection to one team; leave it out for a personal account. */
+/** `teamId` limits discovery to one team; omit it to discover personal and accessible team zones. */
 export const connectTeamToken = Connect.start({
   provider: "vercel",
   method: Connect.Method.token({ token: "vercel_token", teamId: "team_1" }),

@@ -62,7 +62,7 @@ own; the styled composition is the [registry](/components/registry).
 
 ## The flow
 
-`Domain.useFlow({ domain, requirements, connect?, onApplied?, onCleaned?, returnTo?, readOnly? })`
+`Domain.useFlow({ domain, requirements, connect?, onApplied?, onCleaned?, returnTo?, readOnly?, verification? })`
 runs the four controllers together, attaches nothing the customer has not granted, and plans as soon
 as the domain is attached with nothing applied. An apply observes the domain again, and an applied
 domain plans again once an observation made after the apply reads a record back missing or wrong, so
@@ -84,14 +84,14 @@ records deleted at the provider are offered again.
 
 Each takes one options object and returns a controller whose `state` is a tagged union.
 
-| Hook                      | Options                                | State tags                                                                                                       |
-| ------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `Connect.useController`   | `{ domain, returnTo? }`                | `Loading`, `Disconnected`, `Connected`, `Reconnect`, `Submitting`, `Redirecting`, `SelectionRequired`, `Failure` |
-| `Connect.useZones`        | `{ provider? }`                        | `Loading`, `Ready`, `Failure`                                                                                    |
-| `Connect.useAccounts`     | `{ returnTo? }`                        | `Loading`, `Ready`, `Submitting`, `Redirecting`, `Failure`                                                       |
-| `Provision.useController` | `{ domain, requirements, onApplied? }` | `Idle`, `Planning`, `Planned`, `Approving`, `Applying`, `Applied`, `Rejecting`, `Rejected`, `Failure`            |
-| `Cleanup.useController`   | `{ domain, receiptId?, onCleaned? }`   | The same set                                                                                                     |
-| `Verify.useController`    | `{ domain, polling?, requirements? }`  | `Idle`, `Observing`, `Observed`, `Failure`                                                                       |
+| Hook                      | Options                                           | State tags                                                                                                       |
+| ------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `Connect.useController`   | `{ domain, returnTo?, readOnly? }`                | `Loading`, `Disconnected`, `Connected`, `Reconnect`, `Submitting`, `Redirecting`, `SelectionRequired`, `Failure` |
+| `Connect.useZones`        | `{ provider? }`                                   | `Loading`, `Ready`, `Failure`                                                                                    |
+| `Connect.useAccounts`     | `{ returnTo?, readOnly? }`                        | `Loading`, `Ready`, `Submitting`, `Redirecting`, `Failure`                                                       |
+| `Provision.useController` | `{ domain, requirements, onApplied?, readOnly? }` | `Idle`, `Planning`, `Planned`, `Approving`, `Applying`, `Applied`, `Rejecting`, `Rejected`, `Failure`            |
+| `Cleanup.useController`   | `{ domain, receiptId?, onCleaned?, readOnly? }`   | The same set                                                                                                     |
+| `Verify.useController`    | `{ domain, polling?, requirements?, supplied? }`  | `Idle`, `Observing`, `Observed`, `Failure`                                                                       |
 
 <Snippet file="examples/react/controllers.tsx" region="hooks" title="Composing the flow yourself" />
 
@@ -117,11 +117,16 @@ reaches for, the `highlighted` one, the `found` placement, `complete(zone)`, and
 
 ## Read-only
 
-`readOnly` refuses every command that changes the domain: connect, attach, detach, disconnect,
-plan, approve, decline, apply, and every `retry`. Re-inspecting and observing stay, because both
-only read. The refusal is in the controller, not in the markup, so a control a host renders anyway
-cannot reach the transport. Every controller takes `readOnly` as an option, which is how
-`Domain.useFlow` passes its own flag to the four it runs.
+`readOnly` refuses commands that change the domain: connect, attach, detach, disconnect,
+plan, approve, decline, apply, and provisioning or cleanup `retry`. The refusal is in the controller,
+so rendering a control anyway cannot send those commands to the transport. Connection `retry`
+re-inspects instead of repeating a write; verification `observe` and `retry` stay available.
+
+The connection, account, provisioning, and cleanup controllers accept `readOnly`. The verification
+controller has no `readOnly` option. Its `supplied` option takes host-owned readiness and an optional
+`observe` callback, which both `observe` and `retry` call; without that callback, both do nothing.
+The flow accepts the same value as `verification`; see
+[readiness the host holds](/docs/react/composition#readiness-the-host-holds).
 
 | Export                  | Answers                                                          |
 | ----------------------- | ---------------------------------------------------------------- |

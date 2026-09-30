@@ -32,9 +32,10 @@ product verification policy.
 - `readOnly` refuses every command that changes the domain, at the controller rather than in the
   markup: the surface is the host's now, so a control it renders anyway must not reach the
   transport. `DomainKit.Root` sets it for the page, `DomainKit.ReadOnly` narrows a subtree, and
-  every controller takes it as an option, which is how `Domain.useFlow` passes its own flag down.
-  Connect, attach, detach, disconnect, plan, approve, decline, apply, and every `retry` are
-  refused; observing and re-inspecting stay, because both only read. It is also a fact on
+  the connection, account, provisioning, and cleanup controllers take it as an option.
+  Connect, attach, detach, disconnect, plan, approve, decline, apply, and provisioning or cleanup
+  `retry` are refused. Connection `retry` re-inspects; verification `observe` and `retry` stay
+  available, and the verification controller has no `readOnly` option. It is also a fact on
   `FlowState.readOnly`, so a surface can say who may connect rather than rendering nothing.
 - `Verify.useController` and `Domain.useFlow` pass the flow's requirements to `observe`, so a domain
   with no attachment verifies against what the host asked for rather than a receipt it has not

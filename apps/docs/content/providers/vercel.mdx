@@ -40,13 +40,18 @@ emulator that serves `/integrations/<slug>/new` and Vercel's API paths.
 
 <Snippet file="examples/providers/vercel.ts" region="connect-token" title="An access token" />
 
-| Field    | Required | Secret | Means                                                         |
-| -------- | -------- | ------ | ------------------------------------------------------------- |
-| `token`  | yes      | yes    | The access token                                              |
-| `teamId` | no       | no     | Scope the connection to one team; omit for a personal account |
+| Field    | Required | Secret | Means                            |
+| -------- | -------- | ------ | -------------------------------- |
+| `token`  | yes      | yes    | The access token                 |
+| `teamId` | no       | no     | Limit zone discovery to one team |
 
-The stored context is just `{ teamId }`, `null` for a personal account. Team requests carry
-`teamId`; personal ones do not.
+The connection stores `{ teamId }`. With a team id, it discovers that team's zones. Without one,
+`teamId` is `null` and the connection discovers personal zones plus the zones of teams the token
+can reach.
+Omitting `teamId` does not restrict discovery to personal zones.
+
+Each discovered target carries its own team context. DNS requests for a team target carry that
+target's `teamId`; requests for a personal target do not.
 
 ## Connecting with the integration
 

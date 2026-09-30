@@ -14,7 +14,7 @@ takes one options object and returns a controller whose `state` is a tagged unio
 
 ## Connection
 
-`Connect.useController({ domain, returnTo? })`
+`Connect.useController({ domain, returnTo?, readOnly? })`
 
 | State               | Means                                                                                     |
 | ------------------- | ----------------------------------------------------------------------------------------- |
@@ -62,7 +62,7 @@ the provider turned down appears in `connections` as `reconnect` and contributes
 connection carries the account `label` its provider gave at connect time, so a list names accounts
 without a provider call; it is `null` when the provider named no single account.
 
-`Connect.useAccounts({ returnTo })` reads the same listing and adds two commands:
+`Connect.useAccounts({ returnTo?, readOnly? })` reads the same listing and adds two commands:
 `connect({ provider, method, values? })` starts a provider with no domain attached, and
 `reconnect({ connectionId, provider, method, values? })` replaces the credential behind a
 connection the owner already holds, keeping its domains. A token method finishes in place; an
@@ -70,8 +70,8 @@ interactive one redirects and returns through the callback route your server mou
 
 ## Provisioning and cleanup
 
-`Provision.useController({ domain, requirements, onApplied? })` and
-`Cleanup.useController({ domain, receiptId?, onCleaned? })` run the same machine.
+`Provision.useController({ domain, requirements, onApplied?, readOnly? })` and
+`Cleanup.useController({ domain, receiptId?, onCleaned?, readOnly? })` run the same machine.
 
 | State       | Means                                      |
 | ----------- | ------------------------------------------ |
@@ -88,18 +88,19 @@ interactive one redirects and returns through the callback route your server mou
 <Snippet file="examples/react/controllers.tsx" region="commands" title="Approve or decline" />
 
 `approve(operationIds?)` authorizes the digest and applies it in one customer action, because the
-review screen offers one approve and one decline rather than approve and then apply. `apply()` stays
-available for a host that approves out of band. `reject(reason?)` is terminal: approving that plan
-afterwards fails `Stale`.
+review screen offers one approve and one decline rather than approve and then apply. `apply()` uses
+the approval this controller already holds; it does nothing until both a plan and an approval are
+available. `reject(reason?)` is terminal: approving that plan afterwards fails `Stale`.
 
 `retry()` builds a new plan when the reason says the old one is gone (`Stale`, `Expired`,
 `Conflict`) and re-runs the failed step otherwise.
 
 ## Verification
 
-`Verify.useController({ domain, polling?, requirements? })` observes on mount, then re-observes at
-the readiness row's own `nextCheckAt` while it stays mounted. `readiness` holds the latest
-observation even while a new one runs, so the table does not blink.
+`Verify.useController({ domain, polling?, requirements?, supplied? })` observes on mount when
+`supplied` is absent, then re-observes at the readiness row's own `nextCheckAt` while polling is
+enabled and it stays mounted. `readiness` holds the latest observation even while a new one runs,
+so the table does not blink. With supplied readiness, it observes nothing on mount and sets no timer.
 
 `requirements` says what to look for. Without it the server uses the attachment's latest
 provisioning receipt, so a domain with nothing attached has nothing to observe; with it, that domain
@@ -149,5 +150,7 @@ no transport can express. A surface of your own reads it through `DomainKit.useR
 
 <Snippet file="examples/react/read-only.tsx" region="hook" title="Asking which mode a part is in" />
 
-Read-only refuses the commands that change the domain, and `retry` goes with them: re-running a
-failed write is still a write. Re-inspecting and observing stay, because both only read.
+Read-only refuses commands that change the domain, including provisioning and cleanup `retry`.
+Connection `retry` re-inspects instead of repeating a write. Verification `observe` and `retry`
+stay available. With supplied readiness, both call the host's optional `observe` callback, or do
+nothing when it is absent.
