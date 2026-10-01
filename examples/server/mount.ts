@@ -1,5 +1,5 @@
 import { Effect, Layer } from "effect";
-import { HttpApi, HttpApiBuilder, OpenApi } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiBuilder, OpenApi } from "effect/http-api";
 import { DomainKit, type Principal, Reason, type Storage } from "domainkit";
 import { Server } from "domainkit/server";
 

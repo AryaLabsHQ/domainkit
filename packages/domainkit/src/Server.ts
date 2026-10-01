@@ -12,14 +12,14 @@
  * takes; callback URLs follow the mount.
  */
 import { Context, Effect, Layer, Option, Schema } from "effect";
-import * as HttpRouter from "effect/unstable/http/HttpRouter";
-import * as HttpServer from "effect/unstable/http/HttpServer";
-import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
-import * as HttpApi from "effect/unstable/httpapi/HttpApi";
-import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
-import * as HttpApiEndpoint from "effect/unstable/httpapi/HttpApiEndpoint";
-import * as HttpApiGroup from "effect/unstable/httpapi/HttpApiGroup";
-import * as HttpApiSchema from "effect/unstable/httpapi/HttpApiSchema";
+import * as HttpRouter from "effect/http/HttpRouter";
+import * as HttpServer from "effect/http/HttpServer";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
+import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
+import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 
 import * as Approval from "./Approval.ts";
 import * as Cleanup from "./Cleanup.ts";

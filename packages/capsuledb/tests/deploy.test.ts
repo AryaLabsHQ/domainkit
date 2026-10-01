@@ -1,8 +1,8 @@
 import { Pg, Registry } from "capsuledb";
 import { Principal, Storage } from "domainkit";
 import { Effect, Layer, Option } from "effect";
-import type * as SqlClient from "effect/unstable/sql/SqlClient";
-import * as Statement from "effect/unstable/sql/Statement";
+import type * as SqlClient from "effect/sql/SqlClient";
+import * as Statement from "effect/sql/Statement";
 import { afterAll, assert, beforeAll, describe, it } from "@effect/vitest";
 
 import { PgStorage } from "../src/index.ts";

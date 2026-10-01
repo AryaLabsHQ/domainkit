@@ -12,8 +12,8 @@
  */
 import { type Approval, DomainKit, type Plan, Principal, Reason, Storage } from "domainkit";
 import { DateTime, Effect, Option, Schema } from "effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
-import * as SqlError from "effect/unstable/sql/SqlError";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as SqlError from "effect/sql/SqlError";
 
 import type { Tables } from "./tables.ts";
 

@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { HttpApi, OpenApi } from "effect/unstable/httpapi";
+import { HttpApi, OpenApi } from "effect/http-api";
 
 import {
   Connect,

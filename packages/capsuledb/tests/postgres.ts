@@ -1,8 +1,8 @@
 import { PgClient } from "@effect/sql-pg";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { Effect, Exit, type Layer, Redacted, Scope } from "effect";
-import * as Reactivity from "effect/unstable/reactivity/Reactivity";
-import type * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as Reactivity from "effect/reactivity/Reactivity";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 export interface Postgres {
   readonly container: StartedPostgreSqlContainer;

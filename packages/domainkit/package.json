@@ -143,9 +143,9 @@
     "tldts": "^7.4.11"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.0-rc.117",
+    "@effect/vitest": "4.0.0",
     "@types/bun": "1.4.0",
-    "effect": "4.0.0-rc.117",
+    "effect": "4.0.0",
     "miniflare": "3.20250718.3",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
@@ -153,7 +153,7 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "effect": ">=4.0.0-rc.117 <5.0.0"
+    "effect": ">=4.0.0 <5.0.0"
   },
   "engines": {
     "node": ">=24.10.0"
