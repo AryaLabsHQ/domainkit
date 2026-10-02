@@ -7,7 +7,7 @@ never reach the browser.
 ## Install
 
 ```sh
-npm install @domainkit/react domainkit effect@rc react react-dom
+npm install @domainkit/react domainkit effect react react-dom
 ```
 
 React 19 is required. Install `domainkit` and `@domainkit/react` at the same release version.
