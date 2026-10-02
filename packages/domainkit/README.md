@@ -134,7 +134,7 @@ are yours and the copy is not.
 
 ```ts
 import { Effect, Layer } from "effect";
-import { HttpApi, HttpApiBuilder } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiBuilder } from "effect/http-api";
 import { DomainKit, Reason } from "domainkit";
 import { Server } from "domainkit/server";
 

@@ -1,6 +1,6 @@
 import { Capsule, Migration, Pg, Registry, Schema } from "capsuledb";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 // #region declare
 /** A library owns its tables in the host's database. Declare once; CapsuleDB renders per engine. */

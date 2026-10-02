@@ -7,7 +7,7 @@
 import { Capsule, Migration } from "capsuledb";
 import { Storage } from "domainkit";
 import { Layer } from "effect";
-import type * as SqlClient from "effect/unstable/sql/SqlClient";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 import { make as makeService } from "./internal/storage.ts";
 import {

@@ -1,6 +1,6 @@
 // Add custom domains to an Effect app: providers, storage, routes. Nothing else to write.
 import { Config, Effect, Layer } from "effect";
-import { HttpApi, HttpApiBuilder } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiBuilder } from "effect/http-api";
 import { Cloudflare, Custody, DomainKit, type Principal, Reason, Storage, Vercel } from "domainkit";
 import { Server } from "domainkit/server";
 

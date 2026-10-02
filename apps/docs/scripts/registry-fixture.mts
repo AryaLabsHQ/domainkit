@@ -15,7 +15,7 @@ export const registryManifest = (coreTarball: string, reactTarball: string) => {
     clsx: "2.1.1",
     "lucide-react": "0.474.0",
     domainkit: `file:${coreTarball}`,
-    effect: "4.0.0-rc.117",
+    effect: "4.0.0",
     react: "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "3.3.1",
