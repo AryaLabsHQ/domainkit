@@ -1,6 +1,9 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@domainkit/capsuledb\":\n    type: minor\n---\n\n## Prepare Storage at deploy time, check it on first use\n\n`PgStorage.manifest()` returns the CapsuleDB manifest for exactly the capsule `PgStorage.layer()`\ninstalls, so a deploy stack can hand it to `CapsuleDB.Registry` from `capsuledb/alchemy` and prepare\nthe schema the function will assert:\n\n```ts\nconst manifest = yield * PgStorage.manifest();\nconst registry =\n  yield *\n  CapsuleDB.Registry(\"domainkit-storage\", {\n    url,\n    provider: \"Postgres\",\n    manifest,\n  });\n```\n\n`PgStorage.layer` takes a `readiness` option. `\"boot\"` (the default) checks while the layer builds.\n`\"first-use\"` builds without a statement and runs one cached check before the first Storage query,\nso a serverless function boots with `{ mode: \"assert\", readiness: \"first-use\" }` and a cold start\nthat never reaches Storage does no registry work. A failed check surfaces as a `SqlError` on that\nquery and is retried on the next.\n\nThe package now peers on `capsuledb` `>=0.4.0 <0.5.0`.\n"
-    filename: capsuledb-deploy-time.md
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Plan and verify SPF and exclusive records safely\n\n**Breaking:** an exact DNS match no longer hides conflicting records. Exclusive requirements, CNAME\ncollisions, and opaque records can now produce a `Conflict` when planning or a `mismatch` when\nverifying. Add `spf-conflict` to custom catalogs that handle every conflict reason.\n\nUse `DnsRecord.spf` for SPF records. It conflicts when the name holds a different SPF record or more\nthan one, including identical duplicates, and leaves unrelated TXT records alone. Generic\n`DnsRecord.txt` still defaults to `append` and does not enable the SPF constraint. DomainKit checks that a value is\nSPF; validating the policy inside it stays with your application.\n\nThe quickstart now applies and re-plans in one run. The second plan has no writes to make.\n"
+    filename: spf-lifecycle-safety.md
+    v: 0.0.0
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Require stable Effect 4\n\nDomainKit and its React and CapsuleDB integrations require Effect 4.0.0 or later within major 4.\nThe HTTP, SQL, and reactivity imports use the stable Effect exports.\n\n`@domainkit/capsuledb` requires CapsuleDB 0.5.x, which supports stable Effect 4. Install\n`capsuledb@0.5.0` alongside the integration package.\n"
+    filename: stable-effect-v4.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
@@ -9,18 +12,19 @@ core:packages:
     updated: false
   - id: npm:@domainkit/docs
     updated: false
-  - id: npm:domainkit
-    updated: true
   - id: npm:@domainkit/react
     updated: true
   - changelogIds:
-      - capsuledb-deploy-time.md
-    id: npm:@domainkit/capsuledb
+      - spf-lifecycle-safety.md
+      - stable-effect-v4.md
+    id: npm:domainkit
+    updated: true
+  - id: npm:@domainkit/capsuledb
     updated: true
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
   - id: npm:@domainkit/docs
-  - id: npm:domainkit
   - id: npm:@domainkit/react
+  - id: npm:domainkit
   - id: npm:@domainkit/capsuledb

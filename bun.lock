@@ -16,9 +16,9 @@
       "name": "@domainkit/docs",
       "dependencies": {
         "@base-ui/react": "^1.7.0",
-        "@domainkit/react": "workspace:^0.19.0",
+        "@domainkit/react": "workspace:^0.20.0",
         "blume": "^2.0.3",
-        "domainkit": "workspace:^0.19.0",
+        "domainkit": "workspace:^0.20.0",
         "effect": "4.0.0",
         "lucide-react": "0.474.0",
         "react": "19.3.0",
@@ -55,9 +55,9 @@
     },
     "packages/capsuledb": {
       "name": "@domainkit/capsuledb",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
-        "domainkit": "workspace:^0.19.0",
+        "domainkit": "workspace:^0.20.0",
       },
       "devDependencies": {
         "@effect/sql-pg": "4.0.0",
@@ -79,7 +79,7 @@
     },
     "packages/domainkit": {
       "name": "domainkit",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@leichtgewicht/dns-packet": "6.0.3",
         "oauth4webapi": "^3.8.7",
@@ -101,9 +101,9 @@
     },
     "packages/react": {
       "name": "@domainkit/react",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
-        "domainkit": "workspace:^0.19.0",
+        "domainkit": "workspace:^0.20.0",
       },
       "devDependencies": {
         "@testing-library/react": "16.3.1",
