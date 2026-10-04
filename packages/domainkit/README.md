@@ -10,7 +10,7 @@ shape minus the OAuth case.
 ## Install
 
 ```sh
-npm install domainkit effect@rc
+npm install domainkit effect@^4
 ```
 
 Node.js 24.10 or newer and Effect 4 are required.
