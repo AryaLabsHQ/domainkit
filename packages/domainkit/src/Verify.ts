@@ -95,7 +95,10 @@ export interface Interface {
     readonly domain: string;
     readonly requirements?: ReadonlyArray<DnsRecord.Model>;
   }) => Fx<Readiness>;
-  /** Merge host evidence into stored readiness without re-observing DNS. */
+  /**
+   * Merge host evidence into stored readiness without re-observing DNS. Before the first `observe`
+   * the readiness has no requirements and stays `pending` whatever the host evidence says.
+   */
   readonly attachEvidence: (input: {
     readonly domain: string;
     readonly evidence: ReadonlyArray<HostEvidence>;
@@ -291,8 +294,10 @@ const overallOf = (
   ) {
     return "failed";
   }
+  // Readiness is a DNS fact: host evidence can hold a domain back but never makes it ready alone,
+  // so a row with no observed requirement stays pending and keeps its next check scheduled.
   const ready =
-    requirements.length + host.length > 0 &&
+    requirements.length > 0 &&
     requirements.every(({ status }) => status === "satisfied") &&
     host.every(({ status }) => status === "ok");
   return ready ? "ready" : "pending";

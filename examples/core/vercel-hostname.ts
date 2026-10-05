@@ -177,7 +177,7 @@ export const recordVercelStatus = (input: {
   readonly requirements?: ReadonlyArray<DnsRecord.Model>;
 }) =>
   Effect.gen(function* () {
-    // DNS first: host evidence alone would read as ready, because nothing has been observed yet.
+    // DNS first, so the returned readiness reflects this run's observation, not only Vercel's answer.
     yield* Verify.observe(
       input.requirements === undefined
         ? { domain: input.apexName }

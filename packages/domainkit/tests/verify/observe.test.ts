@@ -152,6 +152,43 @@ describe("Verify", () => {
     },
   );
 
+  it.effect("stays pending on host evidence alone until DNS has been observed", () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    return Effect.gen(function* () {
+      yield* connectAndApply;
+      const observedAt = yield* DateTime.now;
+      const hostOnly = yield* Verify.attachEvidence({
+        domain: "app.example.com",
+        evidence: [
+          new Verify.HostEvidence({
+            source: "edge-certificate",
+            status: "ok",
+            label: "TLS certificate",
+            detail: null,
+            observedAt,
+          }),
+        ],
+      });
+      assert.strictEqual(hostOnly.overall, "pending");
+      assert.deepStrictEqual(hostOnly.requirements, []);
+      assert.notStrictEqual(hostOnly.nextCheckAt, null);
+      const observed = yield* Verify.observe({ domain: "app.example.com" });
+      assert.strictEqual(observed.overall, "ready");
+      assert.strictEqual(observed.host[0]?.status, "ok");
+      assert.strictEqual(observed.nextCheckAt, null);
+    }).pipe(
+      withPrincipal,
+      Effect.provide(
+        DomainKit.layerMemory({
+          providers: [fake],
+          resolver: Testing.resolver(
+            requirements.map((record) => ({ name: record.name, records: [record] })),
+          ),
+        }),
+      ),
+    );
+  });
+
   it.effect("fails on a mismatch for exclusive records and observes explicit requirements", () => {
     const fake = Testing.provider({
       zones: ["example.com"],
