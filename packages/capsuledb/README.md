@@ -6,6 +6,8 @@ authorizations, connections, attachments, interactive-flow continuations, plan/a
 attempts, multi-domain batches, and observed readiness — lives in your database, scoped to your
 tenants.
 
+Documentation: [domain-kit.dev](https://domain-kit.dev)
+
 The host owns the `SqlClient` and its lifetime. This package owns its own tables and never exposes
 rows, queries, or a raw client.
 

@@ -2,6 +2,8 @@
 
 Add custom domains to a TypeScript SaaS application.
 
+Documentation: [domain-kit.dev](https://domain-kit.dev)
+
 DomainKit turns DNS requirements into plans a customer can review, applies only the plan digest
 they approved, keeps a receipt of every write, and plans cleanup from that receipt. Cloudflare and
 Vercel are built in; a provider is one declarative value, so tokens-only providers are the same
