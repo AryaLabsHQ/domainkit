@@ -1,5 +1,5 @@
 import { DateTime, Effect } from "effect";
-import { Approval, DnsRecord, Plan, Provision, Receipt, Verify } from "domainkit";
+import { Approval, Connect, DnsRecord, Plan, Provision, Receipt, Verify } from "domainkit";
 
 const projectId = "prj_saas_app";
 const vercelHeaders = (token: string) => ({
@@ -74,14 +74,16 @@ export const recommendedRoute = async (input: {
  * What Vercel told you the customer must add: where the hostname should point, and any TXT proof
  * Vercel asked for. Pass the values Vercel returned; do not copy them from a docs page.
  */
-export const requirements = (input: {
+export interface HostnameInput {
   readonly hostname: string;
   readonly route: { readonly cname: string } | { readonly address: string };
   /** Vercel omits `verification` when it needs no ownership proof. */
   readonly verification?:
     | ReadonlyArray<{ readonly domain: string; readonly value: string }>
     | undefined;
-}) => [
+}
+
+export const requirements = (input: HostnameInput) => [
   "cname" in input.route
     ? DnsRecord.cname({
         name: input.hostname,
@@ -103,15 +105,41 @@ export const requirements = (input: {
 ];
 // #endregion requirements
 
+// #region attach-apex
+/**
+ * Connect and attach the registrable domain (`apexName`), not the subdomain. Vercel's ownership
+ * TXT record sits at `_vercel.<apexName>`, so the plan, the connection, and the later observation
+ * all use the apex. `Resolved` means the customer already connected an account that reaches it.
+ */
+export const connectApex = (apexName: string) =>
+  Effect.gen(function* () {
+    const discovery = yield* Connect.discover(apexName);
+    if (discovery._tag !== "Resolved") return discovery;
+    return yield* Connect.attach({
+      connectionId: discovery.connectionId,
+      domain: apexName,
+      target: discovery.target,
+    });
+  });
+// #endregion attach-apex
+
 // #region plan
 /**
- * Plan against the registrable domain, not the subdomain. Vercel's ownership TXT record sits at
- * `_vercel.<apexName>`, and every requirement must be at or below the attached domain. This step
- * never writes.
+ * One plan per apex. Pass every hostname the customer has under it: a later plan replaces the
+ * earlier one as the receipt that observation reads, so a second hostname rebuilds the plan from
+ * all of them. The records already in the zone become no-ops. This step never writes.
  */
-export const planForCustomer = (
-  input: Parameters<typeof requirements>[0] & { readonly apexName: string },
-) => Provision.plan({ domain: input.apexName, requirements: requirements(input) });
+export const planForCustomer = (input: {
+  readonly apexName: string;
+  readonly hostnames: ReadonlyArray<HostnameInput>;
+}) => {
+  const records = new Map(
+    input.hostnames
+      .flatMap(requirements)
+      .map((record) => [`${record._tag}|${record.name}|${DnsRecord.data(record)}`, record]),
+  );
+  return Provision.plan({ domain: input.apexName, requirements: [...records.values()] });
+};
 // #endregion plan
 
 // #region apply
@@ -133,7 +161,8 @@ export const applyApproved = (approval: Approval.Model) =>
 
 // #region vercel-status
 /**
- * Run this from your own job until the hostname works. Vercel, not DNS, decides when it serves the
+ * Run this from your own job until the hostname works. It observes the apex's DNS first and attaches
+ * Vercel's answer only afterwards. Vercel, not DNS, decides when it serves the
  * hostname, so its answer is host evidence beside DomainKit's observation. The status is `ok` only
  * when Vercel has verified the domain and its configuration reports `misconfigured: false`. The
  * `source` carries the hostname, so two hostnames under one domain keep separate rows. A request
@@ -145,6 +174,8 @@ export const recordVercelStatus = (input: {
   readonly token: string;
 }) =>
   Effect.gen(function* () {
+    // DNS first: host evidence alone would read as ready, because nothing has been observed yet.
+    yield* Verify.observe({ domain: input.apexName });
     const ask = (url: string) =>
       Effect.tryPromise(async () => {
         const response = await fetch(url, { headers: vercelHeaders(input.token) });
