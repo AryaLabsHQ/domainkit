@@ -148,11 +148,17 @@ export const recordVercelStatus = (input: {
     const ask = (url: string) =>
       Effect.tryPromise(async () => {
         const response = await fetch(url, { headers: vercelHeaders(input.token) });
-        return {
-          status: response.status,
-          body: response.ok ? ((await response.json()) as unknown) : null,
-        };
-      }).pipe(Effect.catch(() => Effect.succeed({ status: 0, body: null })));
+        if (!response.ok) return { body: null, problem: `HTTP ${response.status}` };
+        try {
+          return { body: (await response.json()) as unknown, problem: null };
+        } catch {
+          return { body: null, problem: `HTTP ${response.status} with an unreadable body` };
+        }
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.succeed({ body: null, problem: `request error: ${String(error)}` }),
+        ),
+      );
     const domain = yield* ask(
       `https://api.vercel.com/v9/projects/${projectId}/domains/${input.hostname}`,
     );
@@ -172,7 +178,7 @@ export const recordVercelStatus = (input: {
           status: failed ? "failed" : verified && !misconfigured ? "ok" : "pending",
           label: `Vercel serves ${input.hostname}`,
           detail: failed
-            ? `Vercel request failed (${domain.body === null ? domain.status : config.status})`
+            ? `Vercel request failed (${domain.problem ?? config.problem})`
             : verified && !misconfigured
               ? null
               : verified
