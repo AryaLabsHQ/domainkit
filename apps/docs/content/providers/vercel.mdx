@@ -13,6 +13,8 @@ DomainKit writes DNS records to a customer's own Vercel account, after they conn
 the exact records. It offers access tokens and, when you publish one, a marketplace integration.
 Both end at the same connection. Vercel's Domains API attaches domains to your project and issues
 certificates, and the DomainKit adapter writes the customer's DNS, so the two roles stay separate.
+The [guide to custom domains for multi-tenant apps on Vercel](/guides/vercel-custom-domains) walks
+through both halves in code.
 
 ## Register the provider
 
@@ -80,5 +82,9 @@ as the `host` of a domain delegated there before the customer connects it.
 
 `A`, `AAAA`, `CAA`, `CNAME`, `MX`, `NS`, `SRV`, and `TXT`, through Vercel's domain records API. A
 record type DomainKit does not model is kept as an opaque observation and never overwritten.
+
+If you host your app on Vercel and need customers' hostnames to resolve to it, read
+[custom domains for multi-tenant apps on Vercel](/guides/vercel-custom-domains). A customer whose
+DNS is on Cloudflare instead is covered by the [Cloudflare provider](/docs/providers/cloudflare).
 
 Adding a provider of your own is the [write a provider](/docs/guides/implement-provider) guide.

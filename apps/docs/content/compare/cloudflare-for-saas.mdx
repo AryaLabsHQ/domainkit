@@ -82,12 +82,13 @@ reviews the exact records, and approves. DomainKit writes them and checks that t
 
    <Snippet file="examples/core/verification.ts" region="host-evidence" />
 
-The customer's DNS can be on Cloudflare too. Their account is separate from yours.
+The customer's DNS can be on Cloudflare too, which the [Cloudflare provider page](/docs/providers/cloudflare) covers. Their account is separate from yours.
 
 Hosting on Vercel? The shape is the same. Vercel's Domains API attaches the domain to your project
 and issues the certificate ([6](https://vercel.com/docs/multi-tenant/domain-management)).
 DomainKit's Vercel adapter writes the customer's DNS records when their domain's DNS is hosted at
-Vercel. See the [Vercel provider page](/docs/providers/vercel).
+Vercel. See the [Vercel provider page](/docs/providers/vercel) and the guide to
+[custom domains for multi-tenant apps on Vercel](/guides/vercel-custom-domains).
 
 ## What DomainKit doesn't do
 
