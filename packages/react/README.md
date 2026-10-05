@@ -4,6 +4,8 @@ Headless React hooks for custom-domain setup, over a transport your server owns.
 supplies state, copy, and accessibility; your application supplies the markup. Provider credentials
 never reach the browser.
 
+Documentation: [domain-kit.dev](https://domain-kit.dev)
+
 ## Install
 
 ```sh

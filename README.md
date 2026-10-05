@@ -1,5 +1,14 @@
 # DomainKit
 
+[![npm](https://img.shields.io/npm/v/domainkit)](https://www.npmjs.com/package/domainkit)
+[![License: MIT](https://img.shields.io/github/license/AryaLabsHQ/domainkit)](./LICENSE)
+[![Docs](https://img.shields.io/badge/docs-domain--kit.dev-0b5cff)](https://domain-kit.dev)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/AryaLabsHQ/domainkit)
+
+An open-source TypeScript library for custom domains in SaaS: it sets up a customer's DNS records
+through their own Cloudflare or Vercel account. Docs, guides, and components are at
+[domain-kit.dev](https://domain-kit.dev).
+
 DomainKit turns your product's DNS requirements into a plan a customer can review, applies only the
 plan digest they approved, keeps a receipt of every write, and plans cleanup from that receipt.
 Cloudflare and Vercel are built in, and a provider is one declarative value.
@@ -10,6 +19,9 @@ that coexists with unrelated TXT and conflicts with a different or duplicate SPF
 
 Your app keeps identity, tenancy, credentials, storage, routes, consent, and audit. DomainKit
 supplies the lifecycle, not a hosted control plane.
+
+Samva sets up customer domains with DomainKit. Read
+[how Samva sets up customer domains](https://domain-kit.dev/customers/samva).
 
 ## Packages
 
@@ -40,6 +52,14 @@ bun run typecheck:examples
 
 [CONTRIBUTING.md](./CONTRIBUTING.md) covers the live provider harness and the release path.
 
+## Built with DomainKit
+
+If your product uses DomainKit, you can show it in your README:
+
+```md
+[![Built with DomainKit](https://img.shields.io/badge/built%20with-DomainKit-0b5cff)](https://domain-kit.dev)
+```
+
 ## License
 
-MIT
+[MIT](./LICENSE)
