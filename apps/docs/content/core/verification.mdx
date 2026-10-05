@@ -54,7 +54,8 @@ record at _acme.app.example.com`, `google timed out`.
 
 `attachEvidence` merges by `source` without re-reading DNS, so a webhook can update one signal
 without paying for a full observation. Host evidence merged before the first `observe` is kept, but
-the domain stays `pending` until DNS has been observed.
+the domain is never `ready` until DNS has been observed: it is `failed` when a host signal failed and
+otherwise `pending`, with `nextCheckAt` set for that first observation.
 
 ## Statuses
 

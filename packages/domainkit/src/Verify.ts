@@ -97,7 +97,8 @@ export interface Interface {
   }) => Fx<Readiness>;
   /**
    * Merge host evidence into stored readiness without re-observing DNS. Before the first `observe`
-   * the readiness has no requirements and stays `pending` whatever the host evidence says.
+   * the readiness has no requirements, so it is never `ready`: `failed` when a host signal failed,
+   * otherwise `pending` with `nextCheckAt` set for the first observation.
    */
   readonly attachEvidence: (input: {
     readonly domain: string;
@@ -348,14 +349,18 @@ export const make: Effect.Effect<
         ),
       );
       const host = yield* Errors.decode(StoredHost, row.host, "host");
+      // Overall is derived, not trusted: a row stored under an older rule (host evidence alone
+      // read as ready) reads back as pending, due at once, so a worker following `nextCheckAt`
+      // observes it.
+      const overall = overallOf(requirements, host);
       return {
         domain: row.domain,
         attachmentId: row.attachmentId,
-        overall: row.overall,
+        overall,
         requirements,
         host,
         checkedAt: row.checkedAt,
-        nextCheckAt: row.nextCheckAt,
+        nextCheckAt: row.nextCheckAt ?? (overall === "ready" ? null : row.checkedAt),
       };
     });
 

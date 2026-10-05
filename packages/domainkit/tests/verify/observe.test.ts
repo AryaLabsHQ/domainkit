@@ -176,6 +176,65 @@ describe("Verify", () => {
       assert.strictEqual(observed.overall, "ready");
       assert.strictEqual(observed.host[0]?.status, "ok");
       assert.strictEqual(observed.nextCheckAt, null);
+      const failedHost = yield* Verify.attachEvidence({
+        domain: "other.example.com",
+        evidence: [
+          new Verify.HostEvidence({
+            source: "edge-certificate",
+            status: "failed",
+            label: "TLS certificate",
+            detail: "issuance rejected",
+            observedAt,
+          }),
+        ],
+      });
+      assert.strictEqual(failedHost.overall, "failed");
+      assert.deepStrictEqual(failedHost.requirements, []);
+    }).pipe(
+      withPrincipal,
+      Effect.provide(
+        DomainKit.layerMemory({
+          providers: [fake],
+          resolver: Testing.resolver(
+            requirements.map((record) => ({ name: record.name, records: [record] })),
+          ),
+        }),
+      ),
+    );
+  });
+
+  it.effect("reads a host-only row stored as ready back as pending and due", () => {
+    const fake = Testing.provider({ zones: ["example.com"] });
+    return Effect.gen(function* () {
+      yield* connectAndApply;
+      const storage = yield* Storage.Service;
+      const checkedAt = yield* DateTime.now;
+      yield* storage.readiness.put(
+        new Storage.Readiness({
+          domain: "app.example.com",
+          attachmentId: null,
+          ownerId: Testing.principal.ownerId,
+          overall: "ready",
+          requirements: [],
+          host: Schema.encodeSync(Schema.Array(Verify.HostEvidence))([
+            new Verify.HostEvidence({
+              source: "edge-certificate",
+              status: "ok",
+              label: "TLS certificate",
+              detail: null,
+              observedAt: checkedAt,
+            }),
+          ]),
+          pendingSince: null,
+          checkedAt,
+          nextCheckAt: null,
+        }),
+      );
+      const latest = yield* Verify.latest("app.example.com");
+      assert.strictEqual(latest?.overall, "pending");
+      assert.deepStrictEqual(latest?.nextCheckAt, checkedAt);
+      const observed = yield* Verify.observe({ domain: "app.example.com" });
+      assert.strictEqual(observed.overall, "ready");
     }).pipe(
       withPrincipal,
       Effect.provide(

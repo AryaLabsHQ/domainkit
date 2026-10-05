@@ -22,7 +22,10 @@ const observer = Layer.succeed(Verify.Observer, {
     Effect.gen(function* () {
       if (readiness.overall === "ready") return yield* markReady({ ownerId, domain });
       // A pending domain carries its own schedule, so the host sleeps on it rather than polling.
-      if (readiness.nextCheckAt !== null && cause === "observe") {
+      // Merged host evidence keeps the schedule an observation already set; before the first
+      // observation there is none, so evidence on a row with no requirements schedules it.
+      const schedules = cause === "observe" || readiness.requirements.length === 0;
+      if (readiness.nextCheckAt !== null && schedules) {
         yield* wake({
           ownerId,
           domain,
