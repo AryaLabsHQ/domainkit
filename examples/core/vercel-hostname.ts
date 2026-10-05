@@ -114,7 +114,9 @@ export const planForCustomer = (
 // #region vercel-status
 /**
  * Run this from your own job until Vercel reports the hostname verified. Vercel, not DNS, decides
- * when it serves the hostname, so its answer is host evidence beside DomainKit's observation.
+ * when it serves the hostname, so its answer is host evidence beside DomainKit's observation. The
+ * `source` carries the hostname, so two hostnames under one domain keep separate rows, and a failed
+ * request is `failed` rather than a hostname that is merely waiting.
  */
 export const recordVercelStatus = (input: {
   readonly apexName: string;
@@ -127,18 +129,23 @@ export const recordVercelStatus = (input: {
         headers: vercelHeaders(input.token),
       }),
     );
-    const verified =
-      response.ok &&
-      ((yield* Effect.promise(() => response.json())) as { verified?: boolean }).verified === true;
+    const body = response.ok
+      ? ((yield* Effect.promise(() => response.json())) as { readonly verified?: boolean })
+      : null;
     const observedAt = yield* DateTime.now;
     return yield* Verify.attachEvidence({
       domain: input.apexName,
       evidence: [
         new Verify.HostEvidence({
-          source: "vercel-domain",
-          status: verified ? "ok" : "pending",
-          label: "Vercel serves the hostname",
-          detail: verified ? null : "Vercel has not verified the domain yet",
+          source: `vercel-domain:${input.hostname}`,
+          status: body === null ? "failed" : body.verified === true ? "ok" : "pending",
+          label: `Vercel serves ${input.hostname}`,
+          detail:
+            body === null
+              ? `Vercel answered ${response.status}`
+              : body.verified === true
+                ? null
+                : "Vercel has not verified the domain yet",
           observedAt,
         }),
       ],
