@@ -3,11 +3,11 @@
 [![npm](https://img.shields.io/npm/v/domainkit)](https://www.npmjs.com/package/domainkit)
 [![License: MIT](https://img.shields.io/github/license/AryaLabsHQ/domainkit)](./LICENSE)
 [![Docs](https://img.shields.io/badge/docs-domain--kit.dev-0b5cff)](https://domain-kit.dev)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/AryaLabsHQ/domainkit)
 
 An open-source TypeScript library for custom domains in SaaS: it sets up a customer's DNS records
 through their own Cloudflare or Vercel account. Docs, guides, and components are at
-[domain-kit.dev](https://domain-kit.dev).
+[domain-kit.dev](https://domain-kit.dev), and you can ask questions about the code on
+[DeepWiki](https://deepwiki.com/AryaLabsHQ/domainkit).
 
 DomainKit turns your product's DNS requirements into a plan a customer can review, applies only the
 plan digest they approved, keeps a receipt of every write, and plans cleanup from that receipt.
