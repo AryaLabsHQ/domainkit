@@ -1,30 +1,26 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Plan and verify SPF and exclusive records safely\n\n**Breaking:** an exact DNS match no longer hides conflicting records. Exclusive requirements, CNAME\ncollisions, and opaque records can now produce a `Conflict` when planning or a `mismatch` when\nverifying. Add `spf-conflict` to custom catalogs that handle every conflict reason.\n\nUse `DnsRecord.spf` for SPF records. It conflicts when the name holds a different SPF record or more\nthan one, including identical duplicates, and leaves unrelated TXT records alone. Generic\n`DnsRecord.txt` still defaults to `append` and does not enable the SPF constraint. DomainKit checks that a value is\nSPF; validating the policy inside it stays with your application.\n\nThe quickstart now applies and re-plans in one run. The second plan has no writes to make.\n"
-    filename: spf-lifecycle-safety.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Require stable Effect 4\n\nDomainKit and its React and CapsuleDB integrations require Effect 4.0.0 or later within major 4.\nThe HTTP, SQL, and reactivity imports use the stable Effect exports.\n\n`@domainkit/capsuledb` requires CapsuleDB 0.5.x, which supports stable Effect 4. Install\n`capsuledb@0.5.0` alongside the integration package.\n"
-    filename: stable-effect-v4.md
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Keep host-only readiness pending until DNS is observed\n\n`Verify.attachEvidence` no longer reports a domain `ready` when no `Verify.observe` has run. A\nreadiness is `ready` only when at least one requirement has been observed, every requirement is\nsatisfied, and every host signal is `ok`. Host evidence merged first is kept, and the domain is\n`failed` when a host signal failed and otherwise `pending` with its next check scheduled, until the\nfirst observation decides the outcome. `Verify.latest` derives `overall` from the stored evidence,\nso a host-only row stored as `ready` reads back as `pending` and due for observation.\n\nA host-only row stored as `ready` before this release has no `nextCheckAt`, so a worker that selects\ndue rows from storage by that column does not find it. Select the rows whose `overall` is `ready` and\nwhose `requirements` are empty, and pass each to `Verify.observe`, with `requirements` when the\ndomain has no provisioning receipt.\n"
+    filename: readiness-needs-dns.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
-  - id: npm:@domainkit/docs
-    updated: false
-  - id: npm:@domainkit/react
-    updated: true
   - changelogIds:
-      - spf-lifecycle-safety.md
-      - stable-effect-v4.md
+      - readiness-needs-dns.md
     id: npm:domainkit
+    updated: true
+  - id: npm:@domainkit/react
     updated: true
   - id: npm:@domainkit/capsuledb
     updated: true
+  - id: npm:@domainkit/docs
+    updated: false
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
-  - id: npm:@domainkit/docs
-  - id: npm:@domainkit/react
   - id: npm:domainkit
+  - id: npm:@domainkit/react
   - id: npm:@domainkit/capsuledb
+  - id: npm:@domainkit/docs
