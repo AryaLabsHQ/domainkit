@@ -1,5 +1,5 @@
 import { DateTime, Effect } from "effect";
-import { DnsRecord, Provision, Verify } from "domainkit";
+import { DnsRecord, Provision, Receipt, Verify } from "domainkit";
 
 const projectId = "prj_saas_app";
 const vercelHeaders = (token: string) => ({
@@ -77,7 +77,10 @@ export const recommendedRoute = async (input: {
 export const requirements = (input: {
   readonly hostname: string;
   readonly route: { readonly cname: string } | { readonly address: string };
-  readonly verification: ReadonlyArray<{ readonly domain: string; readonly value: string }>;
+  /** Vercel omits `verification` when it needs no ownership proof. */
+  readonly verification?:
+    | ReadonlyArray<{ readonly domain: string; readonly value: string }>
+    | undefined;
 }) => [
   "cname" in input.route
     ? DnsRecord.cname({
@@ -90,7 +93,7 @@ export const requirements = (input: {
         address: input.route.address,
         purpose: "Send traffic to your app",
       }),
-  ...input.verification.map((record) =>
+  ...(input.verification ?? []).map((record) =>
     DnsRecord.txt({
       name: record.domain,
       value: record.value,
@@ -111,10 +114,28 @@ export const planForCustomer = (
 ) => Provision.plan({ domain: input.apexName, requirements: requirements(input) });
 // #endregion plan
 
+// #region apply
+/**
+ * The customer's own plan, from `planForCustomer`, approved by its digest and applied. Apply
+ * re-plans first and fails `Stale` when the zone moved; a partial receipt is data, not a failure.
+ */
+export const approveAndApply = (input: Parameters<typeof planForCustomer>[0]) =>
+  Effect.gen(function* () {
+    const plan = yield* planForCustomer(input);
+    const approval = yield* Provision.approve(plan);
+    const receipt = yield* Provision.apply(approval);
+    return {
+      complete: Receipt.isComplete(receipt),
+      written: Receipt.applied(receipt).length,
+    };
+  });
+// #endregion apply
+
 // #region vercel-status
 /**
- * Run this from your own job until Vercel reports the hostname verified. Vercel, not DNS, decides
- * when it serves the hostname, so its answer is host evidence beside DomainKit's observation. The
+ * Run this from your own job until the hostname works. Vercel, not DNS, decides when it serves the
+ * hostname, so its answer is host evidence beside DomainKit's observation. The status is `ok` only
+ * when Vercel has verified the domain and its configuration reports `misconfigured: false`. The
  * `source` carries the hostname, so two hostnames under one domain keep separate rows, and a failed
  * request is `failed` rather than a hostname that is merely waiting.
  */
@@ -124,27 +145,42 @@ export const recordVercelStatus = (input: {
   readonly token: string;
 }) =>
   Effect.gen(function* () {
-    const response = yield* Effect.promise(() =>
-      fetch(`https://api.vercel.com/v9/projects/${projectId}/domains/${input.hostname}`, {
-        headers: vercelHeaders(input.token),
-      }),
+    const [domain, config] = yield* Effect.promise(() =>
+      Promise.all([
+        fetch(`https://api.vercel.com/v9/projects/${projectId}/domains/${input.hostname}`, {
+          headers: vercelHeaders(input.token),
+        }),
+        fetch(
+          `https://api.vercel.com/v6/domains/${input.hostname}/config?projectIdOrName=${projectId}`,
+          {
+            headers: vercelHeaders(input.token),
+          },
+        ),
+      ]),
     );
-    const body = response.ok
-      ? ((yield* Effect.promise(() => response.json())) as { readonly verified?: boolean })
-      : null;
+    const failed = !domain.ok || !config.ok;
+    const verified = failed
+      ? false
+      : ((yield* Effect.promise(() => domain.json())) as { readonly verified?: boolean })
+          .verified === true;
+    const misconfigured = failed
+      ? true
+      : ((yield* Effect.promise(() => config.json())) as { readonly misconfigured?: boolean })
+          .misconfigured !== false;
     const observedAt = yield* DateTime.now;
     return yield* Verify.attachEvidence({
       domain: input.apexName,
       evidence: [
         new Verify.HostEvidence({
           source: `vercel-domain:${input.hostname}`,
-          status: body === null ? "failed" : body.verified === true ? "ok" : "pending",
+          status: failed ? "failed" : verified && !misconfigured ? "ok" : "pending",
           label: `Vercel serves ${input.hostname}`,
-          detail:
-            body === null
-              ? `Vercel answered ${response.status}`
-              : body.verified === true
-                ? null
+          detail: failed
+            ? `Vercel answered ${domain.ok ? config.status : domain.status}`
+            : verified && !misconfigured
+              ? null
+              : verified
+                ? "Vercel reports the DNS as misconfigured"
                 : "Vercel has not verified the domain yet",
           observedAt,
         }),
