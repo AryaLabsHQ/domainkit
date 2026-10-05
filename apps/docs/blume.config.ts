@@ -85,6 +85,8 @@ export default defineConfig({
       sameAs: [
         "https://github.com/AryaLabsHQ/domainkit",
         "https://www.npmjs.com/package/domainkit",
+        "https://www.npmjs.com/package/@domainkit/react",
+        "https://www.npmjs.com/package/@domainkit/capsuledb",
       ],
     },
   },
