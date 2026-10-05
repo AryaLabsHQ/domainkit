@@ -53,7 +53,9 @@ record at _acme.app.example.com`, `google timed out`.
 />
 
 `attachEvidence` merges by `source` without re-reading DNS, so a webhook can update one signal
-without paying for a full observation.
+without paying for a full observation. Host evidence merged before the first `observe` is kept, but
+the domain is never `ready` until DNS has been observed: it is `failed` when a host signal failed and
+otherwise `pending`, with `nextCheckAt` set for that first observation.
 
 ## Statuses
 
@@ -71,7 +73,9 @@ one SPF record. Unrelated TXT doesn't affect an SPF requirement. Planning and ve
 same rules.
 
 The domain's `overall` is `failed` when any requirement is a mismatch or any host evidence failed,
-`ready` when every requirement is satisfied and every host signal is `ok`, and `pending` otherwise.
+`ready` when at least one requirement has been observed, every requirement is satisfied, and every
+host signal is `ok`, and `pending` otherwise. Host evidence can hold a domain back but never makes
+it ready alone.
 
 ## The resolver pool
 

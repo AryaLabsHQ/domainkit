@@ -22,7 +22,10 @@ const observer = Layer.succeed(Verify.Observer, {
     Effect.gen(function* () {
       if (readiness.overall === "ready") return yield* markReady({ ownerId, domain });
       // A pending domain carries its own schedule, so the host sleeps on it rather than polling.
-      if (readiness.nextCheckAt !== null && cause === "observe") {
+      // Merged host evidence keeps the schedule an observation already set; before the first
+      // observation there is none, so evidence on a row with no requirements schedules it.
+      const schedules = cause === "observe" || readiness.requirements.length === 0;
+      if (readiness.nextCheckAt !== null && schedules) {
         yield* wake({
           ownerId,
           domain,
@@ -38,11 +41,24 @@ export const live = DomainKit.layer({ providers }).pipe(Layer.provideMerge(obser
 // #region job
 /**
  * The clock is the host's. A job observes the domains that are due, and the observer above is what
- * tells the rest of the application that something changed.
+ * tells the rest of the application that something changed. A domain with nothing to observe (no
+ * receipt and no requirements) is logged and skipped, so it does not stop the batch; any other
+ * failure fails the job, so your queue retries it.
  */
 export const sweep = Effect.gen(function* () {
   const due = yield* domainsDue;
-  yield* Effect.forEach(due, (domain) => Verify.observe({ domain }), { concurrency: 8 });
+  yield* Effect.forEach(
+    due,
+    (domain) =>
+      Verify.observe({ domain }).pipe(
+        Effect.catch((error) =>
+          error.reason._tag === "InvalidInput"
+            ? Effect.logWarning(`nothing to observe for ${domain}`, error)
+            : Effect.fail(error),
+        ),
+      ),
+    { concurrency: 8 },
+  );
 }).pipe(Effect.provideService(Principal.Service, principal));
 // #endregion job
 

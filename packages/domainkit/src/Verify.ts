@@ -95,7 +95,11 @@ export interface Interface {
     readonly domain: string;
     readonly requirements?: ReadonlyArray<DnsRecord.Model>;
   }) => Fx<Readiness>;
-  /** Merge host evidence into stored readiness without re-observing DNS. */
+  /**
+   * Merge host evidence into stored readiness without re-observing DNS. Before the first `observe`
+   * the readiness has no requirements, so it is never `ready`: `failed` when a host signal failed,
+   * otherwise `pending` with `nextCheckAt` set for the first observation.
+   */
   readonly attachEvidence: (input: {
     readonly domain: string;
     readonly evidence: ReadonlyArray<HostEvidence>;
@@ -291,8 +295,10 @@ const overallOf = (
   ) {
     return "failed";
   }
+  // Readiness is a DNS fact: host evidence can hold a domain back but never makes it ready alone,
+  // so a row with no observed requirement stays pending and keeps its next check scheduled.
   const ready =
-    requirements.length + host.length > 0 &&
+    requirements.length > 0 &&
     requirements.every(({ status }) => status === "satisfied") &&
     host.every(({ status }) => status === "ok");
   return ready ? "ready" : "pending";
@@ -343,14 +349,18 @@ export const make: Effect.Effect<
         ),
       );
       const host = yield* Errors.decode(StoredHost, row.host, "host");
+      // Overall is derived, not trusted: a row stored under an older rule (host evidence alone
+      // read as ready) reads back as pending, due at once, so a worker following `nextCheckAt`
+      // observes it.
+      const overall = overallOf(requirements, host);
       return {
         domain: row.domain,
         attachmentId: row.attachmentId,
-        overall: row.overall,
+        overall,
         requirements,
         host,
         checkedAt: row.checkedAt,
-        nextCheckAt: row.nextCheckAt,
+        nextCheckAt: row.nextCheckAt ?? (overall === "ready" ? null : row.checkedAt),
       };
     });
 
