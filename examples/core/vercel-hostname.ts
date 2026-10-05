@@ -162,7 +162,9 @@ export const applyApproved = (approval: Approval.Model) =>
 // #region vercel-status
 /**
  * Run this from your own job until the hostname works. It observes the apex's DNS first and attaches
- * Vercel's answer only afterwards. Vercel, not DNS, decides when it serves the
+ * Vercel's answer only afterwards. Pass `requirements` while nothing has been applied, when the
+ * customer added the records by hand or the plan is not applied yet; once a receipt exists, DNS is
+ * checked against it. Vercel, not DNS, decides when it serves the
  * hostname, so its answer is host evidence beside DomainKit's observation. The status is `ok` only
  * when Vercel has verified the domain and its configuration reports `misconfigured: false`. The
  * `source` carries the hostname, so two hostnames under one domain keep separate rows. A request
@@ -172,10 +174,15 @@ export const recordVercelStatus = (input: {
   readonly apexName: string;
   readonly hostname: string;
   readonly token: string;
+  readonly requirements?: ReadonlyArray<DnsRecord.Model>;
 }) =>
   Effect.gen(function* () {
     // DNS first: host evidence alone would read as ready, because nothing has been observed yet.
-    yield* Verify.observe({ domain: input.apexName });
+    yield* Verify.observe(
+      input.requirements === undefined
+        ? { domain: input.apexName }
+        : { domain: input.apexName, requirements: input.requirements },
+    );
     const ask = (url: string) =>
       Effect.tryPromise(async () => {
         const response = await fetch(url, { headers: vercelHeaders(input.token) });

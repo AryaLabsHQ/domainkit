@@ -99,7 +99,9 @@ approval, and receipts.
 Writing the records doesn't make the hostname live. DomainKit observes the provider and public
 resolvers, and Vercel decides when the domain is verified and the certificate is issued. Run a job
 that first checks the apex's DNS, then asks Vercel and records its answer as host evidence. DNS is
-checked before Vercel's answer counts, because host evidence alone would read as ready. The domain
+checked before Vercel's answer counts, because host evidence alone would read as ready. If the
+customer added the records by hand, or the plan isn't applied yet, pass the records from step 3 as
+`requirements`; once a receipt exists, DNS is checked against it. The domain
 is ready only when the records resolve and every host status is `ok`. The job records `ok` only when Vercel has verified the domain and its configuration
 reports `misconfigured: false`, so a hostname isn't called ready before it can serve HTTPS. Each
 hostname gets its own evidence row, and a failed request to Vercel is recorded as `failed` instead
