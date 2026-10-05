@@ -1,0 +1,141 @@
+---
+title: Custom domains for multi-tenant apps on Vercel
+description: Let customers use their own domain on your Vercel app. Add the hostname with Vercel's API, then write the DNS records in their Cloudflare or Vercel account.
+sidebar:
+  label: Custom domains on Vercel
+seo:
+  title: Custom domains for multi-tenant apps on Vercel
+---
+
+You run a multi-tenant app on Vercel, and a customer wants `app.theirbrand.com` to open their
+workspace. Two separate things have to happen. Vercel has to serve the hostname from your project,
+and the customer's DNS has to point at Vercel. This guide wires both: Vercel's API does the first,
+and DomainKit does the second.
+
+| Step                                    | Where it happens                            | Who does it                            |
+| --------------------------------------- | ------------------------------------------- | -------------------------------------- |
+| Add the hostname to your Vercel project | Your Vercel account                         | Vercel's API, called by your app       |
+| Issue the certificate                   | Your Vercel account                         | Vercel                                 |
+| Write the records that point it at you  | The customer's DNS, on Vercel or Cloudflare | DomainKit, after the customer approves |
+
+Vercel's [multi-tenant domain management](https://vercel.com/docs/multi-tenant/domain-management)
+covers the first two rows. DomainKit never touches your project, and it never issues certificates.
+It writes records in the customer's own account, so it works the same whether the customer's DNS is
+on Vercel or Cloudflare.
+
+You need a TypeScript app with an API that can identify the signed-in customer, a Vercel API token
+with access to your project, and DomainKit mounted in that API. The
+[custom domain setup guide](/guides/custom-domain-onboarding) covers the mount, and the
+[Quickstart](/docs/quickstart) runs the lifecycle in memory first.
+
+## 1. Add the hostname to your Vercel project
+
+When the customer submits `app.theirbrand.com`, your app calls Vercel's API to attach it to your
+project. This is Vercel's endpoint, not a DomainKit call, and the account it writes to is yours.
+
+<Snippet file="examples/core/vercel-hostname.ts" region="add-to-project" />
+
+The response names the registrable domain, `apexName`, and says whether Vercel still wants proof of
+ownership. Vercel's API reference lists every response field.
+
+## 2. Ask Vercel where the hostname should point
+
+A second Vercel call returns the recommended `CNAME` target for a subdomain or address for an apex
+domain. Read it at runtime instead of copying a value from a page, because Vercel can change it.
+
+<Snippet file="examples/core/vercel-hostname.ts" region="route" />
+
+## 3. Turn Vercel's answers into records
+
+Vercel's answer is a set of DNS requirements: usually a `CNAME` that points the hostname at
+Vercel, and a TXT record when ownership isn't proven yet. If you accept apex domains such as
+`theirbrand.com`, point them with an `A` record, since most DNS hosts don't allow a `CNAME` at the
+apex.
+
+<Snippet file="examples/core/vercel-hostname.ts" region="requirements" />
+
+The `purpose` is the sentence your customer reads next to each record.
+
+## 4. Let the customer connect their DNS
+
+The customer's DNS may be on Vercel, on Cloudflare, or somewhere DomainKit can't write to. Register
+both built-in providers, then ask which connection already reaches the apex domain before you show a
+provider list. Connect and attach `apexName`, not the subdomain: the records you plan include
+Vercel's ownership TXT record at `_vercel.<apexName>`.
+
+<Snippet file="examples/providers/cloudflare.ts" region="oauth" />
+
+<Snippet file="examples/providers/vercel.ts" region="integration" />
+
+<Snippet file="examples/core/vercel-hostname.ts" region="attach-apex" />
+
+A connection belongs to the customer's account, not the domain, so their next domain skips this
+step. The [Vercel provider page](/docs/providers/vercel) covers tokens and the marketplace
+integration, and the [Cloudflare provider page](/docs/providers/cloudflare) covers its OAuth flow.
+
+If the customer's DNS is elsewhere, show them the records from step 3 as a table to add by hand.
+DomainKit can still observe whether they resolve.
+
+## 5. Plan, review, apply
+
+Planning reads the customer's zone and returns a `Create`, a `Noop`, or a `Conflict` for each
+record. It never writes. Plan against `apexName`, since every requirement must be at or below the
+planned domain. Keep one plan per apex: when the customer adds another hostname under it, call this
+again with every hostname together, because observation reads only the latest plan's records.
+
+<Snippet file="examples/core/vercel-hostname.ts" region="plan" />
+
+Show the customer the writes and any conflicts first. Their approval binds to the plan's digest, and
+apply writes only what they approved, so run the two calls below on separate requests, with their
+decision between them. Writes go one record at a time and aren't atomic, so a failure partway gives
+you a partial receipt whose outcomes name the record that failed. Planning again turns the records
+that landed into no-ops. [Plans](/docs/core/plans) covers review,
+approval, and receipts.
+
+<Snippet file="examples/core/vercel-hostname.ts" region="apply" />
+
+## 6. Wait for Vercel and DNS
+
+Writing the records doesn't make the hostname live. DomainKit observes the provider and public
+resolvers, and Vercel decides when the domain is verified and the certificate is issued. Run a job
+that first checks the apex's DNS, then asks Vercel and records its answer as host evidence. DNS is
+checked before Vercel's answer counts, because host evidence alone would read as ready. If the
+customer added the records by hand, or the plan isn't applied yet, pass the records from step 3 as
+`requirements`; once a receipt exists, DNS is checked against it. The domain
+is ready only when the records resolve and every host status is `ok`. The job records `ok` only when Vercel has verified the domain and its configuration
+reports `misconfigured: false`, so a hostname isn't called ready before it can serve HTTPS. Each
+hostname gets its own evidence row, and a failed request to Vercel is recorded as `failed` instead
+of waiting.
+
+<Snippet file="examples/core/vercel-hostname.ts" region="vercel-status" />
+
+[Verification](/docs/core/verification) covers observation and the schedule a worker can sleep on.
+
+## Before you go live
+
+- Your Vercel token stays on your server, and the project it can reach is the one you intend.
+- The hostname belongs to the signed-in customer's tenant before you add it to Vercel.
+- You pass Vercel's returned values into `requirements`, and never hard-code a target.
+- You show a manual table of records for customers whose DNS you can't write to.
+- You remove a departed hostname from your Vercel project yourself. DomainKit's
+  [cleanup](/docs/core/cleanup) handles only the customer's records.
+
+## FAQ
+
+<Accordion>
+  <AccordionItem title="Does DomainKit add the domain to my Vercel project?">
+    No. Your app calls Vercel's API for that. DomainKit writes records in the customer's DNS
+    account.
+  </AccordionItem>
+  <AccordionItem title="Does it issue the certificate?">
+    No. Vercel issues and renews it after the hostname resolves to your project.
+  </AccordionItem>
+  <AccordionItem title="What if the customer's DNS is on Cloudflare?">
+    It works the same. DomainKit has a Cloudflare provider alongside the Vercel one, and the
+    customer connects their own account.
+  </AccordionItem>
+  <AccordionItem title="What about Cloudflare for SaaS?">
+    That is another way to serve customer hostnames. See [Cloudflare for SaaS and
+    DomainKit](/compare/cloudflare-for-saas).
+  </AccordionItem>
+</Accordion>
