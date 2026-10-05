@@ -41,11 +41,19 @@ export const live = DomainKit.layer({ providers }).pipe(Layer.provideMerge(obser
 // #region job
 /**
  * The clock is the host's. A job observes the domains that are due, and the observer above is what
- * tells the rest of the application that something changed.
+ * tells the rest of the application that something changed. Each domain fails on its own: one with
+ * nothing to observe (no receipt and no requirements) is logged, and the rest of the batch runs.
  */
 export const sweep = Effect.gen(function* () {
   const due = yield* domainsDue;
-  yield* Effect.forEach(due, (domain) => Verify.observe({ domain }), { concurrency: 8 });
+  yield* Effect.forEach(
+    due,
+    (domain) =>
+      Verify.observe({ domain }).pipe(
+        Effect.catch((error) => Effect.logWarning(`observe failed for ${domain}`, error)),
+      ),
+    { concurrency: 8 },
+  );
 }).pipe(Effect.provideService(Principal.Service, principal));
 // #endregion job
 
