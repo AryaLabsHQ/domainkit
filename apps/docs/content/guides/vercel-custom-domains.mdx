@@ -35,12 +35,17 @@ project. This is Vercel's endpoint, not a DomainKit call, and the account it wri
 
 <Snippet file="examples/core/vercel-hostname.ts" region="add-to-project" />
 
-The response tells you whether Vercel still wants proof of ownership. Vercel's API reference lists
-the response fields and the endpoint that returns the recommended `CNAME` or `A` value for a
-hostname. Read those values at runtime instead of copying them from a page, because Vercel can
-change them.
+The response names the registrable domain, `apexName`, and says whether Vercel still wants proof of
+ownership. Vercel's API reference lists every response field.
 
-## 2. Turn Vercel's answer into records
+## 2. Ask Vercel where the hostname should point
+
+A second Vercel call returns the recommended `CNAME` target for a subdomain or address for an apex
+domain. Read it at runtime instead of copying a value from a page, because Vercel can change it.
+
+<Snippet file="examples/core/vercel-hostname.ts" region="route" />
+
+## 3. Turn Vercel's answers into records
 
 Vercel's answer is a set of DNS requirements: usually a `CNAME` that points the hostname at
 Vercel, and a TXT record when ownership isn't proven yet. If you accept apex domains such as
@@ -51,7 +56,7 @@ apex.
 
 The `purpose` is the sentence your customer reads next to each record.
 
-## 3. Let the customer connect their DNS
+## 4. Let the customer connect their DNS
 
 The customer's DNS may be on Vercel, on Cloudflare, or somewhere DomainKit can't write to. Register
 both built-in providers, then ask which connection already reaches the hostname before you show a
@@ -67,13 +72,14 @@ A connection belongs to the customer's account, not the hostname, so their secon
 step. The [Vercel provider page](/docs/providers/vercel) covers tokens and the marketplace
 integration, and the [Cloudflare provider page](/docs/providers/cloudflare) covers its OAuth flow.
 
-If the customer's DNS is elsewhere, show them the records from step 2 as a table to add by hand.
+If the customer's DNS is elsewhere, show them the records from step 3 as a table to add by hand.
 DomainKit can still observe whether they resolve.
 
-## 4. Plan, review, apply
+## 5. Plan, review, apply
 
 Planning reads the customer's zone and returns a `Create`, a `Noop`, or a `Conflict` for each
-record. It never writes.
+record. It never writes. Plan against `apexName`, not the subdomain: Vercel's ownership TXT record
+sits at `_vercel.<apexName>`, and every requirement must be at or below the planned domain.
 
 <Snippet file="examples/core/vercel-hostname.ts" region="plan" />
 
@@ -84,22 +90,22 @@ approval, and receipts.
 
 <Snippet file="examples/core/plans.ts" region="apply" />
 
-## 5. Wait for Vercel and DNS
+## 6. Wait for Vercel and DNS
 
 Writing the records doesn't make the hostname live. DomainKit observes the provider and public
-resolvers, and Vercel decides when the domain is verified and the certificate is issued. Show both
-on the same screen, and add Vercel's status as host evidence.
+resolvers, and Vercel decides when the domain is verified and the certificate is issued. Run a job
+that asks Vercel and records its answer as host evidence. The domain is ready only when every host
+status is `ok`.
 
-<Snippet file="examples/core/verification.ts" region="host-evidence" />
+<Snippet file="examples/core/vercel-hostname.ts" region="vercel-status" />
 
-Re-check Vercel's domain status from your own job, and mark the hostname ready only when Vercel
-says it is.
+[Verification](/docs/core/verification) covers observation and the schedule a worker can sleep on.
 
 ## Before you go live
 
 - Your Vercel token stays on your server, and the project it can reach is the one you intend.
 - The hostname belongs to the signed-in customer's tenant before you add it to Vercel.
-- You pass Vercel's returned values into `requirements`, and don't hard-code a target.
+- You pass Vercel's returned values into `requirements`, and never hard-code a target.
 - You show a manual table of records for customers whose DNS you can't write to.
 - You remove a departed hostname from your Vercel project yourself. DomainKit's
   [cleanup](/docs/core/cleanup) handles only the customer's records.
