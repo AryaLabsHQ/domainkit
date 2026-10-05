@@ -1,5 +1,5 @@
 import { DateTime, Effect } from "effect";
-import { DnsRecord, Provision, Receipt, Verify } from "domainkit";
+import { Approval, DnsRecord, Plan, Provision, Receipt, Verify } from "domainkit";
 
 const projectId = "prj_saas_app";
 const vercelHeaders = (token: string) => ({
@@ -116,19 +116,19 @@ export const planForCustomer = (
 
 // #region apply
 /**
- * The customer's own plan, from `planForCustomer`, approved by its digest and applied. Apply
- * re-plans first and fails `Stale` when the zone moved; a partial receipt is data, not a failure.
+ * Two calls, with the customer's decision between them. Show `Plan.writes(plan)` first; run
+ * `approveReviewedPlan` only when they press approve, then `applyApproved`. Apply re-plans and
+ * fails `Stale` when the zone moved. A partial receipt is data: its `outcomes` say which write
+ * failed and why.
  */
-export const approveAndApply = (input: Parameters<typeof planForCustomer>[0]) =>
-  Effect.gen(function* () {
-    const plan = yield* planForCustomer(input);
-    const approval = yield* Provision.approve(plan);
-    const receipt = yield* Provision.apply(approval);
-    return {
-      complete: Receipt.isComplete(receipt),
-      written: Receipt.applied(receipt).length,
-    };
-  });
+export const approveReviewedPlan = (planId: Plan.PlanId) => Provision.approve(planId);
+
+export const applyApproved = (approval: Approval.Model) =>
+  Effect.map(Provision.apply(approval), (receipt) => ({
+    complete: Receipt.isComplete(receipt),
+    written: Receipt.applied(receipt).length,
+    outcomes: receipt.outcomes,
+  }));
 // #endregion apply
 
 // #region vercel-status
@@ -136,8 +136,8 @@ export const approveAndApply = (input: Parameters<typeof planForCustomer>[0]) =>
  * Run this from your own job until the hostname works. Vercel, not DNS, decides when it serves the
  * hostname, so its answer is host evidence beside DomainKit's observation. The status is `ok` only
  * when Vercel has verified the domain and its configuration reports `misconfigured: false`. The
- * `source` carries the hostname, so two hostnames under one domain keep separate rows, and a failed
- * request is `failed` rather than a hostname that is merely waiting.
+ * `source` carries the hostname, so two hostnames under one domain keep separate rows. A request
+ * that errors or is rejected is `failed`, not a hostname that is merely waiting.
  */
 export const recordVercelStatus = (input: {
   readonly apexName: string;
@@ -145,28 +145,24 @@ export const recordVercelStatus = (input: {
   readonly token: string;
 }) =>
   Effect.gen(function* () {
-    const [domain, config] = yield* Effect.promise(() =>
-      Promise.all([
-        fetch(`https://api.vercel.com/v9/projects/${projectId}/domains/${input.hostname}`, {
-          headers: vercelHeaders(input.token),
-        }),
-        fetch(
-          `https://api.vercel.com/v6/domains/${input.hostname}/config?projectIdOrName=${projectId}`,
-          {
-            headers: vercelHeaders(input.token),
-          },
-        ),
-      ]),
+    const ask = (url: string) =>
+      Effect.tryPromise(async () => {
+        const response = await fetch(url, { headers: vercelHeaders(input.token) });
+        return {
+          status: response.status,
+          body: response.ok ? ((await response.json()) as unknown) : null,
+        };
+      }).pipe(Effect.catch(() => Effect.succeed({ status: 0, body: null })));
+    const domain = yield* ask(
+      `https://api.vercel.com/v9/projects/${projectId}/domains/${input.hostname}`,
     );
-    const failed = !domain.ok || !config.ok;
-    const verified = failed
-      ? false
-      : ((yield* Effect.promise(() => domain.json())) as { readonly verified?: boolean })
-          .verified === true;
-    const misconfigured = failed
-      ? true
-      : ((yield* Effect.promise(() => config.json())) as { readonly misconfigured?: boolean })
-          .misconfigured !== false;
+    const config = yield* ask(
+      `https://api.vercel.com/v6/domains/${input.hostname}/config?projectIdOrName=${projectId}`,
+    );
+    const verified = (domain.body as { readonly verified?: boolean } | null)?.verified === true;
+    const misconfigured =
+      (config.body as { readonly misconfigured?: boolean } | null)?.misconfigured !== false;
+    const failed = domain.body === null || config.body === null;
     const observedAt = yield* DateTime.now;
     return yield* Verify.attachEvidence({
       domain: input.apexName,
@@ -176,7 +172,7 @@ export const recordVercelStatus = (input: {
           status: failed ? "failed" : verified && !misconfigured ? "ok" : "pending",
           label: `Vercel serves ${input.hostname}`,
           detail: failed
-            ? `Vercel answered ${domain.ok ? config.status : domain.status}`
+            ? `Vercel request failed (${domain.body === null ? domain.status : config.status})`
             : verified && !misconfigured
               ? null
               : verified

@@ -83,9 +83,11 @@ sits at `_vercel.<apexName>`, and every requirement must be at or below the plan
 
 <Snippet file="examples/core/vercel-hostname.ts" region="plan" />
 
-The customer approves the plan's digest, and apply writes only what they approved. Writes go one
-record at a time and aren't atomic, so a failure partway gives you a partial receipt. Planning
-again turns the records that landed into no-ops. [Plans](/docs/core/plans) covers review,
+Show the customer the writes and any conflicts first. Their approval binds to the plan's digest, and
+apply writes only what they approved, so run the two calls below on separate requests, with their
+decision between them. Writes go one record at a time and aren't atomic, so a failure partway gives
+you a partial receipt whose outcomes name the record that failed. Planning again turns the records
+that landed into no-ops. [Plans](/docs/core/plans) covers review,
 approval, and receipts.
 
 <Snippet file="examples/core/vercel-hostname.ts" region="apply" />
