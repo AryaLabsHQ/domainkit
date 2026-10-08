@@ -83,7 +83,13 @@ for (const name of graph.keys()) walk(name, []);
 
 const fixture = await mkdtemp(join(tmpdir(), "domainkit-registry-"));
 const run = async (...command: string[]) => {
-  const child = Bun.spawn(command, { cwd: fixture, stderr: "inherit", stdout: "inherit" });
+  const child = Bun.spawn(command, {
+    cwd: fixture,
+    // Keep cached package links inside the consumer so declarations can resolve its React types.
+    env: { ...process.env, BUN_INSTALL_CACHE_DIR: join(fixture, ".bun-cache") },
+    stderr: "inherit",
+    stdout: "inherit",
+  });
   const exitCode = await child.exited;
   if (exitCode !== 0) throw new Error(`${command.join(" ")} exited with ${exitCode}`);
 };
