@@ -1,8 +1,8 @@
-import { CircleAlertIcon, InboxIcon } from "lucide-react";
+import { AlertCircleIcon, InboxIcon, Loading03Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
-import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 export interface AsyncStateProps extends ComponentProps<typeof Empty> {
@@ -29,11 +29,16 @@ function Shell({ children, className, state, ...props }: ShellProps) {
       <EmptyHeader>
         <EmptyMedia variant="icon">
           {state === "loading" ? (
-            <Spinner />
+            <HugeiconsIcon
+              icon={Loading03Icon}
+              aria-label="Loading"
+              className="size-4 animate-spin"
+              role="status"
+            />
           ) : error ? (
-            <CircleAlertIcon className="text-destructive" />
+            <HugeiconsIcon aria-hidden="true" icon={AlertCircleIcon} className="text-destructive" />
           ) : (
-            <InboxIcon />
+            <HugeiconsIcon aria-hidden="true" icon={InboxIcon} />
           )}
         </EmptyMedia>
         <EmptyDescription className={cn(error && "text-destructive")}>{children}</EmptyDescription>

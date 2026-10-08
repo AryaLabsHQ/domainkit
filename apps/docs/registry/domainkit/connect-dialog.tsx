@@ -1,7 +1,8 @@
 "use client";
 
 import { Connect, DomainKit, type Domain } from "@domainkit/react";
-import { ChevronDownIcon, ExternalLinkIcon } from "lucide-react";
+import { ArrowDown01Icon, LinkSquare02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useId, useState, type ReactElement } from "react";
 
 import { Outcome } from "@/components/domainkit/outcome";
@@ -98,7 +99,7 @@ function TokenForm({
           target="_blank"
         >
           {messages.getToken}
-          <ExternalLinkIcon aria-hidden="true" className="size-3" />
+          <HugeiconsIcon aria-hidden="true" icon={LinkSquare02Icon} className="size-3" />
         </a>
       ) : null}
     </div>
@@ -205,7 +206,7 @@ export function ConnectDialog({ flow, marks, trigger }: ConnectDialogProps) {
                     render={<Button className="-mx-2 h-auto py-1 text-lg" variant="ghost" />}
                   >
                     {heading}
-                    <ChevronDownIcon aria-hidden="true" className="size-4" />
+                    <HugeiconsIcon aria-hidden="true" icon={ArrowDown01Icon} className="size-4" />
                   </DropdownMenuTrigger>
                 </DialogTitle>
                 <DropdownMenuContent align="start" aria-label={messages.useAnotherProvider}>

@@ -1,5 +1,6 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { XIcon } from "lucide-react";
+import { Cancel01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import type { ComponentProps } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,7 @@ export function DialogContent({
             data-slot="dialog-close"
             render={<Button className="absolute top-4 right-4" size="icon-sm" variant="ghost" />}
           >
-            <XIcon />
+            <HugeiconsIcon aria-hidden="true" icon={Cancel01Icon} />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         ) : null}

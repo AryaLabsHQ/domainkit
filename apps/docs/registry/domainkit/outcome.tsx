@@ -2,7 +2,8 @@
 
 import { Outcome as DomainKitOutcome, DomainKit, type Messages } from "@domainkit/react";
 import type { DomainKit as Kit } from "domainkit";
-import { AlertTriangleIcon } from "lucide-react";
+import { Alert02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import type { ComponentProps } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -49,7 +50,7 @@ export function Outcome({
       role="alert"
       {...props}
     >
-      <AlertTriangleIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+      <HugeiconsIcon aria-hidden="true" icon={Alert02Icon} className="mt-0.5 size-4 shrink-0" />
       <div className="min-w-0 flex-1 space-y-1">
         <p className="font-medium">{words.title}</p>
         {words.description === undefined ? null : (

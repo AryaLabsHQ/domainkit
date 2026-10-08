@@ -1,7 +1,8 @@
 "use client";
 
 import { Connect, DomainKit, type Domain } from "@domainkit/react";
-import { MoreHorizontalIcon } from "lucide-react";
+import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useState, type ComponentProps, type ReactNode } from "react";
 
 import { ConnectDialog } from "@/components/domainkit/connect-dialog";
@@ -82,7 +83,7 @@ export function ProviderRow({ action, className, flow, marks, ...props }: Provid
             <DropdownMenuTrigger
               render={<Button aria-label={messages.moreActions} size="icon-sm" variant="ghost" />}
             >
-              <MoreHorizontalIcon />
+              <HugeiconsIcon aria-hidden="true" icon={MoreHorizontalIcon} />
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuItem onClick={() => setDisconnecting(true)} variant="destructive">

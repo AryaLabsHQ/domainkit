@@ -59,7 +59,7 @@
       "type": "registry:ui",
       "title": "Copy Value",
       "description": "A compact DNS value with a copy action.",
-      "dependencies": ["lucide-react"],
+      "dependencies": ["@hugeicons/react", "@hugeicons/core-free-icons"],
       "registryDependencies": ["button"],
       "files": [
         {
@@ -73,8 +73,8 @@
       "type": "registry:ui",
       "title": "Async State",
       "description": "Loading, empty, and error states for DNS interfaces.",
-      "dependencies": ["lucide-react"],
-      "registryDependencies": ["empty", "spinner"],
+      "dependencies": ["@hugeicons/react", "@hugeicons/core-free-icons"],
+      "registryDependencies": ["empty"],
       "files": [
         {
           "path": "registry/ui/async-state.tsx",
@@ -102,7 +102,12 @@
       "type": "registry:component",
       "title": "Outcome",
       "description": "A failed step in the catalog's words, as a card or on one line.",
-      "dependencies": ["@domainkit/react", "domainkit", "lucide-react"],
+      "dependencies": [
+        "@domainkit/react",
+        "domainkit",
+        "@hugeicons/react",
+        "@hugeicons/core-free-icons"
+      ],
       "registryDependencies": ["button"],
       "files": [
         {
@@ -172,7 +177,12 @@
       "type": "registry:component",
       "title": "Connect Dialog",
       "description": "Authorizing DNS changes, one decision at a time.",
-      "dependencies": ["@domainkit/react", "domainkit", "lucide-react"],
+      "dependencies": [
+        "@domainkit/react",
+        "domainkit",
+        "@hugeicons/react",
+        "@hugeicons/core-free-icons"
+      ],
       "registryDependencies": [
         "button",
         "dialog",
@@ -195,7 +205,7 @@
       "type": "registry:component",
       "title": "Provider Row",
       "description": "The line that heads a records card: who serves the zone and the one action.",
-      "dependencies": ["@domainkit/react", "lucide-react"],
+      "dependencies": ["@domainkit/react", "@hugeicons/react", "@hugeicons/core-free-icons"],
       "registryDependencies": [
         "button",
         "dropdown-menu",
