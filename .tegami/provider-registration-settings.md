@@ -1,5 +1,6 @@
 ---
-domainkit: minor
+packages:
+  domainkit: minor
 ---
 
 ## Derive provider registration requirements before connecting

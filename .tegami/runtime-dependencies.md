@@ -1,5 +1,6 @@
 ---
-domainkit: patch
+packages:
+  domainkit: patch
 ---
 
 ## Update OAuth and domain parsing dependencies
