@@ -135,7 +135,7 @@ export function cn(...inputs: ReadonlyArray<ClassValue>) {
         ui: "@/components/ui",
         utils: "@/lib/utils",
       },
-      iconLibrary: "lucide",
+      iconLibrary: "hugeicons",
       rsc: false,
       // The flow is written on the Base UI idiom: components take `render`, not `asChild`.
       style: "base-nova",

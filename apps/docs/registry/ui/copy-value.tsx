@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,9 @@ export function CopyValue({ className, copiedIcon, copyIcon, value, ...props }: 
         type="button"
         variant="ghost"
       >
-        {copied ? (copiedIcon ?? <CheckIcon />) : (copyIcon ?? <CopyIcon />)}
+        {copied
+          ? (copiedIcon ?? <HugeiconsIcon aria-hidden="true" icon={Tick02Icon} />)
+          : (copyIcon ?? <HugeiconsIcon aria-hidden="true" icon={Copy01Icon} />)}
       </Button>
     </span>
   );
