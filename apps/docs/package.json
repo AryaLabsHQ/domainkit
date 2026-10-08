@@ -31,6 +31,7 @@
     "test:browser": "playwright test",
     "test:browser:install": "playwright install chromium",
     "test:snippets": "bun scripts/test-snippets.mts",
+    "test:styled": "playwright test -c playwright.styled.config.ts",
     "test:tooling": "bun scripts/test-tooling.mts",
     "typecheck": "blume check"
   },
