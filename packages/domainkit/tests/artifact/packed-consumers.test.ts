@@ -24,9 +24,14 @@ import { cname, spf } from "domainkit/DnsRecord";
 import * as PrincipalModule from "domainkit/Principal";
 import { Server } from "domainkit/server";
 import { Testing } from "domainkit/testing";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Redacted, Schema } from "effect";
 
 export const run = async () => {
+  const registration = await Effect.runPromise(Server.registrationSettings({
+    providers: [Cloudflare.provider({ oauth: { clientId: "public", clientAuth: "none" } }), Vercel.provider({ integration: { clientId: "c", clientSecret: Redacted.make("s"), slug: "domainkit" } })],
+    callbackBaseUrl: "https://consumer.example/api/domainkit",
+  }));
+  if (!Schema.is(Schema.Array(Server.RegistrationSettings))(registration)) throw new Error("Invalid registration settings");
   const fake = Testing.provider({ zones: ["example.com"] });
   const services = DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() });
   const program = Effect.gen(function* () {
@@ -80,6 +85,7 @@ export const run = async () => {
     );
     return {
       ...lifecycleResult,
+      registration,
       wired: wired._tag,
       snapshot: wired.snapshot?.status ?? null,
       capabilities: Transport.capabilities(transport),
@@ -100,6 +106,22 @@ const expected = (version: string) => ({
   keyLength: 43,
   version,
   subpath: true,
+  registration: [
+    {
+      _tag: "OAuth",
+      provider: "cloudflare",
+      callbackUrl: "https://consumer.example/api/domainkit/callback/cloudflare",
+      clientAuth: "none",
+      pkce: "S256",
+      scopes: ["zone.read", "dns.read", "dns.write", "offline_access"],
+    },
+    {
+      _tag: "Integration",
+      provider: "vercel",
+      callbackUrl: "https://consumer.example/api/domainkit/callback/vercel",
+      clientAuth: "client_secret_post",
+    },
+  ],
   wired: "Connected",
   snapshot: "connected",
   capabilities: ["connection", "provisioning", "verification", "cleanup"],
@@ -168,6 +190,8 @@ export const live: Layer.Layer<DomainKit.Services, DomainKit.Error, Storage.Serv
     Layer.provide(Custody.layer({ key: Redacted.make(Custody.generateKey()) })),
   );
 export const cases = Testing.conformance.storage(Testing.storage).map((item) => item.name);
+export type PublicRegistrationSettings = Server.RegistrationSettings;
+export const registrationSettings: Effect.Effect<ReadonlyArray<Server.RegistrationSettings>, DomainKit.Error> = Server.registrationSettings({ providers: [], callbackBaseUrl: "https://consumer.example/api/domainkit" });
 export type PublicIdentity = Server.IdentityService;
 export type PublicEndpoint = Server.EndpointName;
 /** Both halves of the Identity seam compile against the packed types. */

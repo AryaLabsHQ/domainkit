@@ -38,6 +38,27 @@ emulator that serves `/integrations/<slug>/new` and Vercel's API paths.
   title="Against an emulator"
 />
 
+## Derive registration requirements
+
+<Snippet
+  file="examples/providers/vercel.ts"
+  region="registration-settings"
+  title="Secret-free registration settings"
+/>
+
+Reuse `callbackBaseUrl` in your mounted server options. It includes your public origin and mount
+path; the output appends `/callback/vercel`. Derivation reads no credentials and makes no provider
+calls. It describes setup requirements, not console readiness or granted permissions. See the
+[server reference](/docs/reference/server#registration-settings) for the output schema and failures.
+
+The Integration output describes `client_secret_post` code exchange authentication and adds no
+OAuth scopes. Host-started installation resolves the required client id and secret before redirect,
+then resolves them again at completion so credential rotation remains possible. Empty credentials
+or slug and malformed install/API URLs fail field-specific `InvalidInput` before redirect or
+continuation storage. Configuration errors contain no rejected values or source error details.
+Install/API URLs support emulator mount paths and must be HTTP(S) without credentials, query, or
+fragment. The host still registers the callback and chooses integration permissions.
+
 ## Connecting with a token
 
 <Snippet file="examples/providers/vercel.ts" region="connect-token" title="An access token" />

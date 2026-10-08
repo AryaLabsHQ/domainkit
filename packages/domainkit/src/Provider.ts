@@ -190,6 +190,11 @@ export interface CallbackInput {
 }
 
 export interface OAuthAuth {
+  /** Optional setup requirements; absence makes offline registration settings unsupported. */
+  readonly registration?: {
+    readonly clientAuth: "none" | "client_secret_basic" | "client_secret_post";
+    readonly pkce: "S256";
+  };
   readonly label: string;
   readonly scopes: ReadonlyArray<string>;
   readonly start: (input: {
@@ -206,6 +211,8 @@ export interface OAuthAuth {
 
 /** Marketplace-style installs (Vercel integrations) that redirect but are not OAuth. */
 export interface IntegrationAuth {
+  /** Authentication used by the integration code exchange, without credentials. */
+  readonly registration?: { readonly clientAuth: "client_secret_post" };
   readonly label: string;
   readonly start: (input: {
     readonly state: string;

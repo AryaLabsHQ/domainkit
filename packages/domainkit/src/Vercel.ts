@@ -4,7 +4,7 @@ import { type Config, Effect, Redacted, Schema } from "effect";
 import * as Errors from "./internal/error.ts";
 import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
-import { resolve } from "./internal/config.ts";
+import * as Configuration from "./internal/config.ts";
 import { type Fetch, rejectedToken } from "./internal/http.ts";
 import * as Client from "./internal/vercel/client.ts";
 import type * as Protocol from "./internal/vercel/protocol.ts";
@@ -42,8 +42,12 @@ const capabilities = ["dns:read", "dns:write"] as const;
 
 export const provider = (options: Options = {}): Provider.Definition<TeamContext> => {
   const fetch = options.fetch ?? globalThis.fetch;
-  const baseUrl = (options.baseUrl ?? "https://api.vercel.com").replace(/\/$/, "");
-  const client = (token: string): Client.Options => ({ token, fetch, baseUrl });
+  const baseUrl = options.baseUrl ?? "https://api.vercel.com";
+  const client = (token: string): Client.Options => ({
+    token,
+    fetch,
+    baseUrl: baseUrl.replace(/\/$/, ""),
+  });
 
   const targetOf = (domain: Protocol.Domain, label: string): Provider.Target => ({
     zone: domain.name,
@@ -58,21 +62,41 @@ export const provider = (options: Options = {}): Provider.Definition<TeamContext
   function integrationAuth(
     settings: NonNullable<Options["integration"]>,
   ): Provider.IntegrationAuth {
-    const installOrigin = (settings.installOrigin ?? "https://vercel.com").replace(/\/$/, "");
+    const installOrigin = settings.installOrigin ?? "https://vercel.com";
+    const credentials = () =>
+      Effect.gen(function* () {
+        yield* Configuration.endpoint(
+          settings.installOrigin ?? "https://vercel.com",
+          "integration.installOrigin",
+        );
+        yield* Configuration.endpoint(options.baseUrl ?? "https://api.vercel.com", "baseUrl");
+        yield* Configuration.nonempty(settings.slug, "integration.slug");
+        const clientId = yield* Configuration.resolve(
+          settings.clientId,
+          "integration.clientId",
+        ).pipe(Effect.flatMap((v) => Configuration.nonempty(v, "integration.clientId")));
+        const clientSecret = yield* Configuration.resolve(
+          settings.clientSecret,
+          "integration.clientSecret",
+        ).pipe(Effect.flatMap((v) => Configuration.secret(v, "integration.clientSecret")));
+        return { clientId, clientSecret };
+      });
     return {
       label: "Install the Vercel integration",
-      start: (input) => {
-        const authorizationUrl = new URL(
-          `${installOrigin}/integrations/${encodeURIComponent(settings.slug)}/new`,
-        );
-        authorizationUrl.searchParams.set("source", "external");
-        authorizationUrl.searchParams.set("state", input.state);
-        return Effect.succeed({ authorizationUrl: authorizationUrl.toString() });
-      },
+      registration: { clientAuth: "client_secret_post" },
+      start: (input) =>
+        Effect.gen(function* () {
+          yield* credentials();
+          const authorizationUrl = new URL(
+            `${installOrigin.replace(/\/$/, "")}/integrations/${encodeURIComponent(settings.slug)}/new`,
+          );
+          authorizationUrl.searchParams.set("source", "external");
+          authorizationUrl.searchParams.set("state", input.state);
+          return { authorizationUrl: authorizationUrl.toString() };
+        }),
       complete: (input) =>
         Effect.gen(function* () {
-          const clientId = yield* resolve(settings.clientId, "integration.clientId");
-          const clientSecret = yield* resolve(settings.clientSecret, "integration.clientSecret");
+          const { clientId, clientSecret } = yield* credentials();
           const token = yield* Client.exchangeCode({
             options: client(""),
             clientId,

@@ -30,6 +30,35 @@ describe("Cloudflare.provider", () => {
     );
   });
 
+  it.effect("reports malformed runtime endpoints before refresh or revocation construction", () => {
+    const recording = recordedFetch([]);
+    const definition = Cloudflare.provider({
+      fetch: recording.fetch,
+      oauth: {
+        clientId: "c",
+        clientAuth: "none",
+        issuer: 123,
+      } as unknown as Cloudflare.OAuthOptions,
+    });
+    const auth = definition.auth.oauth ?? bail("oauth");
+    const refreshCredential: Provider.Credential = {
+      secret: Redacted.make(JSON.stringify({ accessToken: "access", refreshToken: "refresh" })),
+      context: { accountId: null },
+    };
+    return Effect.gen(function* () {
+      for (const operation of [
+        auth.refresh(refreshCredential),
+        (auth.revoke ?? bail("revoke"))(refreshCredential),
+      ]) {
+        const error = yield* operation.pipe(Effect.flip);
+        assert.strictEqual(error.reason._tag, "InvalidInput");
+        if (error.reason._tag === "InvalidInput")
+          assert.strictEqual(error.reason.field, "oauth.issuer");
+      }
+      assert.deepStrictEqual(recording.requests, []);
+    });
+  });
+
   it.effect("authenticates a user token from its zones and verify endpoint", () => {
     const recording = recordedFetch([
       { body: page([zone]), expect: { pathname: "/client/v4/zones" } },

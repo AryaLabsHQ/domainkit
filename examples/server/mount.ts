@@ -1,6 +1,6 @@
 import { Effect, Layer } from "effect";
 import { HttpApi, HttpApiBuilder, OpenApi } from "effect/http-api";
-import { DomainKit, type Principal, Reason, type Storage } from "domainkit";
+import { Cloudflare, DomainKit, type Principal, Reason, type Storage } from "domainkit";
 import { Server } from "domainkit/server";
 
 // The server reads attempts and receipts straight from Storage, so compose it with `provideMerge`
@@ -130,3 +130,20 @@ export const behindProxy = Server.toWebHandler(Layer.mergeAll(DomainKitLive, Ide
   callbackBaseUrl: "https://app.acme.dev/api/domainkit",
 });
 // #endregion callback-base-url
+
+// #region registration-settings
+/** Reuse this public base in the mounted server options; derivation never reads credentials. */
+export const callbackBaseUrl = "https://app.acme.dev/api/domainkit";
+export const providers = [
+  Cloudflare.provider({ oauth: { clientId: "registered-client", clientAuth: "none" } }),
+];
+export const registrationSettings = Server.registrationSettings({ providers, callbackBaseUrl });
+export const registeredServer = Server.toWebHandler(
+  Layer.mergeAll(DomainKit.layerMemory({ providers }), IdentityLive),
+  {
+    prefix: "/api/domainkit",
+    callbackBaseUrl,
+    defaultReturnTo: "/settings/domains",
+  },
+);
+// #endregion registration-settings

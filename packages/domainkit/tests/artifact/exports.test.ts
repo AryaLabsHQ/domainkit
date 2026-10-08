@@ -81,7 +81,7 @@ describe("public namespaces", () => {
     assert.strictEqual(typeof Testing.transport, "function");
   });
 
-  it("keeps the server surface to the group, its layers, and the wire schemas", () => {
+  it("keeps the server surface to routes, registration settings, and wire schemas", () => {
     assert.deepStrictEqual(Object.keys(Server).sort(), [
       "ApprovePayload",
       "AttachPayload",
@@ -110,6 +110,7 @@ describe("public namespaces", () => {
       "Readiness",
       "ReconnectPayload",
       "Redirect",
+      "RegistrationSettings",
       "RejectPayload",
       "SelectionRequired",
       "Snapshot",
@@ -121,6 +122,7 @@ describe("public namespaces", () => {
       "api",
       "group",
       "layer",
+      "registrationSettings",
       "toWebHandler",
     ]);
   });
