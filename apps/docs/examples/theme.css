@@ -56,3 +56,10 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* The frame body is a flex row, so an unbreakable child sets the wrapper's minimum width. Let the
+   wrapper shrink to the frame, and wide content scroll in its own container instead of the page. */
+[data-blume-example] {
+  min-width: 0;
+  max-width: 100%;
+}

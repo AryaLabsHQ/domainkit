@@ -93,6 +93,9 @@ jobs:
       - name: Build the docs site
         run: bun run --filter @domainkit/docs build
 
+      - name: Check the styled previews in the built site
+        run: bun run --filter @domainkit/docs test:styled
+
       - name: Validate the registry manifest
         run: bun run --filter @domainkit/docs registry:validate
 

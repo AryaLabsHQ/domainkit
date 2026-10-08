@@ -46,12 +46,14 @@ export function PlanAction({ className, flow, ...props }: PlanActionProps) {
   }
   return (
     <div
-      className={cn("flex flex-col items-end gap-2", className)}
+      className={cn("flex min-w-0 flex-col items-end gap-2", className)}
       data-slot="plan-action"
       {...props}
     >
       {blocked ? (
-        <p className="text-sm text-muted-foreground">{messages.everyRecordConflicts}</p>
+        <p className="text-right text-sm text-balance text-muted-foreground">
+          {messages.everyRecordConflicts}
+        </p>
       ) : writes.length === 0 && !running ? null : (
         <Button
           disabled={running || writes.length === 0}

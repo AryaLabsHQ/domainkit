@@ -55,7 +55,7 @@ live in its own frame. Every registry preview mounts `lib/preview-flow.tsx`, whi
 ## Checks
 
 From this directory: `bun run reference:check`, `bun run typecheck`, `bun run test`,
-`bun run build`, `./node_modules/.bin/blume validate --strict`, `bun run audit --strict`, and
+`bun run build`, `bun run test:styled`, `./node_modules/.bin/blume validate --strict`, `bun run audit --strict`, and
 `bun run registry:check`. From the repository root: `bun run typecheck:examples`. Inspect the
 rendered primary journeys when navigation or UI changes.
 
@@ -67,6 +67,12 @@ another. `test:browser` drives the registry block in Playwright-managed Chromium
 `tests/browser/app`, a Vite fixture with no Tailwind build: the few positional rules the utility
 classes would have supplied live in `tests/browser/app/fixture.css`, and everything else is
 deliberately unstyled, because that run is about behaviour, focus, and portals.
+
+`test:styled` runs after `build`: it serves `dist` and drives every registry preview, in its frame
+and on its docs page, in light and dark at 320, 375, 768, and 1280 pixels, asserting that each island
+hydrates and that no text or action is clipped or leaves its container. A preview that renders nothing
+until a grant lands exports `client = "load"`, because Blume hydrates an island with no
+server-rendered element only when it becomes visible, and an empty island never does.
 
 `registry:check` installs every built item into a scratch shadcn project on the `base-nova` style,
 against tarballs packed from this branch, then typechecks and builds it. It uses the workspace's

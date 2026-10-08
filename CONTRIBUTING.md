@@ -47,10 +47,15 @@ that step can require administrator access. CI runs it explicitly. See Playwrigh
 [browser installation guide](https://playwright.dev/docs/browsers).
 
 To use an existing browser, set either `DOMAINKIT_BROWSER_CHANNEL` (for example, `chrome`) or
-`DOMAINKIT_BROWSER_EXECUTABLE_PATH` (the browser's executable path) when running `test:browser`.
+`DOMAINKIT_BROWSER_EXECUTABLE_PATH` (the browser's executable path) when running `test:browser` or `test:styled`.
 Do not set both. The managed Chromium is the tested default; a custom browser must be compatible
 with the installed Playwright version. No option skips browser tests or changes sandbox permissions.
 The runner must permit browser processes and the local sockets used by the browser and Vite.
+
+`bun run test:styled` drives the production build in light and dark at 320, 375, 768, and 1280
+pixels: every registry preview hydrates in its frame and on its docs page, and no text or action is
+clipped or pushed off screen. It serves `apps/docs/dist`, so run `bun run build` first; `bun run test`
+does not include it. It honours the same browser overrides as `test:browser`.
 
 `bun run test:tooling` checks browser selection and registry fixture inputs without launching a
 browser. `bun run test:snippets` checks sample regions. These focused commands do not replace the
