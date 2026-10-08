@@ -101,8 +101,8 @@ const open = async (page: Page, name: string, width: number) => {
  * clips by design, and a scroll container is itself checked, so its overflowing content is
  * reachable.
  */
-const escaped = (page: Page) =>
-  page.evaluate(() => {
+const escaped = (target: Frame) =>
+  target.evaluate(() => {
     const clips = (value: string) => value === "hidden" || value === "clip";
     const scrolls = (value: string) => value === "auto" || value === "scroll";
     const label = (element: Element) =>
@@ -159,7 +159,7 @@ for (const name of examples) {
   for (const width of widths) {
     test(`${name} hydrates and stays inside the frame at ${width}px`, async ({ page }, info) => {
       await open(page, name, width);
-      expect(await escaped(page)).toEqual([]);
+      expect(await escaped(page.mainFrame())).toEqual([]);
       await info.attach(`${name}-${width}`, {
         body: await page.screenshot({ fullPage: true }),
         contentType: "image/png",
@@ -252,6 +252,11 @@ for (const { frames, route, sources } of pages) {
           scroll: document.documentElement.scrollWidth,
         }));
         expect(overflow.scroll).toBeLessThanOrEqual(overflow.client);
+        // The frame is narrower than the standalone page, so its own contents are checked too.
+        const embedded = await (await host.elementHandle())?.contentFrame();
+        if (embedded === null || embedded === undefined)
+          throw new Error("The preview has no frame");
+        expect(await escaped(embedded)).toEqual([]);
       });
     }
   }
