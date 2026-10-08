@@ -1,6 +1,13 @@
 import { readFileSync, readdirSync } from "node:fs";
 
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Frame,
+  type FrameLocator,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 
 /**
  * The production docs build, styled: every registry preview in its own frame and inside its docs
@@ -21,15 +28,72 @@ const boxOf = async (locator: Locator) => {
   return box;
 };
 
+/** A page, or an iframe inside one: the surface a preview is read from. */
+type Scope = Page | FrameLocator;
+
+const planActionBlocked = "Resolve the records above at your provider, then check again.";
+
+/**
+ * What each preview that renders past a grant or a request shows once it is real. Its island
+ * clears `ssr` and mounts a wrapper before a connected preview has rendered anything, so the
+ * wrapper alone does not mean the preview is there to be measured.
+ */
+const settled: Partial<Record<string, (scope: Scope) => Promise<void>>> = {
+  "connect-dialog": async (scope) => {
+    await expect(scope.getByRole("button", { name: "Connect" })).toBeVisible();
+  },
+  "disconnect-dialog": async (scope) => {
+    await expect(scope.getByRole("button", { name: "Disconnect" })).toBeVisible();
+  },
+  "domain-field": async (scope) => {
+    await expect(scope.getByRole("combobox")).toBeVisible();
+  },
+  "domain-flow": async (scope) => {
+    await expect(scope.getByRole("button", { name: "Connect" })).toBeVisible();
+    await expect(scope.getByRole("table")).toBeVisible();
+  },
+  outcome: async (scope) => {
+    const alerts = scope.getByRole("alert");
+    await expect(alerts).toHaveCount(2);
+    await expect(alerts.first()).toContainText("Token not accepted");
+    await expect(alerts.last()).toContainText("Token not accepted");
+  },
+  // Both connected rows: the action over the open plan, and the blocked row beneath it.
+  "plan-action": async (scope) => {
+    await expect(scope.getByRole("button", { name: "Add 3 records" })).toBeVisible();
+    await expect(scope.getByText(planActionBlocked)).toBeVisible();
+    await expect(scope.locator("[data-slot='provider-row']")).toContainText("Meridian");
+  },
+  "provider-row": async (scope) => {
+    await expect(scope.getByRole("button", { name: "Connect" })).toBeVisible();
+    await expect(scope.getByText("An administrator can connect Meridian")).toBeVisible();
+  },
+  "records-table": async (scope) => {
+    await expect(scope.getByRole("button", { name: "Connect" })).toBeVisible();
+    await expect(scope.getByRole("table")).toBeVisible();
+  },
+  "records-table-conflict": async (scope) => {
+    await expect(scope.getByRole("button", { name: "Add 2 records" })).toHaveCount(2);
+    await expect(scope.getByRole("table")).toBeVisible();
+    await expect(scope.getByText("Conflict", { exact: true })).toBeVisible();
+  },
+};
+
+/** Waits for the preview's island to hydrate and its own content to be on screen. */
+const hydrated = async (scope: Scope, name: string) => {
+  // An island that never hydrates keeps its `ssr` attribute, and a blank preview has no text.
+  await expect(scope.locator("astro-island").first()).toBeAttached();
+  await expect(scope.locator("astro-island[ssr]")).toHaveCount(0);
+  await expect(scope.locator("[data-blume-example]")).not.toBeEmpty();
+  await expect(scope.locator("[data-blume-example] > *:not(style, script)").first()).toBeVisible();
+  await settled[name]?.(scope);
+};
+
 const open = async (page: Page, name: string, width: number) => {
   await page.setViewportSize({ width, height: 800 });
   const response = await page.goto(`/blume-examples/registry/${name}/`);
   expect(response?.ok()).toBe(true);
-  // An island that never hydrates keeps its `ssr` attribute, and a blank preview has no text.
-  await expect(page.locator("astro-island").first()).toBeAttached();
-  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await expect(page.locator("[data-blume-example]")).not.toBeEmpty();
-  await expect(page.locator("[data-blume-example] > *:not(style, script)").first()).toBeVisible();
+  await hydrated(page, name);
 };
 
 /**
@@ -111,7 +175,7 @@ for (const width of widths) {
     await expect(add).toBeEnabled();
     await add.click({ trial: true });
     // The blocked row says what to fix, in full, beside the account it blocks.
-    const blocked = page.getByText("Resolve the records above at your provider, then check again.");
+    const blocked = page.getByText(planActionBlocked);
     await expect(blocked).toBeVisible();
     await expect(page.locator("[data-slot='provider-row']").last()).toContainText("Meridian");
     const box = await boxOf(blocked);
@@ -167,7 +231,7 @@ test("every registry preview is embedded by a docs page", () => {
   expect(examples.filter((name) => !embedded.has(name))).toEqual([]);
 });
 
-for (const { frames, route } of pages) {
+for (const { frames, route, sources } of pages) {
   for (const width of [320, 375] as const) {
     for (let index = 0; index < frames; index += 1) {
       test(`${route} fits a ${width}px screen with preview ${index + 1} hydrated`, async ({
@@ -178,12 +242,9 @@ for (const { frames, route } of pages) {
         expect(response?.ok()).toBe(true);
         const host = page.locator("iframe[data-blume-example-frame]").nth(index);
         await host.scrollIntoViewIfNeeded();
-        const content = page.frameLocator("iframe[data-blume-example-frame]").nth(index);
-        await expect(content.locator("astro-island").first()).toBeAttached();
-        await expect(content.locator("astro-island[ssr]")).toHaveCount(0);
-        await expect(
-          content.locator("[data-blume-example] > *:not(style, script)").first(),
-        ).toBeVisible();
+        const name = sources[index];
+        if (name === undefined) throw new Error(`${route} has no preview ${index + 1}`);
+        await hydrated(page.frameLocator("iframe[data-blume-example-frame]").nth(index), name);
         const box = await boxOf(host);
         expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
         const overflow = await page.evaluate(() => ({
