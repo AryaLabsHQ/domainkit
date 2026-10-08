@@ -68,16 +68,40 @@ const IdentityLive = Layer.succeed(Server.Identity)({
         ),
 });
 
+// Close over any host services acquired by your layer; the callback needs no extra environment.
+const callbackOptions: Server.Options = {
+  callback: (outcome) => {
+    if (outcome._tag === "Connected") return Effect.succeed(undefined);
+    const destination = new URL(outcome.returnTo);
+    destination.searchParams.set(
+      "connection",
+      outcome._tag === "Cancelled" ? "cancelled" : outcome.recovery,
+    );
+    return Effect.succeed(destination.toString());
+  },
+};
+
 // Mount the group in your API. Every route, typed, with OpenAPI for free.
 export const Api = HttpApi.make("app").add(Server.group);
 
 export const ApiLive = HttpApiBuilder.layer(Api).pipe(
-  Layer.provide(Server.layer(Api, { callbackBaseUrl, defaultReturnTo: "/settings/domains" })),
+  Layer.provide(
+    Server.layer(Api, {
+      callbackBaseUrl,
+      defaultReturnTo: "/settings/domains",
+      ...callbackOptions,
+    }),
+  ),
   Layer.provide([DomainKitLive, IdentityLive]),
 );
 
 // Not on HttpApi? The same group behind one `fetch` handler, mounted where you like.
 export const { handler, dispose } = Server.toWebHandler(
   Layer.mergeAll(DomainKitLive, IdentityLive),
-  { prefix: "/api/domainkit", defaultReturnTo: "/settings/domains" },
+  {
+    prefix: "/api/domainkit",
+    callbackBaseUrl,
+    defaultReturnTo: "/settings/domains",
+    ...callbackOptions,
+  },
 );

@@ -200,6 +200,21 @@ storing a continuation, with `InvalidInput` naming the field without rejected va
 its required credentials at start and again at completion for rotation. Configured callback bases
 must be HTTP(S) URLs without credentials, query, or fragment; emulator paths remain supported.
 
+`Server.Options.callback` optionally selects a same-origin destination for sanitized `Connected`,
+`Cancelled`, or `Failed` outcomes. Return `Effect.succeed(undefined)` to retain the default response,
+or an Effect of a destination string. The policy receives provider, validated `returnTo`, and
+`connectionId` on success or `recovery: "restart" | "inspect"` on failure; it receives no request,
+state, code, provider text, secret, or full storage row. Hosts close over acquired services.
+
+Only live flows matching the authenticated owner, actor, and provider are classified inside the
+completion lock. Unknown, expired, spent, and mismatched callbacks invoke no policy, including read
+races. Only `access_denied` is cancellation; other provider errors are failure. Cancellation and
+failure retain expiry and retry behavior. `Connected` means durable account access, not DNS readiness;
+zone selection can still be required. Partial persistence or a policy failure after connection needs
+inspection, not a rollback assumption. `Connect.completeOutcome` exposes the shared classified result
+to Effect hosts; `Connect.complete` retains its result/error contract. See the
+[server reference](https://domain-kit.dev/docs/reference/server#callback-destinations) for compiled usage.
+
 After an interactive connection completes, the callback redirects to the `returnTo` the flow was
 started with, or to `defaultReturnTo`. The destination is resolved against the callback's own base
 and must land on its origin, so neither the provider nor a crafted `returnTo` can steer the customer

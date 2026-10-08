@@ -64,3 +64,15 @@ export const registrationSettings = Server.registrationSettings({
   callbackBaseUrl: "https://app.acme.dev/api/domainkit",
 });
 // #endregion registration-settings
+
+// #region callback-policy
+/** Connect through the mounted Server callback; re-inspect before planning DNS. */
+export const callbackOptions: Server.Options = {
+  callback: (outcome) =>
+    Effect.succeed(
+      outcome._tag === "Connected"
+        ? undefined
+        : `/settings/domains?connection=${outcome._tag === "Cancelled" ? "cancelled" : outcome.recovery}`,
+    ),
+};
+// #endregion callback-policy

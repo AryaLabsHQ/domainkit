@@ -13,9 +13,9 @@ import { Server } from "domainkit/server";
 
 {/* reference-inventory:start */}
 
-| Namespace | Carries                                                                                                                                       |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Server`  | `group`, `api`, `layer`, `toWebHandler`, `registrationSettings`, `RegistrationSettings`, `Identity`, and every wire schema the client decodes |
+| Namespace | Carries                                                                                                                                                          |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Server`  | `group`, `api`, `layer`, `toWebHandler`, `registrationSettings`, `RegistrationSettings`, `CallbackOutcome`, `Identity`, and every wire schema the client decodes |
 
 {/* reference-inventory:end */}
 
@@ -142,7 +142,49 @@ flow. The flow is left unspent, so the person who started it can still finish it
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `callbackBaseUrl` | The origin and mount path the provider redirects back to. Set it behind an edge that rewrites `Host`; otherwise the callback follows the request's own origin and the prefix the group is mounted at |
 | `defaultReturnTo` | Where an interactive flow lands when the continuation carries no `returnTo`                                                                                                                          |
+| `callback`        | Optional sanitized outcome policy: return an Effect of a same-origin destination, or `undefined` to keep the default response                                                                        |
 | `prefix`          | `toWebHandler` only: mount every route under this path                                                                                                                                               |
+
+## Callback destinations
+
+`Options.callback` receives `Server.CallbackOutcome`, a schema and type for these server-side values:
+
+| Tag         | Fields                                 | Meaning                                                                                                                             |
+| ----------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Connected` | `provider`, `connectionId`, `returnTo` | The account connection is durable; a zone may still need selection                                                                  |
+| `Cancelled` | `provider`, `returnTo`                 | A live flow returned the allowlisted `access_denied` consent denial                                                                 |
+| `Failed`    | `provider`, `returnTo`, `recovery`     | `restart` for missing code, other callback errors, or a refused grant; `inspect` for other failures or possible partial persistence |
+
+<Snippet
+  file="examples/server/mount.ts"
+  region="callback-policy"
+  title="Choose a callback destination"
+/>
+
+The policy returns `Effect<string | undefined, DomainKit.Error>` with no environment requirement.
+Close over host services acquired when building the server layer. `undefined` keeps the default:
+302 to the saved destination on success, or the existing typed error on cancellation/failure.
+A string selects a 302 destination, normalized and checked against the public callback origin,
+including behind a proxy. Cross-origin, malformed, and non-HTTP(S) destinations fail `InvalidInput`.
+The saved `returnTo` or `defaultReturnTo` is validated before exchange and before calling policy.
+
+The policy receives no request, state, grant code, raw parameters, provider error text, secret,
+provider account context, or storage row. Owner, actor, provider, and live continuation verification
+precede classification inside the completion lock. Unknown, expired, spent, and mismatched flows
+remain the same refusal and invoke no policy, including expiry or consumption during authentication
+or before the locked read. Host authentication and authorization failures do not invoke policy.
+There is no recovery under a different session.
+
+`Connected` describes account persistence, not DNS readiness, plan approval, or apply. Inspect the
+connection and select its zone before planning DNS. Cancellation and completion failure do not spend
+the flow; its expiry and retry behavior remain intact. A recovery redirect does not replay a grant.
+Partial persistence can leave a sealed credential or connection even when completion fails. A policy
+failure or rejected destination after `Connected` cannot undo the connection; inspect durable state
+before asking the customer to start again.
+
+Effect hosts that mount their own callback can use `Connect.completeOutcome`; see the
+[core reference](/docs/reference/core#completion-outcomes). The mounted server owns sanitization and
+destination validation.
 
 ## Registration settings
 

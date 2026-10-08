@@ -109,3 +109,21 @@ If you host your app on Vercel and need customers' hostnames to resolve to it, r
 DNS is on Cloudflare instead is covered by the [Cloudflare provider](/docs/providers/cloudflare).
 
 Adding a provider of your own is the [write a provider](/docs/guides/implement-provider) guide.
+
+## Callback recovery
+
+Host-started flows can opt in to a sanitized destination policy on the mounted server:
+
+<Snippet
+  file="examples/providers/vercel.ts"
+  region="callback-policy"
+  title="Recover an authenticated callback"
+/>
+
+Pass these options to `Server.layer` or `Server.toWebHandler`. `Connected` means a durable account
+connection, not DNS readiness; re-inspect and select the zone before planning. The policy receives
+only live, authenticated outcomes and validated return destinations. Cancellation recognizes only
+`access_denied`; other callback errors are `Failed`. Cancellation and failure retain the flow's
+expiry and spending behavior. `inspect` can mean partial persistence and does not authorize replaying
+a one-time grant. See [callback destinations](/docs/reference/server#callback-destinations) for
+identity, same-origin, and failure boundaries.

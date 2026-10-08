@@ -29,6 +29,7 @@ import * as Errors from "./internal/error.ts";
 import * as Plan from "./Plan.ts";
 import * as Principal from "./Principal.ts";
 import * as Configuration from "./internal/config.ts";
+import * as Callback from "./internal/callback.ts";
 import type * as Provider from "./Provider.ts";
 import * as Providers from "./Providers.ts";
 import * as Provision from "./Provision.ts";
@@ -601,6 +602,28 @@ export type Group = typeof group;
 /** Every route in the group, by name; what `Identity.authorize` is asked about. */
 export type EndpointName = HttpApiGroup.Endpoints<Group>["identifier"];
 
+/** Browser-safe summaries of an authenticated live callback. Connected is not DNS readiness. */
+export const CallbackOutcome = Schema.Union([
+  Schema.Struct({
+    _tag: Schema.Literal("Connected"),
+    provider: Schema.String,
+    connectionId: Schema.String,
+    returnTo: Schema.String,
+  }),
+  Schema.Struct({
+    _tag: Schema.Literal("Cancelled"),
+    provider: Schema.String,
+    returnTo: Schema.String,
+  }),
+  Schema.Struct({
+    _tag: Schema.Literal("Failed"),
+    provider: Schema.String,
+    returnTo: Schema.String,
+    recovery: Schema.Literals(["restart", "inspect"]),
+  }),
+]);
+export type CallbackOutcome = typeof CallbackOutcome.Type;
+
 export interface Options {
   /**
    * Where the callback route is reachable from the provider, without the `/callback/:provider`
@@ -609,6 +632,15 @@ export interface Options {
   readonly callbackBaseUrl?: string;
   /** Where interactive flows return when the callback carries no `returnTo`. */
   readonly defaultReturnTo?: string;
+  /**
+   * Opt in to a same-origin destination, or return undefined to keep default behavior. Invoked
+   * only for a verified live flow; no request, state, code, secrets, or storage rows reach this
+   * policy. Close over acquired host services; its Effect requires no environment.
+   * A policy failure after Connected cannot undo persistence: inspect before restarting.
+   */
+  readonly callback?: (
+    outcome: CallbackOutcome,
+  ) => Effect.Effect<string | undefined, Errors.DomainKitError>;
 }
 
 /** Offline registration requirements, not proof of provider console or grant readiness. */
@@ -770,12 +802,7 @@ const callbackUrlFor = (input: {
  * start it. The text is constant on purpose — a caller holding a leaked `state` must not be able
  * to tell "no such flow" from "not your flow".
  */
-const noSuchFlow = Errors.fail(
-  new Reason.InvalidInput({
-    message: "This callback does not match a connection you started",
-    field: "state",
-  }),
-);
+const noSuchFlow = Callback.refuse;
 
 const callbackUrlAt = (base: string, provider: string): Effect.Effect<URL, Errors.DomainKitError> =>
   Configuration.endpoint(base, "callbackBaseUrl").pipe(
@@ -1082,9 +1109,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
               .header(query.state)
               .pipe(
                 Effect.catch((error) =>
-                  error.reason._tag === "NotFound" || error.reason._tag === "Expired"
-                    ? Effect.succeed(null)
-                    : Effect.fail(error),
+                  Callback.missing(error) ? Effect.succeed(null) : Effect.fail(error),
                 ),
               );
             const continuation =
@@ -1130,9 +1155,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                   .get(query.state)
                   .pipe(
                     Effect.catch((error) =>
-                      error.reason._tag === "NotFound" || error.reason._tag === "Expired"
-                        ? noSuchFlow
-                        : Effect.fail(error),
+                      Callback.missing(error) ? noSuchFlow : Effect.fail(error),
                     ),
                   );
                 const requested = flow.returnTo ?? options.defaultReturnTo;
@@ -1146,13 +1169,44 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                 if (destination === null) {
                   return yield* invalid(`${requested} leaves this application`, "returnTo");
                 }
-                yield* connect.complete({
-                  continuationId: query.state,
-                  callbackUrl: url.toString(),
-                });
+                // Re-read within the completion lock before any provider parameters are classified.
+                const outcome = yield* connect
+                  .completeOutcome({
+                    continuationId: query.state,
+                    callbackUrl: url.toString(),
+                    provider: params.provider,
+                  })
+                  .pipe(
+                    Effect.catch((error) =>
+                      Callback.missing(error) ? noSuchFlow : Effect.fail(error),
+                    ),
+                  );
+                const summary: CallbackOutcome =
+                  outcome._tag === "Connected"
+                    ? {
+                        _tag: "Connected",
+                        provider: flow.provider,
+                        connectionId: outcome.started.connection.id,
+                        returnTo: destination,
+                      }
+                    : outcome._tag === "Cancelled"
+                      ? { _tag: "Cancelled", provider: flow.provider, returnTo: destination }
+                      : {
+                          _tag: "Failed",
+                          provider: flow.provider,
+                          returnTo: destination,
+                          recovery: outcome.recovery,
+                        };
+                const selected =
+                  options.callback === undefined ? undefined : yield* options.callback(summary);
+                const location = selected === undefined ? destination : sameOrigin(selected, base);
+                if (location === null)
+                  return yield* invalid("callback destination leaves this application", "callback");
+                if (selected === undefined && outcome._tag !== "Connected")
+                  return yield* Effect.fail(outcome.error);
                 return HttpApiSchema.withHeaders({
                   body: undefined as void,
-                  headers: { location: destination },
+                  headers: { location },
                 });
               }),
               continuation === null ? undefined : { endpoint: "callback", continuation },
