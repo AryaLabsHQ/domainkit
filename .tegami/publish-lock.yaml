@@ -1,26 +1,34 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Keep host-only readiness pending until DNS is observed\n\n`Verify.attachEvidence` no longer reports a domain `ready` when no `Verify.observe` has run. A\nreadiness is `ready` only when at least one requirement has been observed, every requirement is\nsatisfied, and every host signal is `ok`. Host evidence merged first is kept, and the domain is\n`failed` when a host signal failed and otherwise `pending` with its next check scheduled, until the\nfirst observation decides the outcome. `Verify.latest` derives `overall` from the stored evidence,\nso a host-only row stored as `ready` reads back as `pending` and due for observation.\n\nA host-only row stored as `ready` before this release has no `nextCheckAt`, so a worker that selects\ndue rows from storage by that column does not find it. Select the rows whose `overall` is `ready` and\nwhose `requirements` are empty, and pass each to `Verify.observe`, with `requirements` when the\ndomain has no provisioning receipt.\n"
-    filename: readiness-needs-dns.md
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Derive provider registration requirements before connecting\n\nUse `Server.registrationSettings({ providers, callbackBaseUrl })` to derive secret-free Cloudflare OAuth and Vercel Integration callback and authentication requirements from configured definitions, without credentials, identity, storage, or network access. Custom interactive providers can supply optional registration metadata; token-only providers return no settings.\n\nInteractive starts reject empty credentials and malformed setup fields with redacted, field-specific `InvalidInput` errors before redirecting or writing a continuation. Vercel resolves its required credentials before redirect and again at completion to support rotation. Config resolution errors name the field without exposing the underlying configuration error. Configured callback bases must be HTTP(S) URLs without credentials, query, or fragment; emulator mount paths remain supported.\n"
+    filename: provider-registration-settings.md
+    v: 0.0.0
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Choose authenticated callback destinations\n\nOpt in through `Server.Options.callback` to select a same-origin destination from sanitized `Connected`, `Cancelled`, or `Failed` outcomes, or return `undefined` to preserve the default response. `Server.CallbackOutcome` provides the schema and type; `Connect.completeOutcome` exposes the shared locked completion result to Effect hosts while `Connect.complete` retains its result/error contract.\n\nThe completion lock verifies live owner, actor, and provider binding before classifying provider parameters. Invalid flow races answer with the same HTTP refusal and invoke no policy or exchange. Cancellation recognizes only `access_denied` and retains expiry, spending, and retry behavior. Connected means durable account access, not DNS readiness; failures can leave partial persistence and require inspection. Policy receives no raw callback data, secrets, or storage rows.\n"
+    filename: provider-callback-recovery.md
+    v: 0.0.0
+  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Update OAuth and domain parsing dependencies\n\nDomainKit uses oauth4webapi 3.8.8 and tldts 7.4.18 for provider authorization and domain parsing. Development and validation use Effect 4.0.2; the supported Effect peer range starts at 4.0.0.\n"
+    filename: runtime-dependencies.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
-  - changelogIds:
-      - readiness-needs-dns.md
-    id: npm:domainkit
-    updated: true
   - id: npm:@domainkit/react
-    updated: true
-  - id: npm:@domainkit/capsuledb
     updated: true
   - id: npm:@domainkit/docs
     updated: false
+  - id: npm:@domainkit/capsuledb
+    updated: true
+  - changelogIds:
+      - provider-registration-settings.md
+      - provider-callback-recovery.md
+      - runtime-dependencies.md
+    id: npm:domainkit
+    updated: true
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
-  - id: npm:domainkit
   - id: npm:@domainkit/react
-  - id: npm:@domainkit/capsuledb
   - id: npm:@domainkit/docs
+  - id: npm:@domainkit/capsuledb
+  - id: npm:domainkit

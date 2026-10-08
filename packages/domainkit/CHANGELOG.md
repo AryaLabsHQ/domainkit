@@ -1,3 +1,21 @@
+## domainkit@0.21.0
+
+### Derive provider registration requirements before connecting
+
+Use `Server.registrationSettings({ providers, callbackBaseUrl })` to derive secret-free Cloudflare OAuth and Vercel Integration callback and authentication requirements from configured definitions, without credentials, identity, storage, or network access. Custom interactive providers can supply optional registration metadata; token-only providers return no settings.
+
+Interactive starts reject empty credentials and malformed setup fields with redacted, field-specific `InvalidInput` errors before redirecting or writing a continuation. Vercel resolves its required credentials before redirect and again at completion to support rotation. Config resolution errors name the field without exposing the underlying configuration error. Configured callback bases must be HTTP(S) URLs without credentials, query, or fragment; emulator mount paths remain supported.
+
+### Choose authenticated callback destinations
+
+Opt in through `Server.Options.callback` to select a same-origin destination from sanitized `Connected`, `Cancelled`, or `Failed` outcomes, or return `undefined` to preserve the default response. `Server.CallbackOutcome` provides the schema and type; `Connect.completeOutcome` exposes the shared locked completion result to Effect hosts while `Connect.complete` retains its result/error contract.
+
+The completion lock verifies live owner, actor, and provider binding before classifying provider parameters. Invalid flow races answer with the same HTTP refusal and invoke no policy or exchange. Cancellation recognizes only `access_denied` and retains expiry, spending, and retry behavior. Connected means durable account access, not DNS readiness; failures can leave partial persistence and require inspection. Policy receives no raw callback data, secrets, or storage rows.
+
+### Update OAuth and domain parsing dependencies
+
+DomainKit uses oauth4webapi 3.8.8 and tldts 7.4.18 for provider authorization and domain parsing. Development and validation use Effect 4.0.2; the supported Effect peer range starts at 4.0.0.
+
 ## domainkit@0.20.1
 
 ### Keep host-only readiness pending until DNS is observed
