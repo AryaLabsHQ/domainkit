@@ -347,6 +347,9 @@ describe("mounted callback destination policy", () => {
     "\\/evil.test",
     "\\\\evil.test",
     "javascript:alert(1)",
+    "data:text/html,unsafe",
+    "ftp://app.test/finished",
+    "file:///finished",
   ]) {
     it(`refuses unsafe policy destination ${destination}`, async () => {
       const f = fixture({ callback: () => Effect.succeed(destination) });
@@ -362,6 +365,70 @@ describe("mounted callback destination policy", () => {
         await f.dispose();
       }
     });
+  }
+
+  for (const publicOrigin of [host, "https://public.test"]) {
+    for (const source of ["policy", "returnTo", "defaultReturnTo"] as const) {
+      for (const denied of [false, true]) {
+        it(`refuses matching-origin blob ${source} at ${publicOrigin}, denial=${denied}`, async () => {
+          const destination = `blob:${publicOrigin}/id`;
+          const f = fixture({
+            prefix: "/api/dns",
+            callbackBaseUrl: `${publicOrigin}/api/dns`,
+            ...(source === "defaultReturnTo" ? { defaultReturnTo: destination } : {}),
+            callback: () => Effect.succeed(source === "policy" ? destination : "/recover"),
+          });
+          try {
+            const url = await f.redirect(source === "returnTo" ? { returnTo: destination } : {});
+            url.host = "app.test";
+            if (denied) url.searchParams.set("error", "access_denied");
+            const response = await f.handler(new Request(url));
+            assert.strictEqual(response.status, 400);
+            assert.strictEqual(response.headers.get("location"), null);
+            const error = await response.json();
+            assert.strictEqual(error._tag, "DomainKitError");
+            assert.strictEqual(error.reason._tag, "InvalidInput");
+            assert.strictEqual(error.reason.field, source === "policy" ? "callback" : "returnTo");
+            assert.strictEqual(f.seen.length, source === "policy" ? 1 : 0);
+            assert.strictEqual(f.exchanges(), source === "policy" && !denied ? 1 : 0);
+            assert.strictEqual(
+              (await f.connections()).length,
+              source === "policy" && !denied ? 1 : 0,
+            );
+            if (source !== "policy" || denied)
+              assert.strictEqual((await f.flow(state(url))).id, state(url));
+          } finally {
+            await f.dispose();
+          }
+        });
+      }
+    }
+  }
+
+  for (const publicOrigin of ["http://public.test", "https://public.test"]) {
+    for (const destination of ["/finished", `${publicOrigin}/one/../finished`]) {
+      for (const source of ["policy", "returnTo"] as const) {
+        it(`allows same-origin HTTP(S) ${source} destination ${destination}`, async () => {
+          const f = fixture({
+            prefix: "/api/dns",
+            callbackBaseUrl: `${publicOrigin}/api/dns`,
+            callback: () => Effect.succeed(source === "policy" ? destination : undefined),
+          });
+          try {
+            const url = await f.redirect(source === "returnTo" ? { returnTo: destination } : {});
+            url.protocol = "https:";
+            url.host = "app.test";
+            const response = await f.handler(new Request(url));
+            assert.strictEqual(response.status, 302);
+            assert.strictEqual(response.headers.get("location"), `${publicOrigin}/finished`);
+            assert.strictEqual(f.seen.length, 1);
+            assert.strictEqual(f.exchanges(), 1);
+          } finally {
+            await f.dispose();
+          }
+        });
+      }
+    }
   }
 
   for (const destination of [

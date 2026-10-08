@@ -822,9 +822,11 @@ const sameOrigin = (destination: string, callback: URL): string | null => {
   try {
     // Resolving against the callback is what makes this safe: the URL parser normalizes the forms
     // a browser would follow off-origin (`//host`, `/\host`, `\/host`, encoded hosts) into a real
-    // origin, so comparing origins catches every one of them.
+    // origin. Blob URLs can embed that origin, so destinations must also use HTTP(S).
     const url = new URL(destination, callback);
-    return url.origin === callback.origin ? url.toString() : null;
+    return (url.protocol === "http:" || url.protocol === "https:") && url.origin === callback.origin
+      ? url.toString()
+      : null;
   } catch {
     return null;
   }
