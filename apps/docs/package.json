@@ -39,7 +39,7 @@
     "@domainkit/react": "workspace:^0.20.0",
     "blume": "^2.0.3",
     "domainkit": "workspace:^0.20.0",
-    "effect": "4.0.0",
+    "effect": "4.0.2",
     "lucide-react": "0.474.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"

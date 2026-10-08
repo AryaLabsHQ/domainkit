@@ -139,13 +139,13 @@
   },
   "dependencies": {
     "@leichtgewicht/dns-packet": "6.0.3",
-    "oauth4webapi": "^3.8.7",
-    "tldts": "^7.4.11"
+    "oauth4webapi": "^3.8.8",
+    "tldts": "^7.4.18"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.0",
+    "@effect/vitest": "4.0.2",
     "@types/bun": "1.4.2",
-    "effect": "4.0.0",
+    "effect": "4.0.2",
     "miniflare": "3.20250718.3",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
