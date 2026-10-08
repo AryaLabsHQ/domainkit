@@ -1,5 +1,6 @@
 ---
-domainkit: minor
+packages:
+  domainkit: minor
 ---
 
 ## Choose authenticated callback destinations
