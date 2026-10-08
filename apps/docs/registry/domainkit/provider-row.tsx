@@ -64,19 +64,19 @@ export function ProviderRow({ action, className, flow, marks, ...props }: Provid
   if (provider === null && !state.offering) return null;
   return (
     <div
-      className={cn("flex items-center gap-3 px-4 py-3", className)}
+      className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3", className)}
       data-slot="provider-row"
       data-state={connected ? "connected" : "disconnected"}
       {...props}
     >
       {provider === null ? null : <Mark marks={marks} provider={provider} />}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-32 flex-1">
         <p className="truncate text-sm font-medium">{line()}</p>
         {Connect.reconnect(connection) ? (
           <p className="truncate text-xs text-muted-foreground">{messages.needsReconnect}</p>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="ml-auto flex max-w-full items-center gap-1">
         {offer}
         {connected && !state.readOnly ? (
           <DropdownMenu>
