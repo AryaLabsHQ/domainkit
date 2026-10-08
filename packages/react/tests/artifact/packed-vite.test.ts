@@ -77,7 +77,7 @@ describe("packed Vite consumer on React 19", () => {
             effect: "4.0.0",
             react: "19.2.4",
             "react-dom": "19.2.4",
-            vite: "7.1.12",
+            vite: "8.3.4",
           },
           overrides: { domainkit: `file:${coreTarball}` },
         }),
