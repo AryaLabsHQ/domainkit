@@ -54,10 +54,10 @@
     "jsdom": "26.1.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "tsdown": "0.22.14",
+    "tsdown": "0.23.0",
     "typescript": "7.0.2",
-    "vite": "7.1.12",
-    "vitest": "5.0.1"
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
   },
   "peerDependencies": {
     "effect": ">=4.0.0 <5.0.0",
