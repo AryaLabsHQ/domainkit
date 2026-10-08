@@ -92,6 +92,7 @@ describe("public namespaces", () => {
       "BatchItem",
       "BatchPayload",
       "BatchSummary",
+      "CallbackOutcome",
       "Candidate",
       "Connected",
       "ConnectionStatus",

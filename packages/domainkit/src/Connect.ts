@@ -11,6 +11,7 @@ import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
 import { fresh } from "./internal/ids.ts";
 import * as OAuth from "./internal/oauth.ts";
+import * as Callback from "./internal/callback.ts";
 import * as Principal from "./Principal.ts";
 import * as Provider from "./Provider.ts";
 import * as Providers from "./Providers.ts";
@@ -85,6 +86,14 @@ export type Started = Data.TaggedEnum<{
   };
 }>;
 export const Started = Data.taggedEnum<Started>();
+
+/** A verified completion result. Errors stay on the server; do not serialize them to a browser. */
+export type Completion = Data.TaggedEnum<{
+  Connected: { readonly started: Exclude<Started, { readonly _tag: "Redirect" }> };
+  Cancelled: { readonly error: Errors.DomainKitError };
+  Failed: { readonly error: Errors.DomainKitError; readonly recovery: "restart" | "inspect" };
+}>;
+export const Completion = Data.taggedEnum<Completion>();
 
 /** `attach` either attached the domain or needs the caller to pick a zone. */
 export type Selection = Data.TaggedEnum<{
@@ -182,6 +191,16 @@ export interface Interface {
     readonly continuationId: string;
     readonly callbackUrl: string;
   }) => Fx<Started>;
+  /**
+   * Classify only after live owner/actor verification inside the completion lock. Optional
+   * `provider` binds the flow to a mounted route. Invalid flows fail without an outcome.
+   * Cancellation and failure leave the continuation retryable; persistence is not atomic.
+   */
+  readonly completeOutcome: (input: {
+    readonly continuationId: string;
+    readonly callbackUrl: string;
+    readonly provider?: string;
+  }) => Fx<Completion>;
   readonly attach: (input: {
     readonly connectionId: string;
     readonly domain: string;
@@ -502,7 +521,10 @@ export const make: Effect.Effect<
       }
     });
 
-  const started = (connection: Storage.Connection, attached: Attached | null): Started =>
+  const started = (
+    connection: Storage.Connection,
+    attached: Attached | null,
+  ): Exclude<Started, { readonly _tag: "Redirect" }> =>
     attached === null
       ? Started.Connected({ connection, attachment: null })
       : attached instanceof Storage.Attachment
@@ -817,38 +839,50 @@ export const make: Effect.Effect<
       }
     });
 
-  const complete: Interface["complete"] = (input) =>
-    Effect.gen(function* () {
-      // The continuation is spent only after the credential and connection are persisted, so a
-      // failure before that (bad callback, provider outage, storage outage) leaves the flow
-      // retryable. Concurrent callbacks for the same continuation serialize on a lock; the
-      // loser sees Busy or NotFound. A provider code is single-use, so a retry after the
-      // provider already redeemed it fails Unauthenticated and the customer starts over.
-      const callback = yield* Effect.try({
-        try: () => new URL(input.callbackUrl),
-        catch: () =>
-          new Errors.DomainKitError({
-            reason: new Reason.InvalidInput({
-              message: "callbackUrl is not a URL",
-              field: "callbackUrl",
+  const completeOutcome: Interface["completeOutcome"] = (input) =>
+    storage.withLock(
+      `continuation:${input.continuationId}`,
+      Effect.gen(function* () {
+        const continuation = yield* storage.continuations.get(input.continuationId);
+        const principal = yield* Principal.Service;
+        if (
+          continuation.ownerId !== principal.ownerId ||
+          continuation.actorId !== principal.actorId ||
+          (input.provider !== undefined && continuation.provider !== input.provider)
+        ) {
+          return yield* Callback.refuse;
+        }
+        const callback = yield* Effect.try({
+          try: () => new URL(input.callbackUrl),
+          catch: () =>
+            new Errors.DomainKitError({
+              reason: new Reason.InvalidInput({
+                message: "callbackUrl is not a URL",
+                field: "callbackUrl",
+              }),
             }),
-          }),
-      });
-      const params = Object.fromEntries(callback.searchParams);
-      const unauthenticated = (message: string) =>
-        Errors.fail(new Reason.Unauthenticated({ message }));
-      if (params.error !== undefined) {
-        return yield* unauthenticated(`Provider returned ${params.error}`);
-      }
-      if (params.state !== input.continuationId) {
-        return yield* unauthenticated("Callback state does not match the continuation");
-      }
-      const code = params.code;
-      if (code === undefined) return yield* unauthenticated("Callback has no code");
-      return yield* storage.withLock(
-        `continuation:${input.continuationId}`,
-        Effect.gen(function* () {
-          const continuation = yield* storage.continuations.get(input.continuationId);
+        });
+        const params = Object.fromEntries(callback.searchParams);
+        const failed = (message: string) =>
+          Completion.Failed({
+            error: new Errors.DomainKitError({ reason: new Reason.Unauthenticated({ message }) }),
+            recovery: "restart",
+          });
+        // State verification precedes denial classification, including on the direct Effect API.
+        if (params.state !== input.continuationId)
+          return failed("Callback state does not match the continuation");
+        if (params.error !== undefined) {
+          const outcome = failed(`Provider returned ${params.error}`);
+          // OAuth's standardized consent denial is the only cancellation code we recognize.
+          return params.error === "access_denied"
+            ? Completion.Cancelled({ error: outcome.error })
+            : outcome;
+        }
+        const code = params.code;
+        if (code === undefined) return failed("Callback has no code");
+        // Once persistence starts, even a failure may leave a credential or connection behind.
+        let persisting = false;
+        return yield* Effect.gen(function* () {
           const payload = yield* Errors.decode(Payload, continuation.payload, "continuation");
           const definition = yield* providers.get(continuation.provider);
           const issued =
@@ -882,6 +916,7 @@ export const make: Effect.Effect<
                     params,
                   });
                 });
+          persisting = true;
           if (payload.connectionId !== null) {
             const held = yield* storage.connections.get(payload.connectionId);
             const existing = yield* storage.authorizations.get(held.authorizationId);
@@ -911,9 +946,27 @@ export const make: Effect.Effect<
           // the provider, so the persisted result is returned.
           yield* storage.continuations.consume(input.continuationId).pipe(Effect.ignore);
           return started(connection, attached);
-        }),
-      );
-    });
+        }).pipe(
+          Effect.map((result) => Completion.Connected({ started: result })),
+          Effect.catch((error) =>
+            Effect.succeed(
+              Completion.Failed({
+                error,
+                recovery:
+                  !persisting && error.reason._tag === "Unauthenticated" ? "restart" : "inspect",
+              }),
+            ),
+          ),
+        );
+      }),
+    );
+
+  const complete: Interface["complete"] = (input) =>
+    completeOutcome(input).pipe(
+      Effect.flatMap((outcome) =>
+        outcome._tag === "Connected" ? Effect.succeed(outcome.started) : Effect.fail(outcome.error),
+      ),
+    );
 
   const attach: Interface["attach"] = (input) =>
     Effect.gen(function* () {
@@ -973,6 +1026,7 @@ export const make: Effect.Effect<
     start,
     reconnect,
     complete,
+    completeOutcome,
     attach,
     detach: (attachmentId) => storage.attachments.remove(attachmentId),
     disconnect,
@@ -1000,6 +1054,7 @@ export const discover = accessor((service) => service.discover);
 export const start = accessor((service) => service.start);
 export const reconnect = accessor((service) => service.reconnect);
 export const complete = accessor((service) => service.complete);
+export const completeOutcome = accessor((service) => service.completeOutcome);
 export const attach = accessor((service) => service.attach);
 export const detach = accessor((service) => service.detach);
 export const disconnect = accessor((service) => service.disconnect);

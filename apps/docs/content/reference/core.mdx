@@ -26,7 +26,7 @@ from context (`Provision.plan(...)`). `Policy` values are `Context.Reference`s w
 
 | Namespace   | Owns                                                                                                                                                                                        |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Connect`   | `inspect`, `discover`, `zones`, `start`, `reconnect`, `complete`, `attach`, `detach`, `disconnect`, `refresh`, `session`                                                                    |
+| `Connect`   | `inspect`, `discover`, `zones`, `start`, `reconnect`, `complete`, `completeOutcome`, `attach`, `detach`, `disconnect`, `refresh`, `session`                                                 |
 | `Provision` | `plan`, `approve`, `reject`, `apply`, `get`, `latest` over durable attempts, and `batch` over many at once                                                                                  |
 | `Cleanup`   | The same verbs over a plan built from an apply receipt                                                                                                                                      |
 | `Verify`    | `observe`, `attachEvidence`, `latest`, `summary`, `requirementKey`, `Observer` (`readinessChanged({ ownerId, domain, readiness, cause })`), `Policy`, and the evidence classes they produce |
@@ -90,3 +90,21 @@ Every operation fails with `DomainKit.Error`. It carries one `Reason`, and `cate
 | `httpStatus`  | The status `domainkit/server` answers with                    |
 
 [Failure reasons](/docs/core/errors) lists every reason with its status and the next step.
+
+## Completion outcomes
+
+`Connect.completeOutcome({ continuationId, callbackUrl, provider? })` shares the completion lock,
+exchange, persistence, and spending path with `Connect.complete`. Its `Connect.Completion` tagged
+value is `Connected { started }`, `Cancelled { error }`, or `Failed { error, recovery }`.
+`started` contains a connection and either an attachment or zone candidates; no redirect is produced.
+`error` is the original `DomainKit.Error` for server-side handling. Do not send this value to a
+browser: [Server callback outcomes](/docs/reference/server#callback-destinations) omit those errors
+and storage rows.
+
+The operation verifies the live continuation and its owner and actor inside the lock before
+classifying callback parameters. `provider`, when supplied, also binds the stored flow to that
+provider route. Invalid flows fail without an outcome; direct missing/expired reads retain
+`NotFound`/`Expired`. `Connect.complete` returns the same `Started` result or original completion
+error for ordinary callers. Neither operation spends cancellation or failure; persistence can be
+partial, and `recovery: "inspect"` requires inspecting durable state before deciding whether to
+restart. A provider code can be single-use even when the continuation is still live.

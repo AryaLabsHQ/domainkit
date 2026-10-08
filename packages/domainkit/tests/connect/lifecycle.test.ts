@@ -366,6 +366,88 @@ describe("Connect", () => {
     }).pipe(withPrincipal, Effect.provide(layerFor(fake)));
   });
 
+  for (const mismatch of ["actor", "provider"] as const) {
+    it.effect(
+      `refuses a direct completion for the wrong ${mismatch} without spending the flow`,
+      () => {
+        const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+        const commits: Array<string> = [];
+        const storageLayer = Storage.layerMemoryWith({
+          beforeCommit: (operation) => Effect.sync(() => void commits.push(operation)),
+        });
+        const layer = Connect.layer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              storageLayer,
+              Custody.layer({ key: Redacted.make(Custody.generateKey()) }),
+              Providers.layer([fake]),
+              Testing.resolver(),
+            ),
+          ),
+        );
+        return Effect.gen(function* () {
+          const redirect = yield* Connect.start({
+            provider: "fake",
+            method: Connect.Method.oauth(),
+            domain: "app.example.com",
+            callbackUrl: "https://app.example/cb",
+          });
+          if (redirect._tag !== "Redirect") return assert.fail("expected a redirect");
+          const storage = yield* Storage.Service;
+          const pending = yield* storage.continuations.get(redirect.continuationId);
+          commits.length = 0;
+          const input = {
+            continuationId: redirect.continuationId,
+            callbackUrl: redirect.authorizationUrl,
+            provider: mismatch === "provider" ? "other" : "fake",
+          };
+          const refused = yield* Connect.completeOutcome(input).pipe(
+            Effect.provideService(
+              Principal.Service,
+              Principal.make({
+                ownerId: Testing.principal.ownerId,
+                actorId: mismatch === "actor" ? "other" : Testing.principal.actorId,
+              }),
+            ),
+            Effect.flip,
+          );
+          assert.strictEqual(refused._tag, "DomainKitError");
+          assert.strictEqual(refused.reason._tag, "InvalidInput");
+          if (refused.reason._tag !== "InvalidInput")
+            return assert.fail("expected callback refusal");
+          assert.strictEqual(refused.reason.field, "state");
+          assert.strictEqual(
+            refused.reason.message,
+            "This callback does not match a connection you started",
+          );
+          assert.deepStrictEqual(fake.issued(), []);
+          assert.deepStrictEqual(commits, []);
+          assert.deepStrictEqual(
+            yield* storage.continuations.get(redirect.continuationId),
+            pending,
+          );
+          const snapshot = yield* Connect.inspect("app.example.com");
+          assert.strictEqual(snapshot.authorization, null);
+          assert.strictEqual(snapshot.connection, null);
+          assert.strictEqual(snapshot.attachment, null);
+
+          const completed = yield* Connect.completeOutcome({ ...input, provider: "fake" });
+          if (completed._tag !== "Connected") return assert.fail("expected rightful completion");
+          assert.strictEqual(completed.started._tag, "Connected");
+          if (completed.started._tag !== "Connected") return assert.fail("expected a connection");
+          assert.strictEqual(completed.started.attachment?.domain, "app.example.com");
+          assert.strictEqual(fake.issued().length, 1);
+          assert.ok(commits.includes("continuations.consume"));
+          const connected = yield* Connect.inspect("app.example.com");
+          assert.strictEqual(connected.connection?.id, completed.started.connection.id);
+          assert.strictEqual(connected.authorization?.method, "oauth");
+          const spent = yield* storage.continuations.get(redirect.continuationId).pipe(Effect.flip);
+          assert.strictEqual(spent.reason._tag, "NotFound");
+        }).pipe(withPrincipal, Effect.provide(layer));
+      },
+    );
+  }
+
   it.effect("returns the persisted connection when the continuation expires mid-exchange", () => {
     const fake = Testing.provider({ zones: ["example.com"], oauth: true });
     const oauth = fake.auth.oauth ?? assert.fail("oauth expected");

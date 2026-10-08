@@ -147,3 +147,24 @@ export const registeredServer = Server.toWebHandler(
   },
 );
 // #endregion registration-settings
+
+// #region callback-policy
+/** Only live, authenticated flows reach this policy; destinations are checked against the public origin. */
+export const callbackOptions: Server.Options = {
+  callback: (outcome) => {
+    if (outcome._tag === "Connected") return Effect.succeed(undefined);
+    const destination = new URL(outcome.returnTo);
+    destination.searchParams.set(
+      "connection",
+      outcome._tag === "Cancelled" ? "cancelled" : outcome.recovery,
+    );
+    return Effect.succeed(destination.toString());
+  },
+};
+export const recoveryServer = Server.toWebHandler(Layer.mergeAll(DomainKitLive, IdentityLive), {
+  prefix: "/api/domainkit",
+  callbackBaseUrl,
+  defaultReturnTo: "/settings/domains",
+  ...callbackOptions,
+});
+// #endregion callback-policy

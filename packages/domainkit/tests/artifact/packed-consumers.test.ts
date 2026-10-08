@@ -32,7 +32,7 @@ export const run = async () => {
     callbackBaseUrl: "https://consumer.example/api/domainkit",
   }));
   if (!Schema.is(Schema.Array(Server.RegistrationSettings))(registration)) throw new Error("Invalid registration settings");
-  const fake = Testing.provider({ zones: ["example.com"] });
+  const fake = Testing.provider({ zones: ["example.com"], oauth: true });
   const services = DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() });
   const program = Effect.gen(function* () {
     const started = yield* Connect.start({
@@ -40,6 +40,13 @@ export const run = async () => {
       method: Connect.Method.token("packed-token"),
       domain: "app.example.com",
     });
+    const flow = yield* Connect.start({ provider: fake.id, method: Connect.Method.oauth(), callbackUrl: "https://consumer.example/callback/fake" });
+    if (flow._tag !== "Redirect") throw new Error("Expected redirect");
+    const completed = yield* Connect.complete({ continuationId: flow.continuationId, callbackUrl: flow.authorizationUrl });
+    const denied = yield* Connect.start({ provider: fake.id, method: Connect.Method.oauth(), callbackUrl: "https://consumer.example/callback/fake" });
+    if (denied._tag !== "Redirect") throw new Error("Expected redirect");
+    const denial = new URL(denied.authorizationUrl); denial.searchParams.set("error", "access_denied");
+    const completion = yield* Connect.completeOutcome({ continuationId: denied.continuationId, callbackUrl: denial.toString(), provider: fake.id });
     const plan = yield* Provision.plan({
       domain: "app.example.com",
       requirements: [spf({ name: "app.example.com", value: "v=spf1 -all" })],
@@ -48,6 +55,8 @@ export const run = async () => {
     const readiness = yield* Verify.observe({ domain: "app.example.com" });
     return {
       started: started._tag,
+      complete: completed._tag,
+      completion: completion._tag,
       operations: plan.operations.map(({ _tag }) => _tag),
       status: receipt.status,
       overall: readiness.overall,
@@ -64,13 +73,18 @@ export const run = async () => {
   const lifecycleResult = await Effect.runPromise(program);
 
   // The mounted group and the fetch transport over their own store: a second connect, over HTTP.
+  let callback;
   const { handler, dispose } = Server.toWebHandler(
     DomainKit.layerMemory({ providers: [fake], resolver: Testing.resolver() }).pipe(
       Layer.merge(
         Layer.succeed(Server.Identity)({ principal: () => Effect.succeed(Testing.principal) }),
       ),
     ),
-    { prefix: "/api/domainkit" },
+    { prefix: "/api/domainkit", defaultReturnTo: "/domains", callback: (outcome) => {
+      if (!Schema.is(Server.CallbackOutcome)(outcome)) throw new Error("Invalid callback summary");
+      callback = outcome._tag;
+      return Effect.succeed("/finished");
+    } },
   );
   try {
     const transport = Transport.fromFetch("https://consumer.example/api/domainkit", {
@@ -83,8 +97,13 @@ export const run = async () => {
         method: Transport.Method.token("packed-token"),
       }),
     );
+    const interactive = await Effect.runPromise(transport.connection.start({ provider: fake.id, method: Transport.Method.oauth() }));
+    if (interactive._tag !== "Redirect") throw new Error("Expected redirect");
+    const response = await handler(new Request(interactive.authorizationUrl));
+    if (response.status !== 302 || response.headers.get("location") !== "https://consumer.example/finished") throw new Error("Callback policy failed");
     return {
       ...lifecycleResult,
+      callback,
       registration,
       wired: wired._tag,
       snapshot: wired.snapshot?.status ?? null,
@@ -98,6 +117,8 @@ export const run = async () => {
 
 const expected = (version: string) => ({
   started: "Connected",
+  complete: "Connected",
+  completion: "Cancelled",
   operations: ["Create"],
   status: "complete",
   overall: "ready",
@@ -106,6 +127,7 @@ const expected = (version: string) => ({
   keyLength: 43,
   version,
   subpath: true,
+  callback: "Connected",
   registration: [
     {
       _tag: "OAuth",
@@ -174,7 +196,7 @@ if (JSON.stringify(result) !== JSON.stringify(expected)) {
         join(directory, "types.ts"),
         `
 import { Effect, Layer, Redacted } from "effect";
-import { Custody, DnsRecord, DomainKit, Plan, type Provider, Provision, type Storage, Verify } from "domainkit";
+import { Connect, Custody, DnsRecord, DomainKit, Plan, type Provider, Provision, type Storage, Verify } from "domainkit";
 import { Transport } from "domainkit/client";
 import { Server } from "domainkit/server";
 import { Testing } from "domainkit/testing";
@@ -190,6 +212,11 @@ export const live: Layer.Layer<DomainKit.Services, DomainKit.Error, Storage.Serv
     Layer.provide(Custody.layer({ key: Redacted.make(Custody.generateKey()) })),
   );
 export const cases = Testing.conformance.storage(Testing.storage).map((item) => item.name);
+export type PublicCompletion = Connect.Completion;
+export const completeOutcome = Connect.completeOutcome;
+export const complete = Connect.complete;
+export type PublicCallbackOutcome = Server.CallbackOutcome;
+export const callbackOptions: Server.Options = { callback: (outcome) => Effect.succeed(outcome._tag === "Connected" ? undefined : "/recover") };
 export type PublicRegistrationSettings = Server.RegistrationSettings;
 export const registrationSettings: Effect.Effect<ReadonlyArray<Server.RegistrationSettings>, DomainKit.Error> = Server.registrationSettings({ providers: [], callbackBaseUrl: "https://consumer.example/api/domainkit" });
 export type PublicIdentity = Server.IdentityService;
