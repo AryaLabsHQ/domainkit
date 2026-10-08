@@ -571,3 +571,94 @@ for (const { field, definition } of malformed) {
     }
   });
 }
+
+const endpointDefinitions: ReadonlyArray<{
+  name: string;
+  field: string;
+  definition: (
+    fetch: import("../../src/internal/http.ts").Fetch,
+    value: string,
+  ) => Provider.Definition;
+}> = [
+  ...(["baseUrl", "oauth.issuer", "oauth.serverOrigin"] as const).map((field) => ({
+    name: `Cloudflare ${field}`,
+    field,
+    definition: (fetch: import("../../src/internal/http.ts").Fetch, value: string) =>
+      Cloudflare.provider({
+        fetch,
+        ...(field === "baseUrl" ? { baseUrl: value } : {}),
+        oauth: {
+          clientId: "c",
+          clientAuth: "none",
+          ...(field === "oauth.issuer" ? { issuer: value } : {}),
+          ...(field === "oauth.serverOrigin" ? { serverOrigin: value } : {}),
+        },
+      }),
+  })),
+  ...(["baseUrl", "integration.installOrigin"] as const).map((field) => ({
+    name: `Vercel ${field}`,
+    field,
+    definition: (fetch: import("../../src/internal/http.ts").Fetch, value: string) =>
+      Vercel.provider({
+        fetch,
+        ...(field === "baseUrl" ? { baseUrl: value } : {}),
+        integration: {
+          clientId: "c",
+          clientSecret: Redacted.make("s"),
+          slug: "domainkit",
+          ...(field === "integration.installOrigin" ? { installOrigin: value } : {}),
+        },
+      }),
+  })),
+  {
+    name: "public callback base",
+    field: "callbackBaseUrl",
+    definition: (fetch) =>
+      Vercel.provider({
+        fetch,
+        integration: { clientId: "c", clientSecret: Redacted.make("s"), slug: "domainkit" },
+      }),
+  },
+];
+
+for (const { name, field, definition } of endpointDefinitions) {
+  for (const value of [
+    " https://secret-canary.example",
+    "https://secret-canary.example ",
+    "https://secret-canary.example\t",
+    "https://secret-canary.example\n",
+    "https://secret-canary.example\u0000",
+    "https://secret-\tcanary.example",
+    "https://secret-\ncanary.example",
+    "https://secret-\rcanary.example",
+  ]) {
+    it(`rejects ${name} URL whitespace/control characters ${JSON.stringify(value)} early`, async () => {
+      const recording = recordedFetch([]);
+      const provider = definition(recording.fetch, value);
+      const base = field === "callbackBaseUrl" ? value : callbackBaseUrl;
+      if (field === "callbackBaseUrl") {
+        const error = await Effect.runPromise(
+          Server.registrationSettings({ providers: [provider], callbackBaseUrl: base }).pipe(
+            Effect.flip,
+          ),
+        );
+        assert.strictEqual(error.reason._tag, "InvalidInput");
+        if (error.reason._tag === "InvalidInput") assert.strictEqual(error.reason.field, field);
+        assert.ok(!JSON.stringify(error).includes("secret-canary"));
+      }
+      const web = mounted(provider, base);
+      try {
+        const response = await web.start();
+        assert.strictEqual(response.status, 400);
+        const body = (await response.json()) as DomainKit.Error;
+        assert.strictEqual(body.reason._tag, "InvalidInput");
+        if (body.reason._tag === "InvalidInput") assert.strictEqual(body.reason.field, field);
+        assert.ok(!JSON.stringify(body).includes("secret-canary"));
+        assert.deepStrictEqual(recording.requests, []);
+        assert.deepStrictEqual(web.writes, []);
+      } finally {
+        await web.dispose();
+      }
+    });
+  }
+}

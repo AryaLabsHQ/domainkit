@@ -54,7 +54,12 @@ export const endpoint = (value: string, field: string) =>
   requireValue(
     value,
     (v) => {
-      if (typeof v !== "string") return false;
+      if (
+        typeof v !== "string" ||
+        v !== v.trim() ||
+        [...v].some((character) => character.charCodeAt(0) < 0x20)
+      )
+        return false;
       const url = URL.parse(v);
       return (
         url !== null &&
@@ -66,7 +71,7 @@ export const endpoint = (value: string, field: string) =>
       );
     },
     field,
-    `${field} must be an HTTP(S) URL without credentials, query, or fragment`,
+    `${field} must be an HTTP(S) URL without surrounding whitespace, control characters, credentials, query, or fragment`,
   );
 
 export const scopes = (value: ReadonlyArray<string>, field: string) =>
