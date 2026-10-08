@@ -21,10 +21,12 @@ export default defineConfig({
         root: "content",
       }),
       filesystem({
+        exclude: ["meta.ts"],
         include: ["components/**/*.{md,mdx}"],
         root: "content",
       }),
       filesystem({
+        exclude: ["meta.ts", "guides/meta.ts"],
         include: [
           "compare/**/*.{md,mdx}",
           "customers/**/*.{md,mdx}",

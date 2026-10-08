@@ -35,22 +35,22 @@
     "typecheck": "blume check"
   },
   "dependencies": {
-    "@base-ui/react": "^1.7.0",
+    "@base-ui/react": "^1.8.0",
     "@domainkit/react": "workspace:^0.20.0",
-    "blume": "^2.0.3",
+    "blume": "^2.2.1",
     "domainkit": "workspace:^0.20.0",
     "effect": "4.0.2",
-    "lucide-react": "0.474.0",
+    "lucide-react": "1.53.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "@playwright/test": "1.57.0",
+    "@playwright/test": "1.64.0",
     "@types/bun": "1.4.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "astro": "7.2.9",
-    "shadcn": "4.17.0",
+    "astro": "7.3.8",
+    "shadcn": "4.21.4",
     "vite": "8.3.4",
     "wrangler": "4.127.1"
   }
