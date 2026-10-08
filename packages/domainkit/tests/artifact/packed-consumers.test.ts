@@ -97,6 +97,15 @@ export const run = async () => {
 `;
 
 const expected = (version: string) => ({
+  started: "Connected",
+  operations: ["Create"],
+  status: "complete",
+  overall: "ready",
+  spfConstraint: "spf",
+  providers: ["cloudflare", "vercel"],
+  keyLength: 43,
+  version,
+  subpath: true,
   registration: [
     {
       _tag: "OAuth",
@@ -113,15 +122,6 @@ const expected = (version: string) => ({
       clientAuth: "client_secret_post",
     },
   ],
-  started: "Connected",
-  operations: ["Create"],
-  status: "complete",
-  overall: "ready",
-  spfConstraint: "spf",
-  providers: ["cloudflare", "vercel"],
-  keyLength: 43,
-  version,
-  subpath: true,
   wired: "Connected",
   snapshot: "connected",
   capabilities: ["connection", "provisioning", "verification", "cleanup"],

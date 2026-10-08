@@ -263,8 +263,8 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
           }
           const tokens = yield* OAuth.refresh({
             provider: Client.provider,
-            server: endpoints(),
             client: yield* oauthClient(settings),
+            server: endpoints(),
             refreshToken,
             fetch,
             ...insecure,
@@ -280,8 +280,8 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
           const { accessToken } = parseSecret(credential.secret);
           yield* OAuth.revoke({
             provider: Client.provider,
-            server: endpoints(),
             client: yield* oauthClient(settings),
+            server: endpoints(),
             token: accessToken,
             fetch,
             ...insecure,
