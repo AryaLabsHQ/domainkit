@@ -186,6 +186,20 @@ recognise a credential the browser sends on a top-level navigation.
 authenticated principal reaches every route, which is right when your own middleware already gates
 the mount.
 
+`Server.registrationSettings({ providers, callbackBaseUrl })` derives secret-free registration
+requirements from the same provider definitions and public callback base used by your server.
+It needs no credentials, identity, storage, or network: OAuth settings describe callback URL,
+client authentication, S256 PKCE, and configured scopes; Integration settings describe callback URL
+and code exchange authentication. Token-only definitions return no settings. Custom interactive
+methods without optional registration metadata fail `Unsupported`. Settings describe requirements,
+not console readiness or granted permissions. See the
+[server reference](https://domain-kit.dev/docs/reference/server#registration-settings).
+
+Interactive starts reject empty credentials and malformed setup fields before redirecting or
+storing a continuation, with `InvalidInput` naming the field without rejected values. Vercel resolves
+its required credentials at start and again at completion for rotation. Configured callback bases
+must be HTTP(S) URLs without credentials, query, or fragment; emulator paths remain supported.
+
 After an interactive connection completes, the callback redirects to the `returnTo` the flow was
 started with, or to `defaultReturnTo`. The destination is resolved against the callback's own base
 and must land on its origin, so neither the provider nor a crafted `returnTo` can steer the customer

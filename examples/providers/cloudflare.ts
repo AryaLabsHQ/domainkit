@@ -1,5 +1,6 @@
 import { Config, Effect } from "effect";
 import { Cloudflare, Connect } from "domainkit";
+import { Server } from "domainkit/server";
 
 // #region token-only
 /** With no options Cloudflare offers API tokens only, and nothing needs registering. */
@@ -53,3 +54,11 @@ export const connectOAuth = Effect.map(
   (started) => (started._tag === "Redirect" ? started.authorizationUrl : null),
 );
 // #endregion connect-oauth
+
+// #region registration-settings
+/** Requirements for the provider console; this does not resolve credentials or verify a grant. */
+export const registrationSettings = Server.registrationSettings({
+  providers: [withOAuth],
+  callbackBaseUrl: "https://app.acme.dev/api/domainkit",
+});
+// #endregion registration-settings

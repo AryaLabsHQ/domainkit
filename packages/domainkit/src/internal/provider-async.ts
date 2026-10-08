@@ -45,6 +45,7 @@ export interface AsyncTokenAuth {
 }
 
 export interface AsyncOAuthAuth {
+  readonly registration?: Provider.OAuthAuth["registration"];
   readonly label: string;
   readonly scopes: ReadonlyArray<string>;
   readonly start: (input: {
@@ -60,6 +61,7 @@ export interface AsyncOAuthAuth {
 }
 
 export interface AsyncIntegrationAuth {
+  readonly registration?: Provider.IntegrationAuth["registration"];
   readonly label: string;
   readonly start: (input: {
     readonly state: string;
@@ -175,6 +177,7 @@ export const fromAsync = <Context>(
         : {
             oauth: {
               label: oauth.label,
+              ...(oauth.registration === undefined ? {} : { registration: oauth.registration }),
               scopes: oauth.scopes,
               start: (input) => call(() => oauth.start(input)),
               complete: (input) => call(() => oauth.complete(input)).pipe(Effect.map(issued)),
@@ -193,6 +196,9 @@ export const fromAsync = <Context>(
         : {
             integration: {
               label: integration.label,
+              ...(integration.registration === undefined
+                ? {}
+                : { registration: integration.registration }),
               start: (input) => call(() => integration.start(input)),
               complete: (input) => call(() => integration.complete(input)).pipe(Effect.map(issued)),
               ...(integrationRefresh === undefined

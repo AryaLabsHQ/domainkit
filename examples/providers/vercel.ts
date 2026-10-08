@@ -1,5 +1,6 @@
 import { Config, Effect } from "effect";
 import { Connect, Vercel } from "domainkit";
+import { Server } from "domainkit/server";
 
 // #region token-only
 /** Personal and team access tokens, with no integration to register. */
@@ -55,3 +56,11 @@ export const install = Effect.map(
   (started) => (started._tag === "Redirect" ? started.authorizationUrl : null),
 );
 // #endregion connect-integration
+
+// #region registration-settings
+/** Requirements for the provider console; this does not resolve credentials or verify a grant. */
+export const registrationSettings = Server.registrationSettings({
+  providers: [withIntegration],
+  callbackBaseUrl: "https://app.acme.dev/api/domainkit",
+});
+// #endregion registration-settings

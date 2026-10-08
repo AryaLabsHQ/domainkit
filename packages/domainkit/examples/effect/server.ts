@@ -4,17 +4,19 @@ import { HttpApi, HttpApiBuilder } from "effect/http-api";
 import { Cloudflare, Custody, DomainKit, type Principal, Reason, Storage, Vercel } from "domainkit";
 import { Server } from "domainkit/server";
 
-const DomainKitLive = DomainKit.layer({
-  providers: [
-    Cloudflare.provider({
-      oauth: {
-        clientId: Config.String("CF_CLIENT_ID"),
-        clientSecret: Config.Redacted("CF_CLIENT_SECRET"),
-      },
-    }),
-    Vercel.provider(), // tokens only
-  ],
-}).pipe(
+const providers = [
+  Cloudflare.provider({
+    oauth: {
+      clientId: Config.String("CF_CLIENT_ID"),
+      clientSecret: Config.Redacted("CF_CLIENT_SECRET"),
+    },
+  }),
+  Vercel.provider(), // tokens only
+];
+const callbackBaseUrl = "https://app.acme.dev/api/domainkit";
+export const registrationSettings = Server.registrationSettings({ providers, callbackBaseUrl });
+
+const DomainKitLive = DomainKit.layer({ providers }).pipe(
   // `provideMerge`, not `provide`: the server reads attempts and receipts straight from Storage.
   Layer.provideMerge(Layer.mergeAll(Storage.layerMemory, Custody.layerConfig())),
 );
@@ -70,7 +72,7 @@ const IdentityLive = Layer.succeed(Server.Identity)({
 export const Api = HttpApi.make("app").add(Server.group);
 
 export const ApiLive = HttpApiBuilder.layer(Api).pipe(
-  Layer.provide(Server.layer(Api, { defaultReturnTo: "/settings/domains" })),
+  Layer.provide(Server.layer(Api, { callbackBaseUrl, defaultReturnTo: "/settings/domains" })),
   Layer.provide([DomainKitLive, IdentityLive]),
 );
 

@@ -28,6 +28,8 @@ import * as DnsRecord from "./DnsRecord.ts";
 import * as Errors from "./internal/error.ts";
 import * as Plan from "./Plan.ts";
 import * as Principal from "./Principal.ts";
+import * as Configuration from "./internal/config.ts";
+import type * as Provider from "./Provider.ts";
 import * as Providers from "./Providers.ts";
 import * as Provision from "./Provision.ts";
 import * as Reason from "./Reason.ts";
@@ -609,6 +611,89 @@ export interface Options {
   readonly defaultReturnTo?: string;
 }
 
+/** Offline registration requirements, not proof of provider console or grant readiness. */
+export const RegistrationSettings = Schema.Union([
+  Schema.Struct({
+    _tag: Schema.Literal("OAuth"),
+    provider: Schema.String,
+    callbackUrl: Schema.String,
+    clientAuth: Schema.Literals(["none", "client_secret_basic", "client_secret_post"]),
+    pkce: Schema.Literal("S256"),
+    scopes: Schema.Array(Schema.String),
+  }),
+  Schema.Struct({
+    _tag: Schema.Literal("Integration"),
+    provider: Schema.String,
+    callbackUrl: Schema.String,
+    clientAuth: Schema.Literal("client_secret_post"),
+  }),
+]);
+export type RegistrationSettings = typeof RegistrationSettings.Type;
+
+/** Derive only public setup values; no credentials, identity, storage, or network are needed. */
+export const registrationSettings = (input: {
+  readonly providers: ReadonlyArray<Provider.Definition>;
+  readonly callbackBaseUrl: string;
+}): Effect.Effect<ReadonlyArray<RegistrationSettings>, Errors.DomainKitError> =>
+  Effect.gen(function* () {
+    yield* Configuration.endpoint(input.callbackBaseUrl, "callbackBaseUrl");
+    const settings: Array<RegistrationSettings> = [];
+    for (const definition of input.providers) {
+      const callbackUrl = (yield* callbackUrlAt(input.callbackBaseUrl, definition.id)).toString();
+      const oauth = definition.auth.oauth;
+      const integration = definition.auth.integration;
+      const unsupported = (method: string) =>
+        Errors.fail(
+          new Reason.Unsupported({
+            provider: definition.id,
+            operation: "registrationSettings",
+            message: `${definition.id} ${method} has no registration metadata`,
+          }),
+        );
+      if (oauth !== undefined) {
+        if (oauth.registration === undefined) return yield* unsupported("OAuth");
+        yield* Configuration.scopes(oauth.scopes, "oauth.scopes");
+        const { clientAuth, pkce } = oauth.registration;
+        yield* Configuration.requireValue(
+          clientAuth,
+          (v) => v === "none" || v === "client_secret_basic" || v === "client_secret_post",
+          "oauth.clientAuth",
+          "oauth.clientAuth is unsupported",
+        );
+        yield* Configuration.requireValue(
+          pkce,
+          (v) => v === "S256",
+          "oauth.pkce",
+          "oauth.pkce is unsupported",
+        );
+        settings.push({
+          _tag: "OAuth",
+          provider: definition.id,
+          callbackUrl,
+          clientAuth,
+          pkce,
+          scopes: [...oauth.scopes],
+        });
+      }
+      if (integration !== undefined) {
+        if (integration.registration === undefined) return yield* unsupported("Integration");
+        yield* Configuration.requireValue(
+          integration.registration.clientAuth,
+          (v) => v === "client_secret_post",
+          "integration.clientAuth",
+          "integration.clientAuth is unsupported",
+        );
+        settings.push({
+          _tag: "Integration",
+          provider: definition.id,
+          callbackUrl,
+          clientAuth: integration.registration.clientAuth,
+        });
+      }
+    }
+    return settings;
+  });
+
 /** Everything the handlers need: the lifecycle services, Storage, and the host's `Identity`. */
 export type Services =
   | Provision.Service
@@ -660,13 +745,9 @@ const callbackUrlFor = (input: {
   readonly route: string;
 }): Effect.Effect<URL, Errors.DomainKitError> =>
   Effect.suspend(() => {
-    const suffix = `/callback/${encodeURIComponent(input.provider)}`;
     const configured = input.options.callbackBaseUrl;
     if (configured !== undefined) {
-      return Effect.try({
-        try: () => new URL(`${configured.replace(/\/+$/, "")}${suffix}`),
-        catch: () => callbackConfigurationError(`${configured} is not a URL`),
-      });
+      return callbackUrlAt(configured, input.provider);
     }
     return Effect.flatMap(absoluteUrl(input.request), (url) => {
       const path = url.pathname;
@@ -676,8 +757,9 @@ const callbackUrlFor = (input: {
           "callbackBaseUrl",
         );
       }
-      return Effect.succeed(
-        new URL(`${url.origin}${path.slice(0, path.length - input.route.length)}${suffix}`),
+      return callbackUrlAt(
+        `${url.origin}${path.slice(0, path.length - input.route.length)}`,
+        input.provider,
       );
     });
   });
@@ -695,10 +777,14 @@ const noSuchFlow = Errors.fail(
   }),
 );
 
-const callbackConfigurationError = (message: string) =>
-  new Errors.DomainKitError({
-    reason: new Reason.InvalidInput({ message, field: "callbackBaseUrl" }),
-  });
+const callbackUrlAt = (base: string, provider: string): Effect.Effect<URL, Errors.DomainKitError> =>
+  Configuration.endpoint(base, "callbackBaseUrl").pipe(
+    Effect.map((value) => {
+      const url = new URL(value);
+      url.pathname = `${url.pathname.replace(/\/+$/, "")}${callbackRoute(provider)}`;
+      return url;
+    }),
+  );
 
 /**
  * Where the callback may send the customer: a path under the callback's own base, or an absolute

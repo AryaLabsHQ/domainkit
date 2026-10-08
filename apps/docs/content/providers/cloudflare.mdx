@@ -72,6 +72,26 @@ The credential packs the access and refresh tokens together, so a refresh is inv
 DomainKit refreshes ten minutes before expiry, single-flighted, and revokes at Cloudflare when the
 customer disconnects.
 
+## Derive registration requirements
+
+<Snippet
+  file="examples/providers/cloudflare.ts"
+  region="registration-settings"
+  title="Secret-free registration settings"
+/>
+
+Reuse `callbackBaseUrl` in your mounted server options. It includes your public origin and mount
+path; the output appends `/callback/cloudflare`. Derivation reads no credentials and makes no provider
+calls. It describes setup requirements, not console readiness or granted permissions. See the
+[server reference](/docs/reference/server#registration-settings) for the output schema and failures.
+
+The OAuth output includes the effective `clientAuth`, `pkce: "S256"` for public and confidential
+clients, and your configured scopes. Empty client ids or confidential secrets, unsupported runtime
+auth modes, malformed scope tokens, and malformed endpoint URLs fail `InvalidInput` on the relevant
+configuration field before redirect. Config resolution failures name the field without its source
+error or value. Endpoint URLs support emulator paths and split browser/server hosts, and must be
+HTTP(S) without credentials, query, or fragment. Custom scopes remain your choice.
+
 ## Capabilities
 
 DomainKit needs `dns:read` and `dns:write`. Cloudflare's token verification does not enumerate DNS

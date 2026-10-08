@@ -6,7 +6,7 @@ import * as Reason from "./Reason.ts";
 import * as DomainName from "./DomainName.ts";
 import * as Client from "./internal/cloudflare/client.ts";
 import type * as Protocol from "./internal/cloudflare/protocol.ts";
-import { resolve } from "./internal/config.ts";
+import * as Configuration from "./internal/config.ts";
 import type { Fetch } from "./internal/http.ts";
 import * as OAuth from "./internal/oauth.ts";
 import * as Provider from "./Provider.ts";
@@ -130,8 +130,12 @@ const packSecret = (tokens: OAuth.Tokens) =>
 
 export const provider = (options: Options = {}): Provider.Definition<AccountContext> => {
   const fetch = options.fetch ?? globalThis.fetch;
-  const baseUrl = (options.baseUrl ?? "https://api.cloudflare.com/client/v4").replace(/\/$/, "");
-  const client = (token: string): Client.Options => ({ token, fetch, baseUrl });
+  const baseUrl = options.baseUrl ?? "https://api.cloudflare.com/client/v4";
+  const client = (token: string): Client.Options => ({
+    token,
+    fetch,
+    baseUrl: baseUrl.replace(/\/$/, ""),
+  });
 
   /**
    * The one account every zone the credential sees belongs to, with the name Cloudflare gives it.
@@ -156,11 +160,36 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
 
   const oauthClient = (oauth: NonNullable<Options["oauth"]>) =>
     Effect.gen(function* () {
-      const clientId = yield* resolve(oauth.clientId, "oauth.clientId");
+      yield* Configuration.endpoint(
+        options.baseUrl ?? "https://api.cloudflare.com/client/v4",
+        "baseUrl",
+      );
+      yield* Configuration.endpoint(oauth.issuer ?? defaultIssuer, "oauth.issuer");
+      yield* Configuration.endpoint(
+        oauth.serverOrigin ?? oauth.issuer ?? defaultIssuer,
+        "oauth.serverOrigin",
+      );
+      yield* Configuration.scopes(oauth.scopes ?? defaultScopes, "oauth.scopes");
+      yield* Configuration.requireValue(
+        oauth.clientAuth,
+        (v) =>
+          v === undefined ||
+          v === "none" ||
+          v === "client_secret_basic" ||
+          v === "client_secret_post",
+        "oauth.clientAuth",
+        "oauth.clientAuth is unsupported",
+      );
+      const clientId = yield* Configuration.resolve(oauth.clientId, "oauth.clientId").pipe(
+        Effect.flatMap((v) => Configuration.nonempty(v, "oauth.clientId")),
+      );
       if (oauth.clientAuth === "none") {
         return { clientId, clientSecret: null, clientAuth: "none" } satisfies OAuth.Client;
       }
-      const clientSecret = yield* resolve(oauth.clientSecret, "oauth.clientSecret");
+      const clientSecret = yield* Configuration.resolve(
+        oauth.clientSecret,
+        "oauth.clientSecret",
+      ).pipe(Effect.flatMap((v) => Configuration.secret(v, "oauth.clientSecret")));
       return {
         clientId,
         clientSecret,
@@ -185,17 +214,18 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
   function oauthAuth(settings: NonNullable<Options["oauth"]>): Provider.OAuthAuth {
     const scopes = settings.scopes ?? defaultScopes;
     const browser = settings.issuer ?? defaultIssuer;
-    const endpoints = endpointsOf({ browser, server: settings.serverOrigin ?? browser });
+    const endpoints = () => endpointsOf({ browser, server: settings.serverOrigin ?? browser });
     const insecure =
       settings.allowPlaintext === undefined ? {} : { allowPlaintext: settings.allowPlaintext };
     return {
       label: "Sign in with Cloudflare",
+      registration: { clientAuth: settings.clientAuth ?? "client_secret_basic", pkce: "S256" },
       scopes,
       start: (input) =>
         oauthClient(settings).pipe(
           Effect.map(({ clientId }) => ({
             authorizationUrl: OAuth.authorizationUrl({
-              server: endpoints,
+              server: endpoints(),
               clientId,
               scopes,
               state: input.state,
@@ -209,7 +239,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
           Effect.flatMap((oauthClientValue) =>
             OAuth.exchangeCode({
               provider: Client.provider,
-              server: endpoints,
+              server: endpoints(),
               client: oauthClientValue,
               code: input.code,
               state: input.params.state ?? "",
@@ -233,7 +263,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
           }
           const tokens = yield* OAuth.refresh({
             provider: Client.provider,
-            server: endpoints,
+            server: endpoints(),
             client: yield* oauthClient(settings),
             refreshToken,
             fetch,
@@ -250,7 +280,7 @@ export const provider = (options: Options = {}): Provider.Definition<AccountCont
           const { accessToken } = parseSecret(credential.secret);
           yield* OAuth.revoke({
             provider: Client.provider,
-            server: endpoints,
+            server: endpoints(),
             client: yield* oauthClient(settings),
             token: accessToken,
             fetch,

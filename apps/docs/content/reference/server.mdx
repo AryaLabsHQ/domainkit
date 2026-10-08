@@ -13,9 +13,9 @@ import { Server } from "domainkit/server";
 
 {/* reference-inventory:start */}
 
-| Namespace | Carries                                                                                       |
-| --------- | --------------------------------------------------------------------------------------------- |
-| `Server`  | `group`, `api`, `layer`, `toWebHandler`, `Identity`, and every wire schema the client decodes |
+| Namespace | Carries                                                                                                                                       |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Server`  | `group`, `api`, `layer`, `toWebHandler`, `registrationSettings`, `RegistrationSettings`, `Identity`, and every wire schema the client decodes |
 
 {/* reference-inventory:end */}
 
@@ -143,6 +143,31 @@ flow. The flow is left unspent, so the person who started it can still finish it
 | `callbackBaseUrl` | The origin and mount path the provider redirects back to. Set it behind an edge that rewrites `Host`; otherwise the callback follows the request's own origin and the prefix the group is mounted at |
 | `defaultReturnTo` | Where an interactive flow lands when the continuation carries no `returnTo`                                                                                                                          |
 | `prefix`          | `toWebHandler` only: mount every route under this path                                                                                                                                               |
+
+## Registration settings
+
+`Server.registrationSettings({ providers, callbackBaseUrl })` returns an Effect of a readonly array
+of `Server.RegistrationSettings`. Pass the same configured definitions used by `DomainKit.layer`
+and the same public callback base used by the server. The explicit base includes the mount path;
+it must be an HTTP(S) URL without credentials, query, or fragment. It does not infer request origins.
+
+<Snippet
+  file="examples/server/mount.ts"
+  region="registration-settings"
+  title="Derive public setup requirements"
+/>
+
+| Tag           | Fields                                                    | Meaning                                                                    |
+| ------------- | --------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `OAuth`       | `provider`, `callbackUrl`, `clientAuth`, `pkce`, `scopes` | Effective client authentication, `S256` PKCE, and configured scopes        |
+| `Integration` | `provider`, `callbackUrl`, `clientAuth`                   | Integration code exchange authentication (`client_secret_post` for Vercel) |
+
+Token-only definitions contribute no settings. An interactive custom provider without registration
+metadata fails `Unsupported`; see the [provider contract](/docs/reference/providers). The union is
+also a runtime schema. This programmatic operation requires no credentials, Principal, storage,
+custody, or network, and adds no HTTP endpoint. It emits no client ids, secrets, tokens, state,
+account context, or emulator addresses. It describes requirements rather than verifying console
+registration, credential resolution, or granted permissions.
 
 ## Web handler
 

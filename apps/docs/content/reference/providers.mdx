@@ -47,6 +47,20 @@ sees them.
 
 <Snippet file="packages/domainkit/examples/effect/provider.ts" title="A token-only provider" />
 
+## Interactive registration metadata
+
+`Provider.OAuthAuth.registration` optionally declares `clientAuth` (`none`, `client_secret_basic`,
+or `client_secret_post`) and `pkce: "S256"`. The OAuth method's existing `scopes` supplies its scope
+requirements. `Provider.IntegrationAuth.registration` optionally declares
+`clientAuth: "client_secret_post"`, the authentication for its code exchange. These fields describe
+the adapter's actual requests and carry no credentials. `Provider.fromAsync` preserves the same
+optional metadata from `AsyncOAuthAuth` and `AsyncIntegrationAuth`.
+
+Existing custom methods can omit metadata and still connect. Offline
+[`Server.registrationSettings`](/docs/reference/server#registration-settings) fails `Unsupported`
+for an interactive method that omits it, so an incomplete description cannot look complete.
+Token methods need no application registration.
+
 ## Naming the account
 
 Every method answers with an `IssuedCredential`: the sealed `secret`, the account `context`, an
