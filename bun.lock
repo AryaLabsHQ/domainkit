@@ -5,11 +5,13 @@
     "": {
       "name": "domainkit",
       "devDependencies": {
+        "@types/bun": "1.4.2",
         "@types/semver": "^7.8.0",
         "oxfmt": "0.72.0",
         "oxlint": "1.87.0",
         "semver": "^7.8.5",
         "tegami": "1.5.0",
+        "typescript": "7.0.2",
       },
     },
     "apps/docs": {

@@ -39,15 +39,17 @@
     "release:check": "bun run lint && bun run lint:rules && bun run format:check && bun run --filter domainkit release:check && bun run --filter @domainkit/capsuledb release:check && bun run --filter @domainkit/react release:check",
     "tegami": "bun scripts/tegami.mts",
     "test": "bun run --filter './packages/*' test",
-    "typecheck": "bun run --filter domainkit build && bun run --filter './packages/*' typecheck",
+    "typecheck": "tsc --noEmit -p tsconfig.json && bun run --filter domainkit build && bun run --filter './packages/*' typecheck",
     "typecheck:examples": "bun run build && bun run --filter @domainkit/examples typecheck"
   },
   "devDependencies": {
+    "@types/bun": "1.4.2",
     "@types/semver": "^7.8.0",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "semver": "^7.8.5",
-    "tegami": "1.5.0"
+    "tegami": "1.5.0",
+    "typescript": "7.0.2"
   },
   "overrides": {
     "capsuledb": "0.5.0"
