@@ -137,7 +137,9 @@ test("required job names remain truthful and dispatch cannot access publication 
     expect(job.if).toBe("always()");
     const steps = job.steps;
     if (!Array.isArray(steps)) throw new Error("Expected workflow steps");
-    const checkout = steps.map(object).find((step) => typeof step.uses === "string" && step.uses.startsWith("actions/checkout@"));
+    const checkout = steps
+      .map(object)
+      .find((step) => typeof step.uses === "string" && step.uses.startsWith("actions/checkout@"));
     expect(object(checkout?.with)["fetch-depth"]).toBe(0);
     expect(object(steps[0]).run).toBe('test "$ROUTE_RESULT" = success');
     expect(object(steps[1]).if).toBe("needs.route.outputs.metadata == 'true'");

@@ -5,18 +5,26 @@ import { classifyMetadata, git, object } from "./release-metadata.mts";
 import { parse } from "jsonc-parser";
 import { trustedVersionPr } from "./version-pr.mts";
 
-import { historicalBase as base, historicalRelease as release, correctedLock, releaseFixture } from "./release-fixture.mts";
+import {
+  historicalBase as base,
+  historicalRelease as release,
+  correctedLock,
+  releaseFixture,
+} from "./release-fixture.mts";
 const baseLock = await git(["show", `${base}:bun.lock`]);
 async function candidate(path: string, edit: (source: string) => string, mode?: string) {
   const fixture = await releaseFixture(async (directory) => {
     const target = join(directory, path);
     await mkdir(dirname(target), { recursive: true });
-    const source = await Bun.file(target).exists() ? await Bun.file(target).text() : "";
+    const source = (await Bun.file(target).exists()) ? await Bun.file(target).text() : "";
     await writeFile(target, edit(source));
     if (mode) await chmod(target, 0o755);
   });
-  try { return await classifyMetadata(fixture.base, fixture.head, fixture.cwd); }
-  finally { await rm(fixture.cwd, { recursive: true, force: true }); }
+  try {
+    return await classifyMetadata(fixture.base, fixture.head, fixture.cwd);
+  } finally {
+    await rm(fixture.cwd, { recursive: true, force: true });
+  }
 }
 function manifest(field: string, value: unknown) {
   return (source: string) => JSON.stringify({ ...object(JSON.parse(source)), [field]: value });
@@ -36,10 +44,20 @@ describe("release metadata diff", () => {
     expect(parse(correctedLock)).toEqual(expected);
   });
   test("rejects raw a60c360 because its workspace ranges are stale", async () => {
-    expect(await classifyMetadata(base, release)).toMatchObject({ metadataOnly: false, reason: expect.stringContaining("Stale lockfile workspace range") });
+    expect(await classifyMetadata(base, release)).toMatchObject({
+      metadataOnly: false,
+      reason: expect.stringContaining("Stale lockfile workspace range"),
+    });
   });
   test("rejects one restored base lock range even when all bumped versions match", async () => {
-    expect(await candidate("bun.lock", (source) => source.replace('"workspace:^0.21.0"', '"workspace:^0.20.0"'))).toMatchObject({ metadataOnly: false, reason: expect.stringContaining("Stale lockfile workspace range") });
+    expect(
+      await candidate("bun.lock", (source) =>
+        source.replace('"workspace:^0.21.0"', '"workspace:^0.20.0"'),
+      ),
+    ).toMatchObject({
+      metadataOnly: false,
+      reason: expect.stringContaining("Stale lockfile workspace range"),
+    });
   });
   for (const [name, path, edit] of [
     ["source", "packages/domainkit/src/index.ts", () => "throw new Error('changed');"],
