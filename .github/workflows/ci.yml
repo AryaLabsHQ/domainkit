@@ -78,6 +78,9 @@ jobs:
       - name: Check out repository
         if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Automation tests exercise the real historical release fixture and its parent.
+          fetch-depth: 0
 
       - name: Set up Node.js
         if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'

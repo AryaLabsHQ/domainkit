@@ -1,67 +1,45 @@
-import { afterAll, describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { classifyMetadata, git, object } from "./release-metadata.mts";
+import { parse } from "jsonc-parser";
 import { trustedVersionPr } from "./version-pr.mts";
 
-const release = "a60c360c068366b51f49ff1a19aa51104fc7fc21";
-const base = (await git(["rev-parse", `${release}^`])).trim();
+import { historicalBase as base, historicalRelease as release, correctedLock, releaseFixture } from "./release-fixture.mts";
 const baseLock = await git(["show", `${base}:bun.lock`]);
-const root = await mkdtemp(join(tmpdir(), "domainkit-metadata-"));
-afterAll(() => rm(root, { recursive: true, force: true }));
-const paths = (await git(["ls-tree", "-r", "--name-only", base]))
-  .trim()
-  .split("\n")
-  .filter(
-    (path) =>
-      path === "package.json" ||
-      path === "bun.lock" ||
-      path.startsWith(".tegami/") ||
-      /^(?:(?:apps|packages)\/[^/]+|examples)\/(?:package.json|CHANGELOG.md)$/.test(path),
-  );
-async function snapshot(ref: string, directory: string) {
-  const existing = new Set((await git(["ls-tree", "-r", "--name-only", ref])).trim().split("\n"));
-  await Promise.all(
-    paths.map(async (path) => {
-      const target = join(directory, path);
-      await mkdir(dirname(target), { recursive: true });
-      if (existing.has(path)) await writeFile(target, await git(["show", `${ref}:${path}`]));
-      else await rm(target, { force: true });
-    }),
-  );
-}
-let fixture = 0;
 async function candidate(path: string, edit: (source: string) => string, mode?: string) {
-  const directory = join(root, String(fixture++));
-  await mkdir(directory);
-  await git(["init", "-q"], directory);
-  await snapshot(base, directory);
-  // This is a disposable Git fixture, never the repository's real index/config/hooks.
-  await git(["config", "user.email", "fixture@example.invalid"], directory);
-  await git(["config", "user.name", "Fixture"], directory);
-  const commit = async () => {
-    await git(["add", "--", ...paths.filter((entry) => entry !== ".tegami/.gitkeep")], directory);
-    await git(["-c", "core.hooksPath=/dev/null", "commit", "-qm", "fixture"], directory);
-    return (await git(["rev-parse", "HEAD"], directory)).trim();
-  };
-  const from = await commit();
-  await snapshot(release, directory);
-  const target = join(directory, path);
-  await mkdir(dirname(target), { recursive: true });
-  const source = (await Bun.file(target).exists()) ? await Bun.file(target).text() : "";
-  await writeFile(target, edit(source));
-  await git(["add", "--", path], directory);
-  if (mode) await chmod(target, 0o755);
-  const to = await commit();
-  return classifyMetadata(from, to, directory);
+  const fixture = await releaseFixture(async (directory) => {
+    const target = join(directory, path);
+    await mkdir(dirname(target), { recursive: true });
+    const source = await Bun.file(target).exists() ? await Bun.file(target).text() : "";
+    await writeFile(target, edit(source));
+    if (mode) await chmod(target, 0o755);
+  });
+  try { return await classifyMetadata(fixture.base, fixture.head, fixture.cwd); }
+  finally { await rm(fixture.cwd, { recursive: true, force: true }); }
 }
 function manifest(field: string, value: unknown) {
   return (source: string) => JSON.stringify({ ...object(JSON.parse(source)), [field]: value });
 }
 describe("release metadata diff", () => {
-  test("accepts the real a60c360 release, including internal range bumps and consumed notes", async () => {
-    expect(await classifyMetadata(base, release)).toMatchObject({ metadataOnly: true });
+  test("accepts the real a60c360 release with only cached workspace metadata corrected", async () => {
+    expect(await candidate("bun.lock", (source) => source)).toMatchObject({ metadataOnly: true });
+  });
+  test("qualifies the historical positive by changing only its four cached internal ranges", async () => {
+    const expected = object(parse(await git(["show", `${release}:bun.lock`])));
+    const workspaces = object(expected.workspaces);
+    for (const workspace of ["apps/docs", "packages/react", "packages/capsuledb"]) {
+      const dependencies = object(object(workspaces[workspace]).dependencies);
+      dependencies.domainkit = "workspace:^0.21.0";
+      if (workspace === "apps/docs") dependencies["@domainkit/react"] = "workspace:^0.21.0";
+    }
+    expect(parse(correctedLock)).toEqual(expected);
+  });
+  test("rejects raw a60c360 because its workspace ranges are stale", async () => {
+    expect(await classifyMetadata(base, release)).toMatchObject({ metadataOnly: false, reason: expect.stringContaining("Stale lockfile workspace range") });
+  });
+  test("rejects one restored base lock range even when all bumped versions match", async () => {
+    expect(await candidate("bun.lock", (source) => source.replace('"workspace:^0.21.0"', '"workspace:^0.20.0"'))).toMatchObject({ metadataOnly: false, reason: expect.stringContaining("Stale lockfile workspace range") });
   });
   for (const [name, path, edit] of [
     ["source", "packages/domainkit/src/index.ts", () => "throw new Error('changed');"],

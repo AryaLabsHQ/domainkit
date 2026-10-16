@@ -107,11 +107,21 @@ export async function classifyMetadata(base: string, head: string, cwd = process
       equal(after, expected, `${name} manifest`);
     }
     const currentWorkspaces = object(json(await read(head, "bun.lock")).workspaces);
-    for (const [name, { after, path }] of manifests) {
-      if (!bumped.has(name)) continue;
-      const workspace = path.slice(0, -"/package.json".length);
-      if (object(currentWorkspaces[workspace]).version !== after.version)
+    for (const [name, { before, after, path }] of manifests) {
+      const workspace = path === "package.json" ? "" : path.slice(0, -"/package.json".length);
+      const locked = object(currentWorkspaces[workspace]);
+      if (bumped.has(name) && locked.version !== after.version)
         throw new Error(`Stale lockfile workspace version: ${name}`);
+      for (const field of dependencyFields) {
+        if (before[field] === undefined && after[field] === undefined) continue;
+        const oldDeps = before[field] === undefined ? {} : object(before[field]);
+        const newDeps = after[field] === undefined ? {} : object(after[field]);
+        const lockedDeps = locked[field] === undefined ? {} : object(locked[field]);
+        for (const dep of new Set([...Object.keys(oldDeps), ...Object.keys(newDeps)])) {
+          if (bumped.has(dep) && lockedDeps[dep] !== newDeps[dep])
+            throw new Error(`Stale lockfile workspace range: ${name}/${dep}`);
+        }
+      }
     }
     const changes = (await git(["diff", "--raw", "--no-abbrev", "--no-renames", base, head], cwd))
       .trim()

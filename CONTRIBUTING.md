@@ -85,8 +85,8 @@ the PR's CI result when local policy prevents it.
 
 The serialized `publish.yml` workflow runs on every `main` push. Tegami maintains an open
 `tegami/version-packages` PR from consumed `.tegami/*.md` release notes. Merging a prepared version
-PR enables automatic publication; merging this tooling PR can also retry any prepared unpublished
-version already pending on `main`.
+PR enables automatic publication. A later `main` push can also retry a prepared unpublished version
+after the full gate passes at that candidate SHA.
 
 ```text
 main push -> prepare/update version PR

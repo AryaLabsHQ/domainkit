@@ -2,17 +2,18 @@ import { expect, test } from "bun:test";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { git, object } from "./release-metadata.mts";
+import { object } from "./release-metadata.mts";
 import { parse } from "yaml";
 
-const head = "a60c360c068366b51f49ff1a19aa51104fc7fc21";
-const base = (await git(["rev-parse", `${head}^`])).trim();
+import { releaseFixture } from "./release-fixture.mts";
 const realGit = Bun.which("git");
 if (!realGit) throw new Error("Git is required");
 async function route(
   mode: string,
   options: { stale?: boolean; foreign?: boolean; closed?: boolean } = {},
 ) {
+  const fixture = await releaseFixture();
+  const { base, head } = fixture;
   const directory = await mkdtemp(join(tmpdir(), "domainkit-version-route-"));
   try {
     const pr = {
@@ -63,6 +64,7 @@ exec ${JSON.stringify(realGit)} "$@"
         mode === "dispatch" ? "dispatch" : "classify",
       ],
       {
+        cwd: fixture.cwd,
         env: {
           ...process.env,
           PATH: `${directory}:${process.env.PATH}`,
@@ -86,9 +88,10 @@ exec ${JSON.stringify(realGit)} "$@"
     const dispatched = (await Bun.file(join(directory, "dispatched")).exists())
       ? await readFile(join(directory, "dispatched"), "utf8")
       : "";
-    return { code, output, dispatched, stdout, stderr };
+    return { code, output, dispatched, stdout, stderr, base, head };
   } finally {
     await rm(directory, { recursive: true, force: true });
+    await rm(fixture.cwd, { recursive: true, force: true });
   }
 }
 test("ordinary changes keep full CI, trusted native PRs take metadata validation", async () => {
@@ -120,9 +123,9 @@ test("dispatch submits only the current verified version ref and input SHAs", as
     "-f",
     "inputs[pr]=165",
     "-f",
-    `inputs[head]=${head}`,
+    `inputs[head]=${result.head}`,
     "-f",
-    `inputs[base]=${base}`,
+    `inputs[base]=${result.base}`,
   ]);
 });
 test("required job names remain truthful and dispatch cannot access publication credentials", async () => {
@@ -134,6 +137,8 @@ test("required job names remain truthful and dispatch cannot access publication 
     expect(job.if).toBe("always()");
     const steps = job.steps;
     if (!Array.isArray(steps)) throw new Error("Expected workflow steps");
+    const checkout = steps.map(object).find((step) => typeof step.uses === "string" && step.uses.startsWith("actions/checkout@"));
+    expect(object(checkout?.with)["fetch-depth"]).toBe(0);
     expect(object(steps[0]).run).toBe('test "$ROUTE_RESULT" = success');
     expect(object(steps[1]).if).toBe("needs.route.outputs.metadata == 'true'");
     for (const step of steps.slice(2))
