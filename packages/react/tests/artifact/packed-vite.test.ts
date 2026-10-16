@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 const run = async (command: string, args: ReadonlyArray<string>, cwd: string) =>
-  execFileAsync(command, args, { cwd, env: process.env });
+  execFileAsync(command, args, { cwd, env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" } });
 
 const pack = async (packageDirectory: string, destination: string): Promise<string> => {
   const before = new Set(await readdir(destination));

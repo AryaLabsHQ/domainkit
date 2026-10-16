@@ -42,15 +42,19 @@ Samva sets up customer domains with DomainKit. Read
 
 ## Development
 
-Use Bun 1.4 and Node.js 24.10 or newer:
+Use the Bun version pinned in `package.json` (1.4.2) and Node.js 24.10 or newer:
 
 ```sh
 bun install --frozen-lockfile
-bun run release:check
-bun run typecheck:examples
+bun run check
+bun run build
+bun run test:artifact
+bun run docs:check
 ```
 
-[CONTRIBUTING.md](./CONTRIBUTING.md) covers the live provider harness and the release path.
+`bun run release:check` runs all validation serially. `release:version` prepares Tegami metadata;
+`release:publish` runs the gated version-PR and publication path used on `main`.
+[CONTRIBUTING.md](./CONTRIBUTING.md) covers setup, command contracts, and release behavior.
 
 ## Built with DomainKit
 
