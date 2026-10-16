@@ -1,0 +1,9 @@
+{
+  "extends": "./packages/domainkit/tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["scripts/**/*.mts", "tools/**/*.js", "oxlint.config.ts"]
+}

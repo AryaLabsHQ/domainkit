@@ -6,15 +6,19 @@ otherwise.
 
 ## Development
 
-Use Bun 1.4 and Node.js 24.10 or newer:
+Use the Bun version pinned by the root `packageManager` field and Node.js 24.10 or newer:
 
 ```sh
 bun install --frozen-lockfile
-bun run release:check
+bun run check
 ```
 
-`release:check` runs lint, the lint-rule tests, the format check, and each package's own typecheck,
-tests, build, and packed-consumer suite.
+`check` runs formatting, lint, strict types (including repository automation), and normal tests.
+`build` produces the supported package distributions with tsdown; Vitest runs portable-library tests.
+`test:artifact` builds, packs, installs, and exercises the distributions. `release:check` runs the
+publication gates. `release:version` prepares versions, changelogs, and the lockfile;
+`release:publish` enters the gated Tegami CI version/publication path. The release commands can
+write release metadata or publish; they are not validation commands.
 
 Two more gates cover the documentation:
 

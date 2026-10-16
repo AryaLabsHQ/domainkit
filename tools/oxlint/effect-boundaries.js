@@ -22,10 +22,16 @@ const foreignPromiseFiles = new Set([
   `${coreSource}internal/provider-async.ts`,
 ]);
 
+/** @param {string} filename */
 function relative(filename) {
   return path.relative(repoRoot, filename).replaceAll(path.sep, "/");
 }
 
+/**
+ * @typedef {Extract<Parameters<import("oxlint/plugins-dev").RuleTester["run"]>[1], { create: Function }>} CreateRule
+ * @param {Parameters<NonNullable<ReturnType<CreateRule["create"]>["CallExpression"]>>[0]["callee"]} node
+ * @param {string} property
+ */
 function effectMember(node, property) {
   if (node?.type !== "MemberExpression") return false;
   return (
@@ -36,6 +42,12 @@ function effectMember(node, property) {
   );
 }
 
+/**
+ * @param {string} property
+ * @param {ReadonlySet<string>} allowed
+ * @param {string} message
+ * @returns {CreateRule}
+ */
 function boundaryRule(property, allowed, message) {
   return {
     meta: {
