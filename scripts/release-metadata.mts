@@ -83,6 +83,13 @@ export async function classifyMetadata(base: string, head: string, cwd = process
       }
       equal(after, expected, `${name} manifest`);
     }
+    const currentWorkspaces = object(json(await read(head, "bun.lock")).workspaces);
+    for (const [name, { after, path }] of manifests) {
+      if (!bumped.has(name)) continue;
+      const workspace = path.slice(0, -"/package.json".length);
+      if (object(currentWorkspaces[workspace]).version !== after.version)
+        throw new Error(`Stale lockfile workspace version: ${name}`);
+    }
     const changes = (await git(["diff", "--raw", "--no-abbrev", "--no-renames", base, head], cwd)).trim().split("\n");
     const consumed = new Map<string, string>();
     let hasLock = false, hasChangelog = false;

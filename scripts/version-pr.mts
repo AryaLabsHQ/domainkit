@@ -29,7 +29,7 @@ async function currentPr(number: number) {
 }
 async function inspect(number: number) {
   const state = await currentPr(number);
-  await git(["fetch", "--no-tags", "origin", "main", branch]);
+  await git(["fetch", "--no-tags", "origin", branch]);
   if ((await git(["rev-parse", "FETCH_HEAD"])).trim() !== state.head) throw new Error("Version branch moved during fetch");
   const result = await classifyMetadata(state.base, state.head);
   const fresh = await currentPr(number);

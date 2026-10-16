@@ -7,6 +7,7 @@ import { trustedVersionPr } from "./version-pr.mts";
 
 const release = "a60c360c068366b51f49ff1a19aa51104fc7fc21";
 const base = (await git(["rev-parse", `${release}^`])).trim();
+const baseLock = await git(["show", `${base}:bun.lock`]);
 const root = await mkdtemp(join(tmpdir(), "domainkit-metadata-"));
 afterAll(() => rm(root, { recursive: true, force: true }));
 const paths = (await git(["ls-tree", "-r", "--name-only", base])).trim().split("\n")
@@ -71,6 +72,9 @@ describe("release metadata diff", () => {
     ["rewritten changelog", "packages/domainkit/CHANGELOG.md", () => "## domainkit@0.21.0\nrewritten"],
   ] as const) test(`rejects ${name}`, async () => {
     expect(await candidate(path, edit)).toMatchObject({ metadataOnly: false });
+  });
+  test("rejects omitted workspace lockfile version updates", async () => {
+    expect(await candidate("bun.lock", () => baseLock)).toMatchObject({ metadataOnly: false });
   });
   test("rejects executable metadata", async () => {
     expect(await candidate("packages/react/package.json", (text) => text, "executable")).toMatchObject({ metadataOnly: false });
