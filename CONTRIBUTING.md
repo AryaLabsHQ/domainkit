@@ -15,15 +15,15 @@ bun run check
 
 Run commands from the repository root:
 
-| Command | Contract |
-| --- | --- |
-| `check` | Formatting, lint, strict types, and normal offline tests; no live provider calls. |
-| `build` | Supported JavaScript and declaration distributions, built with tsdown. |
-| `test:artifact` | Build, pack, install, and exercise the published entry points in real consumers. |
-| `docs:check` | Snippet and docs types, reference coverage, browser tests, production build, styled previews, registry install/build, strict links and audit. |
-| `release:check` | `check`, `test:artifact`, and `docs:check`; no versioning or publication. |
-| `release:version` | Prepare package versions, generated changelogs, publish lock, and Bun lockfile. |
-| `release:publish` | Tegami CI: maintain the version PR, or publish the prepared candidate through the full gate. |
+| Command           | Contract                                                                                                                                      |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check`           | Formatting, lint, strict types, and normal offline tests; no live provider calls.                                                             |
+| `build`           | Supported JavaScript and declaration distributions, built with tsdown.                                                                        |
+| `test:artifact`   | Build, pack, install, and exercise the published entry points in real consumers.                                                              |
+| `docs:check`      | Snippet and docs types, reference coverage, browser tests, production build, styled previews, registry install/build, strict links and audit. |
+| `release:check`   | `check`, `test:artifact`, and `docs:check`; no versioning or publication.                                                                     |
+| `release:version` | Prepare package versions, generated changelogs, publish lock, and Bun lockfile.                                                               |
+| `release:publish` | Tegami CI: maintain the version PR, or publish the prepared candidate through the full gate.                                                  |
 
 `check` includes the lint-rule and repository-automation tests, package Vitest suites, snippet
 reader, and docs tooling tests. PostgreSQL tests need Docker and the `postgres:16-alpine` image

@@ -12,13 +12,24 @@ async function fixture(broken: boolean) {
   await mkdir(join(cwd, "dist"));
   await mkdir(join(cwd, ".tegami"));
   await writeFile(join(cwd, "dist/index.mjs"), "export const ready = true;");
-  await writeFile(join(cwd, "package.json"), JSON.stringify({
-    name: "domainkit", version: "1.0.0", type: "module", files: ["dist"],
-    exports: broken ? "./missing.mjs" : "./dist/index.mjs",
-    scripts: { "release:check": "bun check.mjs" },
-  }));
-  await writeFile(join(cwd, ".tegami/publish-lock.yaml"), "core:packages:\n  - id: npm:domainkit\n    updated: true\nnpm:packages:\n  - id: npm:domainkit\n");
-  await writeFile(join(cwd, "check.mjs"), `
+  await writeFile(
+    join(cwd, "package.json"),
+    JSON.stringify({
+      name: "domainkit",
+      version: "1.0.0",
+      type: "module",
+      files: ["dist"],
+      exports: broken ? "./missing.mjs" : "./dist/index.mjs",
+      scripts: { "release:check": "bun check.mjs" },
+    }),
+  );
+  await writeFile(
+    join(cwd, ".tegami/publish-lock.yaml"),
+    "core:packages:\n  - id: npm:domainkit\n    updated: true\nnpm:packages:\n  - id: npm:domainkit\n",
+  );
+  await writeFile(
+    join(cwd, "check.mjs"),
+    `
 import { mkdtemp, writeFile, rm, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -35,24 +46,40 @@ try {
   await run(["install", "--ignore-scripts"], directory);
   await run(["-e", "const { ready } = await import('domainkit'); if (!ready) throw new Error('Invalid artifact');"], directory);
 } finally { await rm(directory, { recursive: true, force: true }); }
-`);
+`,
+  );
   const effects: string[] = [];
   class LocalPublish extends PackagePublishTask {
-    override status() { effects.push("remote-status"); return "pending" as const; }
-    async publish() { await writeFile(marker, "npm"); effects.push("npm"); return { type: "published" as const }; }
+    override status() {
+      effects.push("remote-status");
+      return "pending" as const;
+    }
+    async publish() {
+      await writeFile(marker, "npm");
+      effects.push("npm");
+      return { type: "published" as const };
+    }
   }
   class LocalRelease extends PublishTask {
     name = "tag-and-release";
-    async run() { await writeFile(marker, "npm,tag,release"); effects.push("tag", "release"); }
-    override status() { return "pending" as const; }
+    async run() {
+      await writeFile(marker, "npm,tag,release");
+      effects.push("tag", "release");
+    }
+    override status() {
+      return "pending" as const;
+    }
   }
   const boundary: TegamiPlugin = {
     name: "local-remote-boundary",
-    publishPreflight() { return { shouldPublish: true }; },
+    publishPreflight() {
+      return { shouldPublish: true };
+    },
     publishTasks() {
       const pkg = this.graph.get("npm:domainkit");
       if (!pkg) throw new Error("Missing fixture package");
-      const publish = new LocalPublish(pkg), release = new LocalRelease();
+      const publish = new LocalPublish(pkg),
+        release = new LocalRelease();
       release.wait.push(publish);
       return [publish, release];
     },
@@ -69,7 +96,9 @@ test("broken installed exports block npm/tag/release tasks and remote status", a
     await expect(paper.publish()).rejects.toThrow("DomainKit release gate failed");
     expect(effects).toEqual([]);
     expect(await Bun.file(marker).exists()).toBe(false);
-  } finally { await rm(cwd, { recursive: true, force: true }); }
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
 }, 20_000);
 
 test("valid installed artifact permits downstream local publication tasks", async () => {
@@ -78,7 +107,9 @@ test("valid installed artifact permits downstream local publication tasks", asyn
     await paper.publish();
     expect(await readFile(marker, "utf8")).toBe("npm,tag,release");
     expect(effects).toEqual(["remote-status", "npm", "tag", "release"]);
-  } finally { await rm(cwd, { recursive: true, force: true }); }
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
 }, 20_000);
 
 test("status and dry-run also invoke the artifact gate", async () => {
@@ -87,5 +118,7 @@ test("status and dry-run also invoke the artifact gate", async () => {
     await expect(paper.getPublishStatus()).rejects.toThrow("DomainKit release gate failed");
     await expect(paper.publish({ dryRun: true })).rejects.toThrow("DomainKit release gate failed");
     expect(effects).toEqual([]);
-  } finally { await rm(cwd, { recursive: true, force: true }); }
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
 }, 20_000);

@@ -29,11 +29,15 @@ const lockfileSync = (): TegamiPlugin => ({
     });
     if ((await install.exited) !== 0) throw new Error("bun.lock refresh failed");
 
-    const manifests = new Map(await Promise.all(this.graph.getPackages().map(async (pkg) => {
-      const workspace = path.relative(this.cwd, pkg.path).split(path.sep).join("/");
-      const manifest: unknown = await Bun.file(path.join(pkg.path, "package.json")).json();
-      return [workspace, object(manifest)] as const;
-    })));
+    const manifests = new Map(
+      await Promise.all(
+        this.graph.getPackages().map(async (pkg) => {
+          const workspace = path.relative(this.cwd, pkg.path).split(path.sep).join("/");
+          const manifest: unknown = await Bun.file(path.join(pkg.path, "package.json")).json();
+          return [workspace, object(manifest)] as const;
+        }),
+      ),
+    );
     const file = Bun.file(path.join(this.cwd, "bun.lock"));
     await Bun.write(file, syncWorkspaceLock(await file.text(), manifests));
     console.log("bun.lock carries current workspace versions and dependency ranges");
