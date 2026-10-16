@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { parse as parseJsonc, type ParseError } from "jsonc-parser";
-import { gt, satisfies, valid } from "semver";
+import { gt, satisfies, valid, validRange } from "semver";
 import { parse as parseYaml } from "yaml";
 
 const publicPackages = new Set(["domainkit", "@domainkit/react", "@domainkit/capsuledb"]);
@@ -81,9 +81,19 @@ export async function classifyMetadata(base: string, head: string, cwd = process
       const expected = structuredClone(before);
       if (bumped.has(name)) expected.version = bumped.get(name);
       for (const field of dependencyFields) {
+        const newDeps = after[field] === undefined ? {} : object(after[field]);
+        for (const [dep, value] of Object.entries(newDeps)) {
+          const version = bumped.get(dep);
+          if (!version) continue;
+          const spec = string(value);
+          const workspace = spec.startsWith("workspace:");
+          const range = workspace ? spec.slice("workspace:".length) : spec;
+          if (workspace && ["*", "^", "~"].includes(range)) continue;
+          if (!range.trim() || validRange(range) === null || !satisfies(version, range))
+            throw new Error(`Incompatible internal range: ${name}/${dep}`);
+        }
         if (isDeepStrictEqual(before[field], after[field])) continue;
-        const oldDeps = object(before[field]),
-          newDeps = object(after[field]);
+        const oldDeps = object(before[field]);
         const expectedDeps = { ...oldDeps };
         for (const dep of Object.keys(newDeps)) {
           if (oldDeps[dep] === newDeps[dep]) continue;

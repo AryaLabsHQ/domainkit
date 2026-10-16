@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { classifyMetadata, git, object } from "./release-metadata.mts";
-import { parse } from "jsonc-parser";
+import { applyEdits, modify, parse } from "jsonc-parser";
 import { trustedVersionPr } from "./version-pr.mts";
 
 import {
@@ -25,6 +25,22 @@ async function candidate(path: string, edit: (source: string) => string, mode?: 
   } finally {
     await rm(fixture.cwd, { recursive: true, force: true });
   }
+}
+async function reactRange(directory: string, range: string) {
+  await Promise.all(([
+    ["packages/react/package.json", ["dependencies", "domainkit"]],
+    ["bun.lock", ["workspaces", "packages/react", "dependencies", "domainkit"]],
+  ] as const).map(async ([path, keys]) => {
+    const file = Bun.file(join(directory, path));
+    const source = await file.text();
+    await Bun.write(file, applyEdits(source, modify(source, [...keys], range, {})));
+  }));
+}
+async function matchingReactRange(range: string) {
+  const edit = (directory: string) => reactRange(directory, range);
+  const fixture = await releaseFixture(edit, edit);
+  try { return await classifyMetadata(fixture.base, fixture.head, fixture.cwd); }
+  finally { await rm(fixture.cwd, { recursive: true, force: true }); }
 }
 function manifest(field: string, value: unknown) {
   return (source: string) => JSON.stringify({ ...object(JSON.parse(source)), [field]: value });
@@ -59,6 +75,19 @@ describe("release metadata diff", () => {
       reason: expect.stringContaining("Stale lockfile workspace range"),
     });
   });
+  test("rejects incompatible matching React manifest and lock ranges", async () => {
+    expect(await matchingReactRange("workspace:^0.20.0")).toMatchObject({
+      metadataOnly: false, reason: expect.stringContaining("Incompatible internal range"),
+    });
+  });
+  for (const range of ["workspace:*", "workspace:^", "workspace:~", "workspace:>=0.20.0 <0.22.0", ">=0.20.0 <0.22.0"])
+    test(`accepts compatible unchanged internal range ${range}`, async () => {
+      expect(await matchingReactRange(range)).toMatchObject({ metadataOnly: true });
+    });
+  for (const range of ["workspace:", "workspace:invalid", "workspace:../domainkit", "file:../domainkit"])
+    test(`rejects unsupported unchanged internal range ${range}`, async () => {
+      expect(await matchingReactRange(range)).toMatchObject({ metadataOnly: false });
+    });
   for (const [name, path, edit] of [
     ["source", "packages/domainkit/src/index.ts", () => "throw new Error('changed');"],
     ["exports", "packages/domainkit/package.json", manifest("exports", { ".": "./arbitrary.mjs" })],

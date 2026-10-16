@@ -46,7 +46,10 @@ async function snapshot(ref: string, directory: string) {
   );
 }
 /** Disposable Git fixture, never the repository's real index/config/hooks or an implementation worktree. */
-export async function releaseFixture(edit: (cwd: string) => Promise<void> = async () => {}) {
+export async function releaseFixture(
+  edit: (cwd: string) => Promise<void> = async () => {},
+  editBase: (cwd: string) => Promise<void> = async () => {},
+) {
   const cwd = await mkdtemp(join(tmpdir(), "domainkit-release-metadata-"));
   try {
     await git(["init", "-q"], cwd);
@@ -61,6 +64,7 @@ export async function releaseFixture(edit: (cwd: string) => Promise<void> = asyn
       return (await git(["rev-parse", "HEAD"], cwd)).trim();
     }
     await snapshot(historicalBase, cwd);
+    await editBase(cwd);
     const base = await commit();
     await snapshot(historicalRelease, cwd);
     await writeFile(join(cwd, "bun.lock"), correctedLock);
