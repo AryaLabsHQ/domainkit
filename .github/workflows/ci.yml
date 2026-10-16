@@ -30,19 +30,19 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version-file: package.json
 
       - name: Restore Bun package cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-1.4.2-${{ hashFiles('bun.lock') }}
+          key: bun-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lock') }}
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Validate package
-        run: bun run release:check
+        run: bun run check && bun run test:artifact
 
   docs:
     runs-on: ubuntu-24.04
@@ -62,52 +62,20 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version-file: package.json
 
       - name: Restore Bun package cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-1.4.2-${{ hashFiles('bun.lock') }}
+          key: bun-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lock') }}
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
-      # Builds every package first, so the gallery and the docs app resolve the shipped types.
-      - name: Typecheck the snippet gallery
-        run: bun run typecheck:examples
-
-      - name: Check reference coverage
-        run: bun run --filter @domainkit/docs reference:check
-
-      - name: Typecheck the docs app
-        run: bun run --filter @domainkit/docs typecheck
 
       - name: Install the Playwright browser and system dependencies
         run: bun run test:browser:install --with-deps
         working-directory: apps/docs
 
-      - name: Check the tooling, snippet reader, and component previews
-        run: bun run --filter @domainkit/docs test
-
-      - name: Build the docs site
-        run: bun run --filter @domainkit/docs build
-
-      - name: Check the styled previews in the built site
-        run: bun run --filter @domainkit/docs test:styled
-
-      - name: Validate the registry manifest
-        run: bun run --filter @domainkit/docs registry:validate
-
-      # Installs every item into a scratch shadcn project and compiles it, so a broken item cannot
-      # reach the published registry.
-      - name: Check the registry consumers
-        run: bun run --filter @domainkit/docs registry:check
-
-      - name: Validate links
-        run: ./node_modules/.bin/blume validate --strict
-        working-directory: apps/docs
-
-      - name: Audit the built site
-        run: ./node_modules/.bin/blume audit --strict
-        working-directory: apps/docs
+      - name: Validate documentation and registry
+        run: bun run docs:check

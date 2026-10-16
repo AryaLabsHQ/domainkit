@@ -22,6 +22,7 @@
     "check": "blume check",
     "deploy": "bun run build && wrangler deploy",
     "dev": "blume dev",
+    "docs:check": "bun run reference:check && bun run typecheck && bun run test && bun run build && bun run test:styled && bun run registry:validate && bun run registry:check && blume validate --strict && blume audit --strict",
     "preview": "blume preview",
     "reference:check": "bun scripts/check-reference.mts",
     "registry:build": "shadcn build registry.json --output public/r",

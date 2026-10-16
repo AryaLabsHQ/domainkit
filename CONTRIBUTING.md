@@ -6,22 +6,25 @@ otherwise.
 
 ## Development
 
-Use Bun 1.4 and Node.js 24.10 or newer:
+Use the Bun version pinned in root `package.json` (1.4.2) and Node.js 24.10 or newer:
 
 ```sh
 bun install --frozen-lockfile
-bun run release:check
+bun run check
 ```
 
-`release:check` runs lint, the lint-rule tests, the format check, and each package's own typecheck,
-tests, build, and packed-consumer suite.
+| Command           | Contract                                                                                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check`           | Format, lint, lint-rule tests, automation and package types, core examples, and offline package tests, including local Worker and PostgreSQL coverage.                    |
+| `build`           | Build the supported tsdown package distributables and core declarations.                                                                                                  |
+| `test:artifact`   | Build packages, then test packed installed consumers, including Node, Bun, workerd, Vite, and Next. Package downloads require network access.                             |
+| `docs:check`      | Typecheck the snippet gallery and docs; run tooling, snippet, browser, and styled tests; build the site; validate and install the registry; check strict links and audit. |
+| `release:check`   | Run `check`, `test:artifact`, and `docs:check` serially. Requires the browser setup below, local Docker for PostgreSQL, and registry network access.                      |
+| `release:version` | Prepare Tegami version metadata and refresh the lockfile; changes package versions and release files.                                                                     |
+| `release:publish` | Run Tegami CI: prepare the version PR or publish pending packages through the release gate.                                                                               |
 
-Two more gates cover the documentation:
-
-```sh
-bun run typecheck:examples
-cd apps/docs && bun run reference:check && bunx blume validate --strict && bun run audit --strict && bun run build
-```
+The normal tests use recorded provider responses and local runtimes; they do not call live provider
+accounts. PostgreSQL tests need a working Docker daemon and the `postgres:16-alpine` image.
 
 Add focused tests for observable behaviour, document exported APIs, and keep a pull request to one
 coherent change. A change to the public contract says so in its description.
@@ -91,6 +94,22 @@ and `DOMAINKIT_LIVE_VERCEL_TEAM_ID`. Keep credentials in a local secret manager 
 environment; never commit them.
 
 Point the harness at a zone you own and can inspect. It writes real DNS records.
+
+## Releases
+
+Add release notes with `bun run tegami add`. `release:version` is a metadata preparation command,
+not a validation command. Review its manifest, changelog, publish-lock, and Bun lockfile changes.
+
+The serialized Publish workflow runs `release:publish` on every push to `main`. Pending release
+notes produce a Tegami version PR; code PRs and version PRs follow the same full CI checks. After
+version metadata lands on `main`, Tegami preflights the pending packages and runs `release:check`
+at that checkout before any package publication. A failed gate aborts publication. Packages already
+published are skipped on retry; a remaining package still passes the gate. Publication uses the
+existing npm trusted-publishing workflow, then creates package tags and GitHub releases.
+
+Do not run `release:publish`, `tegami publish`, status, or dry-run commands as routine validation:
+Tegami preflights can invoke the full gate, and publication commands can write to npm and GitHub.
+Use `release:check` to validate without publishing.
 
 ## Compatibility
 

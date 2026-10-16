@@ -5,6 +5,8 @@ import { runCli } from "tegami/cli";
 import { github } from "tegami/plugins/github";
 import path from "node:path";
 
+import { releaseChecks } from "./release-checks.mts";
+
 import rootPackage from "../packages/domainkit/package.json" with { type: "json" };
 
 const CORE_PACKAGE_ID = "npm:domainkit";
@@ -13,24 +15,6 @@ const CAPSULEDB_PACKAGE_ID = "npm:@domainkit/capsuledb";
 const REPOSITORY = "AryaLabsHQ/domainkit";
 
 if (rootPackage.name !== "domainkit") throw new Error("Unexpected release package");
-
-const releaseChecks = (): TegamiPlugin => ({
-  name: "domainkit-release-checks",
-  enforce: "pre",
-  async afterPreflight({ plan }) {
-    const shouldPublish = [CORE_PACKAGE_ID, REACT_PACKAGE_ID, CAPSULEDB_PACKAGE_ID].some(
-      (packageId) => plan.packages.get(packageId)?.preflight?.shouldPublish === true,
-    );
-    if (!shouldPublish) return;
-
-    const child = Bun.spawn(["bun", "run", "release:check"], {
-      cwd: this.cwd,
-      stderr: "inherit",
-      stdout: "inherit",
-    });
-    if ((await child.exited) !== 0) throw new Error("DomainKit release gate failed");
-  },
-});
 
 /**
  * The version commit is `git add -A` over the working tree, so the lockfile has to carry the bumped

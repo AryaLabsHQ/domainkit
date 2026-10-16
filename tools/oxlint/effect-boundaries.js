@@ -22,20 +22,17 @@ const foreignPromiseFiles = new Set([
   `${coreSource}internal/provider-async.ts`,
 ]);
 
+/** @param {string} filename */
 function relative(filename) {
   return path.relative(repoRoot, filename).replaceAll(path.sep, "/");
 }
 
-function effectMember(node, property) {
-  if (node?.type !== "MemberExpression") return false;
-  return (
-    node.object?.type === "Identifier" &&
-    node.object.name === "Effect" &&
-    ((node.property?.type === "Identifier" && node.property.name === property) ||
-      (node.computed && node.property?.type === "Literal" && node.property.value === property))
-  );
-}
-
+/**
+ * @param {string} property
+ * @param {Set<string>} allowed
+ * @param {string} message
+ * @returns {Parameters<import("oxlint/plugins-dev").RuleTester["run"]>[1]}
+ */
 function boundaryRule(property, allowed, message) {
   return {
     meta: {
@@ -48,7 +45,16 @@ function boundaryRule(property, allowed, message) {
       if (allowed.has(filename)) return {};
       return {
         CallExpression(node) {
-          if (effectMember(node.callee, property)) {
+          const member = node.callee;
+          if (
+            member.type === "MemberExpression" &&
+            member.object.type === "Identifier" &&
+            member.object.name === "Effect" &&
+            ((member.property.type === "Identifier" && member.property.name === property) ||
+              (member.computed &&
+                member.property.type === "Literal" &&
+                member.property.value === property))
+          ) {
             context.report({ node: node.callee, message });
           }
         },
