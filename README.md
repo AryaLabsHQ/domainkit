@@ -42,12 +42,13 @@ Samva sets up customer domains with DomainKit. Read
 
 ## Development
 
-Use Bun 1.4 and Node.js 24.10 or newer:
+Use the root `packageManager` Bun pin and Node.js 24.10 or newer:
 
 ```sh
 bun install --frozen-lockfile
-bun run release:check
-bun run typecheck:examples
+bun run check
+bun run test:artifact
+bun run docs:check
 ```
 
 [CONTRIBUTING.md](./CONTRIBUTING.md) covers the live provider harness and the release path.

@@ -9,6 +9,13 @@ concurrency:
   group: publish
   cancel-in-progress: false
 
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  ASTRO_TELEMETRY_DISABLED: "1"
+  WRANGLER_SEND_METRICS: "false"
+
+permissions: {}
+
 jobs:
   publish:
     name: Version and publish
@@ -44,7 +51,32 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install the Playwright browser and system dependencies
+        run: bun run test:browser:install --with-deps
+        working-directory: apps/docs
+
       - name: Version and publish
         run: bun run release:publish
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+  dispatch-version-checks:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: Dispatch trusted version metadata checks
+        run: bun scripts/version-pr.mts dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}

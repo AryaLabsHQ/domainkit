@@ -13,19 +13,26 @@ bun install --frozen-lockfile
 bun run check
 ```
 
-`check` runs formatting, lint, strict types (including repository automation), and normal tests.
-`build` produces the supported package distributions with tsdown; Vitest runs portable-library tests.
-`test:artifact` builds, packs, installs, and exercises the distributions. `release:check` runs the
-publication gates. `release:version` prepares versions, changelogs, and the lockfile;
-`release:publish` enters the gated Tegami CI version/publication path. The release commands can
-write release metadata or publish; they are not validation commands.
+Run commands from the repository root:
 
-Two more gates cover the documentation:
+| Command | Contract |
+| --- | --- |
+| `check` | Formatting, lint, strict types, and normal offline tests; no live provider calls. |
+| `build` | Supported JavaScript and declaration distributions, built with tsdown. |
+| `test:artifact` | Build, pack, install, and exercise the published entry points in real consumers. |
+| `docs:check` | Snippet and docs types, reference coverage, browser tests, production build, styled previews, registry install/build, strict links and audit. |
+| `release:check` | `check`, `test:artifact`, and `docs:check`; no versioning or publication. |
+| `release:version` | Prepare package versions, generated changelogs, publish lock, and Bun lockfile. |
+| `release:publish` | Tegami CI: maintain the version PR, or publish the prepared candidate through the full gate. |
 
-```sh
-bun run typecheck:examples
-cd apps/docs && bun run reference:check && bunx blume validate --strict && bun run audit --strict && bun run build
-```
+`check` includes the lint-rule and repository-automation tests, package Vitest suites, snippet
+reader, and docs tooling tests. PostgreSQL tests need Docker and the `postgres:16-alpine` image
+available locally. Artifact and registry consumers install dependencies; `test:artifact` and
+`docs:check` need network access. Keep those separate from the normal offline gate.
+
+The root Bun pin is the single CI input. Strict repository automation uses TypeScript 6.0.3,
+which retains the compiler API needed by docs tooling; package builds and checks retain TypeScript
+7.0.2. Tool versions and configurations are maintained locally, with no shared preset dependency.
 
 Add focused tests for observable behaviour, document exported APIs, and keep a pull request to one
 coherent change. A change to the public contract says so in its description.
@@ -73,6 +80,52 @@ requirements. The shadcn registry and transitive npm dependencies remain externa
 snapshot. Package downloads and `https://ui.shadcn.com` must be reachable. A proxy or network denial
 is a blocked check, not a passing result. Run the full check in an authorized environment or use
 the PR's CI result when local policy prevents it.
+
+## Release lifecycle
+
+The serialized `publish.yml` workflow runs on every `main` push. Tegami maintains an open
+`tegami/version-packages` PR from consumed `.tegami/*.md` release notes. Merging a prepared version
+PR enables automatic publication; merging this tooling PR can also retry any prepared unpublished
+version already pending on `main`.
+
+```text
+main push -> prepare/update version PR
+version PR merge or fix-forward merge -> actual candidate SHA
+  -> Tegami afterPreflight -> release:check
+  -> package publication -> tags and GitHub releases
+```
+
+The local `afterPreflight` hook fails closed before publication tasks. Tegami 1.5 also runs this
+hook for publish-status and dry-run operations. Its `shouldPublish` flag means an eligible versioned
+non-private package, not proof that npm lacks that version. The gate can therefore run more than
+once. Do not use `release:version`, `release:publish`, publish-status, or a dry-run as a pure local
+validation command. Use `release:check` for validation, after installing the managed browser.
+
+A failed gate leaves a prepared version unpublished. Repair it in a reviewed fix-forward PR;
+the next merge can retry the same prepared version only after the full gate passes at that new
+candidate SHA. Published versions are immutable. Partial multi-package publication, or publication
+followed by a tag/release failure, needs registry/tag reconciliation and a scoped recovery decision;
+never blindly republish or retag.
+
+### Generated version PR checks
+
+Only an open, same-repository PR authored by `github-actions[bot]` on
+`tegami/version-packages`, containing the current `main` and matching its fresh API base/head, can
+use metadata-only validation. The classifier permits genuine synchronized package versions,
+corresponding internal workspace ranges and Bun lock entries, generated changelog additions,
+consumed release notes, and the generated publish lock. Source, exports, executable files, scripts,
+external dependencies, workflows, policy, and arbitrary `.tegami` changes require normal CI.
+
+CI retains the required `validate` and `docs` job names. On this narrow route they report metadata
+validation; they do not claim the full package/docs suites ran. Publication still requires the
+full gate against the actual candidate. A separate job has only `actions:write` plus read access
+to dispatch checks for the current open version PR; it has no npm OIDC or publication permissions.
+The classifier runs from the trusted base and never executes the candidate tree.
+
+**Dispatch acceptance is provisional.** A separately authorized post-merge check must confirm that
+a real generated version PR's dispatched `validate`/`docs` statuses satisfy the ruleset. Until
+that readback succeeds, retain GitHub's manual workflow approval/rerun path when checks do not
+attach. No PAT, App, bypass, or ruleset weakening is part of this workflow.
 
 ## Live provider conformance
 

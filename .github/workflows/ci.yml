@@ -2,6 +2,17 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Open Tegami version PR number
+        required: true
+      head:
+        description: Exact current version PR head
+        required: true
+      base:
+        description: Exact current main head
+        required: true
   merge_group:
   push:
     branches:
@@ -11,103 +22,138 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  ASTRO_TELEMETRY_DISABLED: "1"
+  WRANGLER_SEND_METRICS: "false"
+
 permissions:
   contents: read
 
 jobs:
+  route:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      metadata: ${{ steps.route.outputs.metadata }}
+    steps:
+      # Classify with code and dependencies from the trusted base, never the candidate tree.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || 'main' }}
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - name: Classify release metadata
+        id: route
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ] && [ "$GITHUB_EVENT_NAME" != workflow_dispatch ]; then
+            echo "metadata=false" >> "$GITHUB_OUTPUT"
+          elif [ -f scripts/version-pr.mts ]; then
+            bun install --frozen-lockfile
+            bun scripts/version-pr.mts classify
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo "Metadata route is not installed on the base" >&2
+            exit 1
+          else
+            echo "metadata=false" >> "$GITHUB_OUTPUT"
+          fi
+
   validate:
+    needs: route
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Require successful routing
+        env:
+          ROUTE_RESULT: ${{ needs.route.result }}
+        run: test "$ROUTE_RESULT" = success
+      - name: Accept validated release metadata
+        if: needs.route.outputs.metadata == 'true'
+        run: echo "Generated metadata validated. Full release gates run at the publication candidate SHA."
       - name: Check out repository
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.0
 
       - name: Set up Bun
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
       - name: Restore Bun package cache
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lock') }}
 
       - name: Install dependencies
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         run: bun install --frozen-lockfile
 
       - name: Validate package
-        run: bun run release:check
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
+        run: bun run check && bun run test:artifact
 
   docs:
+    needs: route
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      - name: Require successful routing
+        env:
+          ROUTE_RESULT: ${{ needs.route.result }}
+        run: test "$ROUTE_RESULT" = success
+      - name: Accept validated release metadata
+        if: needs.route.outputs.metadata == 'true'
+        run: echo "Generated metadata validated. Full release gates run at the publication candidate SHA."
       - name: Check out repository
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Page modification dates come from git history.
           fetch-depth: 0
 
       - name: Set up Node.js
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.0
 
       - name: Set up Bun
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
       - name: Restore Bun package cache
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lock') }}
 
       - name: Install dependencies
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         run: bun install --frozen-lockfile
 
-      # Builds every package first, so the gallery and the docs app resolve the shipped types.
-      - name: Typecheck the snippet gallery
-        run: bun run typecheck:examples
-
-      - name: Check reference coverage
-        run: bun run --filter @domainkit/docs reference:check
-
-      - name: Typecheck the docs app
-        run: bun run --filter @domainkit/docs typecheck
-
       - name: Install the Playwright browser and system dependencies
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
         run: bun run test:browser:install --with-deps
         working-directory: apps/docs
 
-      - name: Check the tooling, snippet reader, and component previews
-        run: bun run --filter @domainkit/docs test
-
-      - name: Build the docs site
-        run: bun run --filter @domainkit/docs build
-
-      - name: Check the styled previews in the built site
-        run: bun run --filter @domainkit/docs test:styled
-
-      - name: Validate the registry manifest
-        run: bun run --filter @domainkit/docs registry:validate
-
-      # Installs every item into a scratch shadcn project and compiles it, so a broken item cannot
-      # reach the published registry.
-      - name: Check the registry consumers
-        run: bun run --filter @domainkit/docs registry:check
-
-      - name: Validate links
-        run: ./node_modules/.bin/blume validate --strict
-        working-directory: apps/docs
-
-      - name: Audit the built site
-        run: ./node_modules/.bin/blume audit --strict
-        working-directory: apps/docs
+      - name: Validate documentation and registry consumers
+        if: needs.route.outputs.metadata != 'true' && github.event_name != 'workflow_dispatch'
+        run: bun run docs:check

@@ -33,7 +33,8 @@
     "test:snippets": "bun scripts/test-snippets.mts",
     "test:styled": "playwright test -c playwright.styled.config.ts",
     "test:tooling": "bun scripts/test-tooling.mts",
-    "typecheck": "blume check"
+    "typecheck": "blume check",
+    "check:site": "bun run reference:check && bun run typecheck && bun run test && bun run build && bun run test:styled && bun run registry:validate && bun run registry:check && blume validate --strict && blume audit --strict"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
