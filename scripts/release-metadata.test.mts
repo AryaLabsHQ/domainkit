@@ -27,20 +27,27 @@ async function candidate(path: string, edit: (source: string) => string, mode?: 
   }
 }
 async function reactRange(directory: string, range: string) {
-  await Promise.all(([
-    ["packages/react/package.json", ["dependencies", "domainkit"]],
-    ["bun.lock", ["workspaces", "packages/react", "dependencies", "domainkit"]],
-  ] as const).map(async ([path, keys]) => {
-    const file = Bun.file(join(directory, path));
-    const source = await file.text();
-    await Bun.write(file, applyEdits(source, modify(source, [...keys], range, {})));
-  }));
+  await Promise.all(
+    (
+      [
+        ["packages/react/package.json", ["dependencies", "domainkit"]],
+        ["bun.lock", ["workspaces", "packages/react", "dependencies", "domainkit"]],
+      ] as const
+    ).map(async ([path, keys]) => {
+      const file = Bun.file(join(directory, path));
+      const source = await file.text();
+      await Bun.write(file, applyEdits(source, modify(source, [...keys], range, {})));
+    }),
+  );
 }
 async function matchingReactRange(range: string) {
   const edit = (directory: string) => reactRange(directory, range);
   const fixture = await releaseFixture(edit, edit);
-  try { return await classifyMetadata(fixture.base, fixture.head, fixture.cwd); }
-  finally { await rm(fixture.cwd, { recursive: true, force: true }); }
+  try {
+    return await classifyMetadata(fixture.base, fixture.head, fixture.cwd);
+  } finally {
+    await rm(fixture.cwd, { recursive: true, force: true });
+  }
 }
 function manifest(field: string, value: unknown) {
   return (source: string) => JSON.stringify({ ...object(JSON.parse(source)), [field]: value });
@@ -77,14 +84,26 @@ describe("release metadata diff", () => {
   });
   test("rejects incompatible matching React manifest and lock ranges", async () => {
     expect(await matchingReactRange("workspace:^0.20.0")).toMatchObject({
-      metadataOnly: false, reason: expect.stringContaining("Incompatible internal range"),
+      metadataOnly: false,
+      reason: expect.stringContaining("Incompatible internal range"),
     });
   });
-  for (const range of ["workspace:*", "workspace:^", "workspace:~", "workspace:>=0.20.0 <0.22.0", ">=0.20.0 <0.22.0"])
+  for (const range of [
+    "workspace:*",
+    "workspace:^",
+    "workspace:~",
+    "workspace:>=0.20.0 <0.22.0",
+    ">=0.20.0 <0.22.0",
+  ])
     test(`accepts compatible unchanged internal range ${range}`, async () => {
       expect(await matchingReactRange(range)).toMatchObject({ metadataOnly: true });
     });
-  for (const range of ["workspace:", "workspace:invalid", "workspace:../domainkit", "file:../domainkit"])
+  for (const range of [
+    "workspace:",
+    "workspace:invalid",
+    "workspace:../domainkit",
+    "file:../domainkit",
+  ])
     test(`rejects unsupported unchanged internal range ${range}`, async () => {
       expect(await matchingReactRange(range)).toMatchObject({ metadataOnly: false });
     });
