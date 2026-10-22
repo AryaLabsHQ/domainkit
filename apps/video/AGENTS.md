@@ -57,14 +57,18 @@ bun run frames
 bun run copy:audit
 ```
 
-`bun run render` writes `renders/hero.mp4` and the eight PNGs in `renders/stills/`.
+`bun run render` writes `../docs/public/launch/hero.mp4` and the eight infographic PNGs directly
+in `../docs/public/launch/`. `bun run stills` exports the infographic PNGs, `home-og.png`
+(1200×630), `github-social-preview.png` (1280×640), and the 1920×1080 `hero-poster.jpg` from
+the existing film's settled reveal at 14 seconds. Social cards use the `social` scene and the
+same compositor, brand mark, fonts, and Field Manual tokens as the film.
 `bun run music --generate` explicitly generates the bed with ElevenLabs Music on FAL, using the prompt in
 `SCRIPT.md`. Paid generation is music only and stays below the approved $5 total budget.
 
 Inspect each beat from the finished movie:
 
 ```sh
-ffmpeg -ss 12 -i renders/hero.mp4 -frames:v 1 /tmp/domainkit-reveal.png
+ffmpeg -ss 14 -i ../docs/public/launch/hero.mp4 -frames:v 1 /tmp/domainkit-reveal.png
 ```
 
 Source and final deliverables are tracked; `.build`, generated project assets, `.env`, and raw

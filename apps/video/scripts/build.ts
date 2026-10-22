@@ -57,7 +57,7 @@ if (values.scene !== undefined) {
 } else {
   await project(hero, launchDir);
   await Promise.all(
-    stillIds.map((id) =>
+    [...stillIds, "social"].map((id) =>
       project(
         {
           id: `still-${id}`,

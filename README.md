@@ -9,13 +9,21 @@ through their own Cloudflare or Vercel account. Docs, guides, and components are
 [domain-kit.dev](https://domain-kit.dev), and you can ask questions about the code on
 [DeepWiki](https://deepwiki.com/AryaLabsHQ/domainkit).
 
+[![Watch the DomainKit intro: custom domains for your SaaS, without the DNS instructions.](./apps/docs/public/launch/hero-poster.jpg)](https://domain-kit.dev/#film)
+
+[Watch the 60-second intro](https://domain-kit.dev/#film).
+
 DomainKit turns your product's DNS requirements into a plan a customer can review, applies only the
 plan digest they approved, keeps a receipt of every write, and plans cleanup from that receipt.
 Cloudflare and Vercel are built in, and a provider is one declarative value.
 
+![Domain setup from provider connection through a reviewed plan, approval, apply receipt, DNS checks, and separately approved cleanup.](./apps/docs/public/launch/lifecycle-1920x1080.png)
+
 Plans are additive and fail closed: missing records are created, exact records are no-ops, and
 incompatible state is a conflict rather than an overwrite. `DnsRecord.spf` declares an SPF record
 that coexists with unrelated TXT and conflicts with a different or duplicate SPF record.
+
+![Plan semantics: a missing record is Create, an exact match is Noop, and incompatible state is Conflict, which blocks apply.](./apps/docs/public/launch/semantics-1920x1080.png)
 
 Your app keeps identity, tenancy, credentials, storage, routes, consent, and audit. DomainKit
 supplies the lifecycle, not a hosted control plane.

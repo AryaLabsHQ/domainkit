@@ -29,6 +29,12 @@ Claims follow `.agents/marketing/truth.md`, `positioning.md`, and `voice.md`.
 Each still uses the film’s React markup and paused GSAP scene system. Export at 1920×1080 and
 1200×630, preserving the full canvas on Field Manual paper.
 
+The film and stills live in `apps/docs/public/launch/`: `hero.mp4`, `hero-poster.jpg`, and
+`{lifecycle,semantics,comparison,host-boundary}-{1920x1080,1200x630}.png`. The poster is the
+settled reveal at 14 seconds, extracted from the film. The `social` scene exports `home-og.png`
+at 1200×630 and `github-social-preview.png` at 1280×640. Both carry the approved mark and
+wordmark, **Custom domains for your SaaS, without the DNS instructions.**, and **domain-kit.dev**.
+
 | Still            | On-screen story                                                                                                                                                                                                                                                                   |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Lifecycle        | Connect → Discover zone → Plan → Approve digest → Apply → Receipt → Observe DNS → Clean up. Cleanup reads **Separately approved. Bound to the receipt.**                                                                                                                          |

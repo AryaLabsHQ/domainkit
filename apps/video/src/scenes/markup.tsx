@@ -10,6 +10,7 @@ import { lifecycle } from "./lifecycle/markup";
 import { plan } from "./plan/markup";
 import { reveal } from "./reveal/markup";
 import { semantics } from "./semantics/markup";
+import { social } from "./social/markup";
 import { verify } from "./verify/markup";
 
 /** Build-time entry: every scene's markup, keyed by scene id. `motion.ts` holds their motion. */
@@ -24,6 +25,7 @@ export const markups: Record<string, SceneMarkup> = {
   cta,
   lifecycle,
   semantics,
+  social,
   comparison,
   "host-boundary": hostBoundary,
 };

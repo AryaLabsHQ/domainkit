@@ -77,6 +77,9 @@ const faqs: {
   logo={config.logo}
   navigation={data.navigation}
   ogEnabled={config.og.enabled}
+  ogImage="/launch/home-og.png"
+  ogImageAlt="DomainKit: custom domains for your SaaS, without the DNS instructions."
+  ogImageSize={{ width: 1200, height: 630 }}
   page={{ description: pageDescription, route: "/", title: pageTitle }}
   searchEnabled={config.search.enabled}
   site={{ description: config.description, title: config.title }}
@@ -142,6 +145,58 @@ const faqs: {
           </p>
         </div>
       </div>
+    </section>
+
+    <section class="block film" id="film" aria-labelledby="film-title">
+      <p class="label">[ Film · 60 seconds ]</p>
+      <h2 id="film-title">See how your customer connects a domain.</h2>
+      <figure>
+        <video
+          controls
+          preload="metadata"
+          playsinline
+          poster="/launch/hero-poster.jpg"
+          width="1920"
+          height="1080"
+          aria-label="DomainKit: a 60-second introduction to custom-domain setup"
+          aria-describedby="film-caption"
+        >
+          <source src="/launch/hero.mp4" type="video/mp4" />
+          <a href="/launch/hero.mp4">Download the DomainKit intro film</a>
+        </video>
+        <figcaption id="film-caption">
+          Connect a provider, review the exact records, and approve the plan. Follow the receipt
+          and public-DNS checks, with credentials kept in your app.
+        </figcaption>
+      </figure>
+      <details class="film-transcript">
+        <summary>Read the film transcript</summary>
+        <div class="film-transcript-copy">
+          <p>
+            A customer copies DNS records between an app and their DNS provider, then waits for
+            them to update. DomainKit replaces those instructions with domain setup in your app.
+          </p>
+          <p>
+            The customer connects their own Cloudflare or Vercel account. Your app keeps the
+            provider credentials. A plan shows every record: Noop for an exact match, Create for
+            a missing record, or Conflict for incompatible state. A conflict blocks apply. The
+            customer fixes the conflicting records at their provider and checks again, producing
+            a new plan with a new digest.
+          </p>
+          <p>
+            The customer approves the exact plan digest. DomainKit applies only that approved
+            plan and returns a receipt of what the attempt completed. The DNS status table shows
+            provider evidence and public-DNS evidence separately, then reports the records
+            verified in public DNS.
+          </p>
+          <p>
+            DomainKit runs in your app. Your app keeps credentials, persistence, identity,
+            tenancy, callback routes, consent, and audit. The film closes with the install command:
+            <code>bun add domainkit</code>. DomainKit is MIT-licensed open source.
+          </p>
+          <p>The film uses on-screen text and instrumental music, with no speech.</p>
+        </div>
+      </details>
     </section>
 
     <section class="block" id="problem">
@@ -806,6 +861,29 @@ const faqs: {
     columns: 2 20rem;
     column-gap: 2.5rem;
     max-width: 62rem;
+  }
+  .film figure {
+    margin: 1.75rem auto 0;
+    max-width: 60rem;
+  }
+  .film video {
+    aspect-ratio: 16 / 9;
+    background: var(--blume-background);
+    border: 1px solid var(--fm-hairline);
+    display: block;
+    height: auto;
+    width: 100%;
+  }
+  .film-transcript {
+    margin: 1.25rem auto 0;
+    max-width: 60rem;
+  }
+  .film-transcript summary {
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  .film-transcript-copy {
+    max-width: 44rem;
   }
   .prose-cols p {
     break-inside: avoid;

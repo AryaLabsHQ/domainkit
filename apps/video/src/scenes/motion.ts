@@ -10,6 +10,7 @@ import { lifecycle } from "./lifecycle/motion";
 import { plan } from "./plan/motion";
 import { reveal } from "./reveal/motion";
 import { semantics } from "./semantics/motion";
+import { social } from "./social/motion";
 import { verify } from "./verify/motion";
 
 /** Runtime entry: every scene's motion, keyed by scene id. `markup.tsx` renders their markup. */
@@ -24,6 +25,7 @@ export const motions: Record<string, SceneMotion> = {
   cta,
   lifecycle,
   semantics,
+  social,
   comparison,
   "host-boundary": hostBoundary,
 };

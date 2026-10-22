@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { app } from "./projects";
+import { app, outputDir } from "./projects";
 
 const checkpoints = [
   [2.8, "hook-copy"],
@@ -29,7 +29,7 @@ const files = await Promise.all(
       "-ss",
       String(time),
       "-i",
-      join(app, "renders/hero.mp4"),
+      join(outputDir, "hero.mp4"),
       "-frames:v",
       "1",
       file,

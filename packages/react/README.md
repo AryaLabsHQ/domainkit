@@ -59,6 +59,8 @@ refusal, applies the plan, observes the records, and cleans them up against the 
 returns the four controllers, the plan the rows report, the latest readiness, the capability groups
 the transport declares, and a `FlowState` your own surface reads.
 
+![The domain setup lifecycle: connect, review, approve, apply, keep a receipt, check DNS, and separately approve cleanup.](https://domain-kit.dev/launch/lifecycle-1920x1080.png)
+
 `Transport.fromFetch` points at the routes you mounted from `domainkit/server`. Writing it inline in
 JSX is fine: `DomainKit.Root` keeps the transport's identity for the whole mount, so the controllers
 do not restart on every render. Pass `revision` to re-inspect every mounted domain after a change
