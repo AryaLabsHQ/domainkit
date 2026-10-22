@@ -42,10 +42,12 @@
     "release:publish": "bun run tegami ci",
     "release:version": "bun run tegami version",
     "tegami": "bun scripts/tegami.mts",
-    "test": "bun test scripts && bun run --filter ./packages/domainkit test && bun run --filter ./packages/capsuledb test && bun run --filter ./packages/react test",
+    "test": "bun test scripts && bun run --filter ./packages/domainkit test && bun run --filter ./packages/capsuledb test && bun run --filter ./packages/react test && bun run --filter @domainkit/video test",
     "test:artifact": "bun run build && bun run --filter ./packages/domainkit test:artifact && bun run --filter ./packages/capsuledb test:artifact && bun run --filter ./packages/react test:artifact",
-    "typecheck": "tsc --noEmit -p tsconfig.json && bun run --filter domainkit build && bun run --filter './packages/*' typecheck && bun run --filter domainkit typecheck:examples",
-    "typecheck:examples": "bun run build && bun run --filter @domainkit/examples typecheck"
+    "typecheck": "tsc --noEmit -p tsconfig.json && bun run --filter domainkit build && bun run --filter './packages/*' typecheck && bun run --filter domainkit typecheck:examples && bun run --filter @domainkit/video typecheck",
+    "typecheck:examples": "bun run build && bun run --filter @domainkit/examples typecheck",
+    "video:build": "bun run --filter @domainkit/video build",
+    "video:render": "bun run --filter @domainkit/video render"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",

@@ -1,0 +1,34 @@
+{
+  "name": "@domainkit/video",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "scene": "bun scripts/build.ts --scene",
+    "preview": "bun run build && hyperframes preview --background launches/introducing-domainkit",
+    "render": "bun run build && bun scripts/render.ts && bun scripts/stills.ts",
+    "stills": "bun run build && bun scripts/stills.ts",
+    "music": "bun scripts/generate-music.ts",
+    "hyperframes": "hyperframes",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "copy:audit": "bun scripts/copy.ts",
+    "frames": "bun scripts/frames.ts",
+    "test": "bun test scripts"
+  },
+  "devDependencies": {
+    "@fal-ai/client": "^1.10.1",
+    "@fontsource-variable/geist": "^5.2.8",
+    "@fontsource-variable/geist-mono": "^5.2.7",
+    "@tailwindcss/cli": "^4.3.3",
+    "@types/bun": "1.4.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "gsap": "^3.14.2",
+    "hyperframes": "0.8.150",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "7.0.2"
+  }
+}

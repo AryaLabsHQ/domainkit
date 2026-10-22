@@ -1,1 +1,8 @@
-{}
+{
+  "ignorePatterns": [
+    "apps/video/.build/**",
+    "apps/video/launches/*/index.html",
+    "apps/video/launches/*/assets/**",
+    "apps/video/launches/*/compositions/**"
+  ]
+}

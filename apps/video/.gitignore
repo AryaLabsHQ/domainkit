@@ -1,0 +1,8 @@
+.env
+media/
+.build/
+launches/*/index.html
+launches/*/assets/
+launches/*/compositions/
+launches/*/snapshots/
+launches/*/.hyperframes/
