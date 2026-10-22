@@ -6,7 +6,7 @@ otherwise.
 
 ## Development
 
-Use the Bun version pinned in root `package.json` (1.4.2) and Node.js 24.10 or newer:
+Use the Bun version pinned in root `package.json` (1.4.4) and Node.js 24.10 or newer:
 
 ```sh
 bun install --frozen-lockfile
