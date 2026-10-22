@@ -159,6 +159,22 @@ const faqs: {
             poster="/launch/hero-poster.jpg"
             src="/launch/hero.mp4"
           />
+          <noscript>
+            <video
+              aria-describedby="film-caption"
+              aria-label="DomainKit: a 60-second introduction to custom-domain setup"
+              class="film-fallback"
+              controls
+              height="1080"
+              playsinline
+              poster="/launch/hero-poster.jpg"
+              preload="metadata"
+              width="1920"
+            >
+              <source src="/launch/hero.mp4" type="video/mp4" />
+              <a href="/launch/hero.mp4">Download the DomainKit intro film</a>
+            </video>
+          </noscript>
         </div>
         <figcaption id="film-caption">
           Connect a provider, review the exact records, and approve the plan. Follow the receipt
@@ -863,7 +879,8 @@ const faqs: {
     max-width: 60rem;
   }
   /* The player renders in the browser only (media-chrome's React entry cannot resolve React
-     during the server build), so the frame holds the 16:9 space before it hydrates. */
+     during the server build), so the frame holds the 16:9 space before it hydrates and a
+     noscript native video keeps the film playable without JavaScript. */
   .film-frame {
     aspect-ratio: 16 / 9;
     background: var(--blume-background) url("/launch/hero-poster.jpg") center / cover;
@@ -875,7 +892,8 @@ const faqs: {
     height: 100%;
     width: 100%;
   }
-  .film :global(.film-player video) {
+  .film :global(.film-player video),
+  .film-fallback {
     display: block;
     height: 100%;
     width: 100%;
