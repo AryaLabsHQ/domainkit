@@ -34,7 +34,7 @@ Each still uses the film’s React markup and paused GSAP scene system. Export a
 | Lifecycle        | Connect → Discover zone → Plan → Approve digest → Apply → Receipt → Observe DNS → Clean up. Cleanup reads **Separately approved. Bound to the receipt.**                                                                                                                          |
 | Plan semantics   | **Three outcomes for every record.** Matching is Noop and writes nothing; missing is Create after digest approval; incompatible is Conflict, surfaced rather than silently resolved.                                                                                              |
 | Before and after | **Copy and paste, or approve once.** DNS instructions require provider switching and field-by-field copying; DomainKit’s flow connects the account, reviews the records, approves the plan, and verifies public DNS.                                                              |
-| Host boundary    | **What your app keeps, and what DomainKit does.** Credentials, persistence, identity, tenancy, callback routes, consent, audit remain with the app. DomainKit plans exact changes, applies the approved digest, keeps the receipt, and observes DNS. **Interfaces, not custody.** |
+| Host boundary    | **What your app keeps, and what DomainKit does.** Credentials, persistence, identity, tenancy, callback routes, consent, audit remain with the app. DomainKit plans exact changes, applies the approved digest, returns a receipt, and observes DNS. **Interfaces, not custody.** |
 
 ## Music production
 

@@ -5,7 +5,7 @@ import { owned } from "../boundary/markup";
 const does = [
   "Plans exact changes",
   "Applies the approved digest",
-  "Keeps the receipt",
+  "Returns a receipt",
   "Observes DNS",
 ];
 
