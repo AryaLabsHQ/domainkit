@@ -21,8 +21,8 @@ export const verify: SceneMotion = (tl, root) => {
   // Public DNS is a separate observation and takes longer.
   for (const i of [0, 1, 2])
     swap(tl, one(root, `public-${i}-wait`), one(root, `public-${i}-done`), 2.4 + i * 0.5, 0.3);
-  drop(tl, one(root, "head-1"), 3.8);
-  lift(tl, one(root, "head-2"), 3.9, { duration: 0.9 });
+  drop(tl, one(root, "head-1"), 3.4, { duration: 0.35 });
+  lift(tl, one(root, "head-2"), 3.8, { duration: 0.6 });
   swap(tl, one(root, "overall-1"), one(root, "overall-2"), 3.9, 0.3);
   rise(tl, one(root, "summary"), 4.4, { y: 12, duration: 0.6 });
 };

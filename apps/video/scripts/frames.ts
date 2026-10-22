@@ -3,17 +3,18 @@ import { join } from "node:path";
 import { app } from "./projects";
 
 const checkpoints = [
-  [2.5, "hook-copy"],
-  [5.5, "hook-paste"],
-  [8, "hook"],
+  [2.8, "hook-copy"],
+  [5.8, "hook-paste"],
+  [6.8, "hook-wait"],
+  [8.9, "hook"],
   [14, "reveal"],
   [21, "connect"],
-  [30, "plan"],
-  [36, "approve"],
+  [27.8, "plan"],
+  [34, "approve"],
   [39.5, "receipt"],
-  [45, "verify"],
-  [53, "boundary"],
-  [58, "cta"],
+  [46.3, "verify"],
+  [54.3, "boundary"],
+  [59.2, "cta"],
 ] as const;
 const dir = join(app, ".build/review");
 await mkdir(dir, { recursive: true });

@@ -20,7 +20,7 @@ const render = Bun.spawn(
   { stdout: "inherit", stderr: "inherit" },
 );
 if ((await render.exited) !== 0) throw new Error("hero render failed");
-// Loudness runs after the bed's separate gain/fade pass, without encoding the picture again.
+// Leave AAC encoding headroom after the bed's separate gain/fade pass; copy the picture.
 const probe = Bun.spawnSync([
   "ffprobe",
   "-v",
@@ -47,7 +47,7 @@ if (probe.stdout.toString().trim() !== "") {
       "-c:v",
       "copy",
       "-af",
-      "loudnorm=I=-14:TP=-1.5:LRA=11,aformat=sample_rates=48000",
+      "loudnorm=I=-14:TP=-2:LRA=11,aformat=sample_rates=48000",
       "-c:a",
       "aac",
       "-b:a",

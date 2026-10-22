@@ -2,7 +2,7 @@ import type { SceneMarkup } from "../../scene";
 import { Header, Line, Scene } from "../parts";
 
 export const steps = [
-  { n: "01", name: "Connect", detail: "The customer’s own Cloudflare or Vercel account." },
+  { n: "01", name: "Connect", detail: "Their own Cloudflare or Vercel account." },
   { n: "02", name: "Discover zone", detail: "Find the zone that serves the domain." },
   { n: "03", name: "Plan", detail: "Noop, Create, or Conflict for every record." },
   { n: "04", name: "Approve digest", detail: "The customer approves the exact plan." },

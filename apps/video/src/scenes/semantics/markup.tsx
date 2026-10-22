@@ -34,7 +34,7 @@ const outcomes = [
   },
 ] as const;
 
-const COL = { width: 544, gap: 48, left: 96, top: 400, height: 456 } as const;
+const COL = { width: 544, gap: 48, left: 96, top: 400, height: 500 } as const;
 
 /** Plan semantics: three outcomes, each with a real record and what happens next. */
 export const semantics: SceneMarkup = {
@@ -130,7 +130,7 @@ export const semantics: SceneMarkup = {
           </div>
         </div>
       ))}
-      <div className="dk-abs" style={{ left: 96, top: 910, display: "flex", gap: 16 }}>
+      <div className="dk-abs" style={{ left: 96, top: 946, display: "flex", gap: 16 }}>
         {["Additive", "Reviewable", "Digest-bound", "Fail-closed"].map((tag) => (
           <span key={tag} data-a="tag" className="dk-tag">
             {tag}

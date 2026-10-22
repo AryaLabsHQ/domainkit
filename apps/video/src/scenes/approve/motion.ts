@@ -52,8 +52,8 @@ export const approve: SceneMotion = (tl, root) => {
   tl.to(cursor, { autoAlpha: 0, duration: 0.3 }, 2.9);
 
   // Apply only that digest.
-  drop(tl, first, 3.2);
-  lift(tl, second, 3.3, { duration: 0.9 });
+  drop(tl, first, 3.2, { duration: 0.35 });
+  lift(tl, second, 3.6, { duration: 0.9 });
   rise(tl, one(root, "progress-label"), 3.4, { y: 8, duration: 0.4 });
   rise(tl, one(root, "track"), 3.4, { y: 0, duration: 0.4 });
   tl.set(one(root, "progress"), { autoAlpha: 1 }, 3.5);
@@ -70,8 +70,8 @@ export const approve: SceneMotion = (tl, root) => {
   swap(tl, one(root, "progress-label"), one(root, "progress-done"), 5.3, 0.3);
 
   // Keep the receipt.
-  drop(tl, second, 5.9);
-  lift(tl, third, 6.0, { duration: 0.9 });
+  drop(tl, second, 5.9, { duration: 0.35 });
+  lift(tl, third, 6.3, { duration: 0.9 });
   draw(tl, one(root, "tie"), 5.6, { axis: "y", duration: 0.4 });
   rise(tl, one(root, "receipt"), 5.9, { y: 40, duration: 0.8 });
   rise(tl, all(root, "receipt-line"), 6.4, { y: 10, duration: 0.5, stagger: 0.18 });
