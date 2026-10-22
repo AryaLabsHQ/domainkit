@@ -1,11 +1,11 @@
 import { mkdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { app, launchDir } from "./projects";
+import { app, launchDir, outputDir } from "./projects";
 
 const { values } = parseArgs({ options: { quality: { type: "string", default: "delivery" } } });
-await mkdir(join(app, "renders"), { recursive: true });
-const output = join(app, "renders/hero.mp4");
+await mkdir(outputDir, { recursive: true });
+const output = join(outputDir, "hero.mp4");
 const render = Bun.spawn(
   [
     join(app, "node_modules/.bin/hyperframes"),
@@ -35,7 +35,7 @@ const probe = Bun.spawnSync([
 ]);
 if (!probe.success) throw new Error(probe.stderr.toString());
 if (probe.stdout.toString().trim() !== "") {
-  const mastered = join(app, "renders/hero.master.mp4");
+  const mastered = join(outputDir, "hero.master.mp4");
   const master = Bun.spawn(
     [
       "ffmpeg",

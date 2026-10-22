@@ -19,6 +19,8 @@ Node.js 24.10 or newer and Effect 4 are required.
 
 ## Plan, approve, apply
 
+![A missing DNS record is Create, an exact match is Noop, and incompatible state is Conflict, which blocks apply.](https://domain-kit.dev/launch/semantics-1920x1080.png)
+
 ```ts
 import { Effect, Match } from "effect";
 import { DnsRecord, DomainKit, Principal, Provision, Verify } from "domainkit";
