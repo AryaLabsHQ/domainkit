@@ -58,21 +58,26 @@ export async function submitMusic(apiKey: string): Promise<string> {
   return submitted.request_id;
 }
 
+class LocalSetupError extends Error {}
+
 async function main(): Promise<void> {
+  if (process.argv.slice(2).join(" ") !== "--generate")
+    throw new LocalSetupError(
+      "Explicit paid command required: cd apps/video && bun run music --generate",
+    );
+
   const source = musicFile("launch-bed.mp3");
   const receipt = musicFile("launch-bed.generation.json");
 
-  if (process.argv.slice(2).join(" ") !== "--generate")
-    throw new Error("Explicit paid command required: cd apps/video && bun run music --generate");
   if (await Bun.file(source).exists()) {
     console.log(`Existing music retained: ${source}`);
   } else {
     if (await Bun.file(receipt).exists())
-      throw new Error(
+      throw new LocalSetupError(
         `Generation already reserved: ${receipt}. Recover the recorded request instead of generating again.`,
       );
-    if (!process.env.FAL_KEY) throw new Error("FAL_KEY is required in apps/video/.env");
-    if (estimatedCostUsd > budgetUsd) throw new Error("Music estimate exceeds budget");
+    if (!process.env.FAL_KEY) throw new LocalSetupError("FAL_KEY is required in apps/video/.env");
+    if (estimatedCostUsd > budgetUsd) throw new LocalSetupError("Music estimate exceeds budget");
     await mkdir(dirname(source), { recursive: true });
     const metadata = {
       endpoint,
@@ -145,12 +150,18 @@ async function main(): Promise<void> {
   }
 }
 
-if (import.meta.main) {
+export async function runMusic(): Promise<void> {
   try {
     await main();
-  } catch {
-    // Provider errors may contain credentials or response bodies; never print them.
-    console.error("Music generation stopped; inspect the generation receipt before any retry.");
+  } catch (error) {
+    // Only our local setup errors are safe to print; provider errors can contain secrets.
+    console.error(
+      error instanceof LocalSetupError
+        ? error.message
+        : "Music generation stopped; inspect the generation receipt before any retry.",
+    );
     process.exitCode = 1;
   }
 }
+
+if (import.meta.main) await runMusic();
