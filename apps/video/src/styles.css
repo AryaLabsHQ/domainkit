@@ -1,0 +1,568 @@
+/*
+ * The video's Tailwind root. It compiles the docs site's Field Manual tokens (paper, ink, one
+ * electric blue, and the add/set/conflict states) so every scene reads as the product's own design
+ * system. Scenes are authored in plain classes below; Tailwind supplies the reset.
+ */
+@import "tailwindcss";
+@import "../../docs/theme.css";
+@source "./";
+
+@font-face {
+  font-family: "Geist";
+  src: url(fonts/geist-latin.woff2) format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url(fonts/geist-mono-latin.woff2) format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
+:root {
+  --dk-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --dk-mono: "Geist Mono", ui-monospace, monospace;
+  --dk-ink: var(--blume-foreground);
+  --dk-soft: var(--blume-muted-foreground);
+  --dk-faint: color-mix(in srgb, var(--blume-foreground) 42%, var(--blume-background));
+  --dk-line: var(--fm-hairline);
+  --dk-blue: var(--blume-action);
+  --dk-blue-wash: color-mix(in srgb, var(--blume-action) 8%, var(--blume-background));
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--blume-background);
+  color: var(--blume-foreground);
+  font-family: var(--dk-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Frame ------------------------------------------------------------------------------------- */
+
+.dk-scene {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--blume-background);
+  color: var(--blume-foreground);
+  font-family: var(--dk-sans);
+}
+
+.dk-scene * {
+  box-sizing: border-box;
+}
+
+/* Everything sits inside the inner 1920x1008 so a 1200x630 crop never clips content. */
+.dk-abs {
+  position: absolute;
+}
+
+.dk-header {
+  position: absolute;
+  top: 36px;
+  left: 96px;
+  right: 96px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--dk-line);
+}
+
+.dk-header-rule {
+  position: absolute;
+  top: 106px;
+  left: 96px;
+  width: 96px;
+  height: 4px;
+  background: var(--dk-blue);
+  transform-origin: left center;
+}
+
+.dk-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.dk-kicker {
+  font-family: var(--dk-mono);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dk-soft);
+}
+
+.dk-kicker--blue {
+  color: var(--dk-blue);
+}
+
+/* Type -------------------------------------------------------------------------------------- */
+
+.dk-h {
+  margin: 0;
+  font-family: var(--dk-sans);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+  color: var(--dk-ink);
+}
+
+.dk-h b {
+  font-weight: 600;
+}
+
+.dk-lede {
+  margin: 0;
+  font-size: 38px;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: var(--dk-soft);
+}
+
+.dk-mono {
+  font-family: var(--dk-mono);
+}
+
+/* A line of type that rises out of its own clip, so words arrive without opacity fades. */
+.dk-mask {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
+}
+
+.dk-mask-inline {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
+}
+
+.dk-mask > *,
+.dk-mask-inline > * {
+  display: block;
+}
+
+.dk-bar {
+  display: block;
+  height: 6px;
+  background: var(--dk-blue);
+  transform-origin: left center;
+}
+
+.dk-hair {
+  display: block;
+  height: 2px;
+  background: var(--dk-line);
+  transform-origin: left center;
+}
+
+.dk-vhair {
+  display: block;
+  width: 2px;
+  background: var(--dk-line);
+  transform-origin: center top;
+}
+
+/* Panels, tables, badges -------------------------------------------------------------------- */
+
+.dk-panel {
+  background: var(--fm-panel);
+  border: 2px solid var(--dk-line);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.dk-panel--open {
+  overflow: visible;
+}
+
+.dk-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 76px;
+  padding: 0 32px;
+  border-bottom: 2px solid var(--dk-line);
+  background: color-mix(in srgb, var(--blume-muted) 55%, var(--fm-panel));
+}
+
+.dk-table-cols {
+  display: grid;
+  align-items: center;
+  height: 64px;
+  padding: 0 32px;
+  column-gap: 28px;
+  border-bottom: 2px solid var(--blume-border);
+  font-family: var(--dk-mono);
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dk-faint);
+}
+
+.dk-row {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-items: center;
+  height: 104px;
+  padding: 0 32px;
+  column-gap: 28px;
+  border-bottom: 2px solid var(--blume-border);
+}
+
+.dk-row:last-child,
+.dk-row--last {
+  border-bottom: 0;
+}
+
+.dk-row > :not(.dk-row-tint) {
+  position: relative;
+}
+
+.dk-row-tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dk-type {
+  font-family: var(--dk-mono);
+  font-size: 25px;
+  font-weight: 600;
+  color: var(--dk-ink);
+}
+
+.dk-name {
+  font-family: var(--dk-mono);
+  font-size: 25px;
+  font-weight: 500;
+  color: var(--dk-ink);
+  white-space: nowrap;
+}
+
+.dk-value {
+  font-family: var(--dk-mono);
+  font-size: 23px;
+  color: var(--dk-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-slot {
+  display: grid;
+}
+
+.dk-slot > * {
+  grid-area: 1 / 1;
+  justify-self: start;
+}
+
+.dk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  height: 48px;
+  padding: 0 22px 0 18px;
+  border: 2px solid;
+  border-radius: 999px;
+  font-family: var(--dk-sans);
+  font-size: 24px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.dk-badge i {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.75;
+}
+
+.dk-badge--success {
+  color: var(--fm-set);
+  background: var(--fm-set-bg);
+  border-color: color-mix(in srgb, var(--fm-set) 30%, transparent);
+}
+
+.dk-badge--warning {
+  color: var(--fm-add);
+  background: var(--fm-add-bg);
+  border-color: color-mix(in srgb, var(--fm-add) 30%, transparent);
+}
+
+.dk-badge--danger {
+  color: var(--fm-conflict);
+  background: var(--fm-conflict-bg);
+  border-color: color-mix(in srgb, var(--fm-conflict) 30%, transparent);
+}
+
+.dk-badge--neutral {
+  color: var(--dk-soft);
+  background: var(--blume-muted);
+  border-color: var(--blume-border);
+}
+
+.dk-badge--action {
+  color: var(--dk-blue);
+  background: var(--dk-blue-wash);
+  border-color: color-mix(in srgb, var(--dk-blue) 30%, transparent);
+}
+
+.dk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 84px;
+  padding: 0 44px;
+  border: 2px solid var(--dk-blue);
+  border-radius: 14px;
+  background: var(--dk-blue);
+  color: var(--blume-accent-foreground);
+  font-family: var(--dk-sans);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.dk-btn--outline {
+  background: var(--fm-panel);
+  border-color: var(--dk-line);
+  color: var(--dk-ink);
+}
+
+.dk-btn--muted {
+  background: var(--blume-muted);
+  border-color: var(--blume-border);
+  color: var(--dk-faint);
+}
+
+.dk-btn--sm {
+  height: 56px;
+  padding: 0 24px;
+  border-radius: 10px;
+  font-size: 22px;
+}
+
+.dk-digest {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  height: 48px;
+  padding: 0 18px;
+  border: 2px solid var(--dk-line);
+  border-radius: 10px;
+  background: var(--fm-panel);
+  font-family: var(--dk-mono);
+  font-size: 22px;
+  color: var(--dk-ink);
+  white-space: nowrap;
+}
+
+.dk-digest em {
+  font-style: normal;
+  color: var(--dk-faint);
+}
+
+.dk-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 44px;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 6px rgb(11 16 21 / 0.22));
+}
+
+.dk-ring {
+  position: absolute;
+  border: 3px solid var(--dk-blue);
+  border-radius: 20px;
+  pointer-events: none;
+}
+
+.dk-spin {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border: 4px solid var(--dk-line);
+  border-top-color: var(--dk-blue);
+  border-radius: 50%;
+}
+
+.dk-dot {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--dk-blue);
+}
+
+/* Browser mock (hook) ----------------------------------------------------------------------- */
+
+.dk-window {
+  position: absolute;
+  background: var(--fm-panel);
+  border: 2px solid var(--dk-line);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 30px 70px -30px rgb(11 16 21 / 0.28);
+}
+
+.dk-tabs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 64px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 0 20px;
+  background: var(--blume-muted);
+  border-bottom: 2px solid var(--dk-line);
+}
+
+.dk-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 280px;
+  height: 52px;
+  padding: 0 22px;
+  border-radius: 12px 12px 0 0;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--dk-soft);
+  white-space: nowrap;
+}
+
+.dk-tab-on {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 22px;
+  border: 2px solid var(--dk-line);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: var(--fm-panel);
+  color: var(--dk-ink);
+  margin-bottom: -2px;
+}
+
+.dk-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 76px;
+  padding: 0 24px;
+  border: 2px solid var(--dk-line);
+  border-radius: 12px;
+  background: var(--fm-panel);
+  font-family: var(--dk-mono);
+  font-size: 25px;
+  color: var(--dk-ink);
+}
+
+.dk-field-label {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--dk-soft);
+}
+
+/* Cards and chips (diagrams) ---------------------------------------------------------------- */
+
+.dk-chip {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 78px;
+  padding: 0 24px;
+  border: 2px solid var(--dk-line);
+  border-radius: 12px;
+  background: var(--fm-panel);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+}
+
+.dk-chip b {
+  font-family: var(--dk-mono);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--dk-faint);
+}
+
+.dk-card {
+  position: absolute;
+  border: 2px solid var(--dk-line);
+  border-radius: 16px;
+  background: var(--fm-panel);
+  padding: 28px 30px;
+}
+
+.dk-card--dashed {
+  border-style: dashed;
+  border-color: var(--dk-blue);
+  background: var(--dk-blue-wash);
+}
+
+.dk-num {
+  font-family: var(--dk-mono);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--dk-blue);
+}
+
+.dk-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  border: 2px solid var(--dk-line);
+  border-radius: 8px;
+  font-family: var(--dk-mono);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dk-soft);
+  background: var(--fm-panel);
+  white-space: nowrap;
+}
+
+.dk-tag--blue {
+  color: var(--dk-blue);
+  border-color: color-mix(in srgb, var(--dk-blue) 40%, transparent);
+  background: var(--dk-blue-wash);
+}
+
+.dk-arrow-head {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
