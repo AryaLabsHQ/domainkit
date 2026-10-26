@@ -19,7 +19,8 @@ const PackResult = Schema.Array(Schema.Struct({ filename: Schema.String }));
  */
 const lifecycle = `
 import { Cloudflare, Connect, Custody, DnsRecord, DomainKit, Principal, Provision, Vercel, Verify, VERSION } from "domainkit";
-import { Transport } from "domainkit/client";
+import { CallbackRecovery, Transport } from "domainkit/client";
+import * as RecoveryModule from "domainkit/CallbackRecovery";
 import { cname, spf } from "domainkit/DnsRecord";
 import * as PrincipalModule from "domainkit/Principal";
 import { Server } from "domainkit/server";
@@ -27,6 +28,10 @@ import { Testing } from "domainkit/testing";
 import { Effect, Layer, Redacted, Schema } from "effect";
 
 export const run = async () => {
+  const recoveryUrl = CallbackRecovery.write(new URL("https://consumer.example/domains?tab=dns#accounts"), { kind: "cancelled", provider: "cloudflare" });
+  const recovery = RecoveryModule.read(recoveryUrl);
+  if (recovery?.kind !== "cancelled" || recovery.provider !== "cloudflare") throw new Error("Packed recovery codec failed");
+  if (CallbackRecovery.write(recoveryUrl, null).href !== "https://consumer.example/domains?tab=dns#accounts") throw new Error("Packed recovery dismissal failed");
   const registration = await Effect.runPromise(Server.registrationSettings({
     providers: [Cloudflare.provider({ oauth: { clientId: "public", clientAuth: "none" } }), Vercel.provider({ integration: { clientId: "c", clientSecret: Redacted.make("s"), slug: "domainkit" } })],
     callbackBaseUrl: "https://consumer.example/api/domainkit",

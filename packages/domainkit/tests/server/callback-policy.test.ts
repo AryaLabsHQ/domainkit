@@ -21,6 +21,8 @@ const fixture = (options: Server.WebHandlerOptions = {}, selection = false) => {
   let exchangeFailure: DomainKit.Error | undefined;
   let connectionFailure = false;
   let attachmentFailure = false;
+  let continuationFailure: "header" | "get" | "locked-get" | undefined;
+  let continuationReads = 0;
   const written: Array<Storage.Authorization> = [];
   let entered: () => void = () => {};
   const exchanging = new Promise<void>((resolve) => {
@@ -54,8 +56,16 @@ const fixture = (options: Server.WebHandlerOptions = {}, selection = false) => {
         ...base,
         continuations: {
           ...base.continuations,
+          header: (id) =>
+            continuationFailure === "header" ? Effect.fail(outage) : base.continuations.header(id),
           get: (id) =>
-            base.continuations.get(id).pipe(
+            Effect.suspend(() => {
+              continuationReads++;
+              return continuationFailure === "get" ||
+                (continuationFailure === "locked-get" && continuationReads === 2)
+                ? Effect.fail(outage)
+                : base.continuations.get(id);
+            }).pipe(
               Effect.flatMap((flow) => {
                 if (race === "lock-consume" || race === "lock-expire") {
                   const expire = race === "lock-expire";
@@ -220,6 +230,10 @@ const fixture = (options: Server.WebHandlerOptions = {}, selection = false) => {
     failAttachment: () => {
       attachmentFailure = true;
     },
+    failContinuation: (value?: typeof continuationFailure) => {
+      continuationFailure = value;
+      continuationReads = 0;
+    },
     gate: (value: Promise<void>) => {
       gate = value;
     },
@@ -261,24 +275,25 @@ const refuse = {
 
 describe("mounted callback destination policy", () => {
   for (const callback of [undefined, () => Effect.succeed(undefined)]) {
-    it(`preserves default success/error responses with ${callback === undefined ? "absent" : "undefined"} policy`, async () => {
+    it(`redirects default cancellation/restart and preserves success with ${callback === undefined ? "absent" : "undefined"} policy`, async () => {
       const f = fixture(callback === undefined ? {} : { callback });
       try {
         const url = await f.redirect({ returnTo: "/settings" });
         const deny = new URL(url);
         deny.searchParams.set("error", "access_denied");
         assert.deepStrictEqual(await responseValue(await f.handler(new Request(deny))), {
-          status: 401,
-          body: JSON.stringify({
-            _tag: "DomainKitError",
-            reason: { _tag: "Unauthenticated", message: "Provider returned access_denied" },
-          }),
-          headers: { "content-type": "application/json", "content-length": "105" },
+          status: 302,
+          body: "",
+          headers: { location: `${host}/settings?domainkit=cancelled&domainkit-provider=fake` },
         });
         assert.strictEqual((await f.flow(state(url))).id, state(url));
         const missing = new URL(url);
         missing.searchParams.delete("code");
-        assert.strictEqual((await f.handler(new Request(missing))).status, 401);
+        assert.deepStrictEqual(await responseValue(await f.handler(new Request(missing))), {
+          status: 302,
+          body: "",
+          headers: { location: `${host}/settings?domainkit=restart&domainkit-provider=fake` },
+        });
         assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
           status: 302,
           body: "",
@@ -288,6 +303,120 @@ describe("mounted callback destination policy", () => {
         await f.dispose();
       }
     });
+  }
+
+  for (const callback of [undefined, () => Effect.succeed(undefined)]) {
+    for (const source of ["returnTo", "defaultReturnTo"] as const) {
+      for (const kind of ["cancelled", "restart", "inspect"] as const) {
+        it(`replaces stale hints for ${kind} in ${source} with ${callback === undefined ? "absent" : "undefined"} policy`, async () => {
+          const destination =
+            "/settings?view=dns&domainkit=old&tab=one&domainkit=inspect&tab=two&domainkit-provider=old&domainkit-provider=other#records";
+          const f = fixture({
+            ...(callback === undefined ? {} : { callback }),
+            ...(source === "defaultReturnTo" ? { defaultReturnTo: destination } : {}),
+          });
+          try {
+            const url = await f.redirect(source === "returnTo" ? { returnTo: destination } : {});
+            if (kind === "inspect") f.failExchange(outage);
+            else url.searchParams.set("error", kind === "cancelled" ? "access_denied" : "secret");
+            assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
+              status: 302,
+              body: "",
+              headers: {
+                location: `${host}/settings?view=dns&tab=one&tab=two&domainkit=${kind}&domainkit-provider=fake#records`,
+              },
+            });
+            assert.strictEqual(f.exchanges(), kind === "inspect" ? 1 : 0);
+            assert.strictEqual((await f.connections()).length, 0);
+            assert.strictEqual((await f.flow(state(url))).id, state(url));
+            assert.deepStrictEqual(
+              f.seen,
+              callback === undefined
+                ? []
+                : [
+                    kind === "cancelled"
+                      ? { _tag: "Cancelled", provider: "fake", returnTo: `${host}${destination}` }
+                      : {
+                          _tag: "Failed",
+                          provider: "fake",
+                          returnTo: `${host}${destination}`,
+                          recovery: kind,
+                        },
+                  ],
+            );
+          } finally {
+            await f.dispose();
+          }
+        });
+      }
+    }
+  }
+
+  it("preserves explicit recovery destinations without adding or clearing parameters", async () => {
+    const destination = "/recover?domainkit=host&domainkit-provider=custom&tab=dns#review";
+    const f = fixture({ callback: () => Effect.succeed(destination) });
+    try {
+      const url = await f.redirect();
+      url.searchParams.set("error", "access_denied");
+      assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
+        status: 302,
+        body: "",
+        headers: { location: `${host}${destination}` },
+      });
+      assert.strictEqual(f.exchanges(), 0);
+      assert.deepStrictEqual(f.seen, [
+        { _tag: "Cancelled", provider: "fake", returnTo: `${host}/domains` },
+      ]);
+    } finally {
+      await f.dispose();
+    }
+  });
+
+  for (const callback of [undefined, () => Effect.succeed(undefined)]) {
+    it(`preserves the exact Connected destination with ${callback === undefined ? "absent" : "undefined"} policy`, async () => {
+      const f = fixture(callback === undefined ? {} : { callback });
+      try {
+        const destination = "/settings?tab=dns&domainkit=host&domainkit-provider=custom#records";
+        const url = await f.redirect({ returnTo: destination });
+        assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
+          status: 302,
+          body: "",
+          headers: { location: `${host}${destination}` },
+        });
+        assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), refuse);
+        assert.strictEqual(f.exchanges(), 1);
+        assert.strictEqual((await f.connections()).length, 1);
+        assert.strictEqual(f.seen.length, callback === undefined ? 0 : 1);
+      } finally {
+        await f.dispose();
+      }
+    });
+  }
+
+  for (const boundary of ["header", "get", "locked-get"] as const) {
+    for (const denied of [false, true]) {
+      it(`returns ${boundary} storage failure before ${denied ? "denial" : "grant"} classification`, async () => {
+        const f = fixture({ callback: () => Effect.succeed("/recover") });
+        try {
+          const url = await f.redirect();
+          if (denied) url.searchParams.set("error", "access_denied");
+          f.failContinuation(boundary);
+          const response = await f.handler(new Request(url));
+          assert.strictEqual(response.status, outage.httpStatus);
+          assert.strictEqual(response.headers.get("location"), null);
+          assert.deepStrictEqual(await response.json(), {
+            _tag: "DomainKitError",
+            reason: { _tag: "ProviderUnavailable", provider: "fake", message: "secret-outage" },
+          });
+          assert.strictEqual(f.seen.length, 0);
+          assert.strictEqual(f.exchanges(), 0);
+          f.failContinuation();
+          assert.strictEqual((await f.flow(state(url))).id, state(url));
+        } finally {
+          await f.dispose();
+        }
+      });
+    }
   }
 
   for (const [error, tag] of [
@@ -452,22 +581,22 @@ describe("mounted callback destination policy", () => {
     });
   }
 
-  it("retains exact default provider-error and outage replies, without changing retry behavior", async () => {
+  it("redirects provider error and grant outage with safe hints without replaying the grant", async () => {
     const f = fixture();
     try {
       const url = await f.redirect();
       url.searchParams.set("error", "arbitrary");
       assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
-        status: 401,
-        body: '{"_tag":"DomainKitError","reason":{"_tag":"Unauthenticated","message":"Provider returned arbitrary"}}',
-        headers: { "content-type": "application/json", "content-length": "101" },
+        status: 302,
+        body: "",
+        headers: { location: `${host}/domains?domainkit=restart&domainkit-provider=fake` },
       });
       url.searchParams.delete("error");
       f.failExchange(outage);
       assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
-        status: 503,
-        body: '{"_tag":"DomainKitError","reason":{"_tag":"ProviderUnavailable","provider":"fake","message":"secret-outage"}}',
-        headers: { "content-type": "application/json", "content-length": "109" },
+        status: 302,
+        body: "",
+        headers: { location: `${host}/domains?domainkit=inspect&domainkit-provider=fake` },
       });
       assert.strictEqual(f.exchanges(), 1);
       assert.strictEqual((await f.flow(state(url))).id, state(url));

@@ -10,6 +10,7 @@ export default defineConfig({
   dts: false,
   entry: {
     Approval: "src/Approval.ts",
+    CallbackRecovery: "src/CallbackRecovery.ts",
     Cleanup: "src/Cleanup.ts",
     Cloudflare: "src/Cloudflare.ts",
     Connect: "src/Connect.ts",

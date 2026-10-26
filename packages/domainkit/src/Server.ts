@@ -22,6 +22,7 @@ import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
 import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 
 import * as Approval from "./Approval.ts";
+import * as CallbackRecovery from "./CallbackRecovery.ts";
 import * as Cleanup from "./Cleanup.ts";
 import * as Connect from "./Connect.ts";
 import * as DnsRecord from "./DnsRecord.ts";
@@ -633,7 +634,8 @@ export interface Options {
   /** Where interactive flows return when the callback carries no `returnTo`. */
   readonly defaultReturnTo?: string;
   /**
-   * Opt in to a same-origin destination, or return undefined to keep default behavior. Invoked
+   * Select a same-origin destination, or return undefined to use the saved/default returnTo.
+   * Default recovery redirects include CallbackRecovery hints; Connected adds no parameters. Invoked
    * only for a verified live flow; no request, state, code, secrets, or storage rows reach this
    * policy. Close over acquired host services; its Effect requires no environment.
    * A policy failure after Connected cannot undo persistence: inspect before restarting.
@@ -1201,11 +1203,17 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                         };
                 const selected =
                   options.callback === undefined ? undefined : yield* options.callback(summary);
-                const location = selected === undefined ? destination : sameOrigin(selected, base);
+                const location =
+                  selected !== undefined
+                    ? sameOrigin(selected, base)
+                    : summary._tag === "Connected"
+                      ? destination
+                      : CallbackRecovery.write(new URL(destination), {
+                          kind: summary._tag === "Cancelled" ? "cancelled" : summary.recovery,
+                          provider: summary.provider,
+                        }).toString();
                 if (location === null)
                   return yield* invalid("callback destination leaves this application", "callback");
-                if (selected === undefined && outcome._tag !== "Connected")
-                  return yield* Effect.fail(outcome.error);
                 return HttpApiSchema.withHeaders({
                   body: undefined as void,
                   headers: { location },

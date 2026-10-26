@@ -49,6 +49,10 @@
       "types": "./dist/types/Approval.d.ts",
       "import": "./dist/Approval.mjs"
     },
+    "./CallbackRecovery": {
+      "types": "./dist/types/CallbackRecovery.d.ts",
+      "import": "./dist/CallbackRecovery.mjs"
+    },
     "./Cleanup": {
       "types": "./dist/types/Cleanup.d.ts",
       "import": "./dist/Cleanup.mjs"
