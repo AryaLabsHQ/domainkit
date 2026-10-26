@@ -211,6 +211,39 @@ for (const width of widths) {
   });
 }
 
+/**
+ * Rendered width and height of each provider mark in `scope`, rounded to whole pixels. It reads
+ * once, so callers poll it: a mark can render after its preview has settled.
+ */
+const markSizes = (scope: Locator) =>
+  scope.locator("[data-slot='provider-mark']").evaluateAll((marks) =>
+    marks.map((mark) => {
+      const box = mark.getBoundingClientRect();
+      return [Math.round(box.width), Math.round(box.height)];
+    }),
+  );
+
+// The mark's own `size-8` must give way to a size the caller passes, as it does under the `cn` a
+// shadcn install ships.
+test("provider-mark renders each size override at its real size", async ({ page }) => {
+  await open(page, "provider-mark", 768);
+  await expect
+    .poll(() => markSizes(page.getByRole("group", { name: "Sizes" })))
+    .toEqual([
+      [16, 16],
+      [24, 24],
+      [32, 32],
+    ]);
+});
+
+// The offer appears once the providers load, which can follow the field itself.
+test("domain-field offers the provider with a compact 16px mark", async ({ page }) => {
+  await open(page, "domain-field", 768);
+  await expect
+    .poll(() => markSizes(page.getByRole("button", { name: "Connect Meridian" })))
+    .toEqual([[16, 16]]);
+});
+
 // A docs page hosts each preview in an iframe; the page must not scroll sideways around them.
 const dist = new URL("../../dist/", import.meta.url);
 const pages = readdirSync(dist, { recursive: true, encoding: "utf8" })
