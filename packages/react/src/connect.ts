@@ -1,8 +1,8 @@
 import { Receipt, type DomainKit, type Storage } from "domainkit";
-import { Transport } from "domainkit/client";
+import { CallbackRecovery, Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
@@ -28,6 +28,42 @@ export {
   type ZonesController,
   type ZonesOptions,
 } from "./domain-field.ts";
+
+/** A callback hint for this page, not evidence that a provider connection succeeded. */
+export interface Recovery {
+  readonly outcome: CallbackRecovery.Model | null;
+  /** Remove the hint from the current URL without navigating or replacing host history state. */
+  readonly dismiss: () => void;
+}
+
+const recoveryListeners = new Set<() => void>();
+const subscribeRecovery = (changed: () => void): (() => void) => {
+  recoveryListeners.add(changed);
+  window.addEventListener("popstate", changed);
+  window.addEventListener("hashchange", changed);
+  return () => {
+    recoveryListeners.delete(changed);
+    window.removeEventListener("popstate", changed);
+    window.removeEventListener("hashchange", changed);
+  };
+};
+const recoveryUrl = (): string => window.location.href;
+const serverRecoveryUrl = (): null => null;
+
+/**
+ * Read the callback hint after hydration, on browser history navigation, and on host rerenders.
+ * A router that changes history without emitting a browser event must rerender its consumers.
+ * Retry through the existing connect controller with the outcome's provider and a chosen method.
+ */
+export function useRecovery(): Recovery {
+  const href = useSyncExternalStore(subscribeRecovery, recoveryUrl, serverRecoveryUrl);
+  const dismiss = useCallback(() => {
+    const url = CallbackRecovery.write(new URL(window.location.href), null);
+    window.history.replaceState(window.history.state, "", url);
+    for (const changed of recoveryListeners) changed();
+  }, []);
+  return { dismiss, outcome: href === null ? null : CallbackRecovery.read(new URL(href)) };
+}
 
 export type Snapshot = Transport.Snapshot;
 export type Discovery = Transport.Discovery;

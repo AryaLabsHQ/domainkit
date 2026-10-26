@@ -25,7 +25,7 @@ import { createRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { DnsRecord } from "domainkit";
 import { Transport } from "domainkit/client";
-import { Domain, DomainKit } from "@domainkit/react";
+import { Connect, Domain, DomainKit } from "@domainkit/react";
 
 const transport = Transport.fromFetch("/api/domainkit");
 const requirements = [
@@ -33,10 +33,11 @@ const requirements = [
 ];
 
 function DomainSetup() {
+  const recovery = Connect.useRecovery();
   const flow = Domain.useFlow({ domain: "app.example.com", requirements });
   return React.createElement(
     "table",
-    null,
+    { "data-recovery": recovery.outcome?.kind ?? "none" },
     React.createElement(
       "tbody",
       null,
@@ -91,7 +92,7 @@ describe("packed Vite consumer on React 19", () => {
       await writeFile(
         join(directory, "ssr.mjs"),
         `${consumerSource}
-if (!html.includes("app.example.com") || !html.includes("CNAME")) {
+if (!html.includes("app.example.com") || !html.includes("CNAME") || !html.includes('data-recovery="none"')) {
   throw new Error("The server render did not include the requirements table");
 }`,
       );
@@ -144,7 +145,7 @@ describe("packed Next.js consumer", () => {
         `"use client";
 import { DnsRecord } from "domainkit";
 import { Transport } from "domainkit/client";
-import { Domain, DomainKit } from "@domainkit/react";
+import { Connect, Domain, DomainKit } from "@domainkit/react";
 
 const transport = Transport.fromFetch("/api/domainkit");
 const requirements = [
@@ -152,8 +153,9 @@ const requirements = [
 ];
 
 function Records() {
+  const recovery = Connect.useRecovery();
   const flow = Domain.useFlow({ domain: "app.example.com", requirements });
-  return <p data-state={flow.state.connection}>{requirements[0].name}</p>;
+  return <p data-state={flow.state.connection} data-recovery={recovery.outcome?.kind ?? "none"}>{requirements[0].name}</p>;
 }
 
 export function DomainSettings() {

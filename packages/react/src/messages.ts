@@ -17,6 +17,7 @@ export interface Catalog {
   readonly cancel: string;
   readonly close: string;
   readonly retry: string;
+  readonly dismissRecovery: string;
   readonly approve: string;
   /** The provisioning dialog's primary action: what it adds, and how many. */
   readonly addRecords: (count: number) => string;
@@ -74,6 +75,11 @@ export interface Catalog {
   readonly planningCleanup: string;
   readonly cleaning: string;
   readonly observing: string;
+
+  // Callback hints carry no connection evidence; the host inspects its accounts separately.
+  readonly recoveryCancelled: (provider: string) => Outcome & { readonly description: string };
+  readonly recoveryRestart: (provider: string) => Outcome & { readonly description: string };
+  readonly recoveryInspect: (provider: string) => Outcome & { readonly description: string };
 
   // Connection
   readonly connectTitle: (provider: string) => string;
@@ -273,6 +279,7 @@ export const english: Catalog = {
   cancel: "Cancel",
   close: "Close",
   retry: "Try again",
+  dismissRecovery: "Dismiss",
   approve: "Approve",
   addRecords: (count) => (count === 1 ? "Add 1 record" : `Add ${count} records`),
   decline: "Decline",
@@ -316,6 +323,20 @@ export const english: Catalog = {
   planningCleanup: "Preparing cleanup…",
   cleaning: "Removing records…",
   observing: "Checking DNS…",
+
+  recoveryCancelled: (provider) => ({
+    title: `Connecting ${provider} was cancelled`,
+    description: "Try again when you are ready to connect.",
+  }),
+  recoveryRestart: (provider) => ({
+    title: `Start connecting ${provider} again`,
+    description: "This sign-in attempt cannot continue. Try again to start a new one.",
+  }),
+  recoveryInspect: (provider) => ({
+    title: `Check your ${provider} accounts`,
+    description:
+      "Inspect your connected accounts before trying again. This return does not confirm whether the connection completed.",
+  }),
 
   connectTitle: (provider) => `Connect ${provider}`,
   connectAnyTitle: "Connect a DNS provider",
