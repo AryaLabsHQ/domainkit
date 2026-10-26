@@ -195,6 +195,13 @@ remain the same refusal and invoke no policy, including expiry or consumption du
 or before the locked read. Host authentication and authorization failures do not invoke policy.
 There is no recovery under a different session.
 
+Classified cancellation and failure annotate the current span and emit the
+`DomainKit callback recovery` log before the destination policy runs. Cancellation uses Info;
+failure uses Warning. The fields are `domainkit.callback.outcome`, `domainkit.callback.provider`,
+and `domainkit.callback.reason` (the reason tag), plus `domainkit.callback.recovery` for a failure.
+They contain no error message, callback URL, state, grant code, or credential. Success and refused
+callbacks emit no recovery event. The host configures its logger and tracer.
+
 `Connected` describes account persistence, not DNS readiness, plan approval, or apply. Inspect the
 connection and select its zone before planning DNS. Cancellation and completion failure do not spend
 the flow; its expiry and retry behavior remain intact. A recovery redirect does not replay a grant.

@@ -1213,6 +1213,19 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                             ? {}
                             : { connectionId: outcome.connectionId }),
                         };
+                if (outcome._tag !== "Connected") {
+                  const attributes = {
+                    "domainkit.callback.outcome": outcome._tag,
+                    "domainkit.callback.provider": flow.provider,
+                    "domainkit.callback.reason": outcome.error.reason._tag,
+                    ...(outcome._tag === "Failed"
+                      ? { "domainkit.callback.recovery": outcome.recovery }
+                      : {}),
+                  };
+                  yield* Effect.annotateCurrentSpan(attributes);
+                  const log = outcome._tag === "Cancelled" ? Effect.logInfo : Effect.logWarning;
+                  yield* log("DomainKit callback recovery").pipe(Effect.annotateLogs(attributes));
+                }
                 const selected =
                   options.callback === undefined ? undefined : yield* options.callback(summary);
                 const location =

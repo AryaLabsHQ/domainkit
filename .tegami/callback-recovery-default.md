@@ -28,3 +28,7 @@ Successful default callbacks clear recovery parameters. React strips them when d
 page's default return destination, so another connect or reconnect control cannot carry an old
 cancellation alert through a successful attempt. Explicit host-selected destinations retain their
 policy semantics.
+
+Classified callback recovery records finite outcome, provider, and reason tags on the current span
+and in logs: Info for cancellation, Warning for failure. Logs omit raw errors, callback URLs,
+state, grant codes, and credentials, retaining failure observability when the browser redirects.
