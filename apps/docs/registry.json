@@ -228,7 +228,12 @@
       "title": "Domain Field",
       "description": "One input over every zone your customer's connected accounts reach.",
       "dependencies": ["@domainkit/react"],
-      "registryDependencies": ["button", "input", "https://domain-kit.dev/r/provider-artwork.json"],
+      "registryDependencies": [
+        "button",
+        "input",
+        "https://domain-kit.dev/r/provider-artwork.json",
+        "https://domain-kit.dev/r/outcome.json"
+      ],
       "files": [
         {
           "path": "registry/domainkit/domain-field.tsx",

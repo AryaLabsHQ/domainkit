@@ -294,3 +294,35 @@ for (const { frames, route, sources } of pages) {
     }
   }
 }
+
+for (const name of ["domain-flow", "domain-field"]) {
+  for (const kind of ["cancelled", "restart", "inspect"] as const) {
+    for (const width of widths) {
+      test(`${name} keeps ${kind} recovery readable at ${width}px`, async ({ page }, info) => {
+        await page.setViewportSize({ width, height: 800 });
+        const response = await page.goto(
+          `/blume-examples/registry/${name}/?method=oauth&domainkit=${kind}&domainkit-provider=meridian`,
+        );
+        expect(response?.ok()).toBe(true);
+        await hydrated(page, name);
+        const alert = page.locator("[data-slot='callback-recovery']");
+        await expect(alert).toBeVisible();
+        await expect(alert).toContainText("Meridian");
+        await expect(alert.getByRole("button", { name: "Dismiss" })).toBeEnabled();
+        const retry = alert.getByRole("button", { name: "Try again" });
+        if (kind === "inspect") {
+          await expect(alert).toContainText("Inspect your connected accounts");
+          await expect(retry).toHaveCount(0);
+        } else {
+          await expect(retry).toBeEnabled();
+          await retry.click({ trial: true });
+        }
+        expect(await escaped(page.mainFrame())).toEqual([]);
+        await info.attach(`${name}-recovery-${kind}-${width}`, {
+          body: await page.screenshot({ fullPage: true }),
+          contentType: "image/png",
+        });
+      });
+    }
+  }
+}

@@ -4,7 +4,7 @@
  * application around it.
  */
 import { DomainKit as Kit, Reason } from "domainkit";
-import type { Transport } from "domainkit/client";
+import { Transport } from "domainkit/client";
 import { DomainKit, Testing } from "@domainkit/react";
 import * as Effect from "effect/Effect";
 import { StrictMode, useMemo, useState } from "react";
@@ -56,6 +56,29 @@ const refusing = (transport: Transport.Interface): Transport.Interface => {
   };
 };
 
+/** The memory host lives at domainkit.test; give it an equivalent host-relative destination. */
+const browserDestination = (transport: Transport.Interface): Transport.Interface => {
+  const connection = transport.connection;
+  if (connection === undefined) return transport;
+  return {
+    ...transport,
+    connection: {
+      ...connection,
+      start: (input) => {
+        const method = input.method;
+        if (method._tag !== "OAuth" || method.returnTo === undefined)
+          return connection.start(input);
+        const url = new URL(method.returnTo, window.location.href);
+        if (url.origin !== window.location.origin) return connection.start(input);
+        return connection.start({
+          ...input,
+          method: Transport.Method.oauth({ returnTo: `${url.pathname}${url.search}${url.hash}` }),
+        });
+      },
+    },
+  };
+};
+
 function Fixture() {
   const transport = useMemo(
     () =>
@@ -65,21 +88,29 @@ function Fixture() {
           name: "Meridian",
           labels: { [zone]: `${zone} (Northwind Traders)` },
           ...(hosted ? { nameserverSuffixes: [zone] } : {}),
-          oauth: view !== "field",
+          oauth: parameters.get("method") === "oauth" || view !== "field",
           records: seed.map((record) => ({ record, zone })),
           zones: [zone],
         },
       }),
     [],
   );
-  const live = parameters.get("connect") === "refused" ? refusing(transport) : transport;
+  const browser = useMemo(() => browserDestination(transport), [transport]);
+  const live = parameters.get("connect") === "refused" ? refusing(browser) : browser;
   const [value, setValue] = useState("");
+  const [destination, setDestination] = useState("");
   return (
     <DomainKit.Root
-      navigate={() => {}}
+      navigate={setDestination}
       readOnly={parameters.get("mode") === "read-only"}
       transport={live}
     >
+      <output data-slot="fixture-destination" hidden>
+        {destination}
+      </output>
+      <output data-slot="fixture-calls" hidden>
+        {JSON.stringify(transport.calls)}
+      </output>
       <main>
         {view === "field" ? (
           <DomainField marks={marks} onChange={setValue} value={value} />

@@ -9,8 +9,10 @@ import {
 
 export default function DomainFlowExample() {
   return (
-    <PreviewRoot>
+    <PreviewRoot queryOptions>
       <DomainFlow domain={previewDomain} marks={previewMarks} requirements={previewRequirements} />
     </PreviewRoot>
   );
 }
+
+export const client = "load";

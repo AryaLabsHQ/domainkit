@@ -4,7 +4,7 @@ import { Connect, Domain } from "@domainkit/react";
 import type { DnsRecord, Receipt } from "domainkit";
 import type { ComponentProps } from "react";
 
-import { Outcome } from "@/components/domainkit/outcome";
+import { CallbackRecoveryAlert, Outcome } from "@/components/domainkit/outcome";
 import { type ProviderArtwork } from "@/components/domainkit/provider-artwork";
 import { ProviderRow } from "@/components/domainkit/provider-row";
 import { RecordsTable } from "@/components/domainkit/records-table";
@@ -62,6 +62,16 @@ export function DomainFlow({
 
   return (
     <div className={cn("grid gap-3", className)} data-slot="domain-flow" {...props}>
+      <CallbackRecoveryAlert
+        disabled={
+          flow.state.readOnly ||
+          connection.state._tag === "Loading" ||
+          connection.state._tag === "Submitting" ||
+          connection.state._tag === "Redirecting"
+        }
+        onRetry={connection.connect}
+        providers={connection.providers}
+      />
       <RecordsTable
         flow={flow}
         header={

@@ -18,8 +18,10 @@ function Field() {
 
 export default function DomainFieldExample() {
   return (
-    <PreviewRoot>
+    <PreviewRoot queryOptions>
       <Field />
     </PreviewRoot>
   );
 }
+
+export const client = "load";
