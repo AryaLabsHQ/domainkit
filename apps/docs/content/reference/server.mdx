@@ -157,19 +157,23 @@ completion failure add the browser-safe recovery hint below:
 | `Failed` with `recovery: "restart"` | `restart`   | Provider id          |
 | `Failed` with `recovery: "inspect"` | `inspect`   | Provider id          |
 
-Existing query parameters and the fragment are preserved; stale copies of both recovery parameters
+Existing query parameters and the fragment are preserved; stale copies of all recovery parameters
 are replaced. [`CallbackRecovery`](/docs/reference/transport#callback-recovery) owns this URL
 contract. [`Connect.useRecovery()`](/docs/reference/react#callback-recovery) reads and dismisses it
 in React. The parameters are display hints anyone can edit, so they authorize no operation and
 prove neither connection nor DNS readiness.
 
+A reconnect also carries `domainkit-connection=<connectionId>`, taken from the verified live
+continuation. New connections omit it. A retry uses this target to replace the existing credential
+without creating another account connection. The host still authorizes every reconnect request.
+
 `Options.callback` receives `Server.CallbackOutcome`, a schema and type for these server-side values:
 
-| Tag         | Fields                                 | Meaning                                                                                                                             |
-| ----------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `Connected` | `provider`, `connectionId`, `returnTo` | The account connection is durable; a zone may still need selection                                                                  |
-| `Cancelled` | `provider`, `returnTo`                 | A live flow returned the allowlisted `access_denied` consent denial                                                                 |
-| `Failed`    | `provider`, `returnTo`, `recovery`     | `restart` for missing code, other callback errors, or a refused grant; `inspect` for other failures or possible partial persistence |
+| Tag         | Fields                                                      | Meaning                                                                                                                             |
+| ----------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Connected` | `provider`, `connectionId`, `returnTo`                      | The account connection is durable; a zone may still need selection                                                                  |
+| `Cancelled` | `provider`, `returnTo`, optional `connectionId`             | A live flow returned the allowlisted `access_denied` consent denial                                                                 |
+| `Failed`    | `provider`, `returnTo`, `recovery`, optional `connectionId` | `restart` for missing code, other callback errors, or a refused grant; `inspect` for other failures or possible partial persistence |
 
 <Snippet
   file="examples/server/mount.ts"

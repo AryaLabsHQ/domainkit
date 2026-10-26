@@ -70,10 +70,12 @@ export function Outcome({
 export function CallbackRecoveryAlert({
   disabled = false,
   onRetry,
+  onReconnect,
   providers,
 }: {
   readonly disabled?: boolean;
   readonly onRetry: (input: Connect.ConnectInput) => void;
+  readonly onReconnect: (input: Connect.ReconnectInput) => void;
   readonly providers: ReadonlyArray<Connect.Descriptor>;
 }) {
   const recovery = Connect.useRecovery();
@@ -117,7 +119,9 @@ export function CallbackRecoveryAlert({
                 if (disabled || method === undefined) return;
                 // The connect controller reads the current URL as its default return destination.
                 recovery.dismiss();
-                onRetry({ method: method.kind, provider: outcome.provider });
+                const input = { method: method.kind, provider: outcome.provider };
+                if (outcome.connectionId === undefined) onRetry(input);
+                else onReconnect({ ...input, connectionId: outcome.connectionId });
               }}
               size="sm"
               type="button"

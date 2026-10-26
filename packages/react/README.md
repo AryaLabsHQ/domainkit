@@ -73,14 +73,17 @@ a different destination, or `null` to leave the server's `defaultReturnTo` in ch
 
 `Connect.useRecovery()` returns a named `Connect.Recovery` with `outcome` and `dismiss()`.
 The outcome is a `CallbackRecovery.Model` from `domainkit/client`: `kind` is `cancelled`,
-`restart`, or `inspect`, and `provider` identifies the provider to offer again. A callback hint is
+`restart`, or `inspect`, `provider` identifies the provider to offer again, and optional
+`connectionId` identifies an existing connection to re-credit. A callback hint is
 not evidence of a successful connection. For `inspect`, inspect connected accounts before retrying.
 
 Render the hint with `recoveryCancelled(provider)`, `recoveryRestart(provider)`, or
 `recoveryInspect(provider)` from `Messages.Catalog`, passing the provider's display name. Each
 returns a title and description. Use the catalog's `retry` and `dismissRecovery` action labels.
 A retry calls the existing connection controller's `connect({ provider, method })` with the
-customer's chosen method. Dismiss first when the next attempt should return to a URL without the hint.
+customer's chosen method. When the hint includes `connectionId`, call
+`reconnect({ connectionId, provider, method })` instead. Both the domain controller and account
+controller expose it; the domain input is `Connect.ReconnectInput`. Dismiss first when the next attempt should return to a URL without the hint.
 
 `dismiss()` removes the recovery parameters through `history.replaceState`, preserving host history
 state, unrelated query parameters, and the hash without navigating. The hook returns `null` during

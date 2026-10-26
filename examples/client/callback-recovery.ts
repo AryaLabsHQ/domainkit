@@ -5,6 +5,7 @@ const destination = new URL("https://app.example.com/settings/domains?tab=dns#ac
 export const recoveryUrl = CallbackRecovery.write(destination, {
   kind: "cancelled",
   provider: "cloudflare",
+  connectionId: "conn_existing",
 });
 export const recovery = CallbackRecovery.read(recoveryUrl);
 export const dismissedUrl = CallbackRecovery.write(recoveryUrl, null);

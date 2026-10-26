@@ -27,11 +27,26 @@ describe("Connect.useRecovery", () => {
     expect(view.result.current.outcome).toEqual({ kind, provider: "cloudflare" });
   });
 
+  it.each(["cancelled", "restart", "inspect"] as const)("retains a %s reconnect hint", (kind) => {
+    show({ kind, provider: "fake", connectionId: "existing-connection" });
+    const view = renderHook(() => Connect.useRecovery());
+    expect(view.result.current.outcome).toEqual({
+      kind,
+      provider: "fake",
+      connectionId: "existing-connection",
+    });
+    act(() => view.result.current.dismiss());
+    expect(view.result.current.outcome).toBeNull();
+    expect(new URL(window.location.href).searchParams.has("domainkit-connection")).toBe(false);
+  });
+
   it.each([
     "/?domainkit=cancelled",
     "/?domainkit-provider=fake",
     "/?domainkit=unknown&domainkit-provider=fake",
     "/?domainkit=restart&domainkit-provider=",
+    "/?domainkit=restart&domainkit-provider=fake&domainkit-connection=",
+    "/?domainkit=restart&domainkit-provider=fake&domainkit-connection=one&domainkit-connection=two",
     "/?domainkit=cancelled&domainkit=inspect&domainkit-provider=fake",
   ])("ignores malformed input %s", (url) => {
     window.history.replaceState(null, "", url);
@@ -51,6 +66,7 @@ describe("Connect.useRecovery", () => {
       CallbackRecovery.write(new URL(window.location.href), {
         kind: "restart",
         provider: "fake",
+        connectionId: "existing-connection",
       }),
     );
     const length = window.history.length;

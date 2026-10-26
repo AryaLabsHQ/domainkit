@@ -172,6 +172,96 @@ describe("Connect.useController", () => {
     expect(transport.calls.filter((entry) => entry.method === "connection.start")).toHaveLength(1);
   });
 
+  it.each(["disconnected", "unrelated"] as const)(
+    "reconnects the exact hinted id with a %s snapshot and preserves its domains",
+    async (snapshot) => {
+      const { domain, sibling, transport } = scenario();
+      const connection = transport.connection;
+      if (connection === undefined) throw new Error("Missing connection group");
+      await attach(transport, domain);
+      const before = await Effect.runPromise(connection.inspect(domain));
+      const connectionId = before.connectionId;
+      if (connectionId === null) throw new Error("Missing seeded connection");
+      if (snapshot === "unrelated") await attach(transport, sibling);
+      const target = snapshot === "unrelated" ? sibling : "app.unrelated.example";
+      const view = mount(transport, () => Connect.useController({ domain: target }));
+      await until(() =>
+        expect(view.result.current.snapshot?.status).toBe(
+          snapshot === "unrelated" ? "connected" : "disconnected",
+        ),
+      );
+      expect(view.result.current.snapshot?.connectionId).not.toBe(connectionId);
+      const starts = transport.calls.filter((call) => call.method === "connection.start").length;
+      await run(() =>
+        view.result.current.reconnect({
+          connectionId,
+          provider: "fake",
+          method: "token",
+          values: { token: "again" },
+        }),
+      );
+      await until(() => expect(view.result.current.established).toBe(1));
+      expect(
+        transport.calls.find((call) => call.method === "connection.reconnect")?.input,
+      ).toMatchObject({ connectionId, method: { _tag: "Token" } });
+      expect(transport.calls.filter((call) => call.method === "connection.start")).toHaveLength(
+        starts,
+      );
+      const after = await Effect.runPromise(connection.inspect(domain));
+      expect(after.connectionId).toBe(connectionId);
+      expect(after.attachment).toEqual(before.attachment);
+      expect(after.status).toBe("connected");
+    },
+  );
+
+  it.each(["inherited", "option"] as const)(
+    "refuses explicit reconnect when read-only is %s",
+    async (source) => {
+      const { domain, transport } = scenario();
+      const view = mount(
+        transport,
+        () =>
+          Connect.useController({
+            domain,
+            ...(source === "option" ? { readOnly: true } : {}),
+          }),
+        { readOnly: source === "inherited" },
+      );
+      await until(() => expect(view.result.current.state._tag).toBe("Disconnected"));
+      await run(() =>
+        view.result.current.reconnect({
+          connectionId: "existing",
+          provider: "fake",
+          method: "token",
+          values: { token: "again" },
+        }),
+      );
+      expect(transport.calls.some((call) => call.method === "connection.reconnect")).toBe(false);
+      expect(transport.calls.some((call) => call.method === "connection.start")).toBe(false);
+    },
+  );
+
+  it("keeps a rejected reconnect as a failure without falling back to a new account", async () => {
+    const { domain, transport } = scenario();
+    const view = mount(transport, () => Connect.useController({ domain }));
+    await until(() => expect(view.result.current.state._tag).toBe("Disconnected"));
+    await run(() =>
+      view.result.current.reconnect({
+        connectionId: "missing",
+        provider: "fake",
+        method: "token",
+        values: { token: "again" },
+      }),
+    );
+    await until(() => expect(view.result.current.state._tag).toBe("Failure"));
+    await run(() => view.result.current.retry());
+    await until(() => expect(view.result.current.state._tag).toBe("Failure"));
+    expect(transport.calls.filter((call) => call.method === "connection.reconnect")).toHaveLength(
+      2,
+    );
+    expect(transport.calls.some((call) => call.method === "connection.start")).toBe(false);
+  });
+
   it("names the account the records go to and reads the receipt once", async () => {
     const { domain, transport, zone } = scenario();
     await attach(transport, domain);
@@ -311,4 +401,41 @@ describe("interactive return destination", () => {
   it("sends none when the host opts out, leaving the server's default in charge", async () => {
     expect(await start(null)).toEqual({ _tag: "OAuth" });
   });
+  it.each([undefined, null, "/settings/accounts"])(
+    "preserves reconnect returnTo %s",
+    async (returnTo) => {
+      const { domain, transport } = oauth();
+      const view = mount(
+        transport,
+        () =>
+          Connect.useController({
+            domain,
+            ...(returnTo === undefined ? {} : { returnTo }),
+          }),
+        { navigate: () => {} },
+      );
+      await until(() => expect(view.result.current.providers).toHaveLength(1));
+      await run(() =>
+        view.result.current.reconnect({
+          connectionId: "existing",
+          method: "oauth",
+          provider: "fake",
+        }),
+      );
+      await until(() =>
+        expect(
+          transport.calls.find((call) => call.method === "connection.reconnect"),
+        ).toBeDefined(),
+      );
+      expect(transport.calls.find((call) => call.method === "connection.reconnect")?.input).toEqual(
+        {
+          connectionId: "existing",
+          method: {
+            _tag: "OAuth",
+            ...(returnTo === null ? {} : { returnTo: returnTo ?? window.location.href }),
+          },
+        },
+      );
+    },
+  );
 });

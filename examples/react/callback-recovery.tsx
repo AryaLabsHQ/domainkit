@@ -31,7 +31,15 @@ export function ConnectionRecovery() {
           disabled={busy}
           onClick={() => {
             recovery.dismiss();
-            accounts.connect({ provider: outcome.provider, method: method.kind });
+            if (outcome.connectionId === undefined) {
+              accounts.connect({ provider: outcome.provider, method: method.kind });
+            } else {
+              accounts.reconnect({
+                connectionId: outcome.connectionId,
+                provider: outcome.provider,
+                method: method.kind,
+              });
+            }
           }}
           type="button"
         >

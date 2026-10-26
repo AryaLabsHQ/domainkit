@@ -96,7 +96,8 @@ Every operation fails with `DomainKit.Error`. It carries one `Reason`, and `cate
 
 `Connect.completeOutcome({ continuationId, callbackUrl, provider? })` shares the completion lock,
 exchange, persistence, and spending path with `Connect.complete`. Its `Connect.Completion` tagged
-value is `Connected { started }`, `Cancelled { error }`, or `Failed { error, recovery }`.
+value is `Connected { started }`, `Cancelled { error, connectionId? }`, or `Failed { error, recovery, connectionId? }`.
+The optional connection id names the existing connection a verified reconnect is re-crediting.
 `started` contains a connection and either an attachment or zone candidates; no redirect is produced.
 `error` is the original `DomainKit.Error` for server-side handling. Do not send this value to a
 browser: [Server callback outcomes](/docs/reference/server#callback-destinations) omit those errors

@@ -24,7 +24,7 @@ import { Transport } from "domainkit/client";
 
 `CallbackRecovery` is a browser-safe URL codec, also exported from `domainkit` and
 `domainkit/CallbackRecovery`. Its `Model` schema and type carry `kind` (`cancelled`, `restart`, or
-`inspect`) and the `provider` id. It imports no server module.
+`inspect`), the `provider` id, and optional `connectionId` for a reconnect. It imports no server module.
 
 <Snippet
   file="examples/client/callback-recovery.ts"
@@ -32,9 +32,10 @@ import { Transport } from "domainkit/client";
   title="Read and clear a recovery hint"
 />
 
-`read(URL)` returns the model or `null` for an absent, incomplete, duplicated, or invalid pair.
+`read(URL)` returns the model or `null` for an absent, incomplete, duplicated, or invalid hint. Optional connection metadata must be a single nonempty value.
 `write(URL, model)` returns a new URL with `domainkit=<kind>` and `domainkit-provider=<id>`;
-`write(URL, null)` removes them. Both leave the input URL untouched. Writes replace all stale
+`domainkit-connection=<connectionId>` is included only for a reconnect.
+`write(URL, null)` removes all three parameters. Both leave the input URL untouched. Writes replace all stale
 copies and preserve other query parameters and the fragment.
 
 The [server default](/docs/reference/server#callback-destinations) produces these hints only after

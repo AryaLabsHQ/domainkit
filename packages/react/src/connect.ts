@@ -53,7 +53,7 @@ const serverRecoveryUrl = (): null => null;
 /**
  * Read the callback hint after hydration, on browser history navigation, and on host rerenders.
  * A router that changes history without emitting a browser event must rerender its consumers.
- * Retry through the existing connect controller with the outcome's provider and a chosen method.
+ * Retry with the outcome's provider and a chosen method; reconnect when it names a connection.
  */
 export function useRecovery(): Recovery {
   const href = useSyncExternalStore(subscribeRecovery, recoveryUrl, serverRecoveryUrl);
@@ -115,6 +115,11 @@ export interface ConnectInput {
   readonly returnTo?: string;
 }
 
+/** Prove the exact existing connection again, retaining its attached domains. */
+export interface ReconnectInput extends ConnectInput {
+  readonly connectionId: string;
+}
+
 export interface Controller {
   readonly domain: string;
   /**
@@ -133,6 +138,7 @@ export interface Controller {
   readonly discovery: Discovery | null;
   readonly providers: ReadonlyArray<Descriptor>;
   readonly connect: (input: ConnectInput) => void;
+  readonly reconnect: (input: ReconnectInput) => void;
   /** Attach the domain to a connection this owner already has. */
   readonly reuse: (input: { readonly connectionId: string; readonly zone?: string }) => void;
   /** Answer `SelectionRequired` by naming the zone that serves the domain. */
@@ -367,8 +373,8 @@ export function useController({ domain, readOnly: refused, returnTo }: Options):
     [domain, onFailure, runner, started],
   );
 
-  const connect = useCallback(
-    (input: ConnectInput) => {
+  const grant = useCallback(
+    (input: ConnectInput, connectionId?: string) => {
       if (connection === undefined || readOnly) return;
       const destination = input.returnTo ?? (returnTo === undefined ? currentUrl() : returnTo);
       const interactive = destination === null ? {} : { returnTo: destination };
@@ -378,22 +384,32 @@ export function useController({ domain, readOnly: refused, returnTo }: Options):
           : input.method === "oauth"
             ? Transport.Method.oauth(interactive)
             : Transport.Method.integration(interactive);
-      // A domain whose connection the provider turned down is not asking for a second account:
-      // proving the same provider again re-credits the connection it already has, and the domains
-      // on it stay where they are. Starting instead would fail, because the domain is attached.
-      const snapshot = held.current.snapshot;
-      const stale =
-        snapshot?.status === "reconnect" &&
-        snapshot.provider === input.provider &&
-        snapshot.connectionId !== null;
       submit(
-        stale && snapshot?.connectionId != null
-          ? connection.reconnect({ connectionId: snapshot.connectionId, method })
-          : connection.start({ domain, method, provider: input.provider }),
+        connectionId === undefined
+          ? connection.start({ domain, method, provider: input.provider })
+          : connection.reconnect({ connectionId, method }),
         { method: input.method, provider: input.provider },
       );
     },
     [connection, domain, readOnly, returnTo, submit],
+  );
+
+  const connect = useCallback(
+    (input: ConnectInput) => {
+      // Proving the stale provider again keeps the domains on the connection they already hold.
+      const snapshot = held.current.snapshot;
+      const connectionId =
+        snapshot?.status === "reconnect" && snapshot.provider === input.provider
+          ? (snapshot.connectionId ?? undefined)
+          : undefined;
+      grant(input, connectionId);
+    },
+    [grant],
+  );
+
+  const reconnect = useCallback(
+    (input: ReconnectInput) => grant(input, input.connectionId),
+    [grant],
   );
 
   const reuse = useCallback(
@@ -503,6 +519,7 @@ export function useController({ domain, readOnly: refused, returnTo }: Options):
 
   return {
     connect,
+    reconnect,
     detach,
     disconnect,
     domain,

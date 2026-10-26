@@ -108,13 +108,16 @@ and the initial hydration render return `null`; the browser supplies the hint af
   title="Offer a fresh connection attempt"
 />
 
-`dismiss()` removes both recovery parameters with `history.replaceState`, preserving the host's
+`dismiss()` removes all recovery parameters with `history.replaceState`, preserving the host's
 history state, unrelated query parameters, and fragment without navigation. Mounted readers update
 together. Browser history and hash navigation update the reader; a host router that changes history
 without emitting an event must rerender the consumer.
 
 For `cancelled` and `restart`, start a fresh attempt through the existing controller's
-`connect({ provider, method })`. Dismiss first so its default `returnTo` is the clean current URL.
+`connect({ provider, method })`. When `outcome.connectionId` is present, call
+`reconnect({ connectionId, provider, method })` instead so the existing account and its domains
+keep their connection. Both `Connect.useController` and `Connect.useAccounts` expose this command;
+`Connect.ReconnectInput` names the domain controller input. Dismiss first so its default `returnTo` is the clean current URL.
 For `inspect`, check the account list through the authenticated transport before offering further
 action: persistence can be partial. The hint neither retries nor replays a provider grant.
 

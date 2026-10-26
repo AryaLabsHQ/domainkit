@@ -186,7 +186,8 @@ recognise a credential the browser sends on a top-level navigation.
 A live, authenticated cancellation or completion failure redirects to the saved `returnTo` (or
 `defaultReturnTo`) with `domainkit=cancelled|restart|inspect` and `domainkit-provider=<id>`.
 `Connected` redirects without adding parameters. `CallbackRecovery` from `domainkit/client`
-reads or clears this display hint; `Connect.useRecovery()` from `@domainkit/react` reads and
+reads or clears this display hint, including optional `domainkit-connection=<connectionId>` for
+a reconnect; `Connect.useRecovery()` from `@domainkit/react` reads and
 dismisses it in the browser. A `callback` policy can override the destination with a same-origin
 string or return `undefined` to keep the default. Unknown, expired, spent, or mismatched flows
 remain errors. See [callback destinations](https://domain-kit.dev/docs/reference/server#callback-destinations).
@@ -213,7 +214,8 @@ must be HTTP(S) URLs without credentials, query, or fragment; emulator paths rem
 `Server.Options.callback` optionally selects a same-origin destination for sanitized `Connected`,
 `Cancelled`, or `Failed` outcomes. Return `Effect.succeed(undefined)` to retain the default response,
 or an Effect of a destination string. The policy receives provider, validated `returnTo`, and
-`connectionId` on success or `recovery: "restart" | "inspect"` on failure; it receives no request,
+`connectionId` on success, optional `connectionId` on cancelled or failed reconnects, and
+`recovery: "restart" | "inspect"` on failure; it receives no request,
 state, code, provider text, secret, or full storage row. Hosts close over acquired services.
 
 Only live flows matching the authenticated owner, actor, and provider are classified inside the

@@ -94,13 +94,31 @@ describe("Connect.useAccounts", () => {
         values: { token: "tok" },
       }),
     );
+    await run(() =>
+      view.result.current.reconnect({
+        connectionId: "existing",
+        method: "token",
+        provider: "fake",
+        values: { token: "again" },
+      }),
+    );
+    expect(transport.calls.some((call) => call.method === "connection.reconnect")).toBe(false);
     // Granting an account is a write, so the hook refuses it rather than trusting the markup.
     expect(transport.calls.some((call) => call.method === "connection.start")).toBe(false);
   });
 
   it("re-credits an account the provider turned down rather than adding a second", async () => {
-    const { transport } = scenario();
+    const { transport, zones } = scenario();
     await connectAccount(transport);
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("Missing connection group");
+    const domain = `mail.${zones[0]}`;
+    const {
+      connections: [account],
+    } = await Effect.runPromise(connection.zones({}));
+    if (account === undefined) throw new Error("Missing seeded account");
+    await Effect.runPromise(connection.attach({ connectionId: account.connectionId, domain }));
+    const before = await Effect.runPromise(connection.inspect(domain));
     const view = mount(transport, () => Connect.useAccounts(), { navigate: () => {} });
     await until(() => expect(view.result.current.connections).toHaveLength(1));
     const connectionId = view.result.current.connections[0]?.connectionId;
@@ -116,6 +134,12 @@ describe("Connect.useAccounts", () => {
     await until(() =>
       expect(transport.calls.some((call) => call.method === "connection.reconnect")).toBe(true),
     );
+    await until(() => expect(view.result.current.state._tag).toBe("Ready"));
+    const after = await Effect.runPromise(connection.inspect(domain));
+    expect(after.connectionId).toBe(connectionId);
+    expect(after.attachment).toEqual(before.attachment);
+    expect(after.status).toBe("connected");
+    expect((await Effect.runPromise(connection.zones({}))).connections).toHaveLength(1);
     expect(transport.calls.filter((call) => call.method === "connection.start")).toHaveLength(1);
   });
 });

@@ -70,6 +70,7 @@ export function DomainFlow({
           connection.state._tag === "Redirecting"
         }
         onRetry={connection.connect}
+        onReconnect={connection.reconnect}
         providers={connection.providers}
       />
       <RecordsTable

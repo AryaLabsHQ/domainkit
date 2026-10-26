@@ -43,7 +43,8 @@ in `context`.
 The same file exports `CallbackRecoveryAlert`, used by the
 [domain flow](/components/registry/domain-flow) and [domain field](/components/registry/domain-field).
 It reads `Connect.useRecovery()` and accepts `providers`, `onRetry(input: Connect.ConnectInput)`,
-and optional `disabled`. The catalog supplies the message and action labels. Cancellation and
+`onReconnect(input: Connect.ReconnectInput)`, and optional `disabled`. A hint with a
+`connectionId` retries that connection through `onReconnect`; it never falls back to a new connect. The catalog supplies the message and action labels. Cancellation and
 `restart` can offer an available interactive method; `inspect` only gives account inspection
 guidance. Dismiss clears the URL hint without navigation. Root read-only and connection capability
 checks suppress retry, and `disabled` blocks it while a command is in progress.

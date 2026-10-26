@@ -71,8 +71,13 @@ describe("public namespaces", () => {
     const url = CallbackRecovery.write(new URL("https://app.test/domains"), {
       kind: "restart",
       provider: "cloudflare",
+      connectionId: "conn_reconnect",
     });
-    assert.deepStrictEqual(CallbackRecovery.read(url), { kind: "restart", provider: "cloudflare" });
+    assert.deepStrictEqual(CallbackRecovery.read(url), {
+      kind: "restart",
+      provider: "cloudflare",
+      connectionId: "conn_reconnect",
+    });
   });
 
   it("keeps the transport surface to its adapters and the capability list", () => {

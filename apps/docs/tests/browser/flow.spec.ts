@@ -211,9 +211,72 @@ for (const view of ["flow", "field"]) {
     });
   }
 
+  for (const kind of ["cancelled", "restart"] as const) {
+    test(`${view} retries ${kind} against the hinted connection and preserves its domains`, async ({
+      page,
+    }) => {
+      await page.goto(
+        `/?view=${view}&method=oauth&account=connected&domainkit=${kind}&domainkit-provider=meridian&host-value=keep#accounts`,
+      );
+      await expect(recoveryAlert(page)).toBeVisible();
+      const connectionId = new URL(page.url()).searchParams.get("domainkit-connection");
+      expect(connectionId).toBeTruthy();
+      const snapshots = page.locator("[data-slot='fixture-accounts']");
+      await expect(snapshots).not.toHaveText("[]");
+      const before = JSON.parse((await snapshots.textContent()) ?? "[]");
+      expect(before).toHaveLength(2);
+      expect(
+        before.every((entry: { connectionId: string }) => entry.connectionId === connectionId),
+      ).toBe(true);
+      await recoveryAlert(page).getByRole("button", { name: "Try again" }).click();
+      await expect(recoveryAlert(page)).toHaveCount(0);
+      await expect(page.locator("[data-slot='fixture-destination']")).not.toHaveText("");
+      const calls = JSON.parse(
+        (await page.locator("[data-slot='fixture-calls']").textContent()) ?? "[]",
+      );
+      const reconnects = calls.filter(
+        (call: { method: string }) => call.method === "connection.reconnect",
+      );
+      expect(reconnects).toHaveLength(1);
+      expect(reconnects[0].input.connectionId).toBe(connectionId);
+      expect(
+        calls.filter((call: { method: string }) => call.method === "connection.start"),
+      ).toHaveLength(1);
+      const returnTo = new URL(reconnects[0].input.method.returnTo, "http://domainkit.test");
+      for (const key of ["domainkit", "domainkit-provider", "domainkit-connection"]) {
+        expect(returnTo.searchParams.has(key)).toBe(false);
+        expect(new URL(page.url()).searchParams.has(key)).toBe(false);
+      }
+      expect(returnTo.searchParams.get("host-value")).toBe("keep");
+      expect(returnTo.hash).toBe("#accounts");
+      expect(JSON.parse((await snapshots.textContent()) ?? "[]")).toEqual(before);
+    });
+  }
+
+  test(`${view} refuses a nonexistent reconnect hint without creating an account`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/?view=${view}&method=oauth&domainkit=restart&domainkit-provider=meridian&domainkit-connection=missing`,
+    );
+    await recoveryAlert(page).getByRole("button", { name: "Try again" }).click();
+    await expect(recoveryAlert(page)).toHaveCount(0);
+    await expect(page.locator("[data-slot='fixture-refused']")).toHaveText("true");
+    const calls = JSON.parse(
+      (await page.locator("[data-slot='fixture-calls']").textContent()) ?? "[]",
+    );
+    expect(
+      calls.filter((call: { method: string }) => call.method === "connection.start"),
+    ).toHaveLength(0);
+    expect(
+      calls.filter((call: { method: string }) => call.method === "connection.reconnect"),
+    ).toHaveLength(1);
+    await expect(page.locator("[data-slot='fixture-destination']")).toHaveText("");
+  });
+
   test(`${view} keeps recovery dismissible in read-only mode`, async ({ page }) => {
     await page.goto(
-      `/?view=${view}&method=oauth&mode=read-only&domainkit=restart&domainkit-provider=meridian`,
+      `/?view=${view}&method=oauth&mode=read-only&domainkit=restart&domainkit-provider=meridian&domainkit-connection=existing`,
     );
     const alert = recoveryAlert(page);
     await expect(alert).toContainText(recoveryTitles.restart);

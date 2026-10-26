@@ -7,7 +7,7 @@ import { DomainKit as Kit, Reason } from "domainkit";
 import { Transport } from "domainkit/client";
 import { DomainKit, Testing } from "@domainkit/react";
 import * as Effect from "effect/Effect";
-import { StrictMode, useMemo, useState } from "react";
+import { StrictMode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 // oxlint-disable-next-line import/no-unassigned-import -- a stylesheet has nothing to bind
@@ -57,48 +57,48 @@ const refusing = (transport: Transport.Interface): Transport.Interface => {
 };
 
 /** The memory host lives at domainkit.test; give it an equivalent host-relative destination. */
-const browserDestination = (transport: Transport.Interface): Transport.Interface => {
+const browserDestination = (
+  transport: Transport.Interface,
+  onRefused: () => void,
+): Transport.Interface => {
   const connection = transport.connection;
   if (connection === undefined) return transport;
+  const destination = (method: Transport.Method): Transport.Method => {
+    if (method._tag !== "OAuth" || method.returnTo === undefined) return method;
+    const url = new URL(method.returnTo, window.location.href);
+    if (url.origin !== window.location.origin) return method;
+    return Transport.Method.oauth({ returnTo: `${url.pathname}${url.search}${url.hash}` });
+  };
   return {
     ...transport,
     connection: {
       ...connection,
-      start: (input) => {
-        const method = input.method;
-        if (method._tag !== "OAuth" || method.returnTo === undefined)
-          return connection.start(input);
-        const url = new URL(method.returnTo, window.location.href);
-        if (url.origin !== window.location.origin) return connection.start(input);
-        return connection.start({
-          ...input,
-          method: Transport.Method.oauth({ returnTo: `${url.pathname}${url.search}${url.hash}` }),
-        });
-      },
+      start: (input) => connection.start({ ...input, method: destination(input.method) }),
+      reconnect: (input) =>
+        connection.reconnect({ ...input, method: destination(input.method) }).pipe(
+          Effect.catch((error) => {
+            onRefused();
+            return Effect.fail(error);
+          }),
+        ),
     },
   };
 };
 
-function Fixture() {
-  const transport = useMemo(
-    () =>
-      Testing.transport({
-        provider: {
-          id: "meridian",
-          name: "Meridian",
-          labels: { [zone]: `${zone} (Northwind Traders)` },
-          ...(hosted ? { nameserverSuffixes: [zone] } : {}),
-          oauth: parameters.get("method") === "oauth" || view !== "field",
-          records: seed.map((record) => ({ record, zone })),
-          zones: [zone],
-        },
-      }),
-    [],
-  );
-  const browser = useMemo(() => browserDestination(transport), [transport]);
+function Fixture({ transport }: { readonly transport: Testing.RecordingTransport }) {
+  const [refused, setRefused] = useState(false);
+  const browser = useMemo(() => browserDestination(transport, () => setRefused(true)), [transport]);
   const live = parameters.get("connect") === "refused" ? refusing(browser) : browser;
   const [value, setValue] = useState("");
   const [destination, setDestination] = useState("");
+  const [accounts, setAccounts] = useState<ReadonlyArray<Transport.Snapshot>>([]);
+  useEffect(() => {
+    const connection = transport.connection;
+    if (parameters.get("account") !== "connected" || connection === undefined) return;
+    void Effect.runPromise(
+      Effect.all([connection.inspect(domain), connection.inspect(`other.${zone}`)]),
+    ).then(setAccounts);
+  }, [destination, transport]);
   return (
     <DomainKit.Root
       navigate={setDestination}
@@ -111,6 +111,12 @@ function Fixture() {
       <output data-slot="fixture-calls" hidden>
         {JSON.stringify(transport.calls)}
       </output>
+      <output data-slot="fixture-refused" hidden>
+        {String(refused)}
+      </output>
+      <output data-slot="fixture-accounts" hidden>
+        {JSON.stringify(accounts)}
+      </output>
       <main>
         {view === "field" ? (
           <DomainField marks={marks} onChange={setValue} value={value} />
@@ -122,8 +128,42 @@ function Fixture() {
   );
 }
 
-createRoot(document.getElementById("root") as HTMLElement).render(
-  <StrictMode>
-    <Fixture />
-  </StrictMode>,
-);
+async function startFixture() {
+  const transport = Testing.transport({
+    provider: {
+      id: "meridian",
+      name: "Meridian",
+      labels: { [zone]: `${zone} (Northwind Traders)` },
+      ...(hosted ? { nameserverSuffixes: [zone] } : {}),
+      oauth: parameters.get("method") === "oauth" || view !== "field",
+      records: seed.map((record) => ({ record, zone })),
+      zones: [zone],
+    },
+  });
+  if (parameters.get("account") === "connected") {
+    const connection = transport.connection;
+    if (connection === undefined) throw new Error("Missing fixture connection group");
+    await Effect.runPromise(
+      connection.start({
+        domain,
+        method: Transport.Method.token({ token: "initial" }),
+        provider: "meridian",
+      }),
+    );
+    const snapshot = await Effect.runPromise(connection.inspect(domain));
+    if (snapshot.connectionId === null) throw new Error("Missing seeded connection");
+    await Effect.runPromise(
+      connection.attach({ connectionId: snapshot.connectionId, domain: `other.${zone}` }),
+    );
+    const url = new URL(window.location.href);
+    url.searchParams.set("domainkit-connection", snapshot.connectionId);
+    window.history.replaceState(window.history.state, "", url);
+  }
+  createRoot(document.getElementById("root") as HTMLElement).render(
+    <StrictMode>
+      <Fixture transport={transport} />
+    </StrictMode>,
+  );
+}
+
+void startFixture();

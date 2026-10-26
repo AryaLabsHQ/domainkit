@@ -614,11 +614,13 @@ export const CallbackOutcome = Schema.Union([
   Schema.Struct({
     _tag: Schema.Literal("Cancelled"),
     provider: Schema.String,
+    connectionId: Schema.optionalKey(Schema.String.check(Schema.isMinLength(1))),
     returnTo: Schema.String,
   }),
   Schema.Struct({
     _tag: Schema.Literal("Failed"),
     provider: Schema.String,
+    connectionId: Schema.optionalKey(Schema.String.check(Schema.isMinLength(1))),
     returnTo: Schema.String,
     recovery: Schema.Literals(["restart", "inspect"]),
   }),
@@ -1194,12 +1196,22 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                         returnTo: destination,
                       }
                     : outcome._tag === "Cancelled"
-                      ? { _tag: "Cancelled", provider: flow.provider, returnTo: destination }
+                      ? {
+                          _tag: "Cancelled",
+                          provider: flow.provider,
+                          returnTo: destination,
+                          ...(outcome.connectionId === undefined
+                            ? {}
+                            : { connectionId: outcome.connectionId }),
+                        }
                       : {
                           _tag: "Failed",
                           provider: flow.provider,
                           returnTo: destination,
                           recovery: outcome.recovery,
+                          ...(outcome.connectionId === undefined
+                            ? {}
+                            : { connectionId: outcome.connectionId }),
                         };
                 const selected =
                   options.callback === undefined ? undefined : yield* options.callback(summary);
@@ -1211,6 +1223,9 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                       : CallbackRecovery.write(new URL(destination), {
                           kind: summary._tag === "Cancelled" ? "cancelled" : summary.recovery,
                           provider: summary.provider,
+                          ...(summary.connectionId === undefined
+                            ? {}
+                            : { connectionId: summary.connectionId }),
                         }).toString();
                 if (location === null)
                   return yield* invalid("callback destination leaves this application", "callback");

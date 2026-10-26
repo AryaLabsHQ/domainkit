@@ -19,3 +19,7 @@ flows, host authentication failures, and faults before classification remain err
 `@domainkit/react` reads the hint after hydration and dismisses it without navigation. The message
 catalog supplies recovery copy, and the registry domain flow and domain field show retry or account
 inspection guidance. A hint authorizes no operation and never replays a grant.
+
+A cancelled or failed reconnect includes optional `connectionId` metadata and the
+`domainkit-connection` parameter. The registry retries that existing connection rather than creating
+a second account, preserving the domains it serves. The host still authorizes reconnect requests.

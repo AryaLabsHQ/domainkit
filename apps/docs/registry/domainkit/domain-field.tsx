@@ -57,6 +57,7 @@ export function DomainField({
       <CallbackRecoveryAlert
         disabled={busy || accounts.state._tag === "Loading"}
         onRetry={accounts.connect}
+        onReconnect={accounts.reconnect}
         providers={accounts.providers}
       />
       <div className="relative">
