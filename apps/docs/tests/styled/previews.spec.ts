@@ -211,6 +211,33 @@ for (const width of widths) {
   });
 }
 
+/** Rendered width and height of each provider mark in `scope`, rounded to whole pixels. */
+const markSizes = async (scope: Locator) =>
+  Promise.all(
+    (await scope.locator("[data-slot='provider-mark']").all()).map(async (mark) => {
+      const box = await boxOf(mark);
+      return [Math.round(box.width), Math.round(box.height)];
+    }),
+  );
+
+// The mark's own `size-8` must give way to a size the caller passes, as it does under the `cn` a
+// shadcn install ships.
+test("provider-mark renders each size override at its real size", async ({ page }) => {
+  await open(page, "provider-mark", 768);
+  expect(await markSizes(page.getByRole("group", { name: "Sizes" }))).toEqual([
+    [16, 16],
+    [24, 24],
+    [32, 32],
+  ]);
+});
+
+test("domain-field offers the provider with a compact 16px mark", async ({ page }) => {
+  await open(page, "domain-field", 768);
+  expect(await markSizes(page.getByRole("button", { name: "Connect Meridian" }))).toEqual([
+    [16, 16],
+  ]);
+});
+
 // A docs page hosts each preview in an iframe; the page must not scroll sideways around them.
 const dist = new URL("../../dist/", import.meta.url);
 const pages = readdirSync(dist, { recursive: true, encoding: "utf8" })
