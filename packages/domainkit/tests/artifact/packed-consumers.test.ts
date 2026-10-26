@@ -202,7 +202,7 @@ if (JSON.stringify(result) !== JSON.stringify(expected)) {
         `
 import { Effect, Layer, Redacted } from "effect";
 import { Connect, Custody, DnsRecord, DomainKit, Plan, type Provider, Provision, type Storage, Verify } from "domainkit";
-import { Transport } from "domainkit/client";
+import { CallbackRecovery, Transport } from "domainkit/client";
 import { Server } from "domainkit/server";
 import { Testing } from "domainkit/testing";
 
@@ -218,6 +218,9 @@ export const live: Layer.Layer<DomainKit.Services, DomainKit.Error, Storage.Serv
   );
 export const cases = Testing.conformance.storage(Testing.storage).map((item) => item.name);
 export type PublicCompletion = Connect.Completion;
+export type PublicRecovery = CallbackRecovery.Model;
+export const recoveryUrl = CallbackRecovery.write(new URL("https://consumer.example/domains"), { kind: "inspect", provider: "cloudflare" });
+export const recoveryHint = CallbackRecovery.read(recoveryUrl);
 export const completeOutcome = Connect.completeOutcome;
 export const complete = Connect.complete;
 export type PublicCallbackOutcome = Server.CallbackOutcome;

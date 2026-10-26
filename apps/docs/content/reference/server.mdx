@@ -147,6 +147,22 @@ flow. The flow is left unspent, so the person who started it can still finish it
 
 ## Callback destinations
 
+For a live, authenticated flow, the callback answers 302 to the validated saved `returnTo`, or
+`defaultReturnTo` when the flow has none. `Connected` adds no query parameter. Cancellation and
+completion failure add the browser-safe recovery hint below:
+
+| Outcome                             | `domainkit` | `domainkit-provider` |
+| ----------------------------------- | ----------- | -------------------- |
+| `Cancelled`                         | `cancelled` | Provider id          |
+| `Failed` with `recovery: "restart"` | `restart`   | Provider id          |
+| `Failed` with `recovery: "inspect"` | `inspect`   | Provider id          |
+
+Existing query parameters and the fragment are preserved; stale copies of both recovery parameters
+are replaced. [`CallbackRecovery`](/docs/reference/transport#callback-recovery) owns this URL
+contract. [`Connect.useRecovery()`](/docs/reference/react#callback-recovery) reads and dismisses it
+in React. The parameters are display hints anyone can edit, so they authorize no operation and
+prove neither connection nor DNS readiness.
+
 `Options.callback` receives `Server.CallbackOutcome`, a schema and type for these server-side values:
 
 | Tag         | Fields                                 | Meaning                                                                                                                             |
@@ -163,7 +179,7 @@ flow. The flow is left unspent, so the person who started it can still finish it
 
 The policy returns `Effect<string | undefined, DomainKit.Error>` with no environment requirement.
 Close over host services acquired when building the server layer. `undefined` keeps the default:
-302 to the saved destination on success, or the existing typed error on cancellation/failure.
+302 to the saved destination, with recovery parameters for cancellation or completion failure.
 A string selects a 302 destination, normalized and checked against the public callback origin,
 including behind a proxy. Cross-origin, malformed, and non-HTTP(S) destinations fail `InvalidInput`.
 The saved `returnTo` or `defaultReturnTo` is validated before exchange and before calling policy.

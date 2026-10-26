@@ -68,17 +68,14 @@ const IdentityLive = Layer.succeed(Server.Identity)({
         ),
 });
 
-// Close over any host services acquired by your layer; the callback needs no extra environment.
+// A policy string selects a same-origin destination; undefined keeps the recovery URL default.
 const callbackOptions: Server.Options = {
-  callback: (outcome) => {
-    if (outcome._tag === "Connected") return Effect.succeed(undefined);
-    const destination = new URL(outcome.returnTo);
-    destination.searchParams.set(
-      "connection",
-      outcome._tag === "Cancelled" ? "cancelled" : outcome.recovery,
-    );
-    return Effect.succeed(destination.toString());
-  },
+  callback: (outcome) =>
+    Effect.succeed(
+      outcome._tag === "Failed" && outcome.recovery === "inspect"
+        ? "/settings/dns-accounts"
+        : undefined,
+    ),
 };
 
 // Mount the group in your API. Every route, typed, with OpenAPI for free.

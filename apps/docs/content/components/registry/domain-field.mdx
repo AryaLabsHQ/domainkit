@@ -38,6 +38,19 @@ turned down is offered as a reconnect rather than as a second account.
 | `id`          | `string`                                  | no       | The input's id; one is generated otherwise.  |
 | `placeholder` | `string`                                  | no       | The input's placeholder.                     |
 
+## Callback recovery
+
+On return from a live, authenticated provider callback, the block reads
+[`Connect.useRecovery()`](/docs/reference/react#callback-recovery) and shows the catalog's
+provider-specific alert. Cancellation and `restart` offer **Try again** for an available interactive
+method; `inspect` points the customer to connected accounts before any fresh attempt. Read-only
+surfaces offer no retry. **Dismiss** clears the hint without navigation.
+
+The URL uses `domainkit=cancelled|restart|inspect` and `domainkit-provider=<id>`; the
+[server default](/docs/reference/server#callback-destinations) sets these parameters. They are display
+hints, so the authenticated transport remains the authority for account state. Preview URLs can
+carry the same pair to show the alert.
+
 ## Boundary
 
 The field lists zones and can connect or reconnect provider accounts through your transport. It

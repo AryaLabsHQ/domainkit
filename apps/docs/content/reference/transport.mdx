@@ -13,11 +13,34 @@ import { Transport } from "domainkit/client";
 
 {/* reference-inventory:start */}
 
-| Namespace   | Carries                                                                                       |
-| ----------- | --------------------------------------------------------------------------------------------- |
-| `Transport` | `Interface`, `fromFetch`, `fromAsync`, `toAsync`, `capabilities`, `allCapabilities`, `Method` |
+| Namespace          | Carries                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `Transport`        | `Interface`, `fromFetch`, `fromAsync`, `toAsync`, `capabilities`, `allCapabilities`, `Method` |
+| `CallbackRecovery` | `Model`, `read(url)`, `write(url, outcome)`                                                   |
 
 {/* reference-inventory:end */}
+
+## Callback recovery
+
+`CallbackRecovery` is a browser-safe URL codec, also exported from `domainkit` and
+`domainkit/CallbackRecovery`. Its `Model` schema and type carry `kind` (`cancelled`, `restart`, or
+`inspect`) and the `provider` id. It imports no server module.
+
+<Snippet
+  file="examples/client/callback-recovery.ts"
+  region="codec"
+  title="Read and clear a recovery hint"
+/>
+
+`read(URL)` returns the model or `null` for an absent, incomplete, duplicated, or invalid pair.
+`write(URL, model)` returns a new URL with `domainkit=<kind>` and `domainkit-provider=<id>`;
+`write(URL, null)` removes them. Both leave the input URL untouched. Writes replace all stale
+copies and preserve other query parameters and the fragment.
+
+The [server default](/docs/reference/server#callback-destinations) produces these hints only after
+authenticating a live callback. A URL is editable: always inspect account state through the
+authenticated transport before acting. `inspect` asks the customer to check connected accounts
+because completion can leave partial persistence; it never offers automatic grant replay.
 
 ## Capability groups
 

@@ -149,17 +149,14 @@ export const registeredServer = Server.toWebHandler(
 // #endregion registration-settings
 
 // #region callback-policy
-/** Only live, authenticated flows reach this policy; destinations are checked against the public origin. */
+/** A string overrides the destination; undefined keeps the built-in recovery redirect. */
 export const callbackOptions: Server.Options = {
-  callback: (outcome) => {
-    if (outcome._tag === "Connected") return Effect.succeed(undefined);
-    const destination = new URL(outcome.returnTo);
-    destination.searchParams.set(
-      "connection",
-      outcome._tag === "Cancelled" ? "cancelled" : outcome.recovery,
-    );
-    return Effect.succeed(destination.toString());
-  },
+  callback: (outcome) =>
+    Effect.succeed(
+      outcome._tag === "Failed" && outcome.recovery === "inspect"
+        ? "/settings/dns-accounts"
+        : undefined,
+    ),
 };
 export const recoveryServer = Server.toWebHandler(Layer.mergeAll(DomainKitLive, IdentityLive), {
   prefix: "/api/domainkit",

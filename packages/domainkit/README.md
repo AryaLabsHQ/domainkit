@@ -183,6 +183,14 @@ the group.
 `/callback/:provider` is the one route the provider drives the browser to, so `Identity` has to
 recognise a credential the browser sends on a top-level navigation.
 
+A live, authenticated cancellation or completion failure redirects to the saved `returnTo` (or
+`defaultReturnTo`) with `domainkit=cancelled|restart|inspect` and `domainkit-provider=<id>`.
+`Connected` redirects without adding parameters. `CallbackRecovery` from `domainkit/client`
+reads or clears this display hint; `Connect.useRecovery()` from `@domainkit/react` reads and
+dismisses it in the browser. A `callback` policy can override the destination with a same-origin
+string or return `undefined` to keep the default. Unknown, expired, spent, or mismatched flows
+remain errors. See [callback destinations](https://domain-kit.dev/docs/reference/server#callback-destinations).
+
 `authorize` is optional and runs after `principal` on every request with the route's name, one of
 `Server.EndpointName`. Fail it with reason `Forbidden` for the 403 a UI expects. Omit it and every
 authenticated principal reaches every route, which is right when your own middleware already gates

@@ -66,13 +66,8 @@ export const registrationSettings = Server.registrationSettings({
 // #endregion registration-settings
 
 // #region callback-policy
-/** Connect through the mounted Server callback; re-inspect before planning DNS. */
+/** The default redirects live, authenticated outcomes and carries a shared recovery URL hint. */
 export const callbackOptions: Server.Options = {
-  callback: (outcome) =>
-    Effect.succeed(
-      outcome._tag === "Connected"
-        ? undefined
-        : `/settings/domains?connection=${outcome._tag === "Cancelled" ? "cancelled" : outcome.recovery}`,
-    ),
+  defaultReturnTo: "/settings/domains",
 };
 // #endregion callback-policy
