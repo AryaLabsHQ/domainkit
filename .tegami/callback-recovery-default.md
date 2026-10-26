@@ -23,3 +23,8 @@ inspection guidance. A hint authorizes no operation and never replays a grant.
 A cancelled or failed reconnect includes optional `connectionId` metadata and the
 `domainkit-connection` parameter. The registry retries that existing connection rather than creating
 a second account, preserving the domains it serves. The host still authorizes reconnect requests.
+
+Successful default callbacks clear recovery parameters. React strips them when deriving the current
+page's default return destination, so another connect or reconnect control cannot carry an old
+cancellation alert through a successful attempt. Explicit host-selected destinations retain their
+policy semantics.

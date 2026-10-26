@@ -383,15 +383,16 @@ describe("mounted callback destination policy", () => {
   });
 
   for (const callback of [undefined, () => Effect.succeed(undefined)]) {
-    it(`preserves the exact Connected destination with ${callback === undefined ? "absent" : "undefined"} policy`, async () => {
+    it(`clears stale recovery hints from Connected with ${callback === undefined ? "absent" : "undefined"} policy`, async () => {
       const f = fixture(callback === undefined ? {} : { callback });
       try {
-        const destination = "/settings?tab=dns&domainkit=host&domainkit-provider=custom#records";
+        const destination =
+          "/settings?tab=dns&domainkit=cancelled&view=one&view=two&domainkit=inspect&domainkit-provider=custom&domainkit-connection=old&domainkit-connection=other#records";
         const url = await f.redirect({ returnTo: destination });
         assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
           status: 302,
           body: "",
-          headers: { location: `${host}${destination}` },
+          headers: { location: `${host}/settings?tab=dns&view=one&view=two#records` },
         });
         assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), refuse);
         assert.strictEqual(f.exchanges(), 1);

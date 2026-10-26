@@ -637,7 +637,7 @@ export interface Options {
   readonly defaultReturnTo?: string;
   /**
    * Select a same-origin destination, or return undefined to use the saved/default returnTo.
-   * Default recovery redirects include CallbackRecovery hints; Connected adds no parameters. Invoked
+   * Default recovery redirects include CallbackRecovery hints; Connected clears those hints. Invoked
    * only for a verified live flow; no request, state, code, secrets, or storage rows reach this
    * policy. Close over acquired host services; its Effect requires no environment.
    * A policy failure after Connected cannot undo persistence: inspect before restarting.
@@ -1219,7 +1219,7 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                   selected !== undefined
                     ? sameOrigin(selected, base)
                     : summary._tag === "Connected"
-                      ? destination
+                      ? CallbackRecovery.write(new URL(destination), null).toString()
                       : CallbackRecovery.write(new URL(destination), {
                           kind: summary._tag === "Cancelled" ? "cancelled" : summary.recovery,
                           provider: summary.provider,

@@ -192,7 +192,9 @@ const tookReturn = (domain: string): boolean => {
 
 /** Read at connect time, not at render, so it is the page the customer is actually on. */
 const currentUrl = (): string | null =>
-  typeof window === "undefined" ? null : window.location.href;
+  typeof window === "undefined"
+    ? null
+    : CallbackRecovery.write(new URL(window.location.href), null).toString();
 
 const snapshotOf = (state: State): Snapshot | null => {
   switch (state._tag) {

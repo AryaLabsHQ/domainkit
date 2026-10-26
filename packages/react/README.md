@@ -83,7 +83,8 @@ returns a title and description. Use the catalog's `retry` and `dismissRecovery`
 A retry calls the existing connection controller's `connect({ provider, method })` with the
 customer's chosen method. When the hint includes `connectionId`, call
 `reconnect({ connectionId, provider, method })` instead. Both the domain controller and account
-controller expose it; the domain input is `Connect.ReconnectInput`. Dismiss first when the next attempt should return to a URL without the hint.
+controller expose it; the domain input is `Connect.ReconnectInput`. Dismiss clears the visible alert. Controllers strip recovery parameters from the default current
+return URL even when another control starts the attempt, leaving the current page unchanged.
 
 `dismiss()` removes the recovery parameters through `history.replaceState`, preserving host history
 state, unrelated query parameters, and the hash without navigating. The hook returns `null` during

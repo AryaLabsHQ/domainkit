@@ -117,7 +117,9 @@ For `cancelled` and `restart`, start a fresh attempt through the existing contro
 `connect({ provider, method })`. When `outcome.connectionId` is present, call
 `reconnect({ connectionId, provider, method })` instead so the existing account and its domains
 keep their connection. Both `Connect.useController` and `Connect.useAccounts` expose this command;
-`Connect.ReconnectInput` names the domain controller input. Dismiss first so its default `returnTo` is the clean current URL.
+`Connect.ReconnectInput` names the domain controller input. Dismiss removes the visible hint. Controllers also strip all recovery parameters when deriving
+the default `returnTo` from the current URL, including when another control starts the attempt.
+The current page and host-supplied return destinations are unchanged.
 For `inspect`, check the account list through the authenticated transport before offering further
 action: persistence can be partial. The hint neither retries nor replays a provider grant.
 

@@ -148,7 +148,7 @@ flow. The flow is left unspent, so the person who started it can still finish it
 ## Callback destinations
 
 For a live, authenticated flow, the callback answers 302 to the validated saved `returnTo`, or
-`defaultReturnTo` when the flow has none. `Connected` adds no query parameter. Cancellation and
+`defaultReturnTo` when the flow has none. `Connected` clears all recovery parameters. Cancellation and
 completion failure add the browser-safe recovery hint below:
 
 | Outcome                             | `domainkit` | `domainkit-provider` |

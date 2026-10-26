@@ -185,7 +185,7 @@ recognise a credential the browser sends on a top-level navigation.
 
 A live, authenticated cancellation or completion failure redirects to the saved `returnTo` (or
 `defaultReturnTo`) with `domainkit=cancelled|restart|inspect` and `domainkit-provider=<id>`.
-`Connected` redirects without adding parameters. `CallbackRecovery` from `domainkit/client`
+`Connected` redirects after clearing all recovery parameters. `CallbackRecovery` from `domainkit/client`
 reads or clears this display hint, including optional `domainkit-connection=<connectionId>` for
 a reconnect; `Connect.useRecovery()` from `@domainkit/react` reads and
 dismisses it in the browser. A `callback` policy can override the destination with a same-origin
