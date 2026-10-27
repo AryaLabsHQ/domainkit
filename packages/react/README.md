@@ -69,6 +69,29 @@ the UI did not make.
 An interactive provider returns the customer to the page they started from. Pass `returnTo` to name
 a different destination, or `null` to leave the server's `defaultReturnTo` in charge.
 
+## Callback recovery
+
+`Connect.useRecovery()` returns a named `Connect.Recovery` with `outcome` and `dismiss()`.
+The outcome is a `CallbackRecovery.Model` from `domainkit/client`: `kind` is `cancelled`,
+`restart`, or `inspect`, `provider` identifies the provider to offer again, and optional
+`connectionId` identifies an existing connection to re-credit. A callback hint is
+not evidence of a successful connection. For `inspect`, inspect connected accounts before retrying.
+
+Render the hint with `recoveryCancelled(provider)`, `recoveryRestart(provider)`, or
+`recoveryInspect(provider)` from `Messages.Catalog`, passing the provider's display name. Each
+returns a title and description. Use the catalog's `retry` and `dismissRecovery` action labels.
+A retry calls the existing connection controller's `connect({ provider, method })` with the
+customer's chosen method. When the hint includes `connectionId`, call
+`reconnect({ connectionId, provider, method })` instead. Both the domain controller and account
+controller expose it; the domain input is `Connect.ReconnectInput`. Dismiss clears the visible alert. Controllers strip recovery parameters from the default current
+return URL even when another control starts the attempt, leaving the current page unchanged.
+
+`dismiss()` removes the recovery parameters through `history.replaceState`, preserving host history
+state, unrelated query parameters, and the hash without navigating. The hook returns `null` during
+server rendering and the first hydration render, then reads the browser URL. It follows browser
+history and hash events and checks the URL on host rerenders; a client router that changes history
+without a browser event must rerender the consumer. The hook requires no `DomainKit.Root`.
+
 ## What the flow says about a domain
 
 `flow.state` is what DomainKit has to say, so your own offers can be ordered beside it rather than

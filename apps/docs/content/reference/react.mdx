@@ -18,18 +18,18 @@ own; the styled composition is the [registry](/components/registry).
 
 ## Namespaces
 
-| Namespace   | Carries                                                                                                                                                                                                                                                                                           |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DomainKit` | `Root`, `ReadOnly`, `useDomainKit`, `useTransport`, `useMessages`, `useCapabilities`, `useReadOnly`                                                                                                                                                                                               |
-| `Domain`    | `useFlow`, and the `Flow` and `FlowState` shapes it returns                                                                                                                                                                                                                                       |
-| `Connect`   | `useController`, `useZones`, `useAccounts`, `useDomainField`, `describeMethods`, `rejectedField`, `attempted`, `offering`, `holdsConnection`, `reconnect`, `hostProvider`, `providerOf`, `displayName`, `reusableConnections`, `answeredInPlace`, `placementOf`, `suggestionsFor`, `completionOf` |
-| `Provision` | `useController`, `State`, `pendingPlan`, `planOf`                                                                                                                                                                                                                                                 |
-| `Cleanup`   | The same set over a plan built from an apply receipt                                                                                                                                                                                                                                              |
-| `Verify`    | `useController`, `State`, `valuesOf`, `summary`, `Supplied`, and the readiness shapes it reports                                                                                                                                                                                                  |
-| `Records`   | `standingOf`, `useCopy`, `copyText`, `toZoneFile`, `downloadZoneFile`, `identity`, `requirementsKey`                                                                                                                                                                                              |
-| `Outcome`   | `describe(error, catalog)` and `useDescribe()`, which binds the catalog the root holds                                                                                                                                                                                                            |
-| `Messages`  | `Catalog`, `english`, `merge`, `outcome(error, catalog)`, and `failure(error, catalog)`                                                                                                                                                                                                           |
-| `Testing`   | `transport`, re-exported from `domainkit/testing` for UI tests                                                                                                                                                                                                                                    |
+| Namespace   | Carries                                                                                                                                                                                                                                                                                                          |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DomainKit` | `Root`, `ReadOnly`, `useDomainKit`, `useTransport`, `useMessages`, `useCapabilities`, `useReadOnly`                                                                                                                                                                                                              |
+| `Domain`    | `useFlow`, and the `Flow` and `FlowState` shapes it returns                                                                                                                                                                                                                                                      |
+| `Connect`   | `useController`, `useRecovery`, `useZones`, `useAccounts`, `useDomainField`, `describeMethods`, `rejectedField`, `attempted`, `offering`, `holdsConnection`, `reconnect`, `hostProvider`, `providerOf`, `displayName`, `reusableConnections`, `answeredInPlace`, `placementOf`, `suggestionsFor`, `completionOf` |
+| `Provision` | `useController`, `State`, `pendingPlan`, `planOf`                                                                                                                                                                                                                                                                |
+| `Cleanup`   | The same set over a plan built from an apply receipt                                                                                                                                                                                                                                                             |
+| `Verify`    | `useController`, `State`, `valuesOf`, `summary`, `Supplied`, and the readiness shapes it reports                                                                                                                                                                                                                 |
+| `Records`   | `standingOf`, `useCopy`, `copyText`, `toZoneFile`, `downloadZoneFile`, `identity`, `requirementsKey`                                                                                                                                                                                                             |
+| `Outcome`   | `describe(error, catalog)` and `useDescribe()`, which binds the catalog the root holds                                                                                                                                                                                                                           |
+| `Messages`  | `Catalog`, `english`, `merge`, `outcome(error, catalog)`, and `failure(error, catalog)`                                                                                                                                                                                                                          |
+| `Testing`   | `transport`, re-exported from `domainkit/testing` for UI tests                                                                                                                                                                                                                                                   |
 
 ## Top-level exports
 
@@ -94,6 +94,39 @@ Each takes one options object and returns a controller whose `state` is a tagged
 | `Verify.useController`    | `{ domain, polling?, requirements?, supplied? }`  | `Idle`, `Observing`, `Observed`, `Failure`                                                                       |
 
 <Snippet file="examples/react/controllers.tsx" region="hooks" title="Composing the flow yourself" />
+
+## Callback recovery
+
+`Connect.useRecovery()` returns `Connect.Recovery`: an `outcome` of
+`CallbackRecovery.Model | null` and `dismiss()`. It reads the current URL through the
+[shared codec](/docs/reference/transport#callback-recovery) and renders no markup. Server rendering
+and the initial hydration render return `null`; the browser supplies the hint after hydration.
+
+<Snippet
+  file="examples/react/callback-recovery.tsx"
+  region="recovery"
+  title="Offer a fresh connection attempt"
+/>
+
+`dismiss()` removes all recovery parameters with `history.replaceState`, preserving the host's
+history state, unrelated query parameters, and fragment without navigation. Mounted readers update
+together. Browser history and hash navigation update the reader; a host router that changes history
+without emitting an event must rerender the consumer.
+
+For `cancelled` and `restart`, start a fresh attempt through the existing controller's
+`connect({ provider, method })`. When `outcome.connectionId` is present, call
+`reconnect({ connectionId, provider, method })` instead so the existing account and its domains
+keep their connection. Both `Connect.useController` and `Connect.useAccounts` expose this command;
+`Connect.ReconnectInput` names the domain controller input. Dismiss removes the visible hint. Controllers also strip all recovery parameters when deriving
+the default `returnTo` from the current URL, including when another control starts the attempt.
+The current page and host-supplied return destinations are unchanged.
+For `inspect`, check the account list through the authenticated transport before offering further
+action: persistence can be partial. The hint neither retries nor replays a provider grant.
+
+`Messages.Catalog` supplies `recoveryCancelled(provider)`, `recoveryRestart(provider)`, and
+`recoveryInspect(provider)`, each with a title and description, plus `dismissRecovery` and `retry`.
+The [domain flow](/components/registry/domain-flow) and
+[domain field](/components/registry/domain-field) render these alerts with your kit.
 
 ## The domain field
 

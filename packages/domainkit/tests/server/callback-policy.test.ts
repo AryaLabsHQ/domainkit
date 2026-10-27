@@ -1,6 +1,13 @@
 import { assert, describe, it } from "@effect/vitest";
 import { DateTime, Effect, Layer, Redacted, Schema } from "effect";
-import { Custody, DomainKit, Principal, Reason, Storage } from "../../src/index.ts";
+import {
+  CallbackRecovery,
+  Custody,
+  DomainKit,
+  Principal,
+  Reason,
+  Storage,
+} from "../../src/index.ts";
 import { Server } from "../../src/entry/server.ts";
 import { Testing } from "../../src/entry/testing.ts";
 
@@ -21,6 +28,8 @@ const fixture = (options: Server.WebHandlerOptions = {}, selection = false) => {
   let exchangeFailure: DomainKit.Error | undefined;
   let connectionFailure = false;
   let attachmentFailure = false;
+  let continuationFailure: "header" | "get" | "locked-get" | undefined;
+  let continuationReads = 0;
   const written: Array<Storage.Authorization> = [];
   let entered: () => void = () => {};
   const exchanging = new Promise<void>((resolve) => {
@@ -54,8 +63,16 @@ const fixture = (options: Server.WebHandlerOptions = {}, selection = false) => {
         ...base,
         continuations: {
           ...base.continuations,
+          header: (id) =>
+            continuationFailure === "header" ? Effect.fail(outage) : base.continuations.header(id),
           get: (id) =>
-            base.continuations.get(id).pipe(
+            Effect.suspend(() => {
+              continuationReads++;
+              return continuationFailure === "get" ||
+                (continuationFailure === "locked-get" && continuationReads === 2)
+                ? Effect.fail(outage)
+                : base.continuations.get(id);
+            }).pipe(
               Effect.flatMap((flow) => {
                 if (race === "lock-consume" || race === "lock-expire") {
                   const expire = race === "lock-expire";
@@ -220,6 +237,10 @@ const fixture = (options: Server.WebHandlerOptions = {}, selection = false) => {
     failAttachment: () => {
       attachmentFailure = true;
     },
+    failContinuation: (value?: typeof continuationFailure) => {
+      continuationFailure = value;
+      continuationReads = 0;
+    },
     gate: (value: Promise<void>) => {
       gate = value;
     },
@@ -261,24 +282,25 @@ const refuse = {
 
 describe("mounted callback destination policy", () => {
   for (const callback of [undefined, () => Effect.succeed(undefined)]) {
-    it(`preserves default success/error responses with ${callback === undefined ? "absent" : "undefined"} policy`, async () => {
+    it(`redirects default cancellation/restart and preserves success with ${callback === undefined ? "absent" : "undefined"} policy`, async () => {
       const f = fixture(callback === undefined ? {} : { callback });
       try {
         const url = await f.redirect({ returnTo: "/settings" });
         const deny = new URL(url);
         deny.searchParams.set("error", "access_denied");
         assert.deepStrictEqual(await responseValue(await f.handler(new Request(deny))), {
-          status: 401,
-          body: JSON.stringify({
-            _tag: "DomainKitError",
-            reason: { _tag: "Unauthenticated", message: "Provider returned access_denied" },
-          }),
-          headers: { "content-type": "application/json", "content-length": "105" },
+          status: 302,
+          body: "",
+          headers: { location: `${host}/settings?domainkit=cancelled&domainkit-provider=fake` },
         });
         assert.strictEqual((await f.flow(state(url))).id, state(url));
         const missing = new URL(url);
         missing.searchParams.delete("code");
-        assert.strictEqual((await f.handler(new Request(missing))).status, 401);
+        assert.deepStrictEqual(await responseValue(await f.handler(new Request(missing))), {
+          status: 302,
+          body: "",
+          headers: { location: `${host}/settings?domainkit=restart&domainkit-provider=fake` },
+        });
         assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
           status: 302,
           body: "",
@@ -288,6 +310,124 @@ describe("mounted callback destination policy", () => {
         await f.dispose();
       }
     });
+  }
+
+  for (const callback of [undefined, () => Effect.succeed(undefined)]) {
+    for (const source of ["returnTo", "defaultReturnTo"] as const) {
+      for (const kind of ["cancelled", "restart", "inspect"] as const) {
+        it(`replaces stale hints for ${kind} in ${source} with ${callback === undefined ? "absent" : "undefined"} policy`, async () => {
+          const destination =
+            "/settings?view=dns&domainkit=old&tab=one&domainkit=inspect&tab=two&domainkit-provider=old&domainkit-provider=other&domainkit-connection=stale&domainkit-connection=other#records";
+          const f = fixture({
+            ...(callback === undefined ? {} : { callback }),
+            ...(source === "defaultReturnTo" ? { defaultReturnTo: destination } : {}),
+          });
+          try {
+            const url = await f.redirect(source === "returnTo" ? { returnTo: destination } : {});
+            url.searchParams.set("domainkit-connection", "query-spoof");
+            url.searchParams.set("connectionId", "raw-query-spoof");
+            if (kind === "inspect") f.failExchange(outage);
+            else url.searchParams.set("error", kind === "cancelled" ? "access_denied" : "secret");
+            assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
+              status: 302,
+              body: "",
+              headers: {
+                location: `${host}/settings?view=dns&tab=one&tab=two&domainkit=${kind}&domainkit-provider=fake#records`,
+              },
+            });
+            assert.strictEqual(f.exchanges(), kind === "inspect" ? 1 : 0);
+            assert.strictEqual((await f.connections()).length, 0);
+            assert.strictEqual((await f.flow(state(url))).id, state(url));
+            assert.deepStrictEqual(
+              f.seen,
+              callback === undefined
+                ? []
+                : [
+                    kind === "cancelled"
+                      ? { _tag: "Cancelled", provider: "fake", returnTo: `${host}${destination}` }
+                      : {
+                          _tag: "Failed",
+                          provider: "fake",
+                          returnTo: `${host}${destination}`,
+                          recovery: kind,
+                        },
+                  ],
+            );
+          } finally {
+            await f.dispose();
+          }
+        });
+      }
+    }
+  }
+
+  it("preserves explicit recovery destinations without adding or clearing parameters", async () => {
+    const destination =
+      "/recover?domainkit=host&domainkit-provider=custom&domainkit-connection=host-owned&tab=dns#review";
+    const f = fixture({ callback: () => Effect.succeed(destination) });
+    try {
+      const url = await f.redirect();
+      url.searchParams.set("error", "access_denied");
+      assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
+        status: 302,
+        body: "",
+        headers: { location: `${host}${destination}` },
+      });
+      assert.strictEqual(f.exchanges(), 0);
+      assert.deepStrictEqual(f.seen, [
+        { _tag: "Cancelled", provider: "fake", returnTo: `${host}/domains` },
+      ]);
+    } finally {
+      await f.dispose();
+    }
+  });
+
+  for (const callback of [undefined, () => Effect.succeed(undefined)]) {
+    it(`clears stale recovery hints from Connected with ${callback === undefined ? "absent" : "undefined"} policy`, async () => {
+      const f = fixture(callback === undefined ? {} : { callback });
+      try {
+        const destination =
+          "/settings?tab=dns&domainkit=cancelled&view=one&view=two&domainkit=inspect&domainkit-provider=custom&domainkit-connection=old&domainkit-connection=other#records";
+        const url = await f.redirect({ returnTo: destination });
+        assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
+          status: 302,
+          body: "",
+          headers: { location: `${host}/settings?tab=dns&view=one&view=two#records` },
+        });
+        assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), refuse);
+        assert.strictEqual(f.exchanges(), 1);
+        assert.strictEqual((await f.connections()).length, 1);
+        assert.strictEqual(f.seen.length, callback === undefined ? 0 : 1);
+      } finally {
+        await f.dispose();
+      }
+    });
+  }
+
+  for (const boundary of ["header", "get", "locked-get"] as const) {
+    for (const denied of [false, true]) {
+      it(`returns ${boundary} storage failure before ${denied ? "denial" : "grant"} classification`, async () => {
+        const f = fixture({ callback: () => Effect.succeed("/recover") });
+        try {
+          const url = await f.redirect();
+          if (denied) url.searchParams.set("error", "access_denied");
+          f.failContinuation(boundary);
+          const response = await f.handler(new Request(url));
+          assert.strictEqual(response.status, outage.httpStatus);
+          assert.strictEqual(response.headers.get("location"), null);
+          assert.deepStrictEqual(await response.json(), {
+            _tag: "DomainKitError",
+            reason: { _tag: "ProviderUnavailable", provider: "fake", message: "secret-outage" },
+          });
+          assert.strictEqual(f.seen.length, 0);
+          assert.strictEqual(f.exchanges(), 0);
+          f.failContinuation();
+          assert.strictEqual((await f.flow(state(url))).id, state(url));
+        } finally {
+          await f.dispose();
+        }
+      });
+    }
   }
 
   for (const [error, tag] of [
@@ -452,22 +592,22 @@ describe("mounted callback destination policy", () => {
     });
   }
 
-  it("retains exact default provider-error and outage replies, without changing retry behavior", async () => {
+  it("redirects provider error and grant outage with safe hints without replaying the grant", async () => {
     const f = fixture();
     try {
       const url = await f.redirect();
       url.searchParams.set("error", "arbitrary");
       assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
-        status: 401,
-        body: '{"_tag":"DomainKitError","reason":{"_tag":"Unauthenticated","message":"Provider returned arbitrary"}}',
-        headers: { "content-type": "application/json", "content-length": "101" },
+        status: 302,
+        body: "",
+        headers: { location: `${host}/domains?domainkit=restart&domainkit-provider=fake` },
       });
       url.searchParams.delete("error");
       f.failExchange(outage);
       assert.deepStrictEqual(await responseValue(await f.handler(new Request(url))), {
-        status: 503,
-        body: '{"_tag":"DomainKitError","reason":{"_tag":"ProviderUnavailable","provider":"fake","message":"secret-outage"}}',
-        headers: { "content-type": "application/json", "content-length": "109" },
+        status: 302,
+        body: "",
+        headers: { location: `${host}/domains?domainkit=inspect&domainkit-provider=fake` },
       });
       assert.strictEqual(f.exchanges(), 1);
       assert.strictEqual((await f.flow(state(url))).id, state(url));
@@ -609,6 +749,108 @@ describe("mounted callback destination policy", () => {
     }
   });
 
+  for (const policy of ["absent", "default", "override"] as const) {
+    for (const kind of ["cancelled", "restart", "inspect"] as const) {
+      it(`carries the verified reconnect id for ${kind} with ${policy} policy and preserves domains on retry`, async () => {
+        const destination =
+          "/settings?view=dns&domainkit=old&domainkit-provider=old&domainkit-connection=stale&domainkit-connection=other#records";
+        const selected =
+          "/recover?domainkit=host&domainkit-provider=host&domainkit-connection=host-owned#review";
+        const f = fixture(
+          policy === "absent"
+            ? {}
+            : { callback: () => Effect.succeed(policy === "override" ? selected : undefined) },
+        );
+        try {
+          const first = await f.start("Token", { domain: "app.example.com" });
+          if (first._tag !== "Connected") throw new Error("Expected connection");
+          const connectionId = first.connectionId;
+          const before = Schema.decodeUnknownSync(Server.Snapshot)(
+            await (await f.call("/domains/app.example.com")).json(),
+          );
+          const response = await f.call(`/connections/${connectionId}/reconnections`, {
+            method: { _tag: "OAuth", returnTo: destination },
+          });
+          assert.strictEqual(response.status, 200);
+          const reconnect = Schema.decodeUnknownSync(Server.Started)(await response.json());
+          if (reconnect._tag !== "Redirect") throw new Error("Expected reconnect redirect");
+          const url = new URL(reconnect.authorizationUrl);
+          url.searchParams.set("domainkit-connection", "query-spoof");
+          url.searchParams.set("connectionId", "raw-query-spoof");
+          if (kind === "inspect") f.failExchange(outage);
+          else url.searchParams.set("error", kind === "cancelled" ? "access_denied" : "secret");
+          const recovery = await f.handler(new Request(url));
+          assert.strictEqual(recovery.status, 302);
+          const location = recovery.headers.get("location");
+          if (location === null) throw new Error("Expected recovery destination");
+          if (policy === "override") assert.strictEqual(location, `${host}${selected}`);
+          else {
+            assert.deepStrictEqual(CallbackRecovery.read(new URL(location)), {
+              kind,
+              provider: "fake",
+              connectionId,
+            });
+            assert.strictEqual(
+              location,
+              `${host}/settings?view=dns&domainkit=${kind}&domainkit-provider=fake&domainkit-connection=${connectionId}#records`,
+            );
+          }
+          assert.deepStrictEqual(
+            f.seen,
+            policy === "absent"
+              ? []
+              : [
+                  kind === "cancelled"
+                    ? {
+                        _tag: "Cancelled",
+                        provider: "fake",
+                        connectionId,
+                        returnTo: `${host}${destination}`,
+                      }
+                    : {
+                        _tag: "Failed",
+                        provider: "fake",
+                        connectionId,
+                        returnTo: `${host}${destination}`,
+                        recovery: kind,
+                      },
+                ],
+          );
+          assert.strictEqual(f.exchanges(), kind === "inspect" ? 1 : 0);
+          // Retry starts a fresh reconnect flow, never a second connection or a replayed grant.
+          f.failExchange();
+          const retryId =
+            policy === "override"
+              ? f.seen[0]?.connectionId
+              : CallbackRecovery.read(new URL(location))?.connectionId;
+          assert.strictEqual(retryId, connectionId);
+          const retryResponse = await f.call(`/connections/${retryId}/reconnections`, {
+            method: { _tag: "OAuth" },
+          });
+          const retry = Schema.decodeUnknownSync(Server.Started)(await retryResponse.json());
+          if (retry._tag !== "Redirect") throw new Error("Expected fresh reconnect redirect");
+          assert.notStrictEqual(state(new URL(retry.authorizationUrl)), state(url));
+          assert.strictEqual((await f.handler(new Request(retry.authorizationUrl))).status, 302);
+          assert.strictEqual(f.exchanges(), kind === "inspect" ? 2 : 1);
+          assert.strictEqual((await f.connections()).length, 1);
+          const after = Schema.decodeUnknownSync(Server.Snapshot)(
+            await (await f.call("/domains/app.example.com")).json(),
+          );
+          assert.strictEqual(after.connectionId, connectionId);
+          assert.deepStrictEqual(after.attachment, before.attachment);
+          assert.strictEqual(after.connectionDomains, 1);
+          assert.strictEqual(after.method, "oauth");
+          if (policy !== "absent") {
+            assert.strictEqual(f.seen[1]?._tag, "Connected");
+            assert.strictEqual(f.seen[1]?.connectionId, connectionId);
+          }
+        } finally {
+          await f.dispose();
+        }
+      });
+    }
+  }
+
   it("keeps a durable connection when policy fails; replay cannot invoke it again", async () => {
     const f = fixture({ callback: () => Effect.fail(outage) });
     try {
@@ -660,7 +902,18 @@ describe("mounted callback destination policy", () => {
       it(`has the constant refusal for ${kind}${denial ? " with denial" : ""}, zero policy/exchange`, async () => {
         const f = fixture({ callback: () => Effect.succeed("/recover") });
         try {
-          const url = await f.redirect();
+          const first = await f.start("Token", { domain: "app.example.com" });
+          if (first._tag !== "Connected") throw new Error("Expected connection");
+          const reconnectResponse = await f.call(
+            `/connections/${first.connectionId}/reconnections`,
+            { method: { _tag: "OAuth" } },
+          );
+          const reconnect = Schema.decodeUnknownSync(Server.Started)(
+            await reconnectResponse.json(),
+          );
+          if (reconnect._tag !== "Redirect") throw new Error("Expected reconnect redirect");
+          const url = new URL(reconnect.authorizationUrl);
+          url.searchParams.set("domainkit-connection", first.connectionId);
           const id = state(url);
           if (kind === "unknown") url.searchParams.set("state", "unknown");
           if (kind === "expired") await f.expire(id);

@@ -1,8 +1,8 @@
 import { Receipt, type DomainKit, type Storage } from "domainkit";
-import { Transport } from "domainkit/client";
+import { CallbackRecovery, Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useDomainKit, useReadOnly } from "./domain-kit.tsx";
 import { Event } from "./events.ts";
@@ -28,6 +28,42 @@ export {
   type ZonesController,
   type ZonesOptions,
 } from "./domain-field.ts";
+
+/** A callback hint for this page, not evidence that a provider connection succeeded. */
+export interface Recovery {
+  readonly outcome: CallbackRecovery.Model | null;
+  /** Remove the hint from the current URL without navigating or replacing host history state. */
+  readonly dismiss: () => void;
+}
+
+const recoveryListeners = new Set<() => void>();
+const subscribeRecovery = (changed: () => void): (() => void) => {
+  recoveryListeners.add(changed);
+  window.addEventListener("popstate", changed);
+  window.addEventListener("hashchange", changed);
+  return () => {
+    recoveryListeners.delete(changed);
+    window.removeEventListener("popstate", changed);
+    window.removeEventListener("hashchange", changed);
+  };
+};
+const recoveryUrl = (): string => window.location.href;
+const serverRecoveryUrl = (): null => null;
+
+/**
+ * Read the callback hint after hydration, on browser history navigation, and on host rerenders.
+ * A router that changes history without emitting a browser event must rerender its consumers.
+ * Retry with the outcome's provider and a chosen method; reconnect when it names a connection.
+ */
+export function useRecovery(): Recovery {
+  const href = useSyncExternalStore(subscribeRecovery, recoveryUrl, serverRecoveryUrl);
+  const dismiss = useCallback(() => {
+    const url = CallbackRecovery.write(new URL(window.location.href), null);
+    window.history.replaceState(window.history.state, "", url);
+    for (const changed of recoveryListeners) changed();
+  }, []);
+  return { dismiss, outcome: href === null ? null : CallbackRecovery.read(new URL(href)) };
+}
 
 export type Snapshot = Transport.Snapshot;
 export type Discovery = Transport.Discovery;
@@ -79,6 +115,11 @@ export interface ConnectInput {
   readonly returnTo?: string;
 }
 
+/** Prove the exact existing connection again, retaining its attached domains. */
+export interface ReconnectInput extends ConnectInput {
+  readonly connectionId: string;
+}
+
 export interface Controller {
   readonly domain: string;
   /**
@@ -97,6 +138,7 @@ export interface Controller {
   readonly discovery: Discovery | null;
   readonly providers: ReadonlyArray<Descriptor>;
   readonly connect: (input: ConnectInput) => void;
+  readonly reconnect: (input: ReconnectInput) => void;
   /** Attach the domain to a connection this owner already has. */
   readonly reuse: (input: { readonly connectionId: string; readonly zone?: string }) => void;
   /** Answer `SelectionRequired` by naming the zone that serves the domain. */
@@ -150,7 +192,9 @@ const tookReturn = (domain: string): boolean => {
 
 /** Read at connect time, not at render, so it is the page the customer is actually on. */
 const currentUrl = (): string | null =>
-  typeof window === "undefined" ? null : window.location.href;
+  typeof window === "undefined"
+    ? null
+    : CallbackRecovery.write(new URL(window.location.href), null).toString();
 
 const snapshotOf = (state: State): Snapshot | null => {
   switch (state._tag) {
@@ -331,8 +375,8 @@ export function useController({ domain, readOnly: refused, returnTo }: Options):
     [domain, onFailure, runner, started],
   );
 
-  const connect = useCallback(
-    (input: ConnectInput) => {
+  const grant = useCallback(
+    (input: ConnectInput, connectionId?: string) => {
       if (connection === undefined || readOnly) return;
       const destination = input.returnTo ?? (returnTo === undefined ? currentUrl() : returnTo);
       const interactive = destination === null ? {} : { returnTo: destination };
@@ -342,22 +386,32 @@ export function useController({ domain, readOnly: refused, returnTo }: Options):
           : input.method === "oauth"
             ? Transport.Method.oauth(interactive)
             : Transport.Method.integration(interactive);
-      // A domain whose connection the provider turned down is not asking for a second account:
-      // proving the same provider again re-credits the connection it already has, and the domains
-      // on it stay where they are. Starting instead would fail, because the domain is attached.
-      const snapshot = held.current.snapshot;
-      const stale =
-        snapshot?.status === "reconnect" &&
-        snapshot.provider === input.provider &&
-        snapshot.connectionId !== null;
       submit(
-        stale && snapshot?.connectionId != null
-          ? connection.reconnect({ connectionId: snapshot.connectionId, method })
-          : connection.start({ domain, method, provider: input.provider }),
+        connectionId === undefined
+          ? connection.start({ domain, method, provider: input.provider })
+          : connection.reconnect({ connectionId, method }),
         { method: input.method, provider: input.provider },
       );
     },
     [connection, domain, readOnly, returnTo, submit],
+  );
+
+  const connect = useCallback(
+    (input: ConnectInput) => {
+      // Proving the stale provider again keeps the domains on the connection they already hold.
+      const snapshot = held.current.snapshot;
+      const connectionId =
+        snapshot?.status === "reconnect" && snapshot.provider === input.provider
+          ? (snapshot.connectionId ?? undefined)
+          : undefined;
+      grant(input, connectionId);
+    },
+    [grant],
+  );
+
+  const reconnect = useCallback(
+    (input: ReconnectInput) => grant(input, input.connectionId),
+    [grant],
   );
 
   const reuse = useCallback(
@@ -467,6 +521,7 @@ export function useController({ domain, readOnly: refused, returnTo }: Options):
 
   return {
     connect,
+    reconnect,
     detach,
     disconnect,
     domain,

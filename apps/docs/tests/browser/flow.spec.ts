@@ -151,3 +151,167 @@ test("completes a typed domain from the zones the workspace's accounts reach", a
     "northwind.app (Northwind Traders)",
   );
 });
+
+const recoveryAlert = (page: Page) => page.locator("[data-slot='callback-recovery']");
+const recoveryTitles = {
+  cancelled: "Connecting Meridian was cancelled",
+  restart: "Start connecting Meridian again",
+  inspect: "Check your Meridian accounts",
+};
+
+for (const view of ["flow", "field"]) {
+  for (const kind of ["cancelled", "restart", "inspect"] as const) {
+    test(`${view} reports ${kind} recovery and dismisses only its URL hints`, async ({ page }) => {
+      await page.goto(
+        `/?view=${view}&method=oauth&domainkit=${kind}&domainkit-provider=meridian&host-value=keep&host-value=also#accounts`,
+      );
+      const alert = recoveryAlert(page);
+      await expect(alert).toContainText(recoveryTitles[kind]);
+      await expect(alert.getByRole("button", { name: "Try again" })).toHaveCount(
+        kind === "inspect" ? 0 : 1,
+      );
+      if (kind === "inspect") await expect(alert).toContainText("Inspect your connected accounts");
+      await page.evaluate(() => window.history.replaceState({ host: "kept" }, ""));
+      await alert.getByRole("button", { name: "Dismiss", exact: true }).click();
+      await expect(alert).toHaveCount(0);
+      const url = new URL(page.url());
+      expect(url.searchParams.has("domainkit")).toBe(false);
+      expect(url.searchParams.has("domainkit-provider")).toBe(false);
+      expect(url.searchParams.getAll("host-value")).toEqual(["keep", "also"]);
+      expect(url.hash).toBe("#accounts");
+      expect(await page.evaluate(() => window.history.state)).toEqual({ host: "kept" });
+      await expect(page.locator("[data-slot='fixture-destination']")).toHaveText("");
+    });
+  }
+
+  for (const kind of ["cancelled", "restart"] as const) {
+    test(`${view} retries ${kind} with the hinted provider and a clean return URL`, async ({
+      page,
+    }) => {
+      await page.goto(
+        `/?view=${view}&method=oauth&domainkit=${kind}&domainkit-provider=meridian&host-value=keep#accounts`,
+      );
+      await recoveryAlert(page).getByRole("button", { name: "Try again" }).click();
+      await expect(recoveryAlert(page)).toHaveCount(0);
+      await expect(page.locator("[data-slot='fixture-destination']")).not.toHaveText("");
+      const calls = await page.locator("[data-slot='fixture-calls']").textContent();
+      expect(calls).not.toBeNull();
+      const starts = JSON.parse(calls ?? "[]").filter(
+        (call: { method: string }) => call.method === "connection.start",
+      );
+      expect(starts).toHaveLength(1);
+      expect(starts[0].input.provider).toBe("meridian");
+      expect(starts[0].input.method._tag).toBe("OAuth");
+      expect(starts[0].input.method.returnTo).toMatch(/^\//);
+      const returnTo = new URL(starts[0].input.method.returnTo, "http://domainkit.test");
+      expect(returnTo.searchParams.has("domainkit")).toBe(false);
+      expect(returnTo.searchParams.has("domainkit-provider")).toBe(false);
+      expect(returnTo.searchParams.get("host-value")).toBe("keep");
+      expect(returnTo.hash).toBe("#accounts");
+    });
+  }
+
+  for (const kind of ["cancelled", "restart"] as const) {
+    test(`${view} retries ${kind} against the hinted connection and preserves its domains`, async ({
+      page,
+    }) => {
+      await page.goto(
+        `/?view=${view}&method=oauth&account=connected&domainkit=${kind}&domainkit-provider=meridian&host-value=keep#accounts`,
+      );
+      await expect(recoveryAlert(page)).toBeVisible();
+      const connectionId = new URL(page.url()).searchParams.get("domainkit-connection");
+      expect(connectionId).toBeTruthy();
+      const snapshots = page.locator("[data-slot='fixture-accounts']");
+      await expect(snapshots).not.toHaveText("[]");
+      const before = JSON.parse((await snapshots.textContent()) ?? "[]");
+      expect(before).toHaveLength(2);
+      expect(
+        before.every((entry: { connectionId: string }) => entry.connectionId === connectionId),
+      ).toBe(true);
+      await recoveryAlert(page).getByRole("button", { name: "Try again" }).click();
+      await expect(recoveryAlert(page)).toHaveCount(0);
+      await expect(page.locator("[data-slot='fixture-destination']")).not.toHaveText("");
+      const calls = JSON.parse(
+        (await page.locator("[data-slot='fixture-calls']").textContent()) ?? "[]",
+      );
+      const reconnects = calls.filter(
+        (call: { method: string }) => call.method === "connection.reconnect",
+      );
+      expect(reconnects).toHaveLength(1);
+      expect(reconnects[0].input.connectionId).toBe(connectionId);
+      expect(
+        calls.filter((call: { method: string }) => call.method === "connection.start"),
+      ).toHaveLength(1);
+      const returnTo = new URL(reconnects[0].input.method.returnTo, "http://domainkit.test");
+      for (const key of ["domainkit", "domainkit-provider", "domainkit-connection"]) {
+        expect(returnTo.searchParams.has(key)).toBe(false);
+        expect(new URL(page.url()).searchParams.has(key)).toBe(false);
+      }
+      expect(returnTo.searchParams.get("host-value")).toBe("keep");
+      expect(returnTo.hash).toBe("#accounts");
+      expect(JSON.parse((await snapshots.textContent()) ?? "[]")).toEqual(before);
+    });
+  }
+
+  test(`${view} refuses a nonexistent reconnect hint without creating an account`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/?view=${view}&method=oauth&domainkit=restart&domainkit-provider=meridian&domainkit-connection=missing`,
+    );
+    await recoveryAlert(page).getByRole("button", { name: "Try again" }).click();
+    await expect(recoveryAlert(page)).toHaveCount(0);
+    await expect(page.locator("[data-slot='fixture-refused']")).toHaveText("true");
+    const calls = JSON.parse(
+      (await page.locator("[data-slot='fixture-calls']").textContent()) ?? "[]",
+    );
+    expect(
+      calls.filter((call: { method: string }) => call.method === "connection.start"),
+    ).toHaveLength(0);
+    expect(
+      calls.filter((call: { method: string }) => call.method === "connection.reconnect"),
+    ).toHaveLength(1);
+    await expect(page.locator("[data-slot='fixture-destination']")).toHaveText("");
+  });
+
+  test(`${view} keeps recovery dismissible in read-only mode`, async ({ page }) => {
+    await page.goto(
+      `/?view=${view}&method=oauth&mode=read-only&domainkit=restart&domainkit-provider=meridian&domainkit-connection=existing`,
+    );
+    const alert = recoveryAlert(page);
+    await expect(alert).toContainText(recoveryTitles.restart);
+    await expect(alert.getByRole("button", { name: "Try again" })).toHaveCount(0);
+    await expect(alert.getByRole("button", { name: "Dismiss" })).toBeEnabled();
+  });
+
+  test(`${view} offers no recovery retry for an unknown provider`, async ({ page }) => {
+    await page.goto(`/?view=${view}&domainkit=restart&domainkit-provider=missing`);
+    const alert = recoveryAlert(page);
+    await expect(alert).toContainText("missing");
+    await expect(alert.getByRole("button", { name: "Try again" })).toHaveCount(0);
+  });
+}
+
+test("a token-only provider offers no recovery retry", async ({ page }) => {
+  await page.goto("/?view=field&domainkit=restart&domainkit-provider=meridian");
+  await expect(recoveryAlert(page)).toContainText(recoveryTitles.restart);
+  await expect(recoveryAlert(page).getByRole("button", { name: "Try again" })).toHaveCount(0);
+});
+
+test("inspection guidance stays available beside the field's connected accounts and zones", async ({
+  page,
+}) => {
+  await page.goto("/?view=field&domainkit=inspect&domainkit-provider=meridian");
+  await page.getByRole("button", { name: "Connect Meridian" }).click();
+  await page.getByPlaceholder("Token").fill("secret-token");
+  await page.getByRole("button", { name: "Connect with an API token" }).click();
+  const input = page.getByRole("combobox");
+  await input.fill("mail.north");
+  await expect(page.getByRole("option")).toHaveCount(1);
+  await input.press("Tab");
+  await expect(page.locator("[data-slot='domain-field-account']")).toContainText(
+    "Northwind Traders",
+  );
+  await expect(recoveryAlert(page)).toContainText("Inspect your connected accounts");
+  await expect(recoveryAlert(page).getByRole("button", { name: "Try again" })).toHaveCount(0);
+});

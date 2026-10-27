@@ -22,6 +22,7 @@ import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
 import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 
 import * as Approval from "./Approval.ts";
+import * as CallbackRecovery from "./CallbackRecovery.ts";
 import * as Cleanup from "./Cleanup.ts";
 import * as Connect from "./Connect.ts";
 import * as DnsRecord from "./DnsRecord.ts";
@@ -613,11 +614,13 @@ export const CallbackOutcome = Schema.Union([
   Schema.Struct({
     _tag: Schema.Literal("Cancelled"),
     provider: Schema.String,
+    connectionId: Schema.optionalKey(Schema.String.check(Schema.isMinLength(1))),
     returnTo: Schema.String,
   }),
   Schema.Struct({
     _tag: Schema.Literal("Failed"),
     provider: Schema.String,
+    connectionId: Schema.optionalKey(Schema.String.check(Schema.isMinLength(1))),
     returnTo: Schema.String,
     recovery: Schema.Literals(["restart", "inspect"]),
   }),
@@ -633,7 +636,8 @@ export interface Options {
   /** Where interactive flows return when the callback carries no `returnTo`. */
   readonly defaultReturnTo?: string;
   /**
-   * Opt in to a same-origin destination, or return undefined to keep default behavior. Invoked
+   * Select a same-origin destination, or return undefined to use the saved/default returnTo.
+   * Default recovery redirects include CallbackRecovery hints; Connected clears those hints. Invoked
    * only for a verified live flow; no request, state, code, secrets, or storage rows reach this
    * policy. Close over acquired host services; its Effect requires no environment.
    * A policy failure after Connected cannot undo persistence: inspect before restarting.
@@ -1192,20 +1196,52 @@ export const layer = <ApiId extends string, Groups extends HttpApiGroup.Constrai
                         returnTo: destination,
                       }
                     : outcome._tag === "Cancelled"
-                      ? { _tag: "Cancelled", provider: flow.provider, returnTo: destination }
+                      ? {
+                          _tag: "Cancelled",
+                          provider: flow.provider,
+                          returnTo: destination,
+                          ...(outcome.connectionId === undefined
+                            ? {}
+                            : { connectionId: outcome.connectionId }),
+                        }
                       : {
                           _tag: "Failed",
                           provider: flow.provider,
                           returnTo: destination,
                           recovery: outcome.recovery,
+                          ...(outcome.connectionId === undefined
+                            ? {}
+                            : { connectionId: outcome.connectionId }),
                         };
+                if (outcome._tag !== "Connected") {
+                  const attributes = {
+                    "domainkit.callback.outcome": outcome._tag,
+                    "domainkit.callback.provider": flow.provider,
+                    "domainkit.callback.reason": outcome.error.reason._tag,
+                    ...(outcome._tag === "Failed"
+                      ? { "domainkit.callback.recovery": outcome.recovery }
+                      : {}),
+                  };
+                  yield* Effect.annotateCurrentSpan(attributes);
+                  const log = outcome._tag === "Cancelled" ? Effect.logInfo : Effect.logWarning;
+                  yield* log("DomainKit callback recovery").pipe(Effect.annotateLogs(attributes));
+                }
                 const selected =
                   options.callback === undefined ? undefined : yield* options.callback(summary);
-                const location = selected === undefined ? destination : sameOrigin(selected, base);
+                const location =
+                  selected !== undefined
+                    ? sameOrigin(selected, base)
+                    : summary._tag === "Connected"
+                      ? CallbackRecovery.write(new URL(destination), null).toString()
+                      : CallbackRecovery.write(new URL(destination), {
+                          kind: summary._tag === "Cancelled" ? "cancelled" : summary.recovery,
+                          provider: summary.provider,
+                          ...(summary.connectionId === undefined
+                            ? {}
+                            : { connectionId: summary.connectionId }),
+                        }).toString();
                 if (location === null)
                   return yield* invalid("callback destination leaves this application", "callback");
-                if (selected === undefined && outcome._tag !== "Connected")
-                  return yield* Effect.fail(outcome.error);
                 return HttpApiSchema.withHeaders({
                   body: undefined as void,
                   headers: { location },

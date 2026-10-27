@@ -34,7 +34,7 @@ Add the persistence package when the host runs Effect on PostgreSQL:
 | ---------------------- | ------------------------------------------------------------------------ |
 | `domainkit`            | Lifecycle services, host seams, providers, values, and `DomainKit.Error` |
 | `domainkit/server`     | `Server.group`, its layers, `Server.Identity`, and the wire schemas      |
-| `domainkit/client`     | `Transport.fromFetch` and the Promise adapters                           |
+| `domainkit/client`     | `Transport.fromFetch`, the Promise adapters, and `CallbackRecovery`      |
 | `domainkit/testing`    | Fakes, the recording transport, and the conformance runners              |
 | `@domainkit/react`     | The React flow hook, the controllers, the message catalog, and `Testing` |
 | `@domainkit/capsuledb` | `Storage` on PostgreSQL as one CapsuleDB capsule                         |
@@ -63,11 +63,11 @@ subpath in two cases:
 
 Runtime and types resolve to the same module either way, so the two spellings never disagree.
 
-| Subpath                                                                                     |
-| ------------------------------------------------------------------------------------------- |
-| `domainkit/Approval`, `/Cleanup`, `/Cloudflare`, `/Connect`, `/Custody`, `/DnsRecord`       |
-| `domainkit/DomainKit`, `/DomainName`, `/Plan`, `/Principal`, `/Provider`, `/Providers`      |
-| `domainkit/Provision`, `/Reason`, `/Receipt`, `/Resolver`, `/Storage`, `/Vercel`, `/Verify` |
+| Subpath                                                                                                    |
+| ---------------------------------------------------------------------------------------------------------- |
+| `domainkit/Approval`, `/CallbackRecovery`, `/Cleanup`, `/Cloudflare`, `/Connect`, `/Custody`, `/DnsRecord` |
+| `domainkit/DomainKit`, `/DomainName`, `/Plan`, `/Principal`, `/Provider`, `/Providers`                     |
+| `domainkit/Provision`, `/Reason`, `/Receipt`, `/Resolver`, `/Storage`, `/Vercel`, `/Verify`                |
 
 Nothing else is importable. There is no pattern export, and no path under `internal` or `entry` is
 part of the contract.

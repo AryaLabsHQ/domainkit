@@ -90,8 +90,12 @@ export const Started = Data.taggedEnum<Started>();
 /** A verified completion result. Errors stay on the server; do not serialize them to a browser. */
 export type Completion = Data.TaggedEnum<{
   Connected: { readonly started: Exclude<Started, { readonly _tag: "Redirect" }> };
-  Cancelled: { readonly error: Errors.DomainKitError };
-  Failed: { readonly error: Errors.DomainKitError; readonly recovery: "restart" | "inspect" };
+  Cancelled: { readonly error: Errors.DomainKitError; readonly connectionId?: string };
+  Failed: {
+    readonly error: Errors.DomainKitError;
+    readonly recovery: "restart" | "inspect";
+    readonly connectionId?: string;
+  };
 }>;
 export const Completion = Data.taggedEnum<Completion>();
 
@@ -862,11 +866,22 @@ export const make: Effect.Effect<
               }),
             }),
         });
+        // Decode once without changing callback-error precedence for malformed stored payloads.
+        const decoded = yield* Errors.decode(Payload, continuation.payload, "continuation").pipe(
+          Effect.result,
+        );
+        const reconnection =
+          decoded._tag === "Success" &&
+          decoded.success.connectionId !== null &&
+          decoded.success.connectionId.length > 0
+            ? { connectionId: decoded.success.connectionId }
+            : {};
         const params = Object.fromEntries(callback.searchParams);
         const failed = (message: string) =>
           Completion.Failed({
             error: new Errors.DomainKitError({ reason: new Reason.Unauthenticated({ message }) }),
             recovery: "restart",
+            ...reconnection,
           });
         // State verification precedes denial classification, including on the direct Effect API.
         if (params.state !== input.continuationId)
@@ -875,7 +890,7 @@ export const make: Effect.Effect<
           const outcome = failed(`Provider returned ${params.error}`);
           // OAuth's standardized consent denial is the only cancellation code we recognize.
           return params.error === "access_denied"
-            ? Completion.Cancelled({ error: outcome.error })
+            ? Completion.Cancelled({ error: outcome.error, ...reconnection })
             : outcome;
         }
         const code = params.code;
@@ -883,7 +898,8 @@ export const make: Effect.Effect<
         // Once persistence starts, even a failure may leave a credential or connection behind.
         let persisting = false;
         return yield* Effect.gen(function* () {
-          const payload = yield* Errors.decode(Payload, continuation.payload, "continuation");
+          if (decoded._tag === "Failure") return yield* Effect.fail(decoded.failure);
+          const payload = decoded.success;
           const definition = yield* providers.get(continuation.provider);
           const issued =
             payload.method === "oauth"
@@ -952,6 +968,7 @@ export const make: Effect.Effect<
             Effect.succeed(
               Completion.Failed({
                 error,
+                ...reconnection,
                 recovery:
                   !persisting && error.reason._tag === "Unauthenticated" ? "restart" : "inspect",
               }),

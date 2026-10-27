@@ -132,7 +132,7 @@ Adding a provider of your own is the [write a provider](/docs/guides/implement-p
 
 ## Callback recovery
 
-Host-started flows can opt in to a sanitized destination policy on the mounted server:
+Host-started flows return to their saved destination. Set a fallback for flows with no `returnTo`:
 
 <Snippet
   file="examples/providers/cloudflare.ts"
@@ -141,8 +141,11 @@ Host-started flows can opt in to a sanitized destination policy on the mounted s
 />
 
 Pass these options to `Server.layer` or `Server.toWebHandler`. `Connected` means a durable account
-connection, not DNS readiness; re-inspect and select the zone before planning. The policy receives
-only live, authenticated outcomes and validated return destinations. Cancellation recognizes only
+connection, not DNS readiness; re-inspect and select the zone before planning. Cancellation and completion failure add `domainkit=cancelled|restart|inspect` and
+`domainkit-provider` to that destination. Read them with
+[`Connect.useRecovery()`](/docs/reference/react#callback-recovery), or use the shared
+[`CallbackRecovery` codec](/docs/reference/transport#callback-recovery). An optional callback policy
+can select a different same-origin destination from sanitized outcomes. Cancellation recognizes only
 `access_denied`; other callback errors are `Failed`. Cancellation and failure retain the flow's
 expiry and spending behavior. `inspect` can mean partial persistence and does not authorize replaying
 a one-time grant. See [callback destinations](/docs/reference/server#callback-destinations) for

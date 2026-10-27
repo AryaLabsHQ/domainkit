@@ -3,6 +3,7 @@
 import { Connect, DomainKit } from "@domainkit/react";
 import { useState, type ComponentProps } from "react";
 
+import { CallbackRecoveryAlert } from "@/components/domainkit/outcome";
 import { Mark, type ProviderArtwork } from "@/components/domainkit/provider-artwork";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +54,12 @@ export function DomainField({
 
   return (
     <div className={cn("grid gap-2", className)} data-slot="domain-field" {...props}>
+      <CallbackRecoveryAlert
+        disabled={busy || accounts.state._tag === "Loading"}
+        onRetry={accounts.connect}
+        onReconnect={accounts.reconnect}
+        providers={accounts.providers}
+      />
       <div className="relative">
         <Input {...field.inputProps} placeholder={placeholder} />
         <ul

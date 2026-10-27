@@ -3,13 +3,14 @@ import { readFile } from "node:fs/promises";
 import { Schema } from "effect";
 
 import packageJson from "../../package.json" with { type: "json" };
-import { Transport } from "../../src/entry/client.ts";
+import { CallbackRecovery, Transport } from "../../src/entry/client.ts";
 import { Server } from "../../src/entry/server.ts";
 import { Testing } from "../../src/entry/testing.ts";
 import * as root from "../../src/index.ts";
 
 const modules = [
   "Approval",
+  "CallbackRecovery",
   "Cleanup",
   "Cloudflare",
   "Connect",
@@ -63,7 +64,23 @@ describe("public namespaces", () => {
     assert.strictEqual("./promise" in packageJson.exports, false);
   });
 
-  it("keeps the client surface to the transport, its adapters, and the capability list", () => {
+  it("exports a shared browser-safe recovery codec beside the transport", () => {
+    assert.strictEqual(CallbackRecovery, root.CallbackRecovery);
+    assert.deepStrictEqual(Object.keys(CallbackRecovery).sort(), ["Model", "read", "write"]);
+    assert.isTrue(Schema.isSchema(CallbackRecovery.Model));
+    const url = CallbackRecovery.write(new URL("https://app.test/domains"), {
+      kind: "restart",
+      provider: "cloudflare",
+      connectionId: "conn_reconnect",
+    });
+    assert.deepStrictEqual(CallbackRecovery.read(url), {
+      kind: "restart",
+      provider: "cloudflare",
+      connectionId: "conn_reconnect",
+    });
+  });
+
+  it("keeps the transport surface to its adapters and the capability list", () => {
     assert.deepStrictEqual(Object.keys(Transport).sort(), [
       "Method",
       "allCapabilities",

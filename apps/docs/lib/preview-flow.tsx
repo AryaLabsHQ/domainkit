@@ -77,6 +77,8 @@ export interface PreviewOptions {
   /** Records the zone already holds, so a plan can show a no-op or a conflict beside a create. */
   readonly seed?: ReadonlyArray<DnsRecord.Model>;
   readonly oauth?: boolean;
+  /** Read iframe-local method and mode query knobs before mounting a registry block. */
+  readonly queryOptions?: boolean;
   readonly readOnly?: boolean;
   /** Start the frame with the account already granted, for the states that follow a connect. */
   readonly connected?: boolean;
@@ -91,9 +93,15 @@ export function PreviewRoot({
   children,
   connected = false,
   oauth = false,
+  queryOptions = false,
   readOnly = false,
   seed = previewSeed,
 }: PreviewOptions & { readonly children: ReactNode }) {
+  const [parameters, setParameters] = useState<URLSearchParams | null>(null);
+  useEffect(() => {
+    if (queryOptions) setParameters(new URLSearchParams(window.location.search));
+  }, [queryOptions]);
+  const interactive = oauth || parameters?.get("method") === "oauth";
   const transport = useMemo(
     () =>
       Testing.transport({
@@ -103,12 +111,12 @@ export function PreviewRoot({
           // The zone's nameservers are this provider's own, so discovery names it as the host.
           nameserverSuffixes: [previewZone],
           labels: { [previewZone]: `${previewZone} (Northwind Traders)` },
-          oauth,
+          oauth: interactive,
           records: seed.map((record) => ({ record, zone: previewZone })),
           zones: [previewZone],
         },
       }),
-    [oauth, seed],
+    [interactive, seed],
   );
   // The grant is the customer's, so a preview that starts past it makes it over the transport
   // rather than by driving the dialog: the surface below then renders the state that follows.
@@ -128,9 +136,13 @@ export function PreviewRoot({
       () => setReady(true),
     );
   }, [ready, transport]);
-  if (!ready) return null;
+  if (!ready || (queryOptions && parameters === null)) return null;
   return (
-    <DomainKit.Root navigate={() => {}} readOnly={readOnly} transport={transport}>
+    <DomainKit.Root
+      navigate={() => {}}
+      readOnly={readOnly || parameters?.get("mode") === "read-only"}
+      transport={transport}
+    >
       <div className="w-full max-w-3xl p-4">{children}</div>
     </DomainKit.Root>
   );

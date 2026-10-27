@@ -50,13 +50,14 @@ from context (`Provision.plan(...)`). `Policy` values are `Context.Reference`s w
 
 ## Values
 
-| Namespace    | Owns                                                                                                      |
-| ------------ | --------------------------------------------------------------------------------------------------------- |
-| `DomainName` | A normalized, IDN-aware hostname, its zone `candidates`, and `isWithin`                                   |
-| `DnsRecord`  | Record constructors including `txt` and `spf`, `Model`, `Observed`, `Opaque`, `data`, `equals`, `sameSet` |
-| `Plan`       | `Model`, the four operations, `writes`, `conflicts`, `isApplicable`, `renderInstructions`                 |
-| `Approval`   | Consent bound to one plan digest and an explicit operation set                                            |
-| `Receipt`    | What an apply actually wrote: `Applied`, `Skipped`, `Failed`, `applied`, `isComplete`                     |
+| Namespace          | Owns                                                                                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DomainName`       | A normalized, IDN-aware hostname, its zone `candidates`, and `isWithin`                                                                       |
+| `DnsRecord`        | Record constructors including `txt` and `spf`, `Model`, `Observed`, `Opaque`, `data`, `equals`, `sameSet`                                     |
+| `Plan`             | `Model`, the four operations, `writes`, `conflicts`, `isApplicable`, `renderInstructions`                                                     |
+| `Approval`         | Consent bound to one plan digest and an explicit operation set                                                                                |
+| `Receipt`          | What an apply actually wrote: `Applied`, `Skipped`, `Failed`, `applied`, `isComplete`                                                         |
+| `CallbackRecovery` | Browser-safe recovery URL `Model`, `read`, and `write`; also available from [`domainkit/client`](/docs/reference/transport#callback-recovery) |
 
 ## Everything else
 
@@ -95,7 +96,8 @@ Every operation fails with `DomainKit.Error`. It carries one `Reason`, and `cate
 
 `Connect.completeOutcome({ continuationId, callbackUrl, provider? })` shares the completion lock,
 exchange, persistence, and spending path with `Connect.complete`. Its `Connect.Completion` tagged
-value is `Connected { started }`, `Cancelled { error }`, or `Failed { error, recovery }`.
+value is `Connected { started }`, `Cancelled { error, connectionId? }`, or `Failed { error, recovery, connectionId? }`.
+The optional connection id names the existing connection a verified reconnect is re-crediting.
 `started` contains a connection and either an attachment or zone candidates; no redirect is produced.
 `error` is the original `DomainKit.Error` for server-side handling. Do not send this value to a
 browser: [Server callback outcomes](/docs/reference/server#callback-destinations) omit those errors

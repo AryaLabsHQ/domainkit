@@ -5,7 +5,7 @@
  * Lifecycle services: Connect, Provision, Cleanup, Verify.
  * Host seams:         Storage, Custody, Principal.
  * Providers:          Provider, Providers, Cloudflare, Vercel.
- * Values:             DomainName, DnsRecord, Plan, Approval, Receipt.
+ * Values:             DomainName, DnsRecord, Plan, Approval, Receipt, CallbackRecovery.
  * Everything else:    Reason, Resolver, DomainKit (the composed layer and `DomainKit.Error`).
  *
  * Subpath: domainkit/testing.
@@ -16,6 +16,7 @@ import packageJson from "../package.json" with { type: "json" };
 export const VERSION = packageJson.version;
 
 export * as Approval from "./Approval.ts";
+export * as CallbackRecovery from "./CallbackRecovery.ts";
 export * as Cleanup from "./Cleanup.ts";
 export * as Cloudflare from "./Cloudflare.ts";
 export * as Connect from "./Connect.ts";

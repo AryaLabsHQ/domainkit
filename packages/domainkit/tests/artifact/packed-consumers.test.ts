@@ -19,7 +19,8 @@ const PackResult = Schema.Array(Schema.Struct({ filename: Schema.String }));
  */
 const lifecycle = `
 import { Cloudflare, Connect, Custody, DnsRecord, DomainKit, Principal, Provision, Vercel, Verify, VERSION } from "domainkit";
-import { Transport } from "domainkit/client";
+import { CallbackRecovery, Transport } from "domainkit/client";
+import * as RecoveryModule from "domainkit/CallbackRecovery";
 import { cname, spf } from "domainkit/DnsRecord";
 import * as PrincipalModule from "domainkit/Principal";
 import { Server } from "domainkit/server";
@@ -27,6 +28,10 @@ import { Testing } from "domainkit/testing";
 import { Effect, Layer, Redacted, Schema } from "effect";
 
 export const run = async () => {
+  const recoveryUrl = CallbackRecovery.write(new URL("https://consumer.example/domains?tab=dns#accounts"), { kind: "cancelled", provider: "cloudflare", connectionId: "conn_reconnect" });
+  const recovery = RecoveryModule.read(recoveryUrl);
+  if (recovery?.kind !== "cancelled" || recovery.provider !== "cloudflare" || recovery.connectionId !== "conn_reconnect") throw new Error("Packed recovery codec failed");
+  if (CallbackRecovery.write(recoveryUrl, null).href !== "https://consumer.example/domains?tab=dns#accounts") throw new Error("Packed recovery dismissal failed");
   const registration = await Effect.runPromise(Server.registrationSettings({
     providers: [Cloudflare.provider({ oauth: { clientId: "public", clientAuth: "none" } }), Vercel.provider({ integration: { clientId: "c", clientSecret: Redacted.make("s"), slug: "domainkit" } })],
     callbackBaseUrl: "https://consumer.example/api/domainkit",
@@ -197,7 +202,7 @@ if (JSON.stringify(result) !== JSON.stringify(expected)) {
         `
 import { Effect, Layer, Redacted } from "effect";
 import { Connect, Custody, DnsRecord, DomainKit, Plan, type Provider, Provision, type Storage, Verify } from "domainkit";
-import { Transport } from "domainkit/client";
+import { CallbackRecovery, Transport } from "domainkit/client";
 import { Server } from "domainkit/server";
 import { Testing } from "domainkit/testing";
 
@@ -213,6 +218,12 @@ export const live: Layer.Layer<DomainKit.Services, DomainKit.Error, Storage.Serv
   );
 export const cases = Testing.conformance.storage(Testing.storage).map((item) => item.name);
 export type PublicCompletion = Connect.Completion;
+export type PublicRecovery = CallbackRecovery.Model;
+export const recoveryUrl = CallbackRecovery.write(new URL("https://consumer.example/domains"), { kind: "inspect", provider: "cloudflare", connectionId: "conn_reconnect" });
+export const recoveryHint = CallbackRecovery.read(recoveryUrl);
+export const recoveryConnection: string | undefined = recoveryHint?.connectionId;
+export const completionConnection = (outcome: Connect.Completion): string | undefined => outcome._tag === "Connected" ? outcome.started.connection.id : outcome.connectionId;
+export const callbackConnection = (outcome: Server.CallbackOutcome): string | undefined => outcome.connectionId;
 export const completeOutcome = Connect.completeOutcome;
 export const complete = Connect.complete;
 export type PublicCallbackOutcome = Server.CallbackOutcome;

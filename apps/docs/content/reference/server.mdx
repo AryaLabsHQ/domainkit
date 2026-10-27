@@ -147,13 +147,33 @@ flow. The flow is left unspent, so the person who started it can still finish it
 
 ## Callback destinations
 
+For a live, authenticated flow, the callback answers 302 to the validated saved `returnTo`, or
+`defaultReturnTo` when the flow has none. `Connected` clears all recovery parameters. Cancellation and
+completion failure add the browser-safe recovery hint below:
+
+| Outcome                             | `domainkit` | `domainkit-provider` |
+| ----------------------------------- | ----------- | -------------------- |
+| `Cancelled`                         | `cancelled` | Provider id          |
+| `Failed` with `recovery: "restart"` | `restart`   | Provider id          |
+| `Failed` with `recovery: "inspect"` | `inspect`   | Provider id          |
+
+Existing query parameters and the fragment are preserved; stale copies of all recovery parameters
+are replaced. [`CallbackRecovery`](/docs/reference/transport#callback-recovery) owns this URL
+contract. [`Connect.useRecovery()`](/docs/reference/react#callback-recovery) reads and dismisses it
+in React. The parameters are display hints anyone can edit, so they authorize no operation and
+prove neither connection nor DNS readiness.
+
+A reconnect also carries `domainkit-connection=<connectionId>`, taken from the verified live
+continuation. New connections omit it. A retry uses this target to replace the existing credential
+without creating another account connection. The host still authorizes every reconnect request.
+
 `Options.callback` receives `Server.CallbackOutcome`, a schema and type for these server-side values:
 
-| Tag         | Fields                                 | Meaning                                                                                                                             |
-| ----------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `Connected` | `provider`, `connectionId`, `returnTo` | The account connection is durable; a zone may still need selection                                                                  |
-| `Cancelled` | `provider`, `returnTo`                 | A live flow returned the allowlisted `access_denied` consent denial                                                                 |
-| `Failed`    | `provider`, `returnTo`, `recovery`     | `restart` for missing code, other callback errors, or a refused grant; `inspect` for other failures or possible partial persistence |
+| Tag         | Fields                                                      | Meaning                                                                                                                             |
+| ----------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Connected` | `provider`, `connectionId`, `returnTo`                      | The account connection is durable; a zone may still need selection                                                                  |
+| `Cancelled` | `provider`, `returnTo`, optional `connectionId`             | A live flow returned the allowlisted `access_denied` consent denial                                                                 |
+| `Failed`    | `provider`, `returnTo`, `recovery`, optional `connectionId` | `restart` for missing code, other callback errors, or a refused grant; `inspect` for other failures or possible partial persistence |
 
 <Snippet
   file="examples/server/mount.ts"
@@ -163,7 +183,7 @@ flow. The flow is left unspent, so the person who started it can still finish it
 
 The policy returns `Effect<string | undefined, DomainKit.Error>` with no environment requirement.
 Close over host services acquired when building the server layer. `undefined` keeps the default:
-302 to the saved destination on success, or the existing typed error on cancellation/failure.
+302 to the saved destination, with recovery parameters for cancellation or completion failure.
 A string selects a 302 destination, normalized and checked against the public callback origin,
 including behind a proxy. Cross-origin, malformed, and non-HTTP(S) destinations fail `InvalidInput`.
 The saved `returnTo` or `defaultReturnTo` is validated before exchange and before calling policy.
@@ -174,6 +194,13 @@ precede classification inside the completion lock. Unknown, expired, spent, and 
 remain the same refusal and invoke no policy, including expiry or consumption during authentication
 or before the locked read. Host authentication and authorization failures do not invoke policy.
 There is no recovery under a different session.
+
+Classified cancellation and failure annotate the current span and emit the
+`DomainKit callback recovery` log before the destination policy runs. Cancellation uses Info;
+failure uses Warning. The fields are `domainkit.callback.outcome`, `domainkit.callback.provider`,
+and `domainkit.callback.reason` (the reason tag), plus `domainkit.callback.recovery` for a failure.
+They contain no error message, callback URL, state, grant code, or credential. Success and refused
+callbacks emit no recovery event. The host configures its logger and tracer.
 
 `Connected` describes account persistence, not DNS readiness, plan approval, or apply. Inspect the
 connection and select its zone before planning DNS. Cancellation and completion failure do not spend

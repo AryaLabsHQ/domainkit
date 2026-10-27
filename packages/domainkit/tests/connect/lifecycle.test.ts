@@ -366,6 +366,141 @@ describe("Connect", () => {
     }).pipe(withPrincipal, Effect.provide(layerFor(fake)));
   });
 
+  for (const reconnect of [false, true]) {
+    it.effect(
+      `returns verified recovery metadata for direct ${reconnect ? "reconnect" : "connect"} outcomes`,
+      () => {
+        const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+        const oauth = fake.auth.oauth;
+        if (oauth === undefined) throw new Error("Expected OAuth fixture");
+        let failure: Errors.DomainKitError | undefined;
+        let exchanges = 0;
+        const provider: Testing.FakeProvider = {
+          ...fake,
+          auth: {
+            ...fake.auth,
+            oauth: {
+              ...oauth,
+              complete: (input) =>
+                Effect.suspend(() => {
+                  exchanges++;
+                  return failure === undefined ? oauth.complete(input) : Effect.fail(failure);
+                }),
+            },
+          },
+        };
+        return Effect.gen(function* () {
+          const first = yield* Connect.start({
+            provider: "fake",
+            method: Connect.Method.token("first"),
+            domain: "app.example.com",
+          });
+          if (first._tag !== "Connected") return assert.fail("expected connection");
+          const flow = yield* reconnect
+            ? Connect.reconnect({
+                connectionId: first.connection.id,
+                method: Connect.Method.oauth(),
+                callbackUrl: "https://app.example/cb",
+              })
+            : Connect.start({
+                provider: "fake",
+                method: Connect.Method.oauth(),
+                callbackUrl: "https://app.example/cb",
+              });
+          if (flow._tag !== "Redirect") return assert.fail("expected redirect");
+          for (const kind of [
+            "cancelled",
+            "error",
+            "missing-code",
+            "mismatch",
+            "restart",
+            "inspect",
+          ] as const) {
+            const url = new URL(flow.authorizationUrl);
+            url.searchParams.set("domainkit-connection", "query-spoof");
+            url.searchParams.set("connectionId", "raw-query-spoof");
+            if (kind === "cancelled" || kind === "error")
+              url.searchParams.set("error", kind === "cancelled" ? "access_denied" : "secret");
+            if (kind === "missing-code") url.searchParams.delete("code");
+            if (kind === "mismatch") url.searchParams.set("state", "other");
+            if (kind === "restart")
+              failure = new Errors.DomainKitError({
+                reason: new Reason.Unauthenticated({ message: "refused" }),
+              });
+            if (kind === "inspect")
+              failure = new Errors.DomainKitError({
+                reason: new Reason.ProviderUnavailable({ provider: "fake", message: "outage" }),
+              });
+            const result = yield* Connect.completeOutcome({
+              continuationId: flow.continuationId,
+              callbackUrl: url.toString(),
+              provider: "fake",
+            });
+            if (result._tag === "Connected") return assert.fail("expected nonconnected result");
+            assert.strictEqual(result._tag, kind === "cancelled" ? "Cancelled" : "Failed");
+            assert.strictEqual(result.connectionId, reconnect ? first.connection.id : undefined);
+            assert.strictEqual(Object.hasOwn(result, "connectionId"), reconnect);
+            if (result._tag === "Failed")
+              assert.strictEqual(result.recovery, kind === "inspect" ? "inspect" : "restart");
+          }
+          assert.strictEqual(exchanges, 2);
+          failure = undefined;
+          const completed = yield* Connect.completeOutcome({
+            continuationId: flow.continuationId,
+            callbackUrl: flow.authorizationUrl,
+          });
+          if (completed._tag !== "Connected") return assert.fail("expected completion");
+          if (reconnect) {
+            assert.strictEqual(completed.started.connection.id, first.connection.id);
+            assert.strictEqual(
+              (yield* Connect.inspect("app.example.com")).connection?.id,
+              first.connection.id,
+            );
+            assert.strictEqual((yield* (yield* Storage.Service).connections.list()).length, 1);
+          } else assert.notStrictEqual(completed.started.connection.id, first.connection.id);
+        }).pipe(withPrincipal, Effect.provide(layerFor(provider)));
+      },
+    );
+  }
+
+  it.effect(
+    "preserves callback error precedence and grant decode failure for malformed stored payloads",
+    () => {
+      const fake = Testing.provider({ zones: ["example.com"], oauth: true });
+      return Effect.gen(function* () {
+        const flow = yield* Connect.start({
+          provider: "fake",
+          method: Connect.Method.oauth(),
+          callbackUrl: "https://app.example/cb",
+        });
+        if (flow._tag !== "Redirect") return assert.fail("expected redirect");
+        const storage = yield* Storage.Service;
+        const continuation = yield* storage.continuations.get(flow.continuationId);
+        yield* storage.continuations.put(
+          new Storage.Continuation({ ...continuation, payload: { connectionId: "unverified" } }),
+        );
+        const url = new URL(flow.authorizationUrl);
+        url.searchParams.set("error", "access_denied");
+        const denied = yield* Connect.completeOutcome({
+          continuationId: flow.continuationId,
+          callbackUrl: url.toString(),
+        });
+        if (denied._tag !== "Cancelled") return assert.fail("expected cancellation");
+        assert.strictEqual(denied.connectionId, undefined);
+        assert.strictEqual(denied.error.reason._tag, "Unauthenticated");
+        const grant = yield* Connect.completeOutcome({
+          continuationId: flow.continuationId,
+          callbackUrl: flow.authorizationUrl,
+        });
+        if (grant._tag !== "Failed") return assert.fail("expected failure");
+        assert.strictEqual(grant.connectionId, undefined);
+        assert.strictEqual(grant.error.reason._tag, "InvalidInput");
+        assert.strictEqual(grant.recovery, "inspect");
+        assert.deepStrictEqual(fake.issued(), []);
+      }).pipe(withPrincipal, Effect.provide(layerFor(fake)));
+    },
+  );
+
   for (const mismatch of ["actor", "provider"] as const) {
     it.effect(
       `refuses a direct completion for the wrong ${mismatch} without spending the flow`,

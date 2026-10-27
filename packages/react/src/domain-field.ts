@@ -8,7 +8,7 @@
  * domain outside every zone leaves the input a plain text field.
  */
 import type { DomainKit } from "domainkit";
-import { Transport } from "domainkit/client";
+import { CallbackRecovery, Transport } from "domainkit/client";
 import * as Data from "effect/Data";
 import {
   useCallback,
@@ -153,7 +153,9 @@ export interface AccountsOptions {
 }
 
 const currentUrl = (): string | null =>
-  typeof window === "undefined" ? null : window.location.href;
+  typeof window === "undefined"
+    ? null
+    : CallbackRecovery.write(new URL(window.location.href), null).toString();
 
 /**
  * The accounts this owner holds, and the one way to add another: connect a provider without naming
