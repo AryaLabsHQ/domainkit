@@ -1,34 +1,31 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Derive provider registration requirements before connecting\n\nUse `Server.registrationSettings({ providers, callbackBaseUrl })` to derive secret-free Cloudflare OAuth and Vercel Integration callback and authentication requirements from configured definitions, without credentials, identity, storage, or network access. Custom interactive providers can supply optional registration metadata; token-only providers return no settings.\n\nInteractive starts reject empty credentials and malformed setup fields with redacted, field-specific `InvalidInput` errors before redirecting or writing a continuation. Vercel resolves its required credentials before redirect and again at completion to support rotation. Config resolution errors name the field without exposing the underlying configuration error. Configured callback bases must be HTTP(S) URLs without credentials, query, or fragment; emulator mount paths remain supported.\n"
-    filename: provider-registration-settings.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n---\n\n## Choose authenticated callback destinations\n\nOpt in through `Server.Options.callback` to select a same-origin destination from sanitized `Connected`, `Cancelled`, or `Failed` outcomes, or return `undefined` to preserve the default response. `Server.CallbackOutcome` provides the schema and type; `Connect.completeOutcome` exposes the shared locked completion result to Effect hosts while `Connect.complete` retains its result/error contract.\n\nThe completion lock verifies live owner, actor, and provider binding before classifying provider parameters. Invalid flow races answer with the same HTTP refusal and invoke no policy or exchange. Cancellation recognizes only `access_denied` and retains expiry, spending, and retry behavior. Connected means durable account access, not DNS readiness; failures can leave partial persistence and require inspection. Policy receives no raw callback data, secrets, or storage rows.\n"
-    filename: provider-callback-recovery.md
-    v: 0.0.0
-  - content: "---\npackages:\n  domainkit:\n    type: patch\n---\n\n## Update OAuth and domain parsing dependencies\n\nDomainKit uses oauth4webapi 3.8.8 and tldts 7.4.18 for provider authorization and domain parsing. Development and validation use Effect 4.0.2; the supported Effect peer range starts at 4.0.0.\n"
-    filename: runtime-dependencies.md
+  - content: "---\npackages:\n  domainkit:\n    type: minor\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Return customers to the application after a provider callback\n\n`Server.layer` and `Server.toWebHandler` redirect live, authenticated cancellation and completion\nfailure to the validated saved `returnTo` or `defaultReturnTo`. The URL carries\n`domainkit=cancelled|restart|inspect` and `domainkit-provider=<provider id>`, preserving other query\nparameters and the fragment. Hosts relying on a typed error response for these classified outcomes\nmust handle the redirect hint or select their own destination with `Options.callback`. A policy\nreturning `undefined` uses this default; an explicit destination still wins. Invalid or expired\nflows, host authentication failures, and faults before classification remain errors.\n\n`CallbackRecovery.Model`, `read`, and `write` expose the shared browser-safe URL contract from\n`domainkit`, `domainkit/CallbackRecovery`, and `domainkit/client`. `Connect.useRecovery()` in\n`@domainkit/react` reads the hint after hydration and dismisses it without navigation. The message\ncatalog supplies recovery copy, and the registry domain flow and domain field show retry or account\ninspection guidance. A hint authorizes no operation and never replays a grant.\n\nA cancelled or failed reconnect includes optional `connectionId` metadata and the\n`domainkit-connection` parameter. The registry retries that existing connection rather than creating\na second account, preserving the domains it serves. The host still authorizes reconnect requests.\n\nSuccessful default callbacks clear recovery parameters. React strips them when deriving the current\npage's default return destination, so another connect or reconnect control cannot carry an old\ncancellation alert through a successful attempt. Explicit host-selected destinations retain their\npolicy semantics.\n\nClassified callback recovery records finite outcome, provider, and reason tags on the current span\nand in logs: Info for cancellation, Warning for failure. Logs omit raw errors, callback URLs,\nstate, grant codes, and credentials, retaining failure observability when the browser redirects.\n"
+    filename: callback-recovery-default.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
-  - id: npm:@domainkit/react
-    updated: true
-  - id: npm:@domainkit/docs
-    updated: false
-  - id: npm:@domainkit/capsuledb
-    updated: true
   - changelogIds:
-      - provider-registration-settings.md
-      - provider-callback-recovery.md
-      - runtime-dependencies.md
+      - callback-recovery-default.md
     id: npm:domainkit
     updated: true
+  - changelogIds:
+      - callback-recovery-default.md
+    id: npm:@domainkit/react
+    updated: true
+  - id: npm:@domainkit/capsuledb
+    updated: true
+  - id: npm:@domainkit/video
+    updated: false
+  - id: npm:@domainkit/docs
+    updated: false
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
-  - id: npm:@domainkit/react
-  - id: npm:@domainkit/docs
-  - id: npm:@domainkit/capsuledb
   - id: npm:domainkit
+  - id: npm:@domainkit/react
+  - id: npm:@domainkit/capsuledb
+  - id: npm:@domainkit/video
+  - id: npm:@domainkit/docs
