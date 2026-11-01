@@ -180,29 +180,34 @@ describe("Connect.placementOf and Connect.completionOf", () => {
   });
 
   it("offers the zone that holds a typed subdomain, never one that only shares letters", () => {
-    const zones = [zone("shop.com"), zone("arya.sh"), zone("dev.arya.sh", "c2"), zone("avaan.app")];
+    const zones = [
+      zone("shop.com"),
+      zone("example.sh"),
+      zone("dev.example.sh", "c2"),
+      zone("northwind.app"),
+    ];
     const names = (value: string) =>
       Connect.suggestionsFor(value, zones).map((entry) => entry.zone);
-    expect(names("probe.arya.sh")).toEqual(["arya.sh"]);
-    expect(names("mail.dev.arya.sh")).toEqual(["dev.arya.sh", "arya.sh"]);
-    expect(names("arya.sh")).toEqual(["arya.sh"]);
-    expect(Connect.completionOf("probe.arya.sh", zone("arya.sh"))).toBe("probe.arya.sh");
+    expect(names("probe.example.sh")).toEqual(["example.sh"]);
+    expect(names("mail.dev.example.sh")).toEqual(["dev.example.sh", "example.sh"]);
+    expect(names("example.sh")).toEqual(["example.sh"]);
+    expect(Connect.completionOf("probe.example.sh", zone("example.sh"))).toBe("probe.example.sh");
   });
 
   it("offers nothing for a finished name no connected zone holds", () => {
-    const zones = [zone("shop.com"), zone("arya.sh")];
+    const zones = [zone("shop.com"), zone("example.sh")];
     expect(Connect.suggestionsFor("probe.unrelated.sh", zones)).toEqual([]);
-    expect(Connect.suggestionsFor("probe.arya.shop", zones)).toEqual([]);
+    expect(Connect.suggestionsFor("probe.example.shop", zones)).toEqual([]);
   });
 
   it("still completes a zone the customer is part way through typing", () => {
-    const zones = [zone("shop.com"), zone("arya.sh")];
+    const zones = [zone("shop.com"), zone("example.sh")];
     const names = (value: string) =>
       Connect.suggestionsFor(value, zones).map((entry) => entry.zone);
-    expect(names("ar")).toEqual(["arya.sh"]);
+    expect(names("ex")).toEqual(["example.sh"]);
     expect(names("mail.sh")).toEqual(["shop.com"]);
-    expect(names("probe.arya.s")).toEqual(["arya.sh"]);
-    expect(Connect.completionOf("probe.arya.s", zone("arya.sh"))).toBe("probe.arya.sh");
+    expect(names("probe.example.s")).toEqual(["example.sh"]);
+    expect(Connect.completionOf("probe.example.s", zone("example.sh"))).toBe("probe.example.sh");
   });
 });
 
