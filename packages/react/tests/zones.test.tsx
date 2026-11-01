@@ -178,6 +178,37 @@ describe("Connect.placementOf and Connect.completionOf", () => {
     expect(Connect.completionOf("ex", only)).toBe("example.com");
     expect(Connect.suggestionsFor("nothing.here", [only])).toEqual([]);
   });
+
+  it("offers the zone that holds a typed subdomain, never one that only shares letters", () => {
+    const zones = [
+      zone("shop.com"),
+      zone("example.sh"),
+      zone("dev.example.sh", "c2"),
+      zone("northwind.app"),
+    ];
+    const names = (value: string) =>
+      Connect.suggestionsFor(value, zones).map((entry) => entry.zone);
+    expect(names("probe.example.sh")).toEqual(["example.sh"]);
+    expect(names("mail.dev.example.sh")).toEqual(["dev.example.sh", "example.sh"]);
+    expect(names("example.sh")).toEqual(["example.sh"]);
+    expect(Connect.completionOf("probe.example.sh", zone("example.sh"))).toBe("probe.example.sh");
+  });
+
+  it("offers nothing for a finished name no connected zone holds", () => {
+    const zones = [zone("shop.com"), zone("example.sh")];
+    expect(Connect.suggestionsFor("probe.unrelated.sh", zones)).toEqual([]);
+    expect(Connect.suggestionsFor("probe.example.shop", zones)).toEqual([]);
+  });
+
+  it("still completes a zone the customer is part way through typing", () => {
+    const zones = [zone("shop.com"), zone("example.sh")];
+    const names = (value: string) =>
+      Connect.suggestionsFor(value, zones).map((entry) => entry.zone);
+    expect(names("ex")).toEqual(["example.sh"]);
+    expect(names("mail.sh")).toEqual(["shop.com"]);
+    expect(names("probe.example.s")).toEqual(["example.sh"]);
+    expect(Connect.completionOf("probe.example.s", zone("example.sh"))).toBe("probe.example.sh");
+  });
 });
 
 describe("Connect.useDomainField", () => {

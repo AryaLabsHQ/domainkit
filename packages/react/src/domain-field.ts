@@ -240,6 +240,10 @@ export function useAccounts({
 
 const normalize = (value: string): string => value.trim().toLowerCase().replace(/\.$/, "");
 
+/** Whether `domain` is the zone or a name under it, compared on whole labels. */
+const contains = (zone: string, domain: string): boolean =>
+  domain === zone || domain.endsWith(`.${zone}`);
+
 /**
  * The zone a value already sits in: the longest listed zone the value is at or under. Two accounts
  * can serve the same zone, so `preferred` names the one the customer picked and wins among equals;
@@ -252,10 +256,7 @@ export const placementOf = (
 ): { readonly zone: Zone; readonly placement: Placement } | null => {
   const domain = normalize(value);
   if (domain === "") return null;
-  const matching = zones.filter((candidate) => {
-    const zone = normalize(candidate.zone);
-    return domain === zone || domain.endsWith(`.${zone}`);
-  });
+  const matching = zones.filter((candidate) => contains(normalize(candidate.zone), domain));
   const longest = matching.reduce(
     (best, candidate) =>
       best === null || normalize(candidate.zone).length > normalize(best.zone).length
@@ -280,37 +281,46 @@ export const placementOf = (
 };
 
 /**
- * What the customer typed in front of the zone they are reaching for. "mail.ex" against
- * `example.com` is the subdomain "mail"; "ex" on its own is none.
+ * Where a partly typed zone starts: the labels before it are the subdomain, the rest is the start
+ * of the zone. The partial zone begins on a label boundary, and a single trailing label counts only
+ * behind a single label, so "mail.ex" reaches for `example.com` while "probe.unrelated.sh" is a
+ * finished name rather than the start of `shop.com`.
  */
-const subdomainOf = (value: string, zone: string): string => {
-  const typed = normalize(value);
-  const target = normalize(zone);
-  if (typed === "" || target.startsWith(typed)) return "";
-  const cut = typed.lastIndexOf(".");
-  if (cut < 0) return "";
-  const head = typed.slice(0, cut);
-  const tail = typed.slice(cut + 1);
-  return target.startsWith(tail) ? head : "";
+const partialSplit = (typed: string, zone: string): string | null => {
+  if (zone.startsWith(typed)) return "";
+  for (let cut = typed.indexOf("."); cut >= 0; cut = typed.indexOf(".", cut + 1)) {
+    const head = typed.slice(0, cut);
+    const tail = typed.slice(cut + 1);
+    if (tail === "" || !zone.startsWith(tail)) continue;
+    if (tail.includes(".") || !head.includes(".")) return head;
+  }
+  return null;
 };
 
-/** Zones the typed value is reaching for: a prefix of the zone, or a subdomain of one. */
+/**
+ * Zones the typed value is reaching for. A zone that already holds the name wins outright, the
+ * deepest first, so `probe.example.com` offers `example.com` and never a zone that only shares
+ * letters with it. Otherwise the value is still being typed: a zone it is a prefix of, or one whose
+ * start follows a subdomain.
+ */
 export const suggestionsFor = (value: string, zones: ReadonlyArray<Zone>): ReadonlyArray<Zone> => {
   const typed = normalize(value);
   if (typed === "") return zones;
-  return zones.filter((candidate) => {
-    const zone = normalize(candidate.zone);
-    if (zone.startsWith(typed)) return true;
-    const cut = typed.lastIndexOf(".");
-    if (cut < 0) return false;
-    const tail = typed.slice(cut + 1);
-    return tail !== "" && zone.startsWith(tail);
-  });
+  const holding = zones.filter((candidate) => contains(normalize(candidate.zone), typed));
+  if (holding.length > 0)
+    return holding.toSorted(
+      (left, right) => normalize(right.zone).length - normalize(left.zone).length,
+    );
+  return zones.filter((candidate) => partialSplit(typed, normalize(candidate.zone)) !== null);
 };
 
 /** The value a suggestion completes to: whatever subdomain was typed, then the zone. */
 export const completionOf = (value: string, zone: Zone): string => {
-  const subdomain = subdomainOf(value, zone.zone);
+  const typed = normalize(value);
+  const target = normalize(zone.zone);
+  const subdomain = contains(target, typed)
+    ? typed.slice(0, Math.max(typed.length - target.length - 1, 0))
+    : (partialSplit(typed, target) ?? "");
   return subdomain === "" ? zone.zone : `${subdomain}.${zone.zone}`;
 };
 
