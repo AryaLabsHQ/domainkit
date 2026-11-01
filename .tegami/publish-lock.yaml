@@ -1,31 +1,29 @@
 core:changelogs:
-  - content: "---\npackages:\n  domainkit:\n    type: minor\n  \"@domainkit/react\":\n    type: minor\n---\n\n## Return customers to the application after a provider callback\n\n`Server.layer` and `Server.toWebHandler` redirect live, authenticated cancellation and completion\nfailure to the validated saved `returnTo` or `defaultReturnTo`. The URL carries\n`domainkit=cancelled|restart|inspect` and `domainkit-provider=<provider id>`, preserving other query\nparameters and the fragment. Hosts relying on a typed error response for these classified outcomes\nmust handle the redirect hint or select their own destination with `Options.callback`. A policy\nreturning `undefined` uses this default; an explicit destination still wins. Invalid or expired\nflows, host authentication failures, and faults before classification remain errors.\n\n`CallbackRecovery.Model`, `read`, and `write` expose the shared browser-safe URL contract from\n`domainkit`, `domainkit/CallbackRecovery`, and `domainkit/client`. `Connect.useRecovery()` in\n`@domainkit/react` reads the hint after hydration and dismisses it without navigation. The message\ncatalog supplies recovery copy, and the registry domain flow and domain field show retry or account\ninspection guidance. A hint authorizes no operation and never replays a grant.\n\nA cancelled or failed reconnect includes optional `connectionId` metadata and the\n`domainkit-connection` parameter. The registry retries that existing connection rather than creating\na second account, preserving the domains it serves. The host still authorizes reconnect requests.\n\nSuccessful default callbacks clear recovery parameters. React strips them when deriving the current\npage's default return destination, so another connect or reconnect control cannot carry an old\ncancellation alert through a successful attempt. Explicit host-selected destinations retain their\npolicy semantics.\n\nClassified callback recovery records finite outcome, provider, and reason tags on the current span\nand in logs: Info for cancellation, Warning for failure. Logs omit raw errors, callback URLs,\nstate, grant codes, and credentials, retaining failure observability when the browser redirects.\n"
-    filename: callback-recovery-default.md
+  - content: "---\npackages:\n  \"@domainkit/react\":\n    type: patch\n---\n\n## Suggest the zone that holds a typed name\n\n`Connect.suggestionsFor` now offers a zone that already holds the typed name before anything else,\ndeepest first, compared on whole labels. `probe.example.com` offers `example.com`, and a zone that\nonly shares letters with the name, such as `shop.com` for `probe.example.sh`, is no longer offered.\nWhen no zone holds the name, the field still completes a zone typed part way, either from its start\nor after a subdomain, and a finished name that no connected zone holds offers nothing.\n`Connect.completionOf` keeps the typed subdomain when it completes a name its zone already holds.\n"
+    filename: zone-suggestions-hold-the-name.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
-  - changelogIds:
-      - callback-recovery-default.md
-    id: npm:domainkit
+  - id: npm:domainkit
     updated: true
   - changelogIds:
-      - callback-recovery-default.md
+      - zone-suggestions-hold-the-name.md
     id: npm:@domainkit/react
     updated: true
-  - id: npm:@domainkit/capsuledb
-    updated: true
-  - id: npm:@domainkit/video
-    updated: false
   - id: npm:@domainkit/docs
     updated: false
+  - id: npm:@domainkit/video
+    updated: false
+  - id: npm:@domainkit/capsuledb
+    updated: true
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
   - id: npm:domainkit
   - id: npm:@domainkit/react
-  - id: npm:@domainkit/capsuledb
-  - id: npm:@domainkit/video
   - id: npm:@domainkit/docs
+  - id: npm:@domainkit/video
+  - id: npm:@domainkit/capsuledb
