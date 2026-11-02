@@ -53,8 +53,9 @@ finish at the callback. The domain is optional: the account is what the customer
 | `SelectionRequired` | The credential reaches several matching zones; pick one and attach   |
 
 A successful exchange spends the continuation created by `start`, so a replay of that callback fails
-`NotFound` rather than connecting twice. Cancellation and completion failure leave the continuation
-unspent until it expires, and the same flow can still be finished.
+`NotFound` rather than connecting twice. Cancellation leaves it unspent, so that flow can still be
+finished. A completion failure also leaves it unspent. The provider code may already have been used,
+and a connection may already be stored, so inspect saved accounts before starting again.
 
 ## Listing the zones an owner reaches
 
