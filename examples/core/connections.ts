@@ -29,8 +29,9 @@ export const withToken = Connect.start({
 
 // #region interactive
 /**
- * OAuth and marketplace installs answer `Redirect`. Send the customer to `authorizationUrl`; the
- * provider drives the browser back to `/callback/:provider`, which calls `Connect.complete`.
+ * OAuth and marketplace installs answer `Redirect`. Send the customer to `authorizationUrl`.
+ * The mounted `/callback/:provider` route completes the flow and redirects. `Connect.complete`
+ * is that exchange for an Effect host that owns the callback: `Started`, or the original error.
  */
 export const withOAuth = Effect.map(
   Connect.start({

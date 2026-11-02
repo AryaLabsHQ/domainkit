@@ -59,11 +59,12 @@ Check three things in order:
    that same value at the provider.
 2. **`Identity` reads a cookie.** The callback is a top-level browser navigation, so an
    `Authorization` header scheme yields no principal there and the flow fails at the last step.
-3. **The continuation is still alive.** They live fifteen minutes by default, and they are spent
-   exactly once, so a replayed callback fails `NotFound`.
+3. **The continuation is still alive.** They live fifteen minutes by default. A successful exchange
+   spends one exactly once, so a replay of that callback fails `NotFound`. Cancellation and
+   completion failure leave it unspent until expiry.
 
-A callback that lands somewhere unexpected is `defaultReturnTo`: a `returnTo` that does not resolve
-to the callback's own origin is refused rather than followed.
+A flow with no `returnTo` uses `defaultReturnTo`. A `returnTo` that does not resolve to the
+callback's own origin is refused rather than followed.
 
 ## DNS never becomes ready
 

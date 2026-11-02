@@ -134,6 +134,11 @@ The [domain flow](/components/registry/domain-flow) and
 semantics: `inputProps`, `listboxProps`, and `optionProps(zone)`, the `suggestions` the typed value
 reaches for, the `highlighted` one, the `found` placement, `complete(zone)`, and `close()`.
 
+`Connect.suggestionsFor` offers the zones that already hold the typed name, matched on whole labels
+and listed deepest first. Otherwise it offers a zone the value is still typing.
+`Connect.completionOf` keeps the typed subdomain in front of the chosen zone, including when that
+zone already holds the name.
+
 <Snippet file="examples/react/add-domain.tsx" region="field" title="The zone picker" />
 
 ## Flow state
@@ -150,7 +155,7 @@ reaches for, the `highlighted` one, the `found` placement, `complete(zone)`, and
 
 ## Read-only
 
-`readOnly` refuses commands that change the domain: connect, attach, detach, disconnect,
+`readOnly` refuses commands that change the domain: connect, reconnect, attach, detach, disconnect,
 plan, approve, decline, apply, and provisioning or cleanup `retry`. The refusal is in the controller,
 so rendering a control anyway cannot send those commands to the transport. Connection `retry`
 re-inspects instead of repeating a write; verification `observe` and `retry` stay available.

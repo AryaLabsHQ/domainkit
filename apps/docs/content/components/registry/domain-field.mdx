@@ -6,8 +6,8 @@ seo:
 ---
 
 `domain-field` is how a customer adds a domain without typing the whole of it. The zones every
-connected account reaches load when the field mounts, typing filters them, and the line underneath
-says where the records will go.
+connected account reaches load when the field mounts. Typing narrows that list, and the line
+underneath says where the records will go.
 
 <Component path="registry/domain-field" />
 
@@ -19,10 +19,16 @@ npx shadcn@latest add https://domain-kit.dev/r/domain-field.json
 
 ## How it completes
 
-A suggestion never replaces what the customer typed, it finishes it: "mail.ex" against
-`example.com` completes to `mail.example.com`. The arrow keys move the highlight, Tab or Enter
-completes it, and Escape closes the list. A domain outside every connected zone leaves the input a
-plain text field, because those records are ones the customer adds by hand.
+Zones that already hold the typed name are the ones offered, matched on whole labels and listed
+deepest first. `mail.dev.example.com` offers `dev.example.com` ahead of `example.com`, and a zone
+that only shares letters with the typed name is left out. Otherwise the value is still being typed:
+the field offers a zone it is a prefix of, or one whose start follows a typed subdomain on a label
+boundary. A finished name that no connected zone holds offers nothing, and the input stays a plain
+text field, because those records are ones the customer adds by hand.
+
+A suggestion finishes the name and keeps the typed subdomain. "mail.ex" against `example.com`
+completes to `mail.example.com`, and a name its zone already holds stays that name. The arrow keys
+move the highlight, Tab or Enter completes it, and Escape closes the list.
 
 With no account connected yet, the field offers the providers instead, and an account the provider
 turned down is offered as a reconnect rather than as a second account.

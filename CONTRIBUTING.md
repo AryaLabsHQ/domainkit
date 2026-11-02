@@ -77,7 +77,8 @@ the PR's CI result when local policy prevents it.
 
 The live harness is opt-in and never runs in CI. It runs the provider conformance suite against a
 real account: create and read back, exact no-op, conflict, stale plan, and partial apply. Every
-record it writes carries the conformance prefix and is removed again.
+record it writes carries the conformance prefix and is removed again. Run it from
+`packages/domainkit`, where those scripts are defined:
 
 ```sh
 bun run test:live:cloudflare

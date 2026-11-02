@@ -12,11 +12,14 @@ string arrives from `Messages.Catalog` first, so one prop translates the whole s
 
 ## Messages
 
-`Messages.Catalog` holds every string in eight groups: actions, progress, connection, plan review,
-records, receipts, verification, and failures, which have one function per `DomainKit.Error` reason. The catalog is
-closed, so every key has a default in `Messages.english`; `messages` on `DomainKit.Root` takes a
-`Partial<Catalog>` and merges over it, and a host replaces one key without restating the rest.
-`DomainKit.useMessages()` returns the merged catalog to a component of your own.
+`Messages.Catalog` holds every user-visible string. Actions, progress, connection, plan review,
+records, receipts, verification, and failures are the labeled groups. Failures have one function per
+`DomainKit.Error` reason. Callback recovery adds `recoveryCancelled(provider)`,
+`recoveryRestart(provider)`, and `recoveryInspect(provider)`, each a title and description. `retry`
+and `dismissRecovery` are the action labels. The catalog is closed, so every key has a default in
+`Messages.english`; `messages` on `DomainKit.Root` takes a `Partial<Catalog>` and merges over it,
+and a host replaces one key without restating the rest. `DomainKit.useMessages()` returns the merged
+catalog to a component of your own.
 
 An operation becomes a sentence through `operation`, a conflict becomes a reason and an advice
 through `conflictReason` and `conflictAdvice`, and a token field name becomes a label through

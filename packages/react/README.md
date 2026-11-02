@@ -145,7 +145,8 @@ another account without naming a domain and lists the ones already connected, ea
 `label` the provider gave it (`null` when the provider named none), and `Connect.useDomainField` turns a text input into a
 combobox over those zones: it returns `inputProps`, `listboxProps`, and `optionProps`, moves the
 highlight with the arrow keys, and completes on Tab or Enter while keeping whatever subdomain was
-typed in front of the zone.
+typed in front of the zone. Zones that already hold the typed name are offered on their own, deepest
+first. A finished name that no connected zone holds offers nothing.
 
 ```tsx
 const { zones } = Connect.useZones();

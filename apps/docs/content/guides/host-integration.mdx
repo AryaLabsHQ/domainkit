@@ -73,13 +73,19 @@ down. Hono, Next.js App Router, and TanStack Start all take a Web handler direct
 
 ## Handle the callback
 
-An interactive connection ends at `/callback/:provider`. DomainKit spends the continuation, stores
-the connection, and redirects the customer.
-
-The destination is the `returnTo` the flow was started with, or `defaultReturnTo`. It is resolved
+An interactive connection ends at `/callback/:provider`. A live, authenticated flow answers 302 to
+the saved `returnTo`, or to `defaultReturnTo` when the flow stored none. The destination is resolved
 against the callback URL and must land on its origin, so neither the provider nor a crafted
 `returnTo` can steer the customer off your application. `returnTo` is not a declared callback query
 parameter, so the provider cannot set it at all.
+
+When the account connection is stored, the route spends the continuation and redirects with recovery
+parameters cleared. Cancellation and completion failure redirect to that same destination and leave
+the continuation unspent until it expires. The URL then carries `domainkit=cancelled|restart|inspect`
+and `domainkit-provider=<id>`, plus `domainkit-connection=<connectionId>` when the flow was
+re-crediting an existing connection. Those parameters are display hints.
+[Callback destinations](/docs/reference/server#callback-destinations) is the full contract.
+Unknown, expired, spent, and mismatched flows stay errors and do not redirect.
 
 By default the callback URL is the request's own origin plus the prefix the group is mounted at. An
 edge that rewrites `Host` leaves that pointing somewhere the browser never reaches, so name the
