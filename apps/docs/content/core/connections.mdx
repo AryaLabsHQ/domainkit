@@ -52,8 +52,10 @@ finish at the callback. The domain is optional: the account is what the customer
 | `Redirect`          | Send the customer to `authorizationUrl`; the callback finishes it    |
 | `SelectionRequired` | The credential reaches several matching zones; pick one and attach   |
 
-The continuation created by `start` is spent exactly once, so a replayed callback fails `NotFound`
-rather than connecting twice.
+A successful exchange spends the continuation created by `start`, so a replay of that callback fails
+`NotFound` rather than connecting twice. Cancellation leaves it unspent, so that flow can still be
+finished. A completion failure also leaves it unspent. The provider code may already have been used,
+and a connection may already be stored, so inspect saved accounts before starting again.
 
 ## Listing the zones an owner reaches
 

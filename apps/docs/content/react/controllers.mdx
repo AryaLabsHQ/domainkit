@@ -27,13 +27,14 @@ takes one options object and returns a controller whose `state` is a tagged unio
 | `SelectionRequired` | The credential reaches several matching zones                                             |
 | `Failure`           | Carries the `DomainKit.Error`                                                             |
 
-| Command                                             | Does                                                                                            |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `connect({ provider, method, values?, returnTo? })` | Starts a connection, or proves the same provider again for a connection that needs reconnecting |
-| `reuse({ connectionId, zone? })`                    | Attaches the domain to a connection the owner already has                                       |
-| `select(zone)`                                      | Answers `SelectionRequired`                                                                     |
-| `detach()` / `disconnect()`                         | Releases the domain, or the whole connection                                                    |
-| `refresh()` / `retry()`                             | Re-inspects, or re-runs the step that failed                                                    |
+| Command                                                             | Does                                                                                            |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `connect({ provider, method, values?, returnTo? })`                 | Starts a connection, or proves the same provider again for a connection that needs reconnecting |
+| `reconnect({ connectionId, provider, method, values?, returnTo? })` | Replaces the credential behind a connection the owner already holds, keeping its domains        |
+| `reuse({ connectionId, zone? })`                                    | Attaches the domain to a connection the owner already has                                       |
+| `select(zone)`                                                      | Answers `SelectionRequired`                                                                     |
+| `detach()` / `disconnect()`                                         | Releases the domain, or the whole connection                                                    |
+| `refresh()` / `retry()`                                             | Re-inspects, or re-runs the step that failed                                                    |
 
 Discovery runs on mount whenever the transport declares it and the domain has no connection yet. A
 discovery failure leaves `discovery` null and the provider list still renders: discovery is an
