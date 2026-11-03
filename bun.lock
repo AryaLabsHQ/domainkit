@@ -24,7 +24,7 @@
         "blume": "^2.2.1",
         "clsx": "2.1.1",
         "domainkit": "workspace:^0.22.0",
-        "effect": "4.0.2",
+        "effect": "4.1.2",
         "media-chrome": "4.19.3",
         "react": "19.3.0",
         "react-dom": "19.3.0",
@@ -68,11 +68,11 @@
         "domainkit": "workspace:*",
       },
       "devDependencies": {
-        "@effect/sql-pg": "4.0.2",
+        "@effect/sql-pg": "4.1.2",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
-        "capsuledb": "0.5.0",
-        "effect": "4.0.2",
+        "capsuledb": "0.6.0",
+        "effect": "4.1.2",
         "react": "19.3.0",
         "react-dom": "19.3.0",
         "typescript": "7.0.2",
@@ -85,21 +85,21 @@
         "domainkit": "workspace:^0.22.0",
       },
       "devDependencies": {
-        "@effect/sql-pg": "4.0.2",
-        "@effect/vitest": "4.0.2",
+        "@effect/sql-pg": "4.1.2",
+        "@effect/vitest": "4.1.2",
         "@testcontainers/postgresql": "12.2.0",
         "@types/bun": "1.4.2",
-        "capsuledb": "0.5.0",
+        "capsuledb": "0.6.0",
         "drizzle-orm": "1.0.0-rc.5-ab785fc",
-        "effect": "4.0.2",
+        "effect": "4.1.2",
         "tsdown": "0.23.0",
         "typescript": "7.0.2",
         "vite": "8.3.4",
         "vitest": "5.0.3",
       },
       "peerDependencies": {
-        "capsuledb": ">=0.5.0 <0.6.0",
-        "effect": ">=4.0.0 <5.0.0",
+        "capsuledb": ">=0.6.0 <0.7.0",
+        "effect": ">=4.1.2 <5.0.0",
       },
     },
     "packages/domainkit": {
@@ -111,9 +111,9 @@
         "tldts": "^7.4.18",
       },
       "devDependencies": {
-        "@effect/vitest": "4.0.2",
+        "@effect/vitest": "4.1.2",
         "@types/bun": "1.4.2",
-        "effect": "4.0.2",
+        "effect": "4.1.2",
         "miniflare": "3.20250718.3",
         "tsdown": "0.23.0",
         "typescript": "7.0.2",
@@ -121,7 +121,7 @@
         "vitest": "5.0.3",
       },
       "peerDependencies": {
-        "effect": ">=4.0.0 <5.0.0",
+        "effect": ">=4.1.2 <5.0.0",
       },
     },
     "packages/react": {
@@ -135,7 +135,7 @@
         "@testing-library/user-event": "14.6.7",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
-        "effect": "4.0.2",
+        "effect": "4.1.2",
         "jsdom": "30.1.2",
         "react": "19.3.0",
         "react-dom": "19.3.0",
@@ -145,14 +145,14 @@
         "vitest": "5.0.3",
       },
       "peerDependencies": {
-        "effect": ">=4.0.0 <5.0.0",
+        "effect": ">=4.1.2 <5.0.0",
         "react": ">=19.0.0 <20.0.0",
         "react-dom": ">=19.0.0 <20.0.0",
       },
     },
   },
   "overrides": {
-    "capsuledb": "0.5.0",
+    "capsuledb": "0.6.0",
   },
   "packages": {
     "@ai-sdk/gateway": ["@ai-sdk/gateway@4.0.100", "", { "dependencies": { "@ai-sdk/provider": "4.0.19", "@ai-sdk/provider-utils": "5.0.51", "@vercel/oidc": "3.2.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-diJXVW2D1/NUW2JSg99b8yTpN8eW9AK5ntXSW4B7NrsW5STqwcGJAAOFlfOrQBzYHJlWReyy11WefWetdx4Qsw=="],
@@ -357,9 +357,9 @@
 
     "@dotenvx/primitives": ["@dotenvx/primitives@0.8.0", "", {}, "sha512-VYJy0uhFm9zTJ1TxBaW/pA8bjbOM/OttaNMwZ1RHG4JKyRG7DhSdiqD1ipQoAyoD22olUtxbP78W9xY3Wd11bg=="],
 
-    "@effect/sql-pg": ["@effect/sql-pg@4.0.2", "", { "peerDependencies": { "effect": "^4.0.2" } }, "sha512-i2N5F0L5s1S8Nx2I8V7k+awBinP26b5xiiHL1zn5b6RALNnloiU7FK1yS4dAkmqG9B0EcOVxvJrIpoMWwrB4hw=="],
+    "@effect/sql-pg": ["@effect/sql-pg@4.1.2", "", { "peerDependencies": { "effect": "^4.1.2" } }, "sha512-0UehR7B5W8dC+dX6fDeWStLbVbBb2M4pk4HBATEeH0cmV4Odl2lckTg0jFmLuadekTLa4OyB+bZQo1yTG1y2Mw=="],
 
-    "@effect/vitest": ["@effect/vitest@4.0.2", "", { "peerDependencies": { "effect": "^4.0.2", "vitest": ">=5.0.0 <6.0.0" } }, "sha512-Zb72nu7iUy3rNdBp9J1Xu5oUQGwJ8cOYsUwmYgujj88aqyvASRDjOS01SjlcPViqf77csduetKdCJTVndMNfzw=="],
+    "@effect/vitest": ["@effect/vitest@4.1.2", "", { "peerDependencies": { "effect": "^4.1.2", "vitest": ">=5.0.0 <6.0.0" } }, "sha512-JJPwAHkJHxvM/woW9mMW/khjasAHcmwWdOMAgMy16rfqsxcVhFDnrRsvN9VI2+kMv8zDCCyBE2q1n5hzZlfE0w=="],
 
     "@emmetio/abbreviation": ["@emmetio/abbreviation@2.3.3", "", { "dependencies": { "@emmetio/scanner": "^1.0.4" } }, "sha512-mgv58UrU3rh4YgbE/TzgLQwJ3pFsHHhCLqY20aJq+9comytTXUDNGG/SMtSeMJdkpxgXSXunBGLD8Boka3JyVA=="],
 
@@ -1305,7 +1305,7 @@
 
     "caniuse-lite": ["caniuse-lite@1.0.30001810", "", {}, "sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg=="],
 
-    "capsuledb": ["capsuledb@0.5.0", "", { "peerDependencies": { "@effect/sql-libsql": ">=4.0.0 <5", "@effect/sql-pg": ">=4.0.0 <5", "@effect/sql-sqlite-bun": ">=4.0.0 <5", "alchemy": ">=2.0.0-beta.80 <3", "effect": ">=4.0.0 <5" }, "optionalPeers": ["@effect/sql-libsql", "@effect/sql-pg", "@effect/sql-sqlite-bun", "alchemy"], "bin": { "capsuledb": "dist/cli.mjs" } }, "sha512-YK34GBQjcjRjQjwhhD++CagzrYwFn32yJaGTefnx2N3BWsVv11FrITPh/FlwkFBA2sFO08JYyqNRyGjTo6yooA=="],
+    "capsuledb": ["capsuledb@0.6.0", "", { "peerDependencies": { "@effect/sql-libsql": ">=4.0.0 <5", "@effect/sql-pg": ">=4.0.0 <5", "@effect/sql-sqlite-bun": ">=4.0.0 <5", "alchemy": ">=2.0.0-beta.80 <3", "effect": ">=4.1.2 <5" }, "optionalPeers": ["@effect/sql-libsql", "@effect/sql-pg", "@effect/sql-sqlite-bun", "alchemy"], "bin": { "capsuledb": "dist/cli.mjs" } }, "sha512-BRQeMlivdXT2p+ZInic0Kahq13FvqvCRi9Ewyn+kWtWSdrxQ7Vr7JVdYd4TZQemmx0njnLxu0T1oq03/O0z2pg=="],
 
     "ccount": ["ccount@2.0.1", "", {}, "sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg=="],
 
@@ -1561,7 +1561,7 @@
 
     "ee-first": ["ee-first@1.1.1", "", {}, "sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow=="],
 
-    "effect": ["effect@4.0.2", "", {}, "sha512-YeYnLqSFrL4+tCOXRrfNP03w8FILoF/wDl+ukraJAGzXrjcS383W7LAAvGBbLatEyktmLxRq+9xJinx7QzXW5A=="],
+    "effect": ["effect@4.1.2", "", {}, "sha512-d3Oah1WyKxFLFh19yWheS5IXIVaITzxZ71JkE1rkUozq/6EcJSU5nPk5bF2QrSygZ3SQoiNQB8TsxFriyMeMaQ=="],
 
     "ejs": ["ejs@3.1.10", "", { "dependencies": { "jake": "^10.8.5" }, "bin": { "ejs": "bin/cli.js" } }, "sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA=="],
 

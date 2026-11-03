@@ -16,7 +16,7 @@ export const registryManifest = (coreTarball: string, reactTarball: string) => {
     "class-variance-authority": "0.7.1",
     clsx: "2.1.1",
     domainkit: `file:${coreTarball}`,
-    effect: "4.0.0",
+    effect: "4.1.2",
     react: "19.3.0",
     "react-dom": "19.3.0",
     "tailwind-merge": "3.3.1",

@@ -44,7 +44,7 @@
     "blume": "^2.2.1",
     "clsx": "2.1.1",
     "domainkit": "workspace:^0.22.0",
-    "effect": "4.0.2",
+    "effect": "4.1.2",
     "media-chrome": "4.19.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
