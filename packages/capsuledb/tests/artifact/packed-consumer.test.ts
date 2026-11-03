@@ -46,7 +46,7 @@ describe("packed PostgreSQL integration consumer", () => {
           dependencies: {
             "@domainkit/capsuledb": `file:${integration}`,
             domainkit: `file:${core}`,
-            capsuledb: "0.5.0",
+            capsuledb: "0.6.0",
             effect: "4.1.2",
           },
           overrides: { domainkit: `file:${core}` },
@@ -104,7 +104,7 @@ for (const name of ["@domainkit/capsuledb", "domainkit", "capsuledb", "effect"])
   assert.ok(entry.startsWith(${JSON.stringify(`${directory}/`)}), entry);
   assert.ok(!entry.includes("/src/"), entry);
 }
-assert.equal(require("capsuledb/package.json").version, "0.5.0");
+assert.equal(require("capsuledb/package.json").version, "0.6.0");
 assert.equal(require("effect/package.json").version, "4.1.2");
 assert.equal(require("domainkit/package.json").version, ${JSON.stringify(packageJson.version)});
 assert.equal(VERSION, ${JSON.stringify(packageJson.version)});

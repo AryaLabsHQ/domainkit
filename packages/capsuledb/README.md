@@ -13,6 +13,8 @@ rows, queries, or a raw client.
 
 ## Install
 
+Requires CapsuleDB `>=0.6.0 <0.7.0` and Effect `>=4.1.2 <5.0.0`.
+
 ```sh
 bun add @domainkit/capsuledb capsuledb @effect/sql-pg
 ```
