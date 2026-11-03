@@ -1,3 +1,14 @@
+## @domainkit/react@0.23.0
+
+### Require Effect 4.1.2 and CapsuleDB 0.6
+
+DomainKit, its React controllers, and its PostgreSQL adapter require Effect 4.1.2 or newer within
+Effect 4. The development, SQL client, test, snippet, registry, and packed-consumer dependencies
+use Effect 4.1.2 together.
+
+The PostgreSQL adapter requires CapsuleDB `>=0.6.0 <0.7.0`, with development, examples, and packed
+consumers pinned to the published CapsuleDB 0.6.0 release. Hosts continue to supply the SQL client.
+
 ## @domainkit/react@0.22.1
 
 ### Suggest the zone that holds a typed name

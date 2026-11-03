@@ -18,12 +18,12 @@
       "name": "@domainkit/docs",
       "dependencies": {
         "@base-ui/react": "^1.8.0",
-        "@domainkit/react": "workspace:^0.22.0",
+        "@domainkit/react": "workspace:^0.23.0",
         "@hugeicons/core-free-icons": "4.3.5",
         "@hugeicons/react": "1.1.10",
         "blume": "^2.2.1",
         "clsx": "2.1.1",
-        "domainkit": "workspace:^0.22.0",
+        "domainkit": "workspace:^0.23.0",
         "effect": "4.1.2",
         "media-chrome": "4.19.3",
         "react": "19.3.0",
@@ -80,9 +80,9 @@
     },
     "packages/capsuledb": {
       "name": "@domainkit/capsuledb",
-      "version": "0.22.1",
+      "version": "0.23.0",
       "dependencies": {
-        "domainkit": "workspace:^0.22.0",
+        "domainkit": "workspace:^0.23.0",
       },
       "devDependencies": {
         "@effect/sql-pg": "4.1.2",
@@ -104,7 +104,7 @@
     },
     "packages/domainkit": {
       "name": "domainkit",
-      "version": "0.22.1",
+      "version": "0.23.0",
       "dependencies": {
         "@leichtgewicht/dns-packet": "6.0.3",
         "oauth4webapi": "^3.8.8",
@@ -126,9 +126,9 @@
     },
     "packages/react": {
       "name": "@domainkit/react",
-      "version": "0.22.1",
+      "version": "0.23.0",
       "dependencies": {
-        "domainkit": "workspace:^0.22.0",
+        "domainkit": "workspace:^0.23.0",
       },
       "devDependencies": {
         "@testing-library/react": "16.3.3",
