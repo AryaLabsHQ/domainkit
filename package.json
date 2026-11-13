@@ -3,14 +3,17 @@
   "private": true,
   "description": "DomainKit workspace for adding custom domains to apps with reviewable DNS plans.",
   "keywords": [
+    "cloudflare",
     "custom-domains",
     "dns",
     "domainkit",
     "effect",
     "react",
-    "typescript"
+    "saas",
+    "typescript",
+    "vercel"
   ],
-  "homepage": "https://github.com/AryaLabsHQ/domainkit#readme",
+  "homepage": "https://domain-kit.dev",
   "bugs": {
     "url": "https://github.com/AryaLabsHQ/domainkit/issues"
   },
