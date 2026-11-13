@@ -382,6 +382,20 @@ export const make = (
     // snake_case columns the capsule declared.
     const sql = client.withoutTransforms();
 
+    /**
+     * Run `effect` with every statement of this client on `connection`, outside a transaction.
+     *
+     * The client reads its transaction connection as `[connection, depth]` and starts a nested
+     * `withTransaction` at `depth + 1`, where depth 0 is `BEGIN` and anything deeper a savepoint.
+     * Binding the connection at depth -1 routes plain statements to it and lets a transaction
+     * inside begin and commit on it as a top-level one. One session runs one statement at a time,
+     * so the effect's storage calls have to run sequentially.
+     */
+    const onSession = <A, E, R>(
+      connection: Effect.Success<typeof sql.reserve>,
+      effect: Effect.Effect<A, E, R>,
+    ) => Effect.provideService(effect, sql.transactionService, [connection, -1]);
+
     const authorizations = sql(tables.authorizations.name);
     const connections = sql(tables.connections.name);
     const attachments = sql(tables.attachments.name);
@@ -1497,6 +1511,8 @@ export const make = (
               // against the provider, and no transaction should stay open across an HTTP call.
               // `reserve` pins one pooled connection so the unlock runs on the session that took
               // the lock, and registering it after the connection makes it run first on release.
+              // The guarded effect's own statements run on that connection too (see `onSession`),
+              // so a host whose pool holds one connection does not wait for a second.
               const connection = yield* Effect.mapError(sql.reserve, (error) =>
                 storageFailed("withLock", sqlMessage(error)),
               );
@@ -1525,7 +1541,7 @@ export const make = (
                     )
                     .pipe(Effect.ignore),
               );
-              return yield* effect;
+              return yield* onSession(connection, effect);
             }),
           ),
         ),
