@@ -57,6 +57,7 @@
     "capsuledb": "0.6.0",
     "drizzle-orm": "1.0.0-rc.5-ab785fc",
     "effect": "4.1.2",
+    "testcontainers": "12.2.0",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vite": "8.3.4",

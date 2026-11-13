@@ -3,8 +3,8 @@
  *
  * Every method reads `Principal` and filters by `owner_id`, so a row belonging to another tenant
  * is indistinguishable from a row that does not exist. Aggregate transitions run inside one
- * transaction over a `FOR UPDATE` row, single-flight guards use a session-level advisory lock on a
- * reserved connection, and revocation is two-phase: mark `pending`, call the provider outside any
+ * transaction over a `FOR UPDATE` row, single-flight guards run in a transaction that holds an
+ * advisory lock, and revocation is two-phase: mark `pending`, call the provider outside any
  * transaction, then delete.
  *
  * `Connect` seals provider secret material through `Custody` before it reaches authorization
@@ -32,6 +32,14 @@ const invalid = (message: string, field?: string) =>
   fail(new Reason.InvalidInput({ message, ...(field === undefined ? {} : { field }) }));
 
 const busy = (key: string) => fail(new Reason.Busy({ key }));
+
+/** A failure the effect under `withLock` raised, told apart from the transaction's own. */
+class Guarded {
+  readonly error: unknown;
+  constructor(error: unknown) {
+    this.error = error;
+  }
+}
 
 const storageFailed = (operation: string, message: string) =>
   new DomainKit.Error({
@@ -381,20 +389,6 @@ export const make = (
     // A host may configure result-name transforms for its own tables; these queries read the exact
     // snake_case columns the capsule declared.
     const sql = client.withoutTransforms();
-
-    /**
-     * Run `effect` with every statement of this client on `connection`, outside a transaction.
-     *
-     * The client reads its transaction connection as `[connection, depth]` and starts a nested
-     * `withTransaction` at `depth + 1`, where depth 0 is `BEGIN` and anything deeper a savepoint.
-     * Binding the connection at depth -1 routes plain statements to it and lets a transaction
-     * inside begin and commit on it as a top-level one. One session runs one statement at a time,
-     * so the effect's storage calls have to run sequentially.
-     */
-    const onSession = <A, E, R>(
-      connection: Effect.Success<typeof sql.reserve>,
-      effect: Effect.Effect<A, E, R>,
-    ) => Effect.provideService(effect, sql.transactionService, [connection, -1]);
 
     const authorizations = sql(tables.authorizations.name);
     const connections = sql(tables.connections.name);
@@ -1503,47 +1497,38 @@ export const make = (
             ),
           ).pipe(guard("readiness.get")),
       },
-      withLock: (key, effect) =>
+      withLock: <A, E, R>(key: string, effect: Effect.Effect<A, E, R>) =>
         Effect.flatMap(Principal.Service, ({ ownerId }) =>
-          Effect.scoped(
-            Effect.gen(function* () {
-              // A session lock, not a transaction lock: the guarded effect refreshes a credential
-              // against the provider, and no transaction should stay open across an HTTP call.
-              // `reserve` pins one pooled connection so the unlock runs on the session that took
-              // the lock, and registering it after the connection makes it run first on release.
-              // The guarded effect's own statements run on that connection too (see `onSession`),
-              // so a host whose pool holds one connection does not wait for a second.
-              const connection = yield* Effect.mapError(sql.reserve, (error) =>
-                storageFailed("withLock", sqlMessage(error)),
-              );
-              const scoped = `${ownerId}:${key}`;
-              yield* Effect.acquireRelease(
-                connection
-                  .execute(
-                    "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired",
-                    [scoped],
-                    undefined,
-                  )
-                  .pipe(
-                    Effect.mapError((error: SqlError.SqlError) =>
-                      storageFailed("withLock", sqlMessage(error)),
-                    ),
-                    Effect.flatMap((rows: ReadonlyArray<{ readonly acquired: boolean }>) =>
-                      rows[0]?.acquired === true ? Effect.void : busy(key),
-                    ),
-                  ),
-                () =>
-                  connection
-                    .execute(
-                      "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
-                      [scoped],
-                      undefined,
-                    )
-                    .pipe(Effect.ignore),
-              );
-              return yield* onSession(connection, effect);
-            }),
-          ),
+          // A transaction lock. A pooler in transaction mode, such as PlanetScale's PgBouncer port,
+          // hands each statement outside a transaction to whichever server session is free, so a
+          // session lock and its unlock can land on different sessions and the lock outlives the
+          // guard. A transaction pins one session until it ends, and the lock ends with it: on
+          // commit, on rollback, or when a dropped client makes the pooler close that session.
+          // The guarded effect runs inside the transaction, on its one connection, so a host whose
+          // pool holds one connection never waits for a second; its writes commit when it
+          // succeeds and roll back when it fails.
+          sql
+            .withTransaction(
+              Effect.gen(function* () {
+                const rows = yield* sql<{ readonly acquired: boolean }>`
+                  SELECT pg_try_advisory_xact_lock(hashtextextended(${`${ownerId}:${key}`}, 0))
+                    AS acquired
+                `.pipe(Effect.mapError((error) => storageFailed("withLock", sqlMessage(error))));
+                if (rows[0]?.acquired !== true) return yield* busy(key);
+                return yield* effect;
+              }).pipe(Effect.mapError((error) => new Guarded(error))),
+            )
+            .pipe(
+              // What the guarded body raised passes through; anything else is BEGIN, COMMIT or
+              // ROLLBACK failing.
+              Effect.catch((error) =>
+                Effect.fail(
+                  error instanceof Guarded
+                    ? (error.error as E | Fail)
+                    : storageFailed("withLock", sqlMessage(error)),
+                ),
+              ),
+            ),
         ),
     };
 
