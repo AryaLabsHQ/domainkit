@@ -1,6 +1,29 @@
+import type { ThemeRegistration } from "@shikijs/core";
+import githubLightDefault from "@shikijs/themes/github-light-default";
 import { defineConfig } from "blume";
 import { orama } from "blume/search";
 import { filesystem } from "blume/sources";
+
+/**
+ * GitHub's current code themes. Every token in `github-dark-default` clears WCAG AA (4.5:1) on the
+ * dark page (`#0a0d12`) and code background (`#0f1319`); comments read 6.06:1 or better. In
+ * `github-light-default` only comments fall short (`#6e7781`, 4.16:1 on `#f5f5f1`), so they take
+ * Primer's muted foreground, `#59636e` (5.59:1). The older `github-light` also fails on its orange,
+ * red, and green tokens against `#fbfbf9`.
+ */
+// The themes package's declarations import `@shikijs/core`, which Bun's isolated install does not
+// link beside them, so name the type here.
+const githubLight: ThemeRegistration = githubLightDefault;
+
+const lightCodeTheme: ThemeRegistration = {
+  ...githubLight,
+  name: "domainkit-light",
+  tokenColors: githubLight.tokenColors?.map((rule) =>
+    [rule.scope].flat().includes("comment")
+      ? { ...rule, settings: { ...rule.settings, foreground: "#59636e" } }
+      : rule,
+  ),
+};
 
 export default defineConfig({
   agents: {
@@ -56,6 +79,14 @@ export default defineConfig({
   logo: {
     image: "/logo.svg",
     text: "DomainKit",
+  },
+  markdown: {
+    code: {
+      theme: {
+        dark: "github-dark-default",
+        light: lightCodeTheme,
+      },
+    },
   },
   navigation: {
     repo: true,
