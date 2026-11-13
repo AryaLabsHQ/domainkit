@@ -92,7 +92,9 @@ Samva may be named publicly. Approved wording: **"Samva sets up customer domains
   filing) recorded in the proof registry with an observed date. Secondary summaries, competitor
   blog posts about a rival, and remembered anecdotes are not sources.
 - Each comparison page needs owner sign-off before it goes public.
-- Credit what competitors do well. Entri lists about 60 DNS providers with direct API login against DomainKit's two.
+- Credit what competitors do well. Entri's site says 70+ DNS providers (its docs list 65 with
+  automatic setup) against DomainKit's two. Attribute the number to Entri's site, never state it
+  as fact.
 - Do not publish "Domain Connect is dead" (the templates repository is active and several providers
   list support) or "Entri costs thousands a month" (its public plan starts at $249 a month). Domain
   Connect is complementary, never a target.
