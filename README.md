@@ -31,6 +31,18 @@ supplies the lifecycle, not a hosted control plane.
 Samva sets up customer domains with DomainKit. Read
 [how Samva sets up customer domains](https://domain-kit.dev/customers/samva).
 
+## Quickstart
+
+```sh
+bun add domainkit effect
+```
+
+[Build and apply your first DNS plan](https://domain-kit.dev/docs/quickstart) with the in-memory
+provider, no credentials needed, then
+[mount the routes in your API](https://domain-kit.dev/docs/guides/host-integration) and
+[connect Cloudflare](https://domain-kit.dev/docs/providers/cloudflare) or
+[Vercel](https://domain-kit.dev/docs/providers/vercel).
+
 ## Packages
 
 - [`domainkit`](./packages/domainkit/README.md) — the Effect-native lifecycle, its host seams, the

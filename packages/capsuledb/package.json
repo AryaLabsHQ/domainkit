@@ -3,6 +3,8 @@
   "version": "0.23.0",
   "description": "DomainKit Storage on PostgreSQL, as one declarative CapsuleDB capsule",
   "keywords": [
+    "capsuledb",
+    "custom-domains",
     "dns",
     "domainkit",
     "effect",
