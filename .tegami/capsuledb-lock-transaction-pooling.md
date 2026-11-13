@@ -14,3 +14,6 @@ while the first still held the key. The transaction pins one session, and the lo
 commit, on rollback, or when a dropped client closes it. The guarded effect's writes now commit
 when it succeeds and roll back when it fails, and the transaction stays open across a credential
 refresh's provider call.
+
+Inside an open transaction, each `PgStorage` call runs in its own savepoint, so a caller that
+recovers from a failed storage call keeps the writes it made before it.

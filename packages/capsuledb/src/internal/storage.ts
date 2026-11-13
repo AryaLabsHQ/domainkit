@@ -33,6 +33,14 @@ const invalid = (message: string, field?: string) =>
 
 const busy = (key: string) => fail(new Reason.Busy({ key }));
 
+/** A `DomainKit.Error` carried out of a savepoint as a value, so the savepoint is released. */
+class Refused {
+  readonly error: Fail;
+  constructor(error: Fail) {
+    this.error = error;
+  }
+}
+
 /** A failure the effect under `withLock` raised, told apart from the transaction's own. */
 class Guarded {
   readonly error: unknown;
@@ -51,18 +59,9 @@ const sqlMessage = (error: SqlError.SqlError): string =>
     ? `${error.reason._tag}: ${error.reason.cause.message}`
     : `${error.reason._tag}: ${String(error.reason.cause)}`;
 
-/**
- * Collapse the SQL error channel into `DomainKit.Error`.
- *
- * A `DomainKit.Error` raised by the body is the deliberate outcome of an invariant and passes
- * through unchanged; anything else is a driver failure and becomes `StorageFailed`.
- */
-const guard =
-  (operation: string) =>
-  <A, R>(effect: Effect.Effect<A, SqlError.SqlError | Fail, R>): Effect.Effect<A, Fail, R> =>
-    Effect.catch(effect, (error) =>
-      Effect.fail(DomainKit.isError(error) ? error : storageFailed(operation, sqlMessage(error))),
-    );
+/** Collapse a driver failure into `DomainKit.Error`; a `DomainKit.Error` passes through. */
+const collapse = (operation: string, error: SqlError.SqlError | Fail): Fail =>
+  DomainKit.isError(error) ? error : storageFailed(operation, sqlMessage(error));
 
 // ---------------------------------------------------------------------------------------------
 // Row codecs
@@ -389,6 +388,38 @@ export const make = (
     // A host may configure result-name transforms for its own tables; these queries read the exact
     // snake_case columns the capsule declared.
     const sql = client.withoutTransforms();
+
+    /**
+     * Collapse the SQL error channel into `DomainKit.Error`.
+     *
+     * A `DomainKit.Error` raised by the body is the deliberate outcome of an invariant and passes
+     * through unchanged; anything else is a driver failure and becomes `StorageFailed`.
+     *
+     * Inside an open transaction, such as `withLock`'s, the call runs in its own savepoint. A failed
+     * statement aborts the whole transaction, so without one a caller that recovers from a storage
+     * failure would lose every write before it when the transaction ends. The savepoint rolls back
+     * only on a driver failure: a `DomainKit.Error` keeps the call's writes, as it does outside a
+     * transaction, where `continuations.consume` deletes an expired row and then fails `Expired`.
+     */
+    const guard =
+      (operation: string) =>
+      <A, R>(effect: Effect.Effect<A, SqlError.SqlError | Fail, R>): Effect.Effect<A, Fail, R> =>
+        Effect.flatMap(Effect.serviceOption(sql.transactionService), (open) =>
+          Option.isNone(open)
+            ? Effect.mapError(effect, (error) => collapse(operation, error))
+            : sql
+                .withTransaction(
+                  Effect.catchIf(effect, DomainKit.isError, (error) =>
+                    Effect.succeed(new Refused(error)),
+                  ),
+                )
+                .pipe(
+                  Effect.mapError((error) => collapse(operation, error)),
+                  Effect.flatMap((result) =>
+                    result instanceof Refused ? Effect.fail(result.error) : Effect.succeed(result),
+                  ),
+                ),
+        );
 
     const authorizations = sql(tables.authorizations.name);
     const connections = sql(tables.connections.name);
