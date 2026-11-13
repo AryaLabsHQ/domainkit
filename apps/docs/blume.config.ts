@@ -41,7 +41,8 @@ export default defineConfig({
   deployment: {
     site: "https://domain-kit.dev",
   },
-  description: "Add custom domains to your app with reviewable DNS plans and React flows.",
+  description:
+    "An open-source TypeScript library for custom domains in SaaS: it sets up a customer's DNS records through their own Cloudflare or Vercel account.",
   examples: {
     css: "examples/theme.css",
     source: "examples",
@@ -71,6 +72,7 @@ export default defineConfig({
       logo: "/logo.svg",
       name: "Arya Labs",
       sameAs: ["https://github.com/AryaLabsHQ"],
+      url: "https://arya.sh",
     },
     og: {
       titles: {

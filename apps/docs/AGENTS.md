@@ -52,6 +52,12 @@ live in its own frame. Every registry preview mounts `lib/preview-flow.tsx`, whi
   `packages/capsuledb/src/index.ts`. Hand-author semantics; never list an internal module as public.
 - Pages describe the current API only. No version comparisons and no migration notes.
 
+## Deployment
+
+`bun run deploy` builds the site and runs `wrangler deploy` with `wrangler.jsonc` (Worker
+`domainkit-docs`, custom domain `domain-kit.dev`). The site stays on Wrangler and `wrangler.jsonc`
+until Cloudflare's `cf` CLI can build Astro 6+ projects; its beta cannot, and Blume is Astro-based.
+
 ## Checks
 
 From this directory: `bun run reference:check`, `bun run typecheck`, `bun run test`,

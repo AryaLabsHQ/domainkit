@@ -1113,6 +1113,11 @@ const faqs: {
   .aside {
     font-size: 0.92rem;
   }
+  /* Links inside a sentence need more than colour to stand out (WCAG 1.4.1). */
+  .aside a,
+  .strip-note a {
+    text-decoration: underline;
+  }
 
   /* Cells */
   .cells {
