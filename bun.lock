@@ -82,7 +82,7 @@
     },
     "packages/capsuledb": {
       "name": "@domainkit/capsuledb",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "domainkit": "workspace:^0.23.0",
       },
@@ -106,7 +106,7 @@
     },
     "packages/domainkit": {
       "name": "domainkit",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@leichtgewicht/dns-packet": "6.0.3",
         "oauth4webapi": "^3.8.8",
@@ -128,7 +128,7 @@
     },
     "packages/react": {
       "name": "@domainkit/react",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "domainkit": "workspace:^0.23.0",
       },

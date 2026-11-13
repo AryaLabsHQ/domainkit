@@ -1,33 +1,29 @@
 core:changelogs:
-  - content: "---\npackages:\n  group:public:\n    type: minor\n---\n\n## Require Effect 4.1.2 and CapsuleDB 0.6\n\nDomainKit, its React controllers, and its PostgreSQL adapter require Effect 4.1.2 or newer within\nEffect 4. The development, SQL client, test, snippet, registry, and packed-consumer dependencies\nuse Effect 4.1.2 together.\n\nThe PostgreSQL adapter requires CapsuleDB `>=0.6.0 <0.7.0`, with development, examples, and packed\nconsumers pinned to the published CapsuleDB 0.6.0 release. Hosts continue to supply the SQL client.\n"
-    filename: 2026-11-03-b4e91a.md
+  - content: "---\npackages:\n  \"@domainkit/capsuledb\":\n    type: patch\n---\n\n## Refresh credentials on a one-connection pool\n\n`PgStorage` runs the storage calls a single-flight guard protects, such as the credential reads and\nrotate in a credential refresh, on the connection that holds the guard's advisory lock, and a\ntransaction inside the guard begins and commits on that connection. A host whose SQL pool holds one connection, such as a Lambda, refreshes an expired OAuth\ncredential instead of waiting for a second connection. The lock stays a session lock, so no\ntransaction is open across the provider call.\n"
+    filename: capsuledb-lock-one-connection.md
     v: 0.0.0
 core:packages:
   - id: npm:domainkit-workspace
     updated: false
   - id: npm:@domainkit/examples
     updated: false
-  - changelogIds:
-      - 2026-11-03-b4e91a.md
-    id: npm:domainkit
-    updated: true
-  - changelogIds:
-      - 2026-11-03-b4e91a.md
-    id: npm:@domainkit/capsuledb
-    updated: true
-  - id: npm:@domainkit/video
-    updated: false
-  - changelogIds:
-      - 2026-11-03-b4e91a.md
-    id: npm:@domainkit/react
-    updated: true
   - id: npm:@domainkit/docs
     updated: false
+  - id: npm:@domainkit/video
+    updated: false
+  - id: npm:@domainkit/react
+    updated: true
+  - changelogIds:
+      - capsuledb-lock-one-connection.md
+    id: npm:@domainkit/capsuledb
+    updated: true
+  - id: npm:domainkit
+    updated: true
 npm:packages:
   - id: npm:domainkit-workspace
   - id: npm:@domainkit/examples
-  - id: npm:domainkit
-  - id: npm:@domainkit/capsuledb
+  - id: npm:@domainkit/docs
   - id: npm:@domainkit/video
   - id: npm:@domainkit/react
-  - id: npm:@domainkit/docs
+  - id: npm:@domainkit/capsuledb
+  - id: npm:domainkit
