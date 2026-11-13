@@ -108,7 +108,7 @@ describe("withLock on a one-connection pool", () => {
   );
 
   it(
-    "commits transactions inside the lock, top-level and nested, on the locked connection",
+    "commits transactions inside the lock as savepoints of its transaction",
     () =>
       run(
         "org-one-connection-tx",
@@ -122,7 +122,7 @@ describe("withLock on a one-connection pool", () => {
             `refresh:${id}`,
             Effect.gen(function* () {
               // `promoteCapabilities` opens its own transaction over a `FOR UPDATE` row, which
-              // begins at the top level here because the lock holds no transaction open.
+              // nests as a savepoint in the lock's transaction.
               yield* storage.authorizations.promoteCapabilities(id, ["dns:write"]);
               yield* sql.withTransaction(
                 Effect.gen(function* () {

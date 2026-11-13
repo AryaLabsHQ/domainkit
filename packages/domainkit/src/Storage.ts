@@ -465,7 +465,11 @@ export interface Interface {
     readonly put: (readiness: Readiness) => Fx<void>;
     readonly get: (domain: string) => Fx<Option.Option<Readiness>>;
   };
-  /** Single-flight guard keyed by string (credential refresh, apply). Fails `Busy` rather than waiting. */
+  /**
+   * Single-flight guard keyed by string (credential refresh, OAuth completion). Fails `Busy` rather
+   * than waiting. A transactional store may run `effect` in one transaction, so a caller must not
+   * depend on the writes of a guarded effect that fails.
+   */
   readonly withLock: <A, E, R>(
     key: string,
     effect: Effect.Effect<A, E, R>,

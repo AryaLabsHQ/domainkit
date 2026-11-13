@@ -40,9 +40,13 @@ a `FOR UPDATE` row; duplicates are decided by unique constraints through `ON CON
 NOTHING`; a continuation is claimed by `DELETE ... RETURNING`, which is what makes it exactly once.
 Provider revocation and custody calls never run inside a transaction: the row is durably marked
 `pending`, the transaction closes, the provider is called, and a second transaction deletes the row.
-A failure between the two leaves recoverable state. The single-flight guard is a session advisory
-lock held on a reserved connection, so a credential refresh can call the provider without holding a
-transaction open.
+A failure between the two leaves recoverable state. The single-flight guard is the exception: it is
+an advisory lock scoped to a transaction that spans the guarded work, provider call included. A
+pooler in transaction mode, such as PlanetScale's PgBouncer port, keeps no session state between
+transactions, so a session lock can be released on the wrong session and outlive its guard; a
+transaction pins one session, and its lock ends on commit, on rollback, or when a dropped client
+closes it. The guarded work runs on that transaction's connection, so a one-connection pool never
+waits for a second, and its writes commit together.
 
 PostgreSQL is the only engine shipped. The `Storage` contract and its conformance suite are
 engine-neutral, and further engines are layers in the same package.

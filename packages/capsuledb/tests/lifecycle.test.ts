@@ -334,8 +334,7 @@ describe("lifecycle on PgStorage", () => {
           const before = yield* storage.authorizations.credential(
             (yield* storage.connections.get(started.connection.id)).authorizationId,
           );
-          // The advisory lock has to be released on the reserved connection, or the second call
-          // would fail Busy against a session that is back in the pool.
+          // The lock ends with the first call's transaction, or the second call would fail Busy.
           yield* storage.withLock("refresh:locked", Effect.void);
           yield* storage.withLock("refresh:locked", Effect.void);
           const after = yield* storage.authorizations.credential(

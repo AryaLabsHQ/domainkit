@@ -148,8 +148,11 @@ change it after. `registryPrefix` does the same for CapsuleDB's own ledger table
   the row only while it still holds the credential that was revoked. A crash in between, or a
   refresh that rotated the credential mid-revoke, leaves a row `recoverRevocations` finishes later,
   so a newly issued credential is never orphaned at the provider.
-- `withLock` takes a session advisory lock on a reserved connection and fails `Busy` rather than
-  waiting, so a credential refresh single-flights without holding a transaction across an HTTP call.
+- `withLock` runs the guarded effect in one transaction that holds a transaction-scoped advisory
+  lock, and fails `Busy` rather than waiting. It holds through a pooler in transaction mode, such as
+  PlanetScale's PgBouncer port, and on a one-connection pool. The guarded effect's writes commit
+  when it succeeds and roll back when it fails, and the transaction stays open across the provider
+  call a credential refresh makes.
 
 The package passes `Testing.conformance.storage` from `domainkit/testing`, the same suite the
 in-memory implementation passes.
