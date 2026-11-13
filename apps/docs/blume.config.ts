@@ -1,3 +1,4 @@
+import type { ThemeRegistration } from "@shikijs/core";
 import githubLightDefault from "@shikijs/themes/github-light-default";
 import { defineConfig } from "blume";
 import { orama } from "blume/search";
@@ -10,15 +11,14 @@ import { filesystem } from "blume/sources";
  * Primer's muted foreground, `#59636e` (5.59:1). The older `github-light` also fails on its orange,
  * red, and green tokens against `#fbfbf9`.
  */
-interface TokenRule {
-  readonly scope?: string | readonly string[];
-  readonly settings: { readonly foreground?: string };
-}
+// The themes package's declarations import `@shikijs/core`, which Bun's isolated install does not
+// link beside them, so name the type here.
+const githubLight: ThemeRegistration = githubLightDefault;
 
-const lightCodeTheme = {
-  ...githubLightDefault,
+const lightCodeTheme: ThemeRegistration = {
+  ...githubLight,
   name: "domainkit-light",
-  tokenColors: githubLightDefault.tokenColors?.map((rule: TokenRule) =>
+  tokenColors: githubLight.tokenColors?.map((rule) =>
     [rule.scope].flat().includes("comment")
       ? { ...rule, settings: { ...rule.settings, foreground: "#59636e" } }
       : rule,
