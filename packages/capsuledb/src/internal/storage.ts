@@ -388,8 +388,8 @@ export const make = (
      * The client reads its transaction connection as `[connection, depth]` and starts a nested
      * `withTransaction` at `depth + 1`, where depth 0 is `BEGIN` and anything deeper a savepoint.
      * Binding the connection at depth -1 routes plain statements to it and lets a transaction
-     * inside, such as `rotate`'s, begin and commit on it as a top-level one. One session runs one
-     * statement at a time, so the effect's storage calls have to run sequentially.
+     * inside begin and commit on it as a top-level one. One session runs one statement at a time,
+     * so the effect's storage calls have to run sequentially.
      */
     const onSession = <A, E, R>(
       connection: Effect.Success<typeof sql.reserve>,
