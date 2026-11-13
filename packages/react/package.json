@@ -1,6 +1,6 @@
 {
   "name": "@domainkit/react",
-  "version": "0.23.0",
+  "version": "0.23.1",
   "description": "Headless React hooks for custom-domain setup",
   "keywords": [
     "custom-domains",
