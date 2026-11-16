@@ -129,9 +129,10 @@ Readiness is keyed by domain rather than by attachment, so a host observing publ
 the same row; `attachment_id` links the attachment when one exists and is cleared when it is
 removed.
 
-Every table carries `owner_id`, and every query filters by the `Principal.Service` your host provides, so a
-row belonging to another tenant reads as absent. No foreign keys are declared, to your tables or
-between these; add the ones you want in the emitted SQL.
+Every table except batch items carries `owner_id`. Reads are scoped to the `Principal.Service` your
+host provides, so a row belonging to another tenant reads as absent. Batch items are reached only
+through an owner-scoped batch, and any joined attempt is filtered under the same owner. No foreign keys are declared, to your tables or between these; add the ones you
+want in the emitted SQL.
 
 `PgStorage.layer({ prefix })` renames the tables. The prefix is part of the physical layout: it
 changes the rendered DDL and the migration checksum, so fix it before the first deploy and never

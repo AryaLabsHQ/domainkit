@@ -31,11 +31,11 @@ provider estimate, observed (dated), or inference; never blend them.
 
 ## Schema
 
-Blume 1.5.3 emits `WebSite` everywhere and `TechArticle` on docs pages. Add only truthful nodes:
-`SoftwareSourceCode` (MIT, `codeRepository` `https://github.com/AryaLabsHQ/domainkit`,
-`programmingLanguage` TypeScript) and `Organization` on the homepage, `BreadcrumbList` on docs pages.
-`FAQPage` only where a real, visible FAQ exists. No `HowTo`. Blume 2 adds `seo.organization` and
-`seo.software`; upgrading is its own PR.
+Blume emits the graph from `apps/docs/blume.config.ts`: a `WebSite` node everywhere, the page node
+(`WebPage` on the homepage, an article elsewhere, `TechArticle` on docs pages), and a
+`BreadcrumbList` on articles. `seo.organization` adds an `Organization` node that the other nodes cite
+as publisher, and `seo.software` adds a `SoftwareApplication` node to the homepage from the values
+already in that file. Add only truthful nodes: `FAQPage` where a real, visible FAQ exists. No `HowTo`.
 
 ## Interlinking
 

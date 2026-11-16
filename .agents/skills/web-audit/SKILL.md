@@ -21,7 +21,7 @@ pagegraph commands apply:
 | `diff before.json after.json` | Semantic regressions between two audit artifacts                  |
 
 The graph commands (`check`, `graph`, `sitemap`, `robots`, `plan`, `improve`, `research`) need a
-TanStack `seo.config.ts` and do not run here.
+`pagegraph.config.ts` at the app root, and this repository has none, so they do not run here.
 
 ## Workflow
 

@@ -15,8 +15,9 @@ application that owns them.
 
 ## Decision
 
-`domainkit/server` publishes `Server.group`, one `HttpApiGroup` covering the whole lifecycle in
-fifteen endpoints. A host adds it to its own `HttpApi` and provides `Server.layer(api)` for the
+`domainkit/server` publishes `Server.group`, one `HttpApiGroup` covering the whole lifecycle —
+connection, planning, digest-bound approval, apply and receipt, observation, cleanup, and batch
+planning. A host adds it to its own `HttpApi` and provides `Server.layer(api)` for the
 handlers. The group declares no prefix, so `Server.group.prefix("/internal/dns")` or a router mount
 moves every route at once and the OAuth callback URL follows the mount. `Server.api` is the same
 group as a standalone API, and `OpenApi.fromApi` documents it without extra work.
@@ -44,9 +45,9 @@ origin the browser never sees; without it the base follows the mount the request
 
 Failures cross the wire as the `DomainKit.Error` value itself, with the status `DomainKit.Error`
 already derives from its reason: 400 `InvalidInput`, 401 `Unauthenticated`, 403 `Forbidden` and
-`Reconnect`, 404 `NotFound`, 409 `Conflict`, `Stale`, `Expired`, `Busy` and `ProviderConflict`,
-501 `Unsupported`, 502 `ProviderRejected`, 503 `ProviderUnavailable`, 500 for the internal reasons. Hosts that map their own routes use the
-same table.
+`Reconnect`, 404 `NotFound`, 409 `Conflict`, `Stale`, `BatchStale`, `Expired`, `Busy` and
+`ProviderConflict`, 501 `Unsupported`, 502 `ProviderRejected`, 503 `ProviderUnavailable`, 500 for
+the internal reasons. Hosts that map their own routes use the same table.
 
 `Server.toWebHandler(services, { prefix })` is the Promise edge: one `fetch`-shaped handler and a
 `dispose`, for hosts that are not on Effect's HTTP stack. Async persistence and custody adapt at

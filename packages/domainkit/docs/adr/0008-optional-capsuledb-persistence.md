@@ -22,9 +22,10 @@ a host that persists elsewhere provides its own `Storage`, in Effect or through 
 The capsule declares eight tables under a `domainkit` prefix — authorizations, connections,
 attachments, continuations, attempts, readiness, batches, batch items — through additive
 migrations. A table added after the first deploy is declared with the rest and created by its own
-migration, so what an earlier migration renders never moves. Every table carries
-`owner_id`, and every query filters by the `Principal.Service`, so a row belonging to another tenant reads
-as absent rather than forbidden. The package declares no foreign keys, to host tables or between its
+migration, so what an earlier migration renders never moves. Every table except batch items carries
+`owner_id`. Reads are scoped to the `Principal.Service`: directly by `owner_id`, or for batch items
+through a batch already scoped to that owner. A row belonging to another tenant reads as absent
+rather than forbidden. The package declares no foreign keys, to host tables or between its
 own; a host adds the ones it wants in the SQL it applies.
 
 `PgStorage.layer()` composes the capsule through CapsuleDB's registry: create the ledger, apply
